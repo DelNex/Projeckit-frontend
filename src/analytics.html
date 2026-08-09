@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>Performance Analytics | Project KIT - CSHS</title>
+  </head>
+  <body
+    x-data="{ 'loaded': true, 'darkMode': false, 'sidebarToggle': false }"
+    :class="{'dark bg-gray-900': darkMode === true}"
+  >
+    <!-- preloader removed; use skeletons for in-page loading -->
+
+    <div class="flex h-screen overflow-hidden">
+      <include src="./partials/sidebar.html"></include>
+
+      <div class="relative flex flex-col flex-1 overflow-x-hidden overflow-y-auto">
+        <include src="./partials/overlay.html" />
+        <include src="./partials/header.html" />
+
+        <main>
+          <div class="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6 space-y-4 pb-6">
+            
+            <!-- Page Header & Scope Selector Bar -->
+            <div class="p-4 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-3">
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-gray-100 dark:border-gray-800 pb-3">
+                <div>
+                  <h1 class="text-lg font-bold text-gray-900 dark:text-white">Performance Analytics</h1>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">Compare achievement across classes and school years</p>
+                </div>
+
+              </div>
+
+              <!-- Academic Context Filter Picklists (Matching Item Analysis Design) -->
+              <div class="flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div class="flex flex-wrap items-center gap-2">
+                  <select id="filter-school-year" class="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium">
+                    <option value="2025–2026">2025–2026</option>
+                    <option value="2026–2027">2026–2027</option>
+                    <option value="2024–2025">2024–2025</option>
+                  </select>
+                  <select id="filter-grade-level" class="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium">
+                    <option value="Grade 11">Grade 11</option>
+                    <option value="Grade 12">Grade 12</option>
+                  </select>
+                  <select id="filter-strand" class="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium">
+                    <option value="TVL - ICT">TVL - ICT</option>
+                    <option value="STEM">STEM</option>
+                    <option value="ABM">ABM</option>
+                    <option value="HUMSS">HUMSS</option>
+                    <option value="GAS">GAS</option>
+                  </select>
+                  <div class="relative compact-select">
+                    <select id="filter-section" class="w-full px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-semibold">
+                      <!-- Populated dynamically via JS -->
+                    </select>
+                  </div>
+                  <select id="filter-term" class="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-brand-600 dark:text-brand-400 font-bold">
+                    <option value="First Quarter">Q1</option>
+                    <option value="Second Quarter">Q2</option>
+                    <option value="Third Quarter">Q3</option>
+                    <option value="Fourth Quarter">Q4</option>
+                  </select>
+                  <select id="filter-subject" class="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-semibold max-w-xs">
+                    <option value="Empowerment Technologies">Empowerment Technologies</option>
+                    <option value="English for Academic and Professional Purposes">English for Academic and Professional Purposes</option>
+                    <option value="General Mathematics">General Mathematics</option>
+                    <option value="Practical Research 1">Practical Research 1</option>
+                  </select>
+                </div>
+
+                <!-- Live Performance Summary Badges -->
+                <div class="flex items-center gap-2 text-[11px] font-medium">
+                  <span id="metric-scope-tag" class="px-2.5 py-1 rounded-md bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-400 font-bold">Class Scope: 11-ICT-A</span>
+                  <span id="metric-mps-score" class="px-2.5 py-1 rounded-md bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold">Class MPS: 82.5%</span>
+                  <span id="metric-mastery-tag" class="px-2.5 py-1 rounded-md bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 font-bold">Mastery: High</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab Navigation Bar -->
+            <div class="border-b border-gray-200 dark:border-gray-800">
+              <nav class="flex space-x-3 overflow-x-auto no-scrollbar" id="analytics-tabs-nav">
+                <button data-tab="sectional" class="tab-btn py-2.5 px-4 text-xs font-semibold border-b-2 border-brand-500 text-brand-500 whitespace-nowrap transition-colors">
+                  Class / Sectional Achievement (MPS %)
+                </button>
+                <button data-tab="longitudinal" class="tab-btn py-2.5 px-4 text-xs font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white whitespace-nowrap transition-colors">
+                  Year-over-Year Growth Trends
+                </button>
+                <button data-tab="cognitive" class="tab-btn py-2.5 px-4 text-xs font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white whitespace-nowrap transition-colors">
+                  Cognitive Domain Mastery
+                </button>
+                <button data-tab="difficulty" class="tab-btn py-2.5 px-4 text-xs font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white whitespace-nowrap transition-colors">
+                  Psychometric Item Difficulty Curve
+                </button>
+              </nav>
+            </div>
+
+            <!-- Dynamic Tab Content Panel -->
+            <div id="analytics-tab-content" class="min-h-[380px]">
+              <!-- Content rendered dynamically via analytics.js -->
+            </div>
+
+          </div>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

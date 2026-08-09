@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>School Tenants | Project KIT - CSHS</title>
+  </head>
+  <body
+    x-data="{ 'loaded': true, 'darkMode': false, 'sidebarToggle': false }"
+    :class="{'dark bg-gray-900': darkMode === true}"
+  >
+    <div class="flex h-screen overflow-hidden">
+      <include src="./partials/sidebar-admin.html"></include>
+
+      <div class="relative flex flex-col flex-1 overflow-x-hidden overflow-y-auto">
+        <include src="./partials/overlay.html" />
+        <include src="./partials/header.html" />
+
+        <main>
+          <div class="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6 space-y-6">
+            <!-- Page Header -->
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-gray-200 dark:border-gray-800 pb-4">
+              <div>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">School Tenants</h1>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Create and manage school workspaces. Registrants enter the join code on the signup page.</p>
+              </div>
+              <div class="flex items-center gap-3">
+                <a href="admin.html" class="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 shadow-xs transition">
+                  &larr; Back to Admin Console
+                </a>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+              <!-- Create Tenant Card (1 Col) -->
+              <div class="p-5 bg-white dark:bg-gray-dark rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-4 h-fit">
+                <div class="border-b border-gray-100 dark:border-gray-800/80 pb-3">
+                  <h3 class="font-bold text-gray-900 dark:text-white text-sm">Create School Tenant</h3>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">Registrants enter this code on the signup page to join the school workspace.</p>
+                </div>
+                <form id="admin-create-tenant-form" class="space-y-3">
+                  <div>
+                    <label for="tenant-name" class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">School / Tenant name</label>
+                    <input id="tenant-name" type="text" required placeholder="e.g. San Pedro National High School" class="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:focus:border-brand-400" />
+                  </div>
+                  <div>
+                    <label for="tenant-code" class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">School / tenant code (optional)</label>
+                    <input id="tenant-code" type="text" placeholder="e.g. SPNHS-2026" class="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:focus:border-brand-400" />
+                  </div>
+                  <div id="tenant-form-feedback" class="min-h-[1rem] text-xs text-red-600 dark:text-red-400"></div>
+                  <button type="submit" id="tenant-create-submit" class="w-full rounded-xl bg-brand-500 px-4 py-2 text-xs font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60">Create tenant</button>
+                </form>
+              </div>
+
+              <!-- Tenants List (2 Cols) -->
+              <div class="lg:col-span-2 p-5 bg-white dark:bg-gray-dark rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
+                <div class="flex items-center justify-between border-b border-gray-100 dark:border-gray-800/80 pb-3">
+                  <div>
+                    <h3 class="font-bold text-gray-900 dark:text-white text-sm">All School Tenants</h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Select a tenant to open its workspace page.</p>
+                  </div>
+                  <button id="btn-refresh-tenants" type="button" class="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-500 hover:text-brand-600 transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    Refresh
+                  </button>
+                </div>
+                <div class="overflow-x-auto">
+                  <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr class="border-b border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/40 uppercase font-semibold text-gray-400">
+                        <th class="px-4 py-2.5">School / Tenant</th>
+                        <th class="px-4 py-2.5">Code</th>
+                        <th class="px-4 py-2.5">Status</th>
+                        <th class="px-4 py-2.5">Created</th>
+                        <th class="px-4 py-2.5 text-right">Open</th>
+                      </tr>
+                    </thead>
+                    <tbody id="admin-tenants-tbody">
+                      <tr><td colspan="5" class="px-4 py-6 text-center text-xs text-gray-500 dark:text-gray-400">Loading tenants…</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

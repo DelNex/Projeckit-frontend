@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>Learner Classification | Project KIT - CSHS</title>
+  </head>
+  <body
+    x-data="{ 'loaded': true, 'darkMode': false, 'sidebarToggle': false }"
+    :class="{'dark bg-gray-900': darkMode === true}"
+  >
+    <include src="./partials/preloader.html"></include>
+
+    <div class="flex h-screen overflow-hidden">
+      <include src="./partials/sidebar.html"></include>
+
+      <div class="relative flex flex-col flex-1 overflow-x-hidden overflow-y-auto">
+        <include src="./partials/overlay.html" />
+        <include src="./partials/header.html" />
+
+        <main class="relative">
+          <div class="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6 space-y-6 pb-24">
+            
+            <!-- Page Header -->
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-gray-200 dark:border-gray-800 pb-4">
+              <div>
+                <div class="flex items-center gap-3">
+                  <h1 class="text-xl font-bold text-gray-900 dark:text-white">Student Performance Classification</h1>
+                  <span class="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
+                    Active Student Roster
+                  </span>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Group students into DepEd achievement bands to plan targeted interventions</p>
+              </div>
+
+              <!-- Top Right Actions (TOS Style Document Actions) -->
+              <div class="flex items-center gap-3 flex-wrap">
+                <button id="btn-edit-roster-toggle" class="px-3.5 py-2 text-xs font-semibold text-white bg-brand-500 rounded-full hover:bg-brand-600 shadow-xs transition flex items-center gap-1.5">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                  <span id="edit-roster-btn-text">Edit Roster</span>
+                </button>
+                <button id="btn-export-roster" class="px-3.5 py-2 text-xs font-semibold text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition flex items-center gap-1.5">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                  Export Roster
+                </button>
+              </div>
+            </div>
+
+            <!-- Executive Summary Cards Grid (TOS Style) -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+              <!-- Card 1: Academic Overview -->
+              <div class="p-5 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-3">
+                <div class="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2">
+                  <h3 class="text-xs font-bold uppercase tracking-wider text-brand-500 flex items-center gap-1.5">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 100 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                    Academic Overview
+                  </h3>
+                  <span class="px-2 py-0.5 text-[10px] font-bold uppercase rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">SUMMARY</span>
+                </div>
+                <div class="grid grid-cols-3 gap-2 text-center">
+                  <div class="p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/60">
+                    <p class="text-[10px] text-gray-400 uppercase font-semibold">Students Assessed</p>
+                    <p id="stat-total-examinees" class="text-base font-extrabold text-gray-900 dark:text-white">0</p>
+                    <p class="text-[9px] text-gray-400 font-medium">Enrolled</p>
+                  </div>
+                  <div class="p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/60">
+                    <p class="text-[10px] text-gray-400 uppercase font-semibold">Mean MPS</p>
+                    <p id="stat-avg-mps" class="text-base font-extrabold text-brand-500">0.0%</p>
+                    <p class="text-[9px] text-emerald-600 font-medium">Average</p>
+                  </div>
+                  <div class="p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/60">
+                    <p class="text-[10px] text-gray-400 uppercase font-semibold">Pass Rate</p>
+                    <p id="stat-pass-rate" class="text-base font-extrabold text-emerald-600">0.0%</p>
+                    <p class="text-[9px] text-gray-400 font-medium">≥ 75% Score</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card 2: DepEd Classification Breakdown (Clickable Quick Filters) -->
+              <div class="p-4 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-3 overflow-hidden">
+                <div class="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2 gap-2">
+                  <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 min-w-0 truncate">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                    <span class="truncate">Band Distribution</span>
+                  </h3>
+                  <span class="shrink-0 px-2 py-0.5 text-[10px] font-bold uppercase rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">METRICS</span>
+                </div>
+                <div class="grid grid-cols-3 gap-1.5 text-center">
+                  <div id="filter-box-outstanding" class="p-1.5 rounded-lg bg-emerald-50/50 dark:bg-emerald-900/20 cursor-pointer hover:ring-2 hover:ring-emerald-400 transition">
+                    <p class="text-[9px] text-emerald-700 dark:text-emerald-400 uppercase font-semibold truncate">Outstanding</p>
+                    <p id="stat-count-outstanding" class="text-base font-extrabold text-emerald-600">0</p>
+                    <p class="text-[8px] text-emerald-600 font-medium">≥ 90%</p>
+                  </div>
+                  <div id="filter-box-satisfactory" class="p-1.5 rounded-lg bg-blue-50/50 dark:bg-blue-900/20 cursor-pointer hover:ring-2 hover:ring-blue-400 transition">
+                    <p class="text-[9px] text-blue-700 dark:text-blue-400 uppercase font-semibold truncate">Satisfactory</p>
+                    <p id="stat-count-satisfactory" class="text-base font-extrabold text-blue-600">0</p>
+                    <p class="text-[8px] text-blue-600 font-medium">75% – 89%</p>
+                  </div>
+                  <div id="filter-box-remediation" class="p-1.5 rounded-lg bg-rose-50/50 dark:bg-rose-900/20 cursor-pointer hover:ring-2 hover:ring-rose-400 transition">
+                    <p class="text-[9px] text-rose-700 dark:text-rose-400 uppercase font-semibold truncate">Remediation</p>
+                    <p id="stat-count-remediation" class="text-base font-extrabold text-rose-600">0</p>
+                    <p class="text-[8px] text-rose-600 font-medium">&lt; 75%</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card 3: Targeted Remediation Overview -->
+              <div class="p-5 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-3">
+                <div class="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2 gap-2">
+                  <h3 class="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5 min-w-0 truncate">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    <span class="truncate">Remediation</span>
+                  </h3>
+                  <span class="shrink-0 px-2 py-0.5 text-[10px] font-bold uppercase rounded bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400">INTERVENTION</span>
+                </div>
+                <div class="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/60">
+                  <div>
+                    <p class="text-xs font-semibold text-gray-700 dark:text-gray-300">Needs Remediation</p>
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400">Requires targeted DepEd intervention</p>
+                  </div>
+                  <span id="stat-remediation-needed-count" class="text-xl font-extrabold text-rose-600">0</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Classification Roster Table Card (with integrated filters) -->
+            <div class="bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs">
+              <!-- Card Header: Title + Filters -->
+              <div class="p-4 pb-3 space-y-3 border-b border-gray-100 dark:border-gray-800">
+                <div class="flex items-center justify-between">
+                  <h3 class="text-base font-bold text-gray-900 dark:text-white">Student Roster</h3>
+                  <span id="roster-count-badge" class="px-2.5 py-1 text-xs font-semibold rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                    0 Students
+                  </span>
+                </div>
+
+                <!-- Inline Filter Row -->
+                <div class="flex items-center gap-3 flex-wrap sm:flex-nowrap">
+                  <div class="flex min-w-0 items-center gap-1.5 text-xs">
+                    <label class="font-bold text-gray-400 uppercase tracking-wider text-[10px] whitespace-nowrap">Quarter:</label>
+                    <select id="term-select-filter" class="min-w-0 w-full max-w-[220px] px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:border-brand-500 shadow-xs">
+                      <option value="First Quarter">1st Quarter (Q1)</option>
+                      <option value="Second Quarter">2nd Quarter (Q2)</option>
+                      <option value="Third Quarter">3rd Quarter (Q3)</option>
+                      <option value="Fourth Quarter">4th Quarter (Q4)</option>
+                    </select>
+                  </div>
+
+                  <div class="flex min-w-0 items-center gap-1.5 text-xs">
+                    <label class="font-bold text-gray-400 uppercase tracking-wider text-[10px] whitespace-nowrap">Grade:</label>
+                    <select id="grade-select-filter" class="min-w-0 w-full max-w-[220px] px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:border-brand-500 shadow-xs">
+                      <option value="all">All Grades</option>
+                      <option value="Grade 11">Grade 11</option>
+                      <option value="Grade 12">Grade 12</option>
+                    </select>
+                  </div>
+
+                  <div class="flex min-w-0 items-center gap-1.5 text-xs">
+                    <label class="font-bold text-gray-400 uppercase tracking-wider text-[10px] whitespace-nowrap">Strand:</label>
+                    <select id="strand-select-filter" class="min-w-0 w-full max-w-[220px] px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:border-brand-500 shadow-xs">
+                      <option value="all">All Strands</option>
+                      <option value="TVL - ICT">TVL - ICT</option>
+                      <option value="STEM">STEM</option>
+                      <option value="ABM">ABM</option>
+                      <option value="HUMSS">HUMSS</option>
+                      <option value="GAS">GAS</option>
+                    </select>
+                  </div>
+
+                  <div class="flex min-w-0 items-center gap-1.5 text-xs">
+                    <label class="font-bold text-gray-400 uppercase tracking-wider text-[10px] whitespace-nowrap">Section:</label>
+                    <div class="relative compact-select min-w-0">
+                      <select id="section-select-filter" class="min-w-0 w-full px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:border-brand-500 shadow-xs">
+                        <option value="all">All Sections</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="flex min-w-0 items-center gap-1.5 text-xs">
+                    <label class="font-bold text-gray-400 uppercase tracking-wider text-[10px] whitespace-nowrap">Band:</label>
+                    <select id="band-select-filter" class="min-w-0 w-full max-w-[240px] px-2.5 py-1.5 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:border-brand-500 shadow-xs">
+                      <option value="all">All Bands</option>
+                      <option value="Outstanding">Outstanding (≥ 90%)</option>
+                      <option value="Satisfactory">Satisfactory (75%–89%)</option>
+                      <option value="Did Not Meet Expectations">Needs Remediation (&lt; 75%)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Table -->
+              <div class="overflow-x-auto no-scrollbar">
+                <table class="w-full text-left border-collapse">
+                  <thead>
+                    <tr class="border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 text-[11px] text-gray-500 uppercase tracking-wider font-semibold">
+                      <th class="px-2 py-2.5 w-8 text-center">
+                        <input type="checkbox" id="select-all-students" class="rounded border-gray-300 dark:border-gray-700 text-brand-500 focus:ring-brand-500" />
+                      </th>
+                      <th class="px-2.5 py-2.5 w-28 whitespace-nowrap">LRN</th>
+                      <th class="px-2.5 py-2.5">Student Name</th>
+                      <th class="px-2.5 py-2.5 w-28 whitespace-nowrap">Section</th>
+                      <th class="px-2 py-2.5 text-center w-20 whitespace-nowrap">Raw Score</th>
+                      <th class="px-2 py-2.5 text-center w-24 whitespace-nowrap">MPS %</th>
+                      <th class="px-2.5 py-2.5 w-36 whitespace-nowrap">Classification Band</th>
+                      <th id="th-actions" class="hidden px-2 py-2.5 text-center w-20 whitespace-nowrap">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="students-table-body">
+                    <!-- Populated dynamically via students.js -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Sticky Bulk Action Bar with Enhanced Palette -->
+            <div id="bulk-action-bar" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-9999 bg-gray-900/95 dark:bg-gray-dark/95 backdrop-blur-md text-white text-xs px-6 py-3 rounded-xl shadow-2xl transition-all duration-300 transform flex items-center gap-6 border border-gray-800">
+              <span id="selected-row-count" class="font-medium text-white">0 rows selected</span>
+              <div class="h-4 w-px bg-gray-700/60"></div>
+              <div class="flex items-center gap-3">
+                <button id="btn-bulk-export-remediation" class="px-3.5 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg font-semibold shadow-sm flex items-center gap-2 transition-colors">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                  Export Remediation Roster
+                </button>
+                <button id="btn-bulk-delete-students" class="px-3.5 py-2 bg-rose-500/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 rounded-lg font-semibold shadow-sm transition-colors">
+                  Delete Selected
+                </button>
+              </div>
+            </div>
+
+            <!-- Delete Student Confirmation Modal -->
+            <div id="delete-student-modal" class="hidden fixed inset-0 z-99999 flex items-center justify-center bg-black/50 p-4">
+              <div class="w-full max-w-sm bg-white dark:bg-gray-dark rounded-xl p-6 shadow-2xl space-y-4 text-center">
+                <div class="w-12 h-12 bg-rose-100 dark:bg-rose-900/30 text-rose-600 rounded-full flex items-center justify-center mx-auto">
+                  <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                </div>
+                <h3 class="text-base font-bold text-gray-900 dark:text-white">Delete Student Record?</h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400">Are you sure you want to remove this student? Their scores and achievement rate will be removed from quarterly section totals.</p>
+                <div class="flex justify-center gap-3 pt-2">
+                  <button onclick="document.getElementById('delete-student-modal').classList.add('hidden')" class="px-4 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200">Cancel</button>
+                  <button id="btn-confirm-delete-student" class="px-4 py-2 text-xs font-medium text-white bg-rose-600 rounded-lg hover:bg-rose-700 shadow-sm">Confirm Delete</button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

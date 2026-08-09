@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>Item Analysis | Project KIT - CSHS</title>
+  </head>
+  <body
+    x-data="{ 'loaded': true, 'darkMode': false, 'sidebarToggle': false }"
+    :class="{'dark bg-gray-900': darkMode === true}"
+  >
+    <!-- preloader removed; use skeletons for in-page loading -->
+
+    <div class="flex h-screen overflow-hidden">
+      <include src="./partials/sidebar.html"></include>
+
+      <div class="relative flex flex-col flex-1 overflow-x-hidden overflow-y-auto">
+        <include src="./partials/overlay.html" />
+        <include src="./partials/header.html" />
+
+        <main>
+          <div class="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6 space-y-4 pb-6">
+            
+            <!-- Minimal Page Header & Filter Bar -->
+            <div class="p-4 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-3">
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-gray-100 dark:border-gray-800 pb-3">
+                <div>
+                  <h1 class="text-lg font-bold text-gray-900 dark:text-white">Item Analysis</h1>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">Review item difficulty and discrimination, aligned with the DepEd TOS</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button id="btn-edit-ia-toggle" class="px-3.5 py-1.5 text-xs font-semibold text-white bg-brand-500 rounded-lg hover:bg-brand-600 shadow-xs transition flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                    Edit Item Analysis
+                  </button>
+                  <button id="btn-cancel-ia-edit" class="hidden px-3.5 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+
+              <!-- Compact Filter Picklists & Class Summary Row -->
+              <div class="flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div class="flex flex-wrap items-center gap-2">
+                  <select id="filter-school-year" class="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium">
+                    <option value="2025–2026">2025–2026</option>
+                    <option value="2026–2027">2026–2027</option>
+                  </select>
+                  <select id="filter-grade-level" class="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium">
+                    <option value="Grade 11">Grade 11</option>
+                    <option value="Grade 12">Grade 12</option>
+                  </select>
+                  <select id="filter-strand" class="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium">
+                    <option value="TVL - ICT">TVL - ICT</option>
+                    <option value="STEM">STEM</option>
+                    <option value="ABM">ABM</option>
+                    <option value="HUMSS">HUMSS</option>
+                    <option value="GAS">GAS</option>
+                  </select>
+                  <div class="relative compact-select">
+                    <select id="filter-section" class="w-full px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-semibold">
+                      <!-- Populated dynamically via JS -->
+                    </select>
+                  </div>
+                  <select id="filter-term" class="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-brand-600 dark:text-brand-400 font-bold">
+                    <option value="First Quarter">Q1</option>
+                    <option value="Second Quarter">Q2</option>
+                    <option value="Third Quarter">Q3</option>
+                    <option value="Fourth Quarter">Q4</option>
+                  </select>
+                  <select id="filter-subject" class="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-semibold max-w-xs">
+                    <option value="Empowerment Technologies">Empowerment Technologies</option>
+                    <option value="English for Academic and Professional Purposes">English for Academic and Professional Purposes</option>
+                    <option value="General Mathematics">General Mathematics</option>
+                    <option value="Practical Research 1">Practical Research 1</option>
+                  </select>
+                </div>
+
+                <!-- Minimal Summary Badges Pill -->
+                <div class="flex items-center gap-2 text-[11px] font-medium">
+                  <span id="metric-class-size" class="px-2.5 py-1 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold">40 Students</span>
+                  <span id="metric-total-correct" class="px-2.5 py-1 rounded-md bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold">∑ R_i: 0</span>
+                  <span id="metric-mean-score" class="px-2.5 py-1 rounded-md bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-400 font-bold">Mean: 0.0</span>
+                  <div class="flex items-center gap-1">
+                    <span id="metric-retain-count" class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 font-bold">0 Retain</span>
+                    <span id="metric-revise-count" class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 font-bold">0 Revise</span>
+                    <span id="metric-discard-count" class="px-2 py-0.5 rounded bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400 font-bold">0 Discard</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Minimal Non-Overflowing Table Card -->
+            <div class="p-5 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs">
+              <table class="w-full text-left border-collapse table-fixed">
+                <thead>
+                  <tr class="border-b border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/60 text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">
+                    <th class="px-2 py-2.5 w-12 text-center font-bold text-gray-700 dark:text-gray-300">#</th>
+                    <th class="px-3 py-2.5 font-bold text-gray-700 dark:text-gray-300">TOS Competency & Learning Code</th>
+                    <th class="px-2 py-2.5 w-24 text-center font-bold text-emerald-600 dark:text-emerald-400">Correct (R_i)</th>
+                    <th class="px-2 py-2.5 w-28 text-center font-bold text-gray-700 dark:text-gray-300">Difficulty (P_i)</th>
+                    <th class="px-2 py-2.5 w-28 text-center font-bold text-gray-700 dark:text-gray-300">Discrimination (D_i)</th>
+                    <th class="px-2 py-2.5 w-24 text-center font-bold text-gray-700 dark:text-gray-300">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="item-analysis-table-body">
+                  <!-- Dynamic minimalist rows populated via item-analysis.js -->
+                </tbody>
+                <tfoot>
+                  <tr class="bg-gray-50 dark:bg-gray-800/80 font-bold border-t border-gray-200 dark:border-gray-700 text-xs">
+                    <td class="px-2 py-2.5 text-center text-gray-400">Total</td>
+                    <td class="px-3 py-2.5 text-gray-500 uppercase">Class Column Totals & Means</td>
+                    <td id="foot-total-ri" class="px-2 py-2.5 text-center text-emerald-600 font-extrabold text-sm">0</td>
+                    <td id="foot-avg-pi" class="px-2 py-2.5 text-center font-bold text-gray-900 dark:text-white">P_avg: 0.00</td>
+                    <td id="foot-avg-di" class="px-2 py-2.5 text-center font-bold text-gray-900 dark:text-white">D_avg: 0.00</td>
+                    <td class="px-2 py-2.5 text-center text-gray-400">—</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+          </div>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

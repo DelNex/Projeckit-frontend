@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>Create Account | Project KIT - CSHS</title>
+  </head>
+  <body class="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-white">
+    <div class="flex min-h-screen items-center justify-center px-4 py-10">
+      <div class="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-8 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+        <div class="mb-8 text-center">
+          <div class="mx-auto mb-4 h-14 w-14 rounded-2xl bg-brand-500 text-3xl font-bold leading-none text-white flex items-center justify-center">KIT</div>
+          <h1 class="text-2xl font-semibold">Create your account</h1>
+          <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Register and wait for admin approval before you can sign in.</p>
+        </div>
+
+        <form id="register-form" class="space-y-5">
+          <div>
+            <label for="register-name" class="block text-sm font-medium text-slate-700 dark:text-slate-200">Full name</label>
+            <input id="register-name" name="name" type="text" autocomplete="username" required class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-brand-400" />
+          </div>
+
+          <div>
+            <label for="register-email" class="block text-sm font-medium text-slate-700 dark:text-slate-200">Email address</label>
+            <input id="register-email" name="email" type="email" autocomplete="email" required class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-brand-400" />
+          </div>
+
+          <div>
+            <label for="register-password" class="block text-sm font-medium text-slate-700 dark:text-slate-200">Password</label>
+            <input id="register-password" name="password" type="password" autocomplete="new-password" required class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-brand-400" />
+          </div>
+
+          <div>
+            <label for="register-tenant-code" class="block text-sm font-medium text-slate-700 dark:text-slate-200">School / tenant code</label>
+            <input id="register-tenant-code" name="tenantCode" type="text" autocomplete="organization" placeholder="Enter the school code given by your admin" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-brand-400" />
+            <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">Joining your school&rsquo;s shared settings. Ask your administrator if you don&rsquo;t have one.</p>
+          </div>
+
+          <div>
+            <label for="register-code" class="block text-sm font-medium text-slate-700 dark:text-slate-200">Recommendation code (optional)</label>
+            <input id="register-code" name="recommendationCode" type="text" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:focus:border-brand-400" />
+          </div>
+
+          <div id="register-feedback" class="min-h-[1.5rem] text-sm text-red-600 dark:text-red-400"></div>
+
+          <button id="register-submit" type="submit" class="w-full rounded-2xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60">Create account</button>
+        </form>
+
+        <p class="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
+          Already have an account?
+          <a href="login.html" class="font-semibold text-brand-500 hover:text-brand-400">Sign in</a>
+        </p>
+      </div>
+    </div>
+
+    <div id="app-toast" class="hidden fixed bottom-6 right-6 z-50 rounded-xl bg-gray-900 px-4 py-3 text-sm text-white shadow-2xl transition-all duration-300 transform opacity-0 translate-y-10"></div>
+  </body>
+</html>

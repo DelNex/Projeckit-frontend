@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>Quarterly Reports | Project KIT - CSHS</title>
+  </head>
+  <body
+    x-data="{ 'loaded': true, 'darkMode': false, 'sidebarToggle': false }"
+    :class="{'dark bg-gray-900': darkMode === true}"
+  >
+    <!-- preloader removed; use skeletons for in-page loading -->
+
+    <div class="flex h-screen overflow-hidden">
+      <include src="./partials/sidebar.html"></include>
+
+      <div class="relative flex flex-col flex-1 overflow-x-hidden overflow-y-auto">
+        <include src="./partials/overlay.html" />
+        <include src="./partials/header.html" />
+
+        <main>
+          <div class="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6 space-y-6">
+            
+            <!-- Page Header -->
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between print:hidden">
+              <div>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Quarterly Reports</h1>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Generate and print standardized CSHS academic reports</p>
+              </div>
+              <div class="flex gap-3">
+                <button id="btn-print-report" class="px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600 shadow-sm transition flex items-center gap-2">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                  Print Report Document
+                </button>
+              </div>
+            </div>
+
+            <!-- Print Banner Header -->
+            <div class="p-6 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm space-y-4">
+              <div class="border-b border-gray-200 dark:border-gray-800 pb-4 text-center">
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white uppercase tracking-wide">DEPARTMENT OF EDUCATION — REGION III</h2>
+                <h3 class="text-base font-semibold text-brand-500">CAPAS SENIOR HIGH SCHOOL</h3>
+                <p class="text-xs text-gray-500">Quarterly Knowledge Insight Tool (KIT) Consolidated Academic Report</p>
+              </div>
+
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-gray-600 dark:text-gray-300">
+                <div><strong>Proponent:</strong> <span id="report-proponent"></span></div>
+                <div><strong>Subject:</strong> <span id="report-subject"></span></div>
+                <div><strong>Grade Level:</strong> <span id="report-grade-level"></span></div>
+                <div><strong>School Year / Quarter:</strong> <span id="report-period"></span></div>
+              </div>
+
+              <!-- Prepared by / user profile -->
+              <div class="mt-3 text-xs text-gray-600 dark:text-gray-300">
+                <strong>Prepared by:</strong> <span id="report-user"></span>
+              </div>
+
+              <!-- Report Table -->
+              <div class="overflow-x-auto pt-4">
+                <table class="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr class="border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+                      <th class="px-3 py-2">Section Name</th>
+                      <th class="px-3 py-2 text-center">Students</th>
+                      <th class="px-3 py-2 text-center">Mean Score (\bar{X})</th>
+                      <th class="px-3 py-2 text-center">Std Dev (S)</th>
+                      <th class="px-3 py-2 text-center">MPS %</th>
+                      <th class="px-3 py-2 text-center">Outstanding</th>
+                      <th class="px-3 py-2 text-center">Did Not Meet</th>
+                    </tr>
+                  </thead>
+                  <tbody id="reports-table-body">
+                    <!-- Rows populated dynamically by src/js/views/reports.js -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

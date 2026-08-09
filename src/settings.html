@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>Settings | Project KIT</title>
+  </head>
+  <body
+    x-data="{ 'loaded': true, 'darkMode': false, 'sidebarToggle': false }"
+    :class="{'dark bg-gray-900': darkMode === true}"
+  >
+    <div class="flex h-screen overflow-hidden">
+      <include src="./partials/sidebar.html"></include>
+
+      <div class="relative flex flex-col flex-1 overflow-x-hidden overflow-y-auto">
+        <include src="./partials/overlay.html" />
+        <include src="./partials/header.html" />
+
+        <main>
+          <div class="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6 space-y-6 pb-24">
+
+            <div class="border-b border-gray-200 dark:border-gray-800 pb-4">
+              <h1 class="text-xl font-bold text-gray-900 dark:text-white">Settings</h1>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Manage your account and view the school's current academic period.</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+              <div class="space-y-6">
+                <div class="p-5 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
+                  <h3 class="text-xs font-bold uppercase tracking-wider text-brand-500 flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                    My Profile
+                  </h3>
+                  <div class="space-y-3 text-xs">
+                    <div>
+                      <label class="block font-semibold text-gray-700 dark:text-gray-300 mb-1">Display Name</label>
+                      <input type="text" id="display-name-input" placeholder="Your full name" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium focus:outline-none focus:border-brand-500" />
+                    </div>
+                    <div>
+                      <label class="block font-semibold text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                      <input type="text" id="profile-email-input" disabled class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 text-gray-500 dark:text-gray-400 font-medium" />
+                    </div>
+                    <div class="pt-1 flex items-center gap-3">
+                      <button id="btn-save-profile" class="px-4 py-2 text-xs font-semibold text-white bg-brand-500 rounded-lg hover:bg-brand-600 shadow-sm transition">
+                        Save Profile
+                      </button>
+                      <span id="profile-save-status" class="text-sm text-emerald-600"></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="p-5 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
+                  <h3 class="text-xs font-bold uppercase tracking-wider text-amber-500 flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                    Change Password
+                  </h3>
+                  <div class="space-y-3 text-xs">
+                    <div>
+                      <label class="block font-semibold text-gray-700 dark:text-gray-300 mb-1">Current Password</label>
+                      <input type="password" id="pwd-current" autocomplete="current-password" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:border-brand-500" />
+                    </div>
+                    <div>
+                      <label class="block font-semibold text-gray-700 dark:text-gray-300 mb-1">New Password</label>
+                      <input type="password" id="pwd-new" autocomplete="new-password" placeholder="At least 6 characters" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:border-brand-500" />
+                    </div>
+                    <div>
+                      <label class="block font-semibold text-gray-700 dark:text-gray-300 mb-1">Confirm New Password</label>
+                      <input type="password" id="pwd-confirm" autocomplete="new-password" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:border-brand-500" />
+                    </div>
+                    <p class="text-[11px] text-gray-400 dark:text-gray-500">For your security, all devices are signed out after a password change.</p>
+                    <div class="pt-1 flex items-center gap-3">
+                      <button id="btn-change-password" class="px-4 py-2 text-xs font-semibold text-white bg-amber-500 rounded-lg hover:bg-amber-600 shadow-sm transition">
+                        Change Password
+                      </button>
+                      <span id="password-save-status" class="text-sm"></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="p-5 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-500 flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-2">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                  Active Academic Period
+                </h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400">The active school year and term are set by the school administrator and apply to all reports.</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+                    <div class="font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px] mb-0.5">School Year</div>
+                    <div id="ro-school-year" class="text-base font-bold text-gray-900 dark:text-white">-</div>
+                  </div>
+                  <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+                    <div class="font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px] mb-0.5">Active Term</div>
+                    <div id="ro-active-term" class="text-base font-bold text-gray-900 dark:text-white">-</div>
+                  </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+                    <div class="font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px] mb-0.5">MPS Benchmark</div>
+                    <div id="ro-mps-passing" class="text-base font-bold text-gray-900 dark:text-white">-</div>
+                  </div>
+                  <div class="p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+                    <div class="font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide text-[10px] mb-0.5">School</div>
+                    <div id="ro-school-name" class="text-base font-bold text-gray-900 dark:text-white">-</div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

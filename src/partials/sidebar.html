@@ -1,0 +1,143 @@
+<aside
+  :class="sidebarToggle ? 'translate-x-0 lg:w-[290px]' : '-translate-x-full'"
+  class="sidebar fixed left-0 top-0 z-9999 flex h-screen w-[290px] flex-col overflow-y-hidden border-r border-gray-200 bg-white px-5 dark:border-gray-800 dark:bg-black lg:static lg:translate-x-0 transition-all duration-300"
+>
+  <!-- SIDEBAR HEADER -->
+  <div class="flex items-center justify-between pt-6 pb-6 border-b border-gray-100 dark:border-gray-800">
+    <a href="index.html" class="flex items-center gap-3">
+      <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-500 text-white font-bold text-lg shadow-sm">
+        KIT
+      </div>
+      <div class="flex flex-col">
+        <span class="font-bold text-gray-900 dark:text-white text-base leading-tight">Project KIT</span>
+        <span class="text-xs text-gray-500 dark:text-gray-400">Capas Senior High</span>
+      </div>
+    </a>
+  </div>
+  <!-- SIDEBAR HEADER -->
+
+  <div class="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar py-4">
+    <!-- Sidebar Menu -->
+    <nav class="space-y-6">
+
+      <!-- MAIN MENU -->
+      <div>
+        <h3 class="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">MAIN</h3>
+        <ul class="space-y-1">
+          <li>
+            <a href="index.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200">
+              <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 00-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+              </svg>
+              <span>Executive Dashboard</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+
+      <!-- ACADEMIC WORKFLOW -->
+      <div>
+        <h3 class="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">ACADEMIC WORKFLOW</h3>
+        <ul class="space-y-1">
+          <li>
+            <a href="tos.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200">
+              <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 2v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+              </svg>
+              <span>Table of Specifications</span>
+            </a>
+          </li>
+          <li>
+            <a href="exam-import.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200">
+              <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+              </svg>
+              <span>OCR Exam Importer</span>
+            </a>
+          </li>
+          <li>
+            <a href="item-analysis.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200">
+              <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+              </svg>
+              <span>Psychometric Analysis</span>
+            </a>
+          </li>
+          <li>
+            <a href="students.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200">
+              <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+              </svg>
+              <span>Learner Classification</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+
+      <!-- ANALYTICS & REPORTS -->
+      <div>
+        <h3 class="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">ANALYTICS & REPORTS</h3>
+        <ul class="space-y-1">
+          <li>
+            <a href="analytics.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200">
+              <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+              </svg>
+              <span>Performance Analytics</span>
+            </a>
+          </li>
+          <li>
+            <a href="reports.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200">
+              <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+              </svg>
+              <span>Quarterly Reports</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+
+
+
+      <!-- SETTINGS -->
+      <div>
+        <h3 class="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">SETTINGS</h3>
+        <ul class="space-y-1">
+          <li>
+            <a href="config.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200">
+              <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.552-.336 1.15-.495 1.724-1.065z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+              </svg>
+              <span>School Settings</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+
+      <!-- SUPPORT & SESSION -->
+      <div class="mt-6">
+        <h3 class="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">HELP</h3>
+        <ul class="space-y-1">
+          <li>
+            <a href="support.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200">
+              <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636A9 9 0 115.636 18.364 9 9 0 0118.364 5.636zM12 7v5l3 3"></path>
+              </svg>
+              <span>Support</span>
+            </a>
+          </li>
+          <li>
+            <button id="btn-sign-out" class="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200">
+              <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h6a2 2 0 012 2v1"></path>
+              </svg>
+              <span>Sign out</span>
+            </button>
+          </li>
+        </ul>
+      </div>
+
+    </nav>
+  </div>
+</aside>

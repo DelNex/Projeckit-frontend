@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>Academic Performance Dashboard | Project KIT</title>
+  </head>
+  <body
+    x-data="{ 'loaded': true, 'darkMode': false, 'sidebarToggle': false }"
+    :class="{'dark bg-gray-900': darkMode === true}"
+  >
+    <include src="./partials/preloader.html"></include>
+
+    <div class="flex h-screen overflow-hidden">
+      <include src="./partials/sidebar.html"></include>
+
+      <div class="relative flex flex-col flex-1 overflow-x-hidden overflow-y-auto">
+        <include src="./partials/overlay.html" />
+        <include src="./partials/header.html" />
+
+        <main>
+          <div class="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6 space-y-6">
+            
+            <!-- Page Header -->
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Academic Performance Dashboard</h1>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Quarterly performance and progress — <span id="dashboard-school-name">the school</span></p>
+              </div>
+              <div class="flex items-center gap-3">
+                <a href="exam-import.html" class="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600 shadow-sm transition">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                  Import New Exam Data
+                </a>
+              </div>
+            </div>
+
+            <!-- KPI Cards Grid -->
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <!-- KPI Card 1 -->
+              <div class="p-6 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold uppercase tracking-wider text-gray-400">Average MPS</span>
+                  <span class="p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 rounded-lg">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                  </span>
+                </div>
+                <div class="mt-4 flex items-baseline justify-between">
+                  <span id="kpi-mps" class="text-3xl font-extrabold text-gray-900 dark:text-white">78.45%</span>
+                  <span class="text-xs font-medium text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">+2.10%</span>
+                </div>
+                <p class="mt-1 text-xs text-gray-500">Mean Percentage Score across sections</p>
+              </div>
+
+              <!-- KPI Card 2 -->
+              <div class="p-6 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold uppercase tracking-wider text-gray-400">Total Students Assessed</span>
+                  <span class="p-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 rounded-lg">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                  </span>
+                </div>
+                <div class="mt-4 flex items-baseline justify-between">
+                  <span id="kpi-examinees" class="text-3xl font-extrabold text-gray-900 dark:text-white">342</span>
+                  <span class="text-xs font-medium text-gray-500">Active roster</span>
+                </div>
+                <p class="mt-1 text-xs text-gray-500">Enrolled across 8 class sections</p>
+              </div>
+
+              <!-- KPI Card 3 -->
+              <div class="p-6 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold uppercase tracking-wider text-gray-400">At-Risk Learners</span>
+                  <span class="p-2 bg-rose-50 dark:bg-rose-900/20 text-rose-600 rounded-lg">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                  </span>
+                </div>
+                <div class="mt-4 flex items-baseline justify-between">
+                  <span id="kpi-at-risk" class="text-3xl font-extrabold text-rose-600">28</span>
+                  <span class="text-xs font-medium text-rose-600 bg-rose-50 dark:bg-rose-900/20 px-2 py-0.5 rounded-full">&lt;75% Grade</span>
+                </div>
+                <p class="mt-1 text-xs text-gray-500">Requires targeted remediation</p>
+              </div>
+
+              <!-- KPI Card 4 -->
+              <div class="p-6 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold uppercase tracking-wider text-gray-400">Class Sections</span>
+                  <span class="p-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 rounded-lg">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                  </span>
+                </div>
+                <div class="mt-4 flex items-baseline justify-between">
+                  <span id="kpi-sections" class="text-3xl font-extrabold text-gray-900 dark:text-white">8</span>
+                  <span class="text-xs font-medium text-emerald-600">100% Tracked</span>
+                </div>
+                <p class="mt-1 text-xs text-gray-500">STEM, TVL, and HUMSS strands</p>
+              </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="grid grid-cols-12 gap-6">
+              <!-- MPS Longitudinal Trend -->
+              <div class="col-span-12 lg:col-span-7 p-6 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
+                <div class="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 class="text-base font-bold text-gray-900 dark:text-white">Quarterly MPS Longitudinal Trend</h3>
+                    <p class="text-xs text-gray-500">Mean Percentage Score progression across academic quarters</p>
+                  </div>
+                </div>
+                <div id="chart-mps-trend" class="w-full"></div>
+              </div>
+
+              <!-- Learner Tier Distribution -->
+              <div class="col-span-12 lg:col-span-5 p-6 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
+                <div class="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 class="text-base font-bold text-gray-900 dark:text-white">Learner Performance Tiers</h3>
+                    <p class="text-xs text-gray-500">DepEd standardized classification breakdown</p>
+                  </div>
+                </div>
+                <div id="chart-learner-tiers" class="w-full flex justify-center"></div>
+              </div>
+            </div>
+
+            <!-- Recent Data Imports Table -->
+            <div class="p-6 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
+              <div class="flex items-center justify-between mb-4">
+                <div>
+                  <h3 class="text-base font-bold text-gray-900 dark:text-white">Recent Assessment Imports</h3>
+                  <p class="text-xs text-gray-500">Latest parsed gradebook scans and computational runs</p>
+                </div>
+                <a href="exam-import.html" class="text-xs font-semibold text-brand-500 hover:underline">View All Imports →</a>
+              </div>
+
+              <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                  <thead>
+                    <tr class="border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+                      <th class="px-4 py-3 text-xs font-semibold uppercase text-gray-400">File Name</th>
+                      <th class="px-4 py-3 text-xs font-semibold uppercase text-gray-400">Section</th>
+                      <th class="px-4 py-3 text-xs font-semibold uppercase text-gray-400">Upload Date</th>
+                      <th class="px-4 py-3 text-xs font-semibold uppercase text-gray-400">Calculated MPS</th>
+                      <th class="px-4 py-3 text-xs font-semibold uppercase text-gray-400">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="recent-imports-table-body">
+                    <!-- Dynamic Rows populated by JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

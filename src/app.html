@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>Application Hub | Project KIT</title>
+  </head>
+  <body
+    x-data="{ 'loaded': true, 'darkMode': false, 'sidebarToggle': false }"
+    :class="{'dark bg-gray-900': darkMode === true}"
+  >
+    <div class="flex h-screen overflow-hidden">
+      <include src="./partials/sidebar-admin.html"></include>
+
+      <div class="relative flex flex-col flex-1 overflow-x-hidden overflow-y-auto">
+        <include src="./partials/overlay.html" />
+        <include src="./partials/header.html" />
+
+        <main>
+          <div class="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6 space-y-6">
+            <div class="flex items-center justify-between">
+              <div>
+                <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Application Management</h1>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">A central admin experience for site-level configuration and support tools.</p>
+              </div>
+              <div>
+                <a href="admin.html" class="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-brand-500 rounded-lg hover:bg-brand-600 shadow-sm transition">
+                  Back to Admin Console
+                </a>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <!-- App Settings -->
+              <a href="app-config.html" class="group p-5 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm hover:border-brand-500 dark:hover:border-brand-500 hover:shadow-md transition-all">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 group-hover:scale-105 transition-transform">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg>
+                </div>
+                <h2 class="mt-3 font-bold text-gray-900 dark:text-white">App Settings</h2>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Edit school-wide defaults: academic period, performance standards, and school information.</p>
+              </a>
+
+              <!-- School Tenants -->
+              <a href="tenants.html" class="group p-5 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm hover:border-brand-500 dark:hover:border-brand-500 hover:shadow-md transition-all">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                </div>
+                <h2 class="mt-3 font-bold text-gray-900 dark:text-white">School Tenants</h2>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Create and manage school workspaces and their join codes.</p>
+              </a>
+
+              <!-- Pending Approvals -->
+              <a href="pending-users.html" class="group p-5 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm hover:border-brand-500 dark:hover:border-brand-500 hover:shadow-md transition-all">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 group-hover:scale-105 transition-transform">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
+                </div>
+                <h2 class="mt-3 font-bold text-gray-900 dark:text-white">Teacher Approvals</h2>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Review, approve, reject, suspend, and reactivate teacher accounts.</p>
+              </a>
+
+              <!-- Audit Logs -->
+              <a href="audit-logs.html" class="group p-5 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm hover:border-brand-500 dark:hover:border-brand-500 hover:shadow-md transition-all">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 group-hover:scale-105 transition-transform">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                </div>
+                <h2 class="mt-3 font-bold text-gray-900 dark:text-white">Audit Logs</h2>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Inspect admin actions, user access events, and system activity.</p>
+              </a>
+
+              <!-- System Health -->
+              <a href="system-health.html" class="group p-5 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm hover:border-brand-500 dark:hover:border-brand-500 hover:shadow-md transition-all">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 group-hover:scale-105 transition-transform">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                </div>
+                <h2 class="mt-3 font-bold text-gray-900 dark:text-white">System Health</h2>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">View backend status, Redis connectivity, and service health.</p>
+              </a>
+
+              <!-- Console Overview -->
+              <a href="admin.html" class="group p-5 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm hover:border-brand-500 dark:hover:border-brand-500 hover:shadow-md transition-all">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 group-hover:scale-105 transition-transform">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                </div>
+                <h2 class="mt-3 font-bold text-gray-900 dark:text-white">Console Overview</h2>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">KPI summaries, recent audit activity, and management shortcuts.</p>
+              </a>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>
