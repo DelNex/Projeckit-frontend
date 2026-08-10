@@ -5,9 +5,6 @@ const COMMANDS = [
   { id: 'ai', label: 'Open AI assistant', keywords: ['ai', 'assistant', 'chat', 'help'], run: () => document.getElementById('btn-open-ai-modal')?.click() },
   { id: 'notifications', label: 'Open notifications', keywords: ['notifications', 'alerts', 'bell'], run: () => document.getElementById('btn-notifications')?.click() },
   { id: 'signout', label: 'Sign out', keywords: ['logout', 'sign out', 'exit'], run: () => document.getElementById('btn-sign-out')?.click() },
-  { id: 'copyapi', label: 'Copy backend API URL', keywords: ['api', 'url', 'copy', 'backend'], run: async () => {
-      try { await navigator.clipboard.writeText(API_BASE_URL_RAW || ''); } catch (e) { /* ignore */ }
-    } },
 ];
 
 let searchIndex = null;
