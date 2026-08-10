@@ -39,6 +39,7 @@ import { initAuthAdapter } from './auth-adapter.js';
 import { initNotificationAdapter } from './notification-adapter.js';
 import { initAIModal } from './ai-modal.js';
 import { initSoftNavigation } from './pjax.js';
+import { initGlobalSearch } from './global-search.js';
 
 // Re-inits the view for the current URL after a soft (PJAX) navigation.
 function initViewForPath(path) {
@@ -127,6 +128,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // ─── Page-specific view initialization ───
   initViewForPath(window.location.pathname);
+
+  try {
+    initGlobalSearch();
+  } catch (e) {
+    console.warn('[Index] Global search init failed', e);
+  }
 
   try {
     initNotificationAdapter();

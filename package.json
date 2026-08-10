@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "webpack serve --open --config webpack.config.js",
-    "build": "webpack --config webpack.config.js && node scripts/copy-ocr-assets.js",
+    "build": "webpack --config webpack.config.js && node scripts/copy-ocr-assets.js && node scripts/generate-search-index.js",
     "sort": "npx prettier --write src",
     "test": "jest"
   },

@@ -10,7 +10,7 @@ const isSoftLink = (link) => {
   return link.pathname.endsWith('.html');
 };
 
-async function softNavigate(url, { push = true } = {}) {
+export async function softNavigate(url, { push = true } = {}) {
   let html;
   try {
     const res = await fetch(url.pathname + url.search, {
