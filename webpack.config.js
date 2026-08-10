@@ -41,7 +41,10 @@ const parseEnvFile = (filePath) => {
 };
 
 const envConfig = parseEnvFile(path.resolve(__dirname, ".env"));
-const apiBaseUrl = envConfig.API_BASE_URL || process.env.API_BASE_URL || 'https://projectkit-backend-production.up.railway.app';
+const rawBaseUrl = envConfig.API_BASE_URL || process.env.API_BASE_URL || '';
+const apiBaseUrl = rawBaseUrl
+  ? (/^https?:\/\//i.test(rawBaseUrl) ? rawBaseUrl : `https://${rawBaseUrl}`)
+  : 'https://projectkit-backend-production.up.railway.app';
 
 const generateHTMLPlugins = () =>
   glob.sync("./src/*.html").map((dir) => {

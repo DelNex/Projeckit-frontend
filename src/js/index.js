@@ -38,46 +38,10 @@ import { initThemeToggle } from './theme-toggle.js';
 import { initAuthAdapter } from './auth-adapter.js';
 import { initNotificationAdapter } from './notification-adapter.js';
 import { initAIModal } from './ai-modal.js';
+import { initSoftNavigation } from './pjax.js';
 
-// Dispatch page-specific initialization on DOM Content Loaded
-document.addEventListener("DOMContentLoaded", async () => {
-  // Initialize integrations that are shared across pages (theme first for no flash)
-  try {
-    initThemeToggle();
-  } catch (e) {
-    console.warn('[Index] Theme toggle init failed', e);
-  }
-
-  try {
-    initGlobalApiErrorHandler();
-  } catch (e) {
-    console.warn('[Index] Global API error handler init failed', e);
-  }
-
-  // ─── AUTH GATE: validate session and redirect BEFORE any view renders ───
-  // initAuthAdapter() may redirect the page (e.g. teacher on admin page → index.html).
-  // We MUST await it so that view initialization never runs on the wrong page.
-  try {
-    const redirected = await initAuthAdapter();
-    if (redirected) return; // page is navigating away, don't init views
-  } catch (e) {
-    console.warn('[Index] Auth adapter init failed', e);
-  }
-
-  // ─── Store initialization (skip on auth pages — no session-less data needed) ───
-  const authPath = window.location.pathname.toLowerCase();
-  const isAuthPage = ['/login.html', '/register.html', '/forgot-password.html', '/reset-password.html'].some((page) => authPath.endsWith(page));
-  if (!isAuthPage) {
-    try {
-      await Promise.all([ConfigStore.initialize(), ImportStore.initialize(), ResponseStore.initialize(), AppSettingsStore.initialize()]);
-    } catch (e) {
-      console.warn('[Index] Store initialization failed', e);
-    }
-  }
-
-  // ─── Page-specific view initialization ───
-  const path = window.location.pathname;
-
+// Re-inits the view for the current URL after a soft (PJAX) navigation.
+function initViewForPath(path) {
   if (path.endsWith("admin.html")) {
     initAdminConsoleView();
   } else if (path.endsWith("index.html") || path.endsWith("/") || path === "") {
@@ -119,6 +83,50 @@ document.addEventListener("DOMContentLoaded", async () => {
   } else if (path.endsWith("register.html")) {
     initRegisterView();
   }
+}
+
+// Dispatch page-specific initialization on DOM Content Loaded
+document.addEventListener("DOMContentLoaded", async () => {
+  // Soft navigation (PJAX) — intercepts internal .html links and swaps <main> in place
+  initSoftNavigation();
+  window.addEventListener('pjax:loaded', () => initViewForPath(window.location.pathname));
+
+  // Initialize integrations that are shared across pages (theme first for no flash)
+  try {
+    initThemeToggle();
+  } catch (e) {
+    console.warn('[Index] Theme toggle init failed', e);
+  }
+
+  try {
+    initGlobalApiErrorHandler();
+  } catch (e) {
+    console.warn('[Index] Global API error handler init failed', e);
+  }
+
+  // ─── AUTH GATE: validate session and redirect BEFORE any view renders ───
+  // initAuthAdapter() may redirect the page (e.g. teacher on admin page → index.html).
+  // We MUST await it so that view initialization never runs on the wrong page.
+  try {
+    const redirected = await initAuthAdapter();
+    if (redirected) return; // page is navigating away, don't init views
+  } catch (e) {
+    console.warn('[Index] Auth adapter init failed', e);
+  }
+
+  // ─── Store initialization (skip on auth pages — no session-less data needed) ───
+  const authPath = window.location.pathname.toLowerCase();
+  const isAuthPage = ['/login.html', '/register.html', '/forgot-password.html', '/reset-password.html'].some((page) => authPath.endsWith(page));
+  if (!isAuthPage) {
+    try {
+      await Promise.all([ConfigStore.initialize(), ImportStore.initialize(), ResponseStore.initialize(), AppSettingsStore.initialize()]);
+    } catch (e) {
+      console.warn('[Index] Store initialization failed', e);
+    }
+  }
+
+  // ─── Page-specific view initialization ───
+  initViewForPath(window.location.pathname);
 
   try {
     initNotificationAdapter();
