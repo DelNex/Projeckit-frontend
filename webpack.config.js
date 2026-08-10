@@ -41,7 +41,7 @@ const parseEnvFile = (filePath) => {
 };
 
 const envConfig = parseEnvFile(path.resolve(__dirname, ".env"));
-const apiBaseUrl = envConfig.API_BASE_URL || process.env.API_BASE_URL || "";
+const apiBaseUrl = envConfig.API_BASE_URL || process.env.API_BASE_URL || 'https://projectkit-backend-production.up.railway.app';
 
 const generateHTMLPlugins = () =>
   glob.sync("./src/*.html").map((dir) => {
@@ -158,6 +158,7 @@ module.exports = {
   plugins: [
     new webpack.DefinePlugin({
       'process.env.API_BASE_URL': JSON.stringify(apiBaseUrl),
+      'API_BASE_URL_RAW': JSON.stringify(apiBaseUrl),
     }),
     ...generateHTMLPlugins(),
     new MiniCssExtractPlugin({

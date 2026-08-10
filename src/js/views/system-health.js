@@ -1,7 +1,5 @@
 // System Health View — live backend & Redis status checks
-const BASE = typeof process !== 'undefined' && process.env && process.env.API_BASE_URL
-  ? process.env.API_BASE_URL
-  : window.location.origin;
+const BASE = API_BASE_URL_RAW || window.location.origin;
 
 function setStatus(el, ok, label) {
   if (!el) return;

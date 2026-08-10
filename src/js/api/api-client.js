@@ -1,4 +1,4 @@
-const API_BASE_URL = typeof process !== 'undefined' && process.env && process.env.API_BASE_URL ? process.env.API_BASE_URL : '';
+const API_BASE_URL = API_BASE_URL_RAW || '';
 
 function buildUrl(endpoint) {
   if (typeof endpoint !== 'string') {
