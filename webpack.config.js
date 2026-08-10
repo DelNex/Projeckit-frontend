@@ -161,12 +161,12 @@ module.exports = {
     }),
     ...generateHTMLPlugins(),
     new MiniCssExtractPlugin({
-      filename: "style.css",
-      chunkFilename: "style.css",
+      filename: "[name].[contenthash].css",
+      chunkFilename: "[name].[contenthash].css",
     }),
   ],
   output: {
-    filename: "bundle.js",
+    filename: "[name].[contenthash].js",
     path: path.resolve(__dirname, "build"),
     clean: true,
     assetModuleFilename: "[path][name][ext]",
