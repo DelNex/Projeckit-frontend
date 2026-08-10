@@ -18,8 +18,21 @@ const KEYWORD_HINTS = {
   'reports.html': ['report', 'printing', 'sf5', 'sf4', 'summary'],
   'login.html': ['sign in', 'signin', 'auth'],
   'register.html': ['sign up', 'new account', 'create account'],
-  'logout': [],
 };
+
+// Admin-only routes — must mirror the list in src/js/auth-adapter.js (isAdminRoute).
+// They are excluded from the index so they never appear in the search palette
+// (or the shipped build payload) for non-admin users.
+const ADMIN_ONLY_PAGES = [
+  'admin.html',
+  'pending-users.html',
+  'audit-logs.html',
+  'app-config.html',
+  'app.html',
+  'tenants.html',
+  'tenant.html',
+  'system-health.html',
+];
 
 function processNestedHtml(content, dir, seen = new Set()) {
   return content.replace(INCLUDE_RE, (m, src) => {
@@ -81,6 +94,8 @@ try {
     const headings = extractHeadings(raw);
     const text = stripTags(raw).slice(0, 6000);
     const basename = path.basename(filePath);
+    if (ADMIN_ONLY_PAGES.includes(basename)) continue;
+
     const keywords = [...(KEYWORD_HINTS[basename] || [])];
 
     index.push({ url: basename, title, headings, text, keywords });
