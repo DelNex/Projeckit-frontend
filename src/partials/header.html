@@ -478,7 +478,15 @@
             </div>
           </loquix-chat-header>
           <loquix-message-list slot="messages" auto-scroll class="min-h-0 h-full"></loquix-message-list>
-          <loquix-chat-composer slot="composer" placeholder="Ask anything about your dashboard or academic data..."></loquix-chat-composer>
+          <!-- Assessment context indicator (shown by JS when in workspace) -->
+          <div id="ai-assessment-context-bar" slot="composer" class="hidden px-4 pt-2 pb-0">
+            <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800 text-[11px] font-semibold text-brand-700 dark:text-brand-300">
+              <span class="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse"></span>
+              <span id="ai-context-label">Assessment context active</span>
+              <button id="btn-clear-ai-context" class="ml-auto text-brand-400 hover:text-brand-600 dark:hover:text-brand-200 text-[10px] font-bold uppercase tracking-wide" title="Clear assessment context">Clear</button>
+            </div>
+          </div>
+          <loquix-chat-composer slot="composer" id="ai-chat-composer" placeholder="Ask anything about this assessment..."></loquix-chat-composer>
         </loquix-chat-container>
       </div>
     </div>

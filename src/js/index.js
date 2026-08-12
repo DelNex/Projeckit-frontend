@@ -9,6 +9,8 @@ Alpine.start();
 
 import { initDashboard } from "./views/dashboard.js";
 import { initTOSView } from "./views/tos.js";
+import { initAssessmentsView } from "./views/assessments.js";
+import { initAssessmentWorkspaceView } from "./views/assessment-workspace.js";
 import { initExamImportView } from "./views/exam-import.js";
 import { initItemAnalysisView } from "./views/item-analysis.js";
 import { initStudentsView } from "./views/students.js";
@@ -38,8 +40,9 @@ import { initThemeToggle } from './theme-toggle.js';
 import { initAuthAdapter } from './auth-adapter.js';
 import { initNotificationAdapter } from './notification-adapter.js';
 import { initAIModal } from './ai-modal.js';
-import { initSoftNavigation } from './pjax.js';
+import { initSoftNavigation, softNavigate } from './pjax.js';
 import { initGlobalSearch } from './global-search.js';
+import { initNavigation, updateSidebarActiveState } from './components/navigation.js';
 
 // Re-inits the view for the current URL after a soft (PJAX) navigation.
 function initViewForPath(path) {
@@ -47,18 +50,34 @@ function initViewForPath(path) {
     initAdminConsoleView();
   } else if (path.endsWith("index.html") || path.endsWith("/") || path === "") {
     initDashboard();
-  } else if (path.endsWith("tos.html")) {
-    initTOSView();
-  } else if (path.endsWith("exam-import.html")) {
-    initExamImportView();
-  } else if (path.endsWith("item-analysis.html")) {
-    initItemAnalysisView();
+  } else if (path.endsWith("assessment-workspace.html")) {
+    initAssessmentWorkspaceView();
+  } else if (path.endsWith("assessments.html")) {
+    initAssessmentsView();
   } else if (path.endsWith("students.html")) {
     initStudentsView();
   } else if (path.endsWith("analytics.html")) {
     initAnalyticsView();
+  } else if (path.endsWith("tos.html")) {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('id');
+    if (id) { window.location.href = `assessment-workspace.html?id=${id}&tab=tos`; return; }
+    window.location.href = 'assessments.html';
+  } else if (path.endsWith("exam-import.html")) {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('id');
+    if (id) { window.location.href = `assessment-workspace.html?id=${id}&tab=key`; return; }
+    window.location.href = 'assessments.html';
+  } else if (path.endsWith("item-analysis.html")) {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('id');
+    if (id) { window.location.href = `assessment-workspace.html?id=${id}&tab=analysis`; return; }
+    window.location.href = 'assessments.html';
   } else if (path.endsWith("reports.html")) {
-    initReportsView();
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('id');
+    if (id) { window.location.href = `assessment-workspace.html?id=${id}&tab=reports`; return; }
+    window.location.href = 'assessments.html';
   } else if (path.endsWith("config.html")) {
     initConfigView();
   } else if (path.endsWith("app-config.html")) {
@@ -88,9 +107,17 @@ function initViewForPath(path) {
 
 // Dispatch page-specific initialization on DOM Content Loaded
 document.addEventListener("DOMContentLoaded", async () => {
+  // Initialize navigation sidebar active states
+  initNavigation();
+
   // Soft navigation (PJAX) — intercepts internal .html links and swaps <main> in place
   initSoftNavigation();
-  window.addEventListener('pjax:loaded', () => initViewForPath(window.location.pathname));
+  // Expose PJAX navigate helper for programmatic navigation (e.g. assessments hub → workspace)
+  window.__pjaxNavigate = (url) => softNavigate(url);
+  window.addEventListener('pjax:loaded', () => {
+    updateSidebarActiveState();
+    initViewForPath(window.location.pathname);
+  });
 
   // Initialize integrations that are shared across pages (theme first for no flash)
   try {

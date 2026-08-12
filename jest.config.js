@@ -9,4 +9,8 @@ module.exports = {
     '^.+\\.js$': 'babel-jest',
   },
   transformIgnorePatterns: ['/node_modules/'],
+  globals: {
+    API_BASE_URL_RAW: '',
+    'process.env.API_BASE_URL': '',
+  },
 };

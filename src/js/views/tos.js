@@ -12,18 +12,30 @@ let autosaveTimer = null;
 let autosaveInFlight = false;
 let autosavePending = false;
 
-async function loadCompetencies() {
-  try {
-    const response = await fetchCompetencies();
-    if (response?.success && response.data && typeof response.data === 'object') {
-      TOS_COMPETENCY_DATABASE = response.data;
-      return;
-    }
-  } catch (error) {
-    console.warn('[TOSView] Failed to load competencies from backend', error);
-  }
+let competenciesLoadPromise = null;
 
-  TOS_COMPETENCY_DATABASE = {};
+/**
+ * Loads the competency database from the backend. The request is shared and
+ * memoized so every view (TOS worksheet, item analysis, ...) awaits the same
+ * in-flight request instead of issuing duplicate network calls.
+ */
+export function loadCompetencies() {
+  if (!competenciesLoadPromise) {
+    competenciesLoadPromise = (async () => {
+      try {
+        const response = await fetchCompetencies();
+        if (response?.success && response.data && typeof response.data === 'object') {
+          TOS_COMPETENCY_DATABASE = response.data;
+          return;
+        }
+      } catch (error) {
+        console.warn('[TOSView] Failed to load competencies from backend', error);
+      }
+
+      TOS_COMPETENCY_DATABASE = {};
+    })();
+  }
+  return competenciesLoadPromise;
 }
 
 async function loadSavedDocumentsIndex() {
@@ -78,16 +90,66 @@ export function getCompetenciesForContext(subject, term, schoolYear, grade, stra
   });
 }
 
-let competenciesStore = [];
+export let competenciesStore = [];
+export let documentState = 'Draft';
 let isTableEditing = false;
-let documentState = 'Draft'; // 'Draft', 'Validated', 'Finalized', 'Archived'
-let allocationMode = 'manual'; // 'manual', 'hamilton'
+let allocationMode = 'manual';
 let selectedRowIds = new Set();
 let pendingDeleteIds = [];
-let activeViewMode = 'worksheet'; // 'worksheet', 'preview'
+let activeViewMode = 'worksheet';
+
+/** Allow external callers (setup-tos.js) to seed the TOS store and fully reset state */
+export function setTOSContext({ rows = [], state = 'Draft', assessmentIdOverride = null } = {}) {
+  competenciesStore = rows;
+  documentState = state;
+  isTableEditing = false;
+  allocationMode = 'manual';
+  selectedRowIds = new Set();
+  pendingDeleteIds = [];
+  activeViewMode = 'worksheet';
+  if (assessmentIdOverride !== null) fromAssessmentId = assessmentIdOverride;
+}
+
+/** Toggle edit mode from an external host (workspace TOS panel) */
+export function setIsTableEditing(on) {
+  isTableEditing = Boolean(on);
+}
+
+// Allow setup-tos.js to flip edit mode via window event (avoids circular imports)
+window.addEventListener('tos:set-edit-mode', (e) => {
+  isTableEditing = Boolean(e.detail?.on);
+});
+
+// ── From-assessment deep-link context ────────────────────────────────────────
+// Set when tos.html is opened via "Create TOS" from the workspace deep-link
+// e.g. tos.html?from=42&subject=Math&term=First+Quarter&sy=2025-2026
+let fromAssessmentId = null;
+
+function parseFromAssessmentParams() {
+  const params = new URLSearchParams(window.location.search);
+  fromAssessmentId = params.get('from') ? Number(params.get('from')) : null;
+  return {
+    subject: params.get('subject') || null,
+    term: params.get('term') || null,
+    sy: params.get('sy') || null,
+  };
+}
 
 export async function initTOSView() {
   console.log('[Project KIT] Initializing Professional TOS Document Editor');
+
+  // Parse deep-link context BEFORE anything else
+  const fromParams = parseFromAssessmentParams();
+  if (fromAssessmentId) {
+    // Show a banner so the teacher knows they can return to the workspace
+    showReturnBanner(fromAssessmentId, false);
+  }
+
+  // Bind static buttons/popups FIRST so they respond immediately — even while
+  // competency data is still loading from the backend (prevents dead buttons).
+  bindStaticControls();
+  addTOSGridEventListeners();
+
   await Promise.all([loadCompetencies(), loadSavedDocumentsIndex()]);
 
   // Bind Header Picklists from ConfigStore
@@ -152,6 +214,20 @@ export async function initTOSView() {
 
   if (termSelect && config.academicPeriod) {
     termSelect.value = config.academicPeriod.term || 'First Quarter';
+  }
+
+  // ── Apply deep-link pre-fill AFTER defaults so workspace context wins ───────
+  if (fromParams.subject && subSelect) {
+    // Try exact match first; TOS editor subjects are titles like "Empowerment Technologies"
+    const opt = Array.from(subSelect.options).find(o => o.value === fromParams.subject);
+    if (opt) subSelect.value = fromParams.subject;
+  }
+  if (fromParams.term && termSelect) {
+    const opt = Array.from(termSelect.options).find(o => o.value === fromParams.term);
+    if (opt) termSelect.value = fromParams.term;
+  }
+  if (fromParams.sy && sySelect) {
+    sySelect.value = fromParams.sy;
   }
 
   /** Reload competencies and re-render grid whenever ANY picklist changes */
@@ -229,7 +305,14 @@ export async function initTOSView() {
   // Initial load (does not save anything to the backend)
   handleContextChange(true);
   updateDocumentStatusUI(documentState);
+}
 
+/**
+ * Binds all static page controls (buttons, modals, drawers, toggles).
+ * Runs synchronously BEFORE any async data fetch so popups and buttons always
+ * respond immediately, even when the backend is slow or unavailable.
+ */
+function bindStaticControls() {
   // Page-Level Edit / Save Toggle Button
   const btnEditToggle = document.getElementById('btn-edit-tos-toggle');
   if (btnEditToggle) {
@@ -260,9 +343,13 @@ export async function initTOSView() {
   }
 
   // Help Drawer Controls
+  const btnOpenHelp = document.getElementById('btn-open-help-drawer');
   const btnCloseHelp = document.getElementById('btn-close-help-drawer');
   const helpDrawer = document.getElementById('tos-help-drawer');
 
+  if (btnOpenHelp && helpDrawer) {
+    btnOpenHelp.addEventListener('click', () => helpDrawer.classList.remove('hidden'));
+  }
   if (btnCloseHelp && helpDrawer) {
     btnCloseHelp.addEventListener('click', () => helpDrawer.classList.add('hidden'));
   }
@@ -347,12 +434,9 @@ export async function initTOSView() {
       triggerAutoSave();
     });
   }
-
-  // ARCH-001: Add delegated event listeners for the main grid
-  addTOSGridEventListeners();
 }
 
-function switchViewMode(mode) {
+export function switchViewMode(mode) {
   activeViewMode = mode;
   const worksheetContainer = document.getElementById('worksheet-view-container');
   const previewContainer = document.getElementById('print-preview-container');
@@ -381,9 +465,12 @@ function switchViewMode(mode) {
  * ARCH-001: Adds delegated event listeners to the TOS grid to handle all user
  * interactions without polluting the global scope or using inline handlers.
  */
-function addTOSGridEventListeners() {
+export function addTOSGridEventListeners() {
   const tableBody = document.getElementById('tos-competency-tbody');
   if (!tableBody) return;
+  // Guard against duplicate registration (e.g. PJAX re-render or workspace re-init)
+  if (tableBody.dataset.tosListening) return;
+  tableBody.dataset.tosListening = '1';
 
   // Live input handler for all cells in edit mode
   tableBody.addEventListener('input', (e) => {
@@ -498,7 +585,7 @@ function updateDocumentStatusUI(status) {
   }
 }
 
-function triggerAutoSave() {
+export function triggerAutoSave() {
   const dot = document.getElementById('autosave-dot');
   const text = document.getElementById('autosave-text');
 
@@ -515,6 +602,34 @@ function triggerAutoSave() {
     }
     performAutoSave();
   }, 800);
+}
+
+// ── Return-to-assessment banner ──────────────────────────────────────────────
+function showReturnBanner(assessmentId, saved = false) {
+  const bannerId = 'tos-return-banner';
+  let banner = document.getElementById(bannerId);
+  const returnUrl = `assessment-workspace.html?id=${assessmentId}`;
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = bannerId;
+    banner.className = 'fixed top-0 inset-x-0 z-[99999] flex items-center justify-between gap-3 px-4 py-2.5 text-xs font-semibold bg-brand-600 text-white shadow-lg';
+    document.body.prepend(banner);
+  }
+  banner.innerHTML = saved
+    ? `<span class="flex items-center gap-2">
+        <svg class="w-4 h-4 text-brand-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        TOS saved &amp; linked to assessment
+       </span>
+       <a href="${returnUrl}" class="px-3 py-1 rounded-lg bg-white text-brand-700 font-bold hover:bg-brand-50 transition shrink-0">
+         ← Return to Assessment
+       </a>`
+    : `<span class="flex items-center gap-2">
+        <svg class="w-4 h-4 text-brand-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Opened from Assessment Workspace — save here to link automatically
+       </span>
+       <a href="${returnUrl}" class="px-3 py-1 rounded-lg bg-white/20 text-white font-bold hover:bg-white/30 transition shrink-0">
+         ← Back without saving
+       </a>`;
 }
 
 async function performAutoSave() {
@@ -535,6 +650,9 @@ async function performAutoSave() {
       if (text) text.textContent = '✓ Saved';
       const now = new Date();
       if (time) time.textContent = `· ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+      // If opened from workspace, show/update the Return banner
+      if (fromAssessmentId) showReturnBanner(fromAssessmentId, true);
     } else {
       setAutosaveError();
     }
@@ -557,7 +675,7 @@ function setAutosaveError() {
   if (text) text.textContent = '✗ Save failed';
 }
 
-function buildDocumentPayload() {
+export function buildDocumentPayload() {
   const getValue = (id, fallback) => document.getElementById(id)?.value || fallback;
   const subject = getValue('info-subject', 'Empowerment Technologies');
   const term = getValue('info-term', 'First Quarter');
@@ -583,6 +701,8 @@ function buildDocumentPayload() {
     targetItems,
     status: documentState,
     rows,
+    // Stamp the assessment link if this TOS was opened from a workspace
+    ...(fromAssessmentId ? { assessmentId: fromAssessmentId } : {}),
   };
 }
 
@@ -621,7 +741,7 @@ function safeInt(val, fallback = 0) {
   return isNaN(n) ? fallback : n;
 }
 
-function commitTableEdits() {
+export function commitTableEdits() {
   competenciesStore = competenciesStore.map(c => {
     const codeEl = document.getElementById(`edit-code-${c.id}`);
     const descEl = document.getElementById(`edit-desc-${c.id}`);
@@ -709,7 +829,7 @@ function getRowValidationStatus(comp, totalHours, targetHours, expectedItems, to
   };
 }
 
-function renderTOSGrid() {
+export function renderTOSGrid() {
   const container = document.getElementById('tos-competency-tbody');
   if (!container) return;
 
@@ -814,7 +934,7 @@ function renderTOSGrid() {
   }).join('');
 
   if (rowsHtml.trim() === '' && !isTableEditing) {
-    rowsHtml = NoData.renderTableRow(12, 'No competency data is available for the selected subject or quarter.', 'Please choose a different academic context or import competencies for this subject.', 'Import Competency Data', '/exam-import.html');
+    rowsHtml = NoData.renderTableRow(12, 'No competency data is available for the selected subject or quarter.', 'Click "Edit Worksheet" to add competency rows manually, or choose a different academic context.');
   }
 
   // INLINE CREATION ROW
@@ -846,52 +966,56 @@ function renderTOSGrid() {
     `;
   }
 
-  // TOTALS FOOTER ROW
-  const domainTotals = { remembering: 0, understanding: 0, applying: 0, analyzing: 0, evaluating: 0, creating: 0 };
-  competenciesStore.forEach(c => {
-    domainKeys.forEach(dk => { domainTotals[dk] += c.domains[dk]; });
-  });
+  // TOTALS FOOTER ROW — only rendered when the worksheet actually has competency
+  // rows. An empty TOS must not display a totals table (no data = no table).
+  let totalsFooterHtml = '';
+  if (competenciesStore.length > 0) {
+    const domainTotals = { remembering: 0, understanding: 0, applying: 0, analyzing: 0, evaluating: 0, creating: 0 };
+    competenciesStore.forEach(c => {
+      domainKeys.forEach(dk => { domainTotals[dk] += c.domains[dk]; });
+    });
 
-  const totalAllocatedItems = domainKeys.reduce((sum, dk) => sum + domainTotals[dk], 0);
+    const totalAllocatedItems = domainKeys.reduce((sum, dk) => sum + domainTotals[dk], 0);
 
-  const domainTotalCells = domainKeys.map((dk, i) => {
-    const val = domainTotals[dk];
-    const color = domainColors[i];
-    if (val === 0) {
-      return `<td class="px-2 py-3 text-center text-xs font-bold bg-amber-50 dark:bg-amber-900/20 text-amber-500 border-t-2 border-amber-400" title="${dk}: no items allocated">${val}</td>`;
+    const domainTotalCells = domainKeys.map((dk, i) => {
+      const val = domainTotals[dk];
+      const color = domainColors[i];
+      if (val === 0) {
+        return `<td class="px-2 py-3 text-center text-xs font-bold bg-amber-50 dark:bg-amber-900/20 text-amber-500 border-t-2 border-amber-400" title="${dk}: no items allocated">${val}</td>`;
+      }
+      return `<td class="px-2 py-3 text-center text-xs font-bold text-${color}-600 border-t-2 border-gray-200 dark:border-gray-700">${val}</td>`;
+    }).join('');
+
+    // Hours total cell color-coded highlight
+    let hoursTotalCell;
+    if (totalHours > targetHours) {
+      hoursTotalCell = `<td class="px-2 py-3 text-center text-xs font-extrabold bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 border-t-2 border-rose-500 ring-2 ring-rose-400 ring-inset rounded" title="Total hours exceed the ${targetHours} hrs target">${totalHours} hrs</td>`;
+    } else if (totalHours === targetHours) {
+      hoursTotalCell = `<td class="px-2 py-3 text-center text-xs font-extrabold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-t-2 border-emerald-500" title="Total hours match target">${totalHours} hrs</td>`;
+    } else {
+      hoursTotalCell = `<td class="px-2 py-3 text-center text-xs font-extrabold bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-t-2 border-amber-400" title="Total hours are below the ${targetHours} hrs target">${totalHours} hrs</td>`;
     }
-    return `<td class="px-2 py-3 text-center text-xs font-bold text-${color}-600 border-t-2 border-gray-200 dark:border-gray-700">${val}</td>`;
-  }).join('');
 
-  // Hours total cell color-coded highlight
-  let hoursTotalCell;
-  if (totalHours > targetHours) {
-    hoursTotalCell = `<td class="px-2 py-3 text-center text-xs font-extrabold bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 border-t-2 border-rose-500 ring-2 ring-rose-400 ring-inset rounded" title="Total hours exceed the ${targetHours} hrs target">${totalHours} hrs</td>`;
-  } else if (totalHours === targetHours) {
-    hoursTotalCell = `<td class="px-2 py-3 text-center text-xs font-extrabold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-t-2 border-emerald-500" title="Total hours match target">${totalHours} hrs</td>`;
-  } else {
-    hoursTotalCell = `<td class="px-2 py-3 text-center text-xs font-extrabold bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-t-2 border-amber-400" title="Total hours are below the ${targetHours} hrs target">${totalHours} hrs</td>`;
+    let itemsTotalCell;
+    if (totalAllocatedItems > targetN) {
+      itemsTotalCell = `<td class="px-2 py-3 text-center text-xs font-extrabold bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 border-t-2 border-rose-500 ring-2 ring-rose-400 ring-inset rounded">${totalAllocatedItems}</td>`;
+    } else if (totalAllocatedItems === targetN) {
+      itemsTotalCell = `<td class="px-2 py-3 text-center text-xs font-extrabold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-t-2 border-emerald-500">${totalAllocatedItems}</td>`;
+    } else {
+      itemsTotalCell = `<td class="px-2 py-3 text-center text-xs font-extrabold bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-t-2 border-amber-400">${totalAllocatedItems}</td>`;
+    }
+
+    totalsFooterHtml = `
+      <tr id="tos-totals-row" class="bg-gray-100 dark:bg-gray-800/80 font-semibold">
+        <td class="px-3 py-3 border-t-2 border-gray-300 dark:border-gray-600"></td>
+        <td class="px-4 py-3 text-xs uppercase text-gray-500 border-t-2 border-gray-300 dark:border-gray-600" colspan="2">Column Totals</td>
+        ${hoursTotalCell}
+        ${itemsTotalCell}
+        ${domainTotalCells}
+        <td class="px-3 py-3 border-t-2 border-gray-300 dark:border-gray-600"></td>
+      </tr>
+    `;
   }
-
-  let itemsTotalCell;
-  if (totalAllocatedItems > targetN) {
-    itemsTotalCell = `<td class="px-2 py-3 text-center text-xs font-extrabold bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 border-t-2 border-rose-500 ring-2 ring-rose-400 ring-inset rounded">${totalAllocatedItems}</td>`;
-  } else if (totalAllocatedItems === targetN) {
-    itemsTotalCell = `<td class="px-2 py-3 text-center text-xs font-extrabold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-t-2 border-emerald-500">${totalAllocatedItems}</td>`;
-  } else {
-    itemsTotalCell = `<td class="px-2 py-3 text-center text-xs font-extrabold bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-t-2 border-amber-400">${totalAllocatedItems}</td>`;
-  }
-
-  const totalsFooterHtml = `
-    <tr id="tos-totals-row" class="bg-gray-100 dark:bg-gray-800/80 font-semibold">
-      <td class="px-3 py-3 border-t-2 border-gray-300 dark:border-gray-600"></td>
-      <td class="px-4 py-3 text-xs uppercase text-gray-500 border-t-2 border-gray-300 dark:border-gray-600" colspan="2">Column Totals</td>
-      ${hoursTotalCell}
-      ${itemsTotalCell}
-      ${domainTotalCells}
-      <td class="px-3 py-3 border-t-2 border-gray-300 dark:border-gray-600"></td>
-    </tr>
-  `;
 
   container.innerHTML = rowsHtml + inlineAddRowHtml + totalsFooterHtml;
   updateLiveValidation();
@@ -1044,7 +1168,7 @@ function onDomainInputChanged() {
   triggerAutoSave();
 }
 
-function updateLiveValidation() {
+export function updateLiveValidation() {
   const banner = document.getElementById('tos-validation-banner');
   const targetItemsInput = document.getElementById('tos-total-items');
   const targetHoursInput = document.getElementById('tos-target-hours');
@@ -1199,7 +1323,7 @@ function updateLiveValidation() {
   banner.innerHTML = bannerHtml;
 }
 
-function renderOfficialDepEdPreview() {
+export function renderOfficialDepEdPreview() {
   const tbody = document.getElementById('preview-tbody');
   if (!tbody) return;
 
@@ -1212,17 +1336,22 @@ function renderOfficialDepEdPreview() {
   const teacherVal = document.getElementById('info-teacher')?.value || '';
   const targetN = document.getElementById('tos-total-items')?.value || '';
 
-  // Update preview header labels
-  document.getElementById('preview-subject').textContent = escapeHTML(subjectVal || '—');
-  document.getElementById('preview-grade').textContent = escapeHTML(gradeVal || '—');
-  const qtrElem = document.getElementById('preview-qtr');
-  if (qtrElem) qtrElem.textContent = escapeHTML(qtrVal || '—');
-  document.getElementById('preview-strand').textContent = escapeHTML(strandVal);
-  document.getElementById('preview-section').textContent = escapeHTML(secVal);
-  document.getElementById('preview-sy').textContent = escapeHTML(syVal || '—');
-  document.getElementById('preview-teacher').textContent = escapeHTML(teacherVal || '—');
-  document.getElementById('sig-teacher').textContent = escapeHTML((teacherVal || '—').toUpperCase());
-  document.getElementById('preview-items').textContent = targetN ? `${escapeHTML(targetN)} Test Items` : '—';
+  // Update preview header labels — null-guarded so this works in both
+  // the standalone tos.html and the embedded workspace TOS panel.
+  const setPreview = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  };
+
+  setPreview('preview-subject', subjectVal || '—');
+  setPreview('preview-grade',   gradeVal   || '—');
+  setPreview('preview-qtr',     qtrVal     || '—');
+  setPreview('preview-strand',  strandVal  || '—');
+  setPreview('preview-section', secVal     || '—');
+  setPreview('preview-sy',      syVal      || '—');
+  setPreview('preview-teacher', teacherVal || '—');
+  setPreview('sig-teacher',     (teacherVal || '—').toUpperCase());
+  setPreview('preview-items',   targetN ? `${targetN} Test Items` : '—');
 
   const targetHoursInput = document.getElementById('tos-target-hours');
   const targetHours = targetHoursInput ? Number(targetHoursInput.value) || 40 : 40;
@@ -1230,7 +1359,7 @@ function renderOfficialDepEdPreview() {
   if (!competenciesStore || competenciesStore.length === 0) {
     tbody.innerHTML = `
       <tr class="border-b border-gray-900 text-center">
-        <td colspan="10" class="border border-gray-900 p-6 text-sm text-gray-500">No competency data is available for the selected academic context. Please choose a different subject/quarter or update your curriculum configuration.</td>
+        <td colspan="10" class="border border-gray-900 p-6 text-sm text-gray-500">No competency data is available for the selected academic context. Click "Edit Worksheet" to add competency rows manually, or choose a different subject/quarter.</td>
       </tr>
     `;
     return;

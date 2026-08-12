@@ -482,16 +482,30 @@ function renderStudentRoster() {
       </div>
     ` : `${student.score} / ${student.totalItems || 40}`;
 
+    const initials = (student.name || 'S')
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map(n => n[0].toUpperCase())
+      .join('');
+
     return `
-      <tr class="border-b border-stroke dark:border-strokedark hover:bg-gray-50 dark:hover:bg-gray-800 ${isEditMode ? 'bg-amber-50/20 dark:bg-amber-900/5' : ''}">
+      <tr class="border-b border-stroke dark:border-strokedark hover:bg-gray-50/80 dark:hover:bg-gray-800/60 transition-colors ${isEditMode ? 'bg-amber-50/20 dark:bg-amber-900/5' : ''}">
         <td class="px-2 py-2.5 text-center">
           <input type="checkbox" value="${escapeHTML(student.lrn)}" ${isSelected ? 'checked' : ''} class="row-checkbox rounded border-gray-300 dark:border-gray-700 text-brand-500 focus:ring-brand-500" />
         </td>
         <td class="px-2.5 py-2.5 text-xs font-mono font-semibold text-gray-900 dark:text-white whitespace-nowrap">${escapeHTML(student.lrn)}</td>
-        <td class="px-2.5 py-2.5 text-xs font-medium text-gray-900 dark:text-white whitespace-nowrap">${escapeHTML(student.name)}</td>
+        <td class="px-2.5 py-2.5 text-xs font-medium text-gray-900 dark:text-white whitespace-nowrap">
+          <div class="flex items-center gap-2.5">
+            <div class="w-7 h-7 rounded-full bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 flex items-center justify-center font-bold text-[10px] shrink-0">
+              ${initials}
+            </div>
+            <span class="font-semibold text-gray-900 dark:text-white">${escapeHTML(student.name)}</span>
+          </div>
+        </td>
         <td class="px-2.5 py-2.5 text-xs text-gray-600 dark:text-gray-300 whitespace-nowrap">${escapeHTML(resolveSectionName(student.section, masterConfig))}</td>
         <td class="px-2 py-2.5 text-center text-xs font-bold text-gray-900 dark:text-white whitespace-nowrap">${scoreCellHtml}</td>
-        <td class="px-2 py-2.5 text-center text-xs font-bold text-brand-500 whitespace-nowrap col-mps">${student.mps.toFixed(1)}%</td>
+        <td class="px-2 py-2.5 text-center text-xs font-extrabold text-brand-500 whitespace-nowrap col-mps">${student.mps.toFixed(1)}%</td>
         <td class="px-2.5 py-2.5 col-classification"><span class="${getClassificationBadge(student.classification)}">${escapeHTML(shortenClassification(student.classification))}</span></td>
         ${actionsTd}
       </tr>

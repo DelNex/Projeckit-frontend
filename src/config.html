@@ -209,17 +209,10 @@
 
             </div>
 
-            <!-- Toast Notification -->
-            <div id="app-toast" class="hidden fixed bottom-6 right-6 z-9999 bg-gray-900 dark:bg-gray-800 text-white text-xs px-4 py-3 rounded-xl shadow-2xl transition-all duration-300 transform flex items-center justify-between gap-4">
-            </div>
+            <!-- Toast Notification (shared #app-toast lives in the header partial) -->
 
-          </div>
-        </main>
-      </div>
-    </div>
-
-    <!-- ========== SECTION MODAL POPUP ========== -->
-    <div id="add-section-modal" class="hidden fixed inset-0 z-99999 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <!-- ========== SECTION MODAL POPUP ========== -->
+            <div id="add-section-modal" class="hidden fixed inset-0 z-99999 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-800 w-full max-w-md mx-4 p-6 space-y-5">
         <div class="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
           <h3 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -305,6 +298,11 @@
           <button id="btn-cancel-subject-modal" class="px-4 py-2 text-xs font-semibold text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200">Cancel</button>
           <button id="btn-submit-subject-modal" class="px-5 py-2 text-xs font-semibold text-white bg-purple-600 rounded-lg hover:bg-purple-700 shadow-sm">Register Subject</button>
         </div>
+      </div>
+    </div>
+
+          </div>
+        </main>
       </div>
     </div>
 

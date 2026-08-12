@@ -62,53 +62,54 @@ export function initAnalyticsView() {
     subjectSelect.innerHTML = config.subjects.map(s => `<option value="${escapeHTML(s.title)}">${escapeHTML(s.title)}</option>`).join('');
   }
 
-  // Populate Section Select dynamically based on Strand & Grade
+  // Populate Section Select dynamically based on Strand & Grade filter
   const updateSectionDropdown = () => {
     if (!sectionSelect) return;
-    const strandVal = strandSelect?.value || 'TVL - ICT';
-    const gradeVal = gradeSelect?.value || 'Grade 11';
-    const strandNormalized = strandVal.replace(/\s+-\s+/g, '-').trim().toLowerCase();
-    const gradeNum = gradeVal.replace(/\D/g, '');
+    const strandVal = strandSelect?.value || 'all';
+    const gradeVal = gradeSelect?.value || 'all';
 
-    const matchingSections = (config.sections || []).filter(sec => {
-      const secStrandNormalized = (sec.strand || '').replace(/\s+-\s+/g, '-').trim().toLowerCase();
-      const matchesStrand = !strandNormalized || 
-             secStrandNormalized.includes(strandNormalized) || 
-             strandNormalized.includes(secStrandNormalized);
+    // Always start with 'All Sections'
+    const allSections = config.sections || [];
 
-      if (!matchesStrand) return false;
-
-      if (!gradeNum) return true;
-      const secGradeNum = (sec.grade || '').replace(/\D/g, '');
-      if (secGradeNum) return secGradeNum === gradeNum;
-      const secNamePrefix = (sec.name || '').split('-')[0].replace(/\D/g, '');
-      if (secNamePrefix) return secNamePrefix === gradeNum;
-      return true;
-    });
-
-    if (!matchingSections || matchingSections.length === 0) {
-      sectionSelect.innerHTML = `<option value="">— No sections —</option>`;
-      sectionSelect.disabled = true;
-      ensureAddSectionsLink(sectionSelect);
-      return;
+    let matchingSections = allSections;
+    if (strandVal !== 'all') {
+      const strandNormalized = strandVal.replace(/\s+-\s+/g, '-').trim().toLowerCase();
+      matchingSections = matchingSections.filter(sec => {
+        const secStrand = (sec.strand || '').replace(/\s+-\s+/g, '-').trim().toLowerCase();
+        return secStrand.includes(strandNormalized) || strandNormalized.includes(secStrand);
+      });
+    }
+    if (gradeVal !== 'all') {
+      const gradeNum = gradeVal.replace(/\D/g, '');
+      if (gradeNum) {
+        matchingSections = matchingSections.filter(sec => {
+          const secGradeNum = (sec.grade || '').replace(/\D/g, '');
+          if (secGradeNum) return secGradeNum === gradeNum;
+          const secNamePrefix = (sec.name || '').split('-')[0].replace(/\D/g, '');
+          return secNamePrefix === gradeNum;
+        });
+      }
     }
 
     sectionSelect.disabled = false;
-    sectionSelect.innerHTML = matchingSections.map(s => 
-      `<option value="${escapeHTML(s.name)}">${escapeHTML(s.name)} (${escapeHTML(s.strand)})</option>`
-    ).join('');
-    ensureAddSectionsLink(sectionSelect);
+    const sectionOptions = [
+      '<option value="all">All Sections</option>',
+      ...matchingSections.map(s =>
+        `<option value="${escapeHTML(s.name)}">${escapeHTML(s.name)} (${escapeHTML(s.strand)})</option>`
+      )
+    ];
+    sectionSelect.innerHTML = sectionOptions.join('');
   };
 
   updateSectionDropdown();
 
-  // Set default picklist values from ConfigStore
-  if (sySelect && config.academicPeriod) {
-    sySelect.value = config.academicPeriod.schoolYear || '2025–2026';
-  }
-  if (termSelect && config.academicPeriod) {
-    termSelect.value = config.academicPeriod.term || 'First Quarter';
-  }
+  // Picklists default to 'all' so charts always render on first load
+  if (sySelect) sySelect.value = 'all';
+  if (gradeSelect) gradeSelect.value = 'all';
+  if (strandSelect) strandSelect.value = 'all';
+  if (termSelect) termSelect.value = 'all';
+  if (sectionSelect) sectionSelect.value = 'all';
+  if (subjectSelect) subjectSelect.value = 'all';
 
   // Scope is now derived from the active tab (sectional => 'class', longitudinal => 'year'). The explicit scope switcher buttons were removed to simplify the UI.
 
@@ -162,11 +163,11 @@ export function initAnalyticsView() {
     contentContainer.innerHTML = SkeletonBuilder.renderChartPlaceholder(`Loading ${activeScope.toUpperCase()} ${activeTab.toUpperCase()} Analytics...`);
 
     // Update Summary Header Pills
-    const sectionVal = selectValueOrEmpty(sectionSelect);
-    const syVal = sySelect?.value || '2025–2026';
-    const qtrVal = termSelect?.value || 'First Quarter';
-    const strandVal = strandSelect?.value || 'TVL - ICT';
- 
+    const sectionVal = sectionSelect?.value || 'all';
+    const syVal = sySelect?.value || 'all';
+    const qtrVal = termSelect?.value || 'all';
+    const strandVal = strandSelect?.value || 'all';
+
     const elScopeTag = document.getElementById('metric-scope-tag');
     const elMpsScore = document.getElementById('metric-mps-score');
     const elMasteryTag = document.getElementById('metric-mastery-tag');
@@ -174,78 +175,43 @@ export function initAnalyticsView() {
     // Derive scope from activeTab for simplicity (sectional => class, longitudinal => year)
     activeScope = activeTab === 'longitudinal' ? 'year' : 'class';
 
-    if (sectionSelect?.disabled || !sectionVal) {
-      if (elScopeTag) elScopeTag.textContent = `No Section (${strandVal})`;
+    // Compute aggregate MPS for header pills
+    const sectionsToAggregate = sectionVal === 'all'
+      ? (config.sections || []).map(s => s.name)
+      : [sectionVal];
+    const quartersToAggregate = qtrVal === 'all'
+      ? ['First Quarter', 'Second Quarter', 'Third Quarter', 'Fourth Quarter']
+      : [qtrVal];
+
+    if (elScopeTag) {
+      elScopeTag.textContent = sectionVal === 'all'
+        ? 'All Sections'
+        : (activeScope === 'class' ? `Class: ${sectionVal}` : `Longitudinal: ${syVal}`);
+    }
+
+    // Aggregate MPS across all selected sections and quarters
+    let totalCorrectAll = 0, totalDenomAll = 0;
+    for (const sec of sectionsToAggregate) {
+      for (const qtr of quartersToAggregate) {
+        const responses = ResponseStore.getForSection(sec, qtr) || [];
+        if (!Array.isArray(responses) || responses.length === 0) continue;
+        const items = Array.isArray(responses[0].responses) ? responses[0].responses.length : 0;
+        if (items === 0) continue;
+        const correct = responses.reduce((acc, s) => {
+          return acc + (Array.isArray(s.responses) ? s.responses.reduce((a, v) => a + (Number(v) || 0), 0) : 0);
+        }, 0);
+        totalCorrectAll += correct;
+        totalDenomAll += responses.length * items;
+      }
+    }
+    const computedMps = totalDenomAll > 0 ? Number(((totalCorrectAll / totalDenomAll) * 100).toFixed(1)) : null;
+
+    if (computedMps != null) {
+      if (elMpsScore) elMpsScore.textContent = `Mean MPS: ${computedMps}%`;
+      if (elMasteryTag) elMasteryTag.textContent = computedMps >= AppSettingsStore.mpsPassing() ? 'Mastery: High' : 'Mastery: Moderate';
+    } else {
       if (elMpsScore) elMpsScore.textContent = `Mean MPS: N/A`;
       if (elMasteryTag) elMasteryTag.textContent = `Mastery: N/A`;
-    } else {
-      if (elScopeTag) {
-        elScopeTag.textContent = activeScope === 'class' 
-          ? `Class Scope: ${sectionVal}` 
-          : `Longitudinal Scope: ${syVal} (${strandVal})`;
-      }
-      // Compute section-level MPS using real response data when available; otherwise prefer persisted imports/ConfigStore
-      let computedMps = null;
-
-      if (activeScope === 'class') {
-        if (sectionVal) {
-          // Try to compute from ResponseStore if responses exist for this section
-          const responses = ResponseStore.getForSection(sectionVal, qtrVal) || [];
-          if (Array.isArray(responses) && responses.length > 0) {
-            // Determine number of items from first student's response array
-            const items = Array.isArray(responses[0].responses) ? responses[0].responses.length : 0;
-            if (items > 0) {
-              // Sum correct answers across all students
-              const totalCorrect = responses.reduce((acc, s) => {
-                const sum = Array.isArray(s.responses) ? s.responses.reduce((a, v) => a + (Number(v) || 0), 0) : 0;
-                return acc + sum;
-              }, 0);
-              const denom = responses.length * items;
-              computedMps = denom > 0 ? Number(((totalCorrect / denom) * 100).toFixed(1)) : 0;
-            }
-          }
-
-          // Fallback: try persisted imports -> ConfigStore. Do NOT fall back to hardcoded mock data.
-          if (computedMps == null) {
-            // recent imports (persisted)
-            let parsedImportMps = null;
-            try {
-              const recent = ImportStore.getRecent(20);
-              const importEntry = recent.find(r => (r.section || '').toString() === sectionVal || (r.section || '').toString() === sectionVal);
-              if (importEntry && importEntry.mps != null) {
-                if (typeof importEntry.mps === 'string') {
-                  const n = parseFloat(importEntry.mps.replace('%','').trim());
-                  parsedImportMps = Number.isFinite(n) ? n : null;
-                } else if (typeof importEntry.mps === 'number') {
-                  parsedImportMps = importEntry.mps;
-                }
-              }
-            } catch (e) {
-              // ignore import store errors
-            }
-
-            // Check ConfigStore for per-section mps if present
-            const cfg = ConfigStore.getSafe();
-            const cfgSec = (cfg.sections || []).find(s=>s.name === sectionVal || s.id === sectionVal);
-            const cfgMps = (cfgSec && cfgSec.mps != null) ? Number(cfgSec.mps) : null;
-
-            // Do not use mock system average; if none available, mark as null so UI shows N/A
-            computedMps = parsedImportMps ?? cfgMps ?? null;
-          }
-        } else {
-          computedMps = null;
-        }
-      } else {
-        // For longitudinal (year) scope, try to use imports / ConfigStore per year aggregation if applicable
-        computedMps = null;
-      }
-      if (computedMps != null) {
-        if (elMpsScore) elMpsScore.textContent = `Mean MPS: ${computedMps}%`;
-        if (elMasteryTag) elMasteryTag.textContent = computedMps >= AppSettingsStore.mpsPassing() ? 'Mastery: High' : 'Mastery: Moderate';
-      } else {
-        if (elMpsScore) elMpsScore.textContent = `Mean MPS: N/A`;
-        if (elMasteryTag) elMasteryTag.textContent = `Mastery: N/A`;
-      }
     }
 
     // Render Tab Content & ApexChart after brief transition
@@ -255,8 +221,8 @@ export function initAnalyticsView() {
         schoolYear: syVal,
         section: sectionVal,
         strand: strandVal,
-        subject: subjectSelect?.value || 'Empowerment Technologies',
-        quarter: termSelect?.value || 'First Quarter'
+        subject: subjectSelect?.value || 'all',
+        quarter: qtrVal
       });
     }, 200);
   }
@@ -347,22 +313,19 @@ function renderSectionalChart(selector, context) {
   const container = document.querySelector(selector);
   if (!container) return;
 
-  // Build sections list from ConfigStore (this matches the picklist values) and attach any matching mock section metadata
   const cfg = ConfigStore.getSafe();
   const cfgSections = cfg.sections || [];
-  // No mock lookup: we intentionally avoid using hardcoded mock metadata here
-  const findMockSection = () => undefined;
 
   const sections = cfgSections.map(s => ({
-  id: s.id || s.name,
-  name: s.name,
-  strand: s.strand,
-  studentCount: s.studentCount
+    id: s.id || s.name,
+    name: s.name,
+    strand: s.strand,
+    studentCount: s.studentCount
   }));
 
-  // Build an ordered small set for the chart: active section first (if present) then others
+  // If a specific section is selected, put it first; else show all
   let ordered = [];
-  if (context.section) {
+  if (context.section && context.section !== 'all') {
     const active = sections.find(s => s.name === context.section);
     if (active) ordered.push(active);
     ordered = ordered.concat(sections.filter(s => s.name !== context.section));
@@ -370,61 +333,78 @@ function renderSectionalChart(selector, context) {
     ordered = sections.slice();
   }
 
-  // Limit to 4 items for display parity with previous implementation
-  ordered = ordered.slice(0, 4);
+  // Show up to 8 sections in chart
+  ordered = ordered.slice(0, 8);
 
-  const categories = ordered.map(s => `${s.name}${s.name === context.section ? ' (Active)' : ''}`);
+  const quartersToUse = context.quarter === 'all'
+    ? ['First Quarter', 'Second Quarter', 'Third Quarter', 'Fourth Quarter']
+    : [context.quarter];
+
+  const categories = ordered.map(s =>
+    `${s.name}${s.name === context.section ? ' ✓' : ''}`
+  );
+
   const data = ordered.map(s => {
-    // Prefer real response-derived MPS when available for each section and current quarter
-    try {
-      const responses = ResponseStore.getForSection(s.name, context.quarter) || [];
-      if (Array.isArray(responses) && responses.length > 0) {
+    // Aggregate MPS across relevant quarters
+    let totalCorrect = 0, totalDenom = 0;
+    for (const qtr of quartersToUse) {
+      try {
+        const responses = ResponseStore.getForSection(s.name, qtr) || [];
+        if (!Array.isArray(responses) || responses.length === 0) continue;
         const items = Array.isArray(responses[0].responses) ? responses[0].responses.length : 0;
-        if (items > 0) {
-          const totalCorrect = responses.reduce((acc, st) => {
-            const sum = Array.isArray(st.responses) ? st.responses.reduce((a, v) => a + (Number(v) || 0), 0) : 0;
-            return acc + sum;
-          }, 0);
-          const denom = responses.length * items;
-          return Number(((totalCorrect / denom) * 100).toFixed(1));
-        }
-      }
-    } catch (e) {
-      // ignore and fallback
+        if (items === 0) continue;
+        const correct = responses.reduce((acc, st) => {
+          return acc + (Array.isArray(st.responses) ? st.responses.reduce((a, v) => a + (Number(v) || 0), 0) : 0);
+        }, 0);
+        totalCorrect += correct;
+        totalDenom += responses.length * items;
+      } catch (e) { /* ignore */ }
     }
-    // Try persisted recent imports and ConfigStore; do not use mock data
+    if (totalDenom > 0) return Number(((totalCorrect / totalDenom) * 100).toFixed(1));
+
+    // Fallback: ImportStore
     let fallbackMps = null;
     try {
       const recent = ImportStore.getRecent(20);
-      const importEntry = recent.find(r => (r.section || '').toString() === s.name || (r.section || '').toString() === s.name);
+      const importEntry = recent.find(r => (r.section || '').toString() === s.name);
       if (importEntry && importEntry.mps != null) {
-        if (typeof importEntry.mps === 'string') {
-          const n = parseFloat(importEntry.mps.replace('%','').trim());
-          fallbackMps = Number.isFinite(n) ? n : null;
-        } else if (typeof importEntry.mps === 'number') {
-          fallbackMps = importEntry.mps;
-        }
+        const n = typeof importEntry.mps === 'string'
+          ? parseFloat(importEntry.mps.replace('%','').trim())
+          : Number(importEntry.mps);
+        if (Number.isFinite(n)) fallbackMps = n;
       }
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) { /* ignore */ }
 
     try {
-      const cfg = ConfigStore.getSafe();
       const cfgSec = (cfg.sections || []).find(x => x.name === s.name || x.id === s.id);
       if (cfgSec && cfgSec.mps != null) fallbackMps = Number(cfgSec.mps);
     } catch (e) {}
 
-    // If still no data, return null so chart can show a gap and UI will indicate no data
     return fallbackMps ?? null;
   });
 
+  // If no data at all, show NoData message
+  if (data.every(v => v === null)) {
+    container.innerHTML = NoData.renderCard(
+      'No assessment data available yet',
+      'Complete assessments and record student responses to see MPS comparison charts here.',
+      'Go to Assessments',
+      'assessments.html'
+    );
+    return;
+  }
+
   const options = {
-    chart: { type: 'bar', height: 280, toolbar: { show: false } },
+    chart: { type: 'bar', height: 300, toolbar: { show: false } },
     plotOptions: { bar: { horizontal: true, barHeight: '45%', borderRadius: 4 } },
     colors: [ cssVar('--color-success-500', '#10B981') ],
     series: [{ name: 'Class MPS %', data }],
-    xaxis: { categories, max: 100 }
+    xaxis: { categories, max: 100 },
+    dataLabels: {
+      enabled: true,
+      formatter: (val) => val != null ? `${val}%` : 'N/A',
+    },
+    tooltip: { y: { formatter: (val) => val != null ? `${val}%` : 'No data' } },
   };
   activeChart = new ApexCharts(container, options);
   activeChart.render();
@@ -480,39 +460,62 @@ function renderLongitudinalChart(selector, context) {
     }
   }
 
-  const series = years.map((sy, idx) => {
+  // When 'all' sections, aggregate across every configured section
+  const sectionsForLongitudinal = context.section === 'all'
+    ? (cfg.sections || []).map(s => s.name)
+    : [context.section];
+
+  const series = years.map((sy) => {
     const data = quarters.map(q => {
-      // 1) Prefer ImportStore entries that include schoolYear and quarter
-      const fromImport = findImportMps(context.section, sy, q);
-      if (fromImport != null) return fromImport;
+      let totalCorrect = 0, totalDenom = 0;
 
-      // 2) If schoolYear is current school year, prefer live ResponseStore
-      if (sy === currentSchoolYear) {
-        const respMps = computeMpsFromResponses(context.section, q);
-        if (respMps != null) return respMps;
+      for (const sec of sectionsForLongitudinal) {
+        // 1) ImportStore with schoolYear
+        const fromImport = findImportMps(sec, sy, q);
+        if (fromImport != null) { totalCorrect += fromImport; totalDenom += 100; continue; }
+
+        // 2) Live ResponseStore for current school year
+        if (sy === currentSchoolYear) {
+          const respMps = computeMpsFromResponses(sec, q);
+          if (respMps != null) { totalCorrect += respMps; totalDenom += 100; continue; }
+        }
+
+        // 3) Legacy import fallback
+        const legacy = importEntries.find(e =>
+          (e.section || '').toString() === sec &&
+          ResponseStore.normalizeQuarterName(e.quarter || '') === ResponseStore.normalizeQuarterName(q)
+        );
+        if (legacy && legacy.mps != null) {
+          const v = typeof legacy.mps === 'string' ? parseFloat(legacy.mps.replace('%','').trim()) : Number(legacy.mps);
+          if (Number.isFinite(v)) { totalCorrect += v; totalDenom += 100; }
+        }
       }
 
-      // 3) Try fallback: if imports exist without schoolYear (legacy), attempt match by quarter+section
-      const legacy = importEntries.find(e => (e.section || '').toString() === (context.section || '').toString() && ResponseStore.normalizeQuarterName(e.quarter || '') === ResponseStore.normalizeQuarterName(q));
-      if (legacy && legacy.mps != null) {
-        const v = typeof legacy.mps === 'string' ? parseFloat(legacy.mps.replace('%','').trim()) : Number(legacy.mps);
-        if (Number.isFinite(v)) return v;
-      }
-
-      // 4) No data available for this (sy,q) -> return null to create gaps in the chart
-      return null;
+      return totalDenom > 0 ? Number((totalCorrect / (totalDenom / 100)).toFixed(1)) : null;
     });
 
     return { name: `S.Y. ${sy} MPS %`, data };
   });
+
+  const hasAnyData = series.some(s => s.data.some(v => v != null));
+  if (!hasAnyData) {
+    container.innerHTML = NoData.renderCard(
+      'No longitudinal data available yet',
+      'Complete assessments across multiple quarters and school years to see growth trends here.',
+      'Go to Assessments',
+      'assessments.html'
+    );
+    return;
+  }
 
   const options = {
     chart: { type: 'line', height: 280, toolbar: { show: false } },
     stroke: { curve: 'smooth', width: 3 },
     colors: [ cssVar('--color-brand-500', '#3C50E0'), cssVar('--color-success-500', '#10B981'), cssVar('--color-warning-500', '#F59E0B') ],
     series,
-    xaxis: { categories: ['1st Quarter', '2nd Quarter', '3rd Quarter', '4th Quarter'] },
-    yaxis: { min: 0, max: 100 }
+    xaxis: { categories: ['Q1', 'Q2', 'Q3', 'Q4'] },
+    yaxis: { min: 0, max: 100, title: { text: 'MPS %' } },
+    tooltip: { y: { formatter: v => v != null ? `${v}%` : 'No data' } }
   };
 
   activeChart = new ApexCharts(container, options);
@@ -526,17 +529,31 @@ function renderCognitiveChart(selector, context) {
   const domains = ['remembering', 'understanding', 'applying', 'analyzing', 'evaluating', 'creating'];
   const domainLabels = ['Remembering', 'Understanding', 'Applying', 'Analyzing', 'Evaluating', 'Creating'];
 
-  const subject = context.subject || 'Empowerment Technologies';
-  const quarter = context.quarter || 'First Quarter';
   const cfg = ConfigStore.getSafe();
-  const sectionMeta = (cfg.sections || []).find(s => s.name === context.section || s.id === context.section);
-  const grade = sectionMeta?.grade || 'Grade 11';
-  const schoolYear = context.schoolYear || cfg.academicPeriod?.schoolYear || '2025–2026';
-  const strand = context.strand || 'TVL - ICT';
+  const allSections = cfg.sections || [];
 
-  const competencies = getCompetenciesForContext(subject, quarter, schoolYear, grade, strand, context.section);
+  // Resolve effective section(s): 'all' means first available section for TOS lookup
+  const effectiveSection = context.section === 'all'
+    ? (allSections[0]?.name || '')
+    : context.section;
+  const effectiveQuarter = context.quarter === 'all' ? 'First Quarter' : context.quarter;
+  const effectiveSubject = context.subject === 'all'
+    ? (cfg.subjects?.[0]?.title || 'Empowerment Technologies')
+    : (context.subject || 'Empowerment Technologies');
+
+  const sectionMeta = allSections.find(s => s.name === effectiveSection || s.id === effectiveSection);
+  const grade = sectionMeta?.grade || 'Grade 11';
+  const schoolYear = (context.schoolYear === 'all' ? cfg.academicPeriod?.schoolYear : context.schoolYear) || '2025–2026';
+  const strand = context.strand === 'all' ? (sectionMeta?.strand || 'TVL - ICT') : (context.strand || 'TVL - ICT');
+
+  const competencies = getCompetenciesForContext(effectiveSubject, effectiveQuarter, schoolYear, grade, strand, effectiveSection);
   if (!competencies || competencies.length === 0) {
-    container.innerHTML = NoData.renderCard('No cognitive domain mapping available', 'There are no TOS competencies mapped for the selected subject and quarter. Adjust your selection or add competencies in the TOS page.', 'Open TOS Competencies', '/tos.html');
+    container.innerHTML = NoData.renderCard(
+      'No cognitive domain mapping available',
+      'There are no TOS competencies mapped for the selected subject and quarter. Adjust your selection or add competencies in the TOS editor inside an assessment.',
+      'Go to Assessments',
+      'assessments.html'
+    );
     return;
   }
 
@@ -548,33 +565,41 @@ function renderCognitiveChart(selector, context) {
   competencies.forEach(comp => {
     domains.forEach(domain => {
       const count = Number(comp.domains?.[domain]) || 0;
-      for (let i = 0; i < count; i += 1) {
-        domainSequence.push(domain);
-      }
+      for (let i = 0; i < count; i += 1) domainSequence.push(domain);
     });
   });
 
-  const responses = ResponseStore.getForSection(context.section, context.quarter) || [];
-  const masteryData = domains.map(() => null);
-  if (Array.isArray(responses) && responses.length > 0 && domainSequence.length > 0) {
-    const domainTotals = domains.reduce((acc, domain) => ({ ...acc, [domain]: 0 }), {});
-    const domainCorrect = domains.reduce((acc, domain) => ({ ...acc, [domain]: 0 }), {});
+  // Aggregate responses: if 'all' sections, combine all sections; if 'all' quarters, combine all quarters
+  const sectionsToScan = context.section === 'all' ? allSections.map(s => s.name) : [effectiveSection];
+  const quartersToScan = context.quarter === 'all'
+    ? ['First Quarter', 'Second Quarter', 'Third Quarter', 'Fourth Quarter']
+    : [effectiveQuarter];
 
-    responses.forEach((response) => {
-      const answers = Array.isArray(response.responses) ? response.responses : [];
-      answers.forEach((value, index) => {
-        const domain = domainSequence[index];
-        if (!domain) return;
-        domainTotals[domain] += 1;
-        domainCorrect[domain] += Number(value) || 0;
+  const domainTotals = domains.reduce((acc, d) => ({ ...acc, [d]: 0 }), {});
+  const domainCorrect = domains.reduce((acc, d) => ({ ...acc, [d]: 0 }), {});
+  let hasResponses = false;
+
+  for (const sec of sectionsToScan) {
+    for (const qtr of quartersToScan) {
+      const responses = ResponseStore.getForSection(sec, qtr) || [];
+      if (!Array.isArray(responses) || responses.length === 0) continue;
+      hasResponses = true;
+      responses.forEach(response => {
+        const answers = Array.isArray(response.responses) ? response.responses : [];
+        answers.forEach((value, index) => {
+          const domain = domainSequence[index];
+          if (!domain) return;
+          domainTotals[domain] += 1;
+          domainCorrect[domain] += Number(value) || 0;
+        });
       });
-    });
-
-    domains.forEach((domain, idx) => {
-      const total = domainTotals[domain];
-      masteryData[idx] = total > 0 ? Number(((domainCorrect[domain] / total) * 100).toFixed(1)) : null;
-    });
+    }
   }
+
+  const masteryData = domains.map(domain => {
+    const total = domainTotals[domain];
+    return total > 0 ? Number(((domainCorrect[domain] / total) * 100).toFixed(1)) : null;
+  });
 
   const options = {
     chart: { type: 'line', height: 280, toolbar: { show: false } },
@@ -591,11 +616,10 @@ function renderCognitiveChart(selector, context) {
       { opposite: true, title: { text: 'Mastery %' }, min: 0, max: 100 }
     ],
     tooltip: {
-      shared: true,
-      intersect: false,
+      shared: true, intersect: false,
       y: [
-        { formatter: (value) => `${Number(value).toFixed(0)} item(s)` },
-        { formatter: (value) => (value == null ? 'N/A' : `${Number(value).toFixed(1)}%`) }
+        { formatter: v => `${Number(v).toFixed(0)} item(s)` },
+        { formatter: v => v == null ? 'N/A' : `${Number(v).toFixed(1)}%` }
       ]
     }
   };
@@ -608,13 +632,24 @@ function renderDifficultyCurve(selector, context) {
   const container = document.querySelector(selector);
   if (!container) return;
 
-  const { categories, data } = getDifficultyCurveData(context.section, context.quarter, context.subject);
+  const cfg = ConfigStore.getSafe();
+
+  // Resolve effective section: 'all' → first configured section
+  const effectiveSection = context.section === 'all'
+    ? (cfg.sections?.[0]?.name || '')
+    : context.section;
+  const effectiveQuarter = context.quarter === 'all' ? 'First Quarter' : context.quarter;
+  const effectiveSubject = context.subject === 'all'
+    ? (cfg.subjects?.[0]?.title || 'Empowerment Technologies')
+    : context.subject;
+
+  const { categories, data } = getDifficultyCurveData(effectiveSection, effectiveQuarter, effectiveSubject);
   if (!Array.isArray(data) || data.length === 0) {
     container.innerHTML = NoData.renderCard(
       'No item difficulty data available',
-      'Import or collect student responses for the selected section and quarter to generate the difficulty curve.',
-      'Open Exam Import',
-      '/exam-import.html'
+      'Complete assessments and record student responses to generate the psychometric difficulty curve.',
+      'Go to Assessments',
+      'assessments.html'
     );
     return;
   }
@@ -626,7 +661,13 @@ function renderDifficultyCurve(selector, context) {
     fill: { opacity: 0.2 },
     series: [{ name: 'Difficulty Index (P_i)', data }],
     xaxis: { categories },
-    yaxis: { min: 0, max: 1.0 }
+    yaxis: { min: 0, max: 1.0 },
+    annotations: {
+      yaxis: [
+        { y: 0.36, y2: 0.80, fillColor: '#10B981', opacity: 0.07, label: { text: 'Optimal range (0.36–0.80)', style: { fontSize: '10px' } } }
+      ]
+    },
+    tooltip: { y: { formatter: v => `P = ${Number(v).toFixed(2)}` } }
   };
   activeChart = new ApexCharts(container, options);
   activeChart.render();

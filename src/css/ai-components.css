@@ -190,3 +190,92 @@
 .ai-stat-card {
   min-height: 4.2rem;
 }
+
+/* ── AI Working State ─────────────────────────────────────────────── */
+.ai-working-state {
+  font-family: inherit;
+}
+.ai-working-state.collapsed .ai-working-steps {
+  display: none;
+}
+.ai-working-header {
+  border-radius: 0.6rem;
+  padding: 0.35rem 0.5rem;
+  transition: background 0.15s;
+}
+.ai-working-header:hover {
+  background: rgba(15,23,42,0.04);
+}
+.dark .ai-working-header:hover {
+  background: rgba(255,255,255,0.04);
+}
+
+/* ── AI Answer (prose) ────────────────────────────────────────────── */
+.ai-answer {
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: #374151;
+}
+.dark .ai-answer {
+  color: rgba(255,255,255,0.82);
+}
+.ai-answer h1, .ai-answer h2, .ai-answer h3, .ai-answer h4 {
+  font-weight: 700;
+  margin-top: 1em;
+  margin-bottom: 0.4em;
+  color: #111827;
+}
+.dark .ai-answer h1, .dark .ai-answer h2, .dark .ai-answer h3, .dark .ai-answer h4 {
+  color: rgba(255,255,255,0.95);
+}
+.ai-answer h2 { font-size: 1rem; }
+.ai-answer h3 { font-size: 0.9375rem; }
+.ai-answer ul, .ai-answer ol {
+  padding-left: 1.25em;
+  margin: 0.5em 0;
+}
+.ai-answer li { margin: 0.25em 0; }
+.ai-answer table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.8rem;
+}
+.ai-answer th {
+  background: rgba(70,95,255,0.08);
+  font-weight: 700;
+  text-align: left;
+  padding: 0.4em 0.6em;
+  border: 1px solid rgba(15,23,42,0.1);
+}
+.dark .ai-answer th {
+  background: rgba(70,95,255,0.15);
+  border-color: rgba(255,255,255,0.1);
+}
+.ai-answer td {
+  padding: 0.35em 0.6em;
+  border: 1px solid rgba(15,23,42,0.08);
+  vertical-align: top;
+}
+.dark .ai-answer td {
+  border-color: rgba(255,255,255,0.08);
+}
+.ai-answer code {
+  background: rgba(15,23,42,0.06);
+  padding: 0.1em 0.35em;
+  border-radius: 0.3em;
+  font-size: 0.82em;
+}
+.dark .ai-answer code {
+  background: rgba(255,255,255,0.08);
+}
+.ai-answer strong { font-weight: 700; }
+.ai-answer em { font-style: italic; }
+.ai-answer blockquote {
+  border-left: 3px solid rgba(70,95,255,0.4);
+  padding-left: 0.75em;
+  margin: 0.5em 0;
+  color: #6b7280;
+}
+.dark .ai-answer blockquote {
+  color: rgba(255,255,255,0.55);
+}

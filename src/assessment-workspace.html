@@ -1,0 +1,748 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>Assessment Workspace | Project KIT</title>
+    <meta name="description" content="Manage a single assessment end-to-end: configure, take attendance, process results, and finalize scores." />
+  </head>
+  <body
+    x-data="{ 'loaded': true, 'darkMode': false, 'sidebarToggle': false }"
+    :class="{'dark bg-gray-900': darkMode === true}"
+  >
+    <include src="./partials/preloader.html"></include>
+
+    <div class="flex h-screen overflow-hidden">
+      <include src="./partials/sidebar.html"></include>
+
+      <div class="relative flex flex-col flex-1 overflow-x-hidden overflow-y-auto">
+        <include src="./partials/overlay.html" />
+        <include src="./partials/header.html" />
+
+        <main class="relative" id="workspace-main">
+          <!-- ─── Loading state ─── -->
+          <div id="workspace-loading" class="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+            <div class="w-10 h-10 rounded-full border-2 border-brand-500 border-t-transparent animate-spin"></div>
+            <p class="text-xs text-gray-400 font-medium">Loading assessment…</p>
+          </div>
+
+          <!-- ─── Error state ─── -->
+          <div id="workspace-error" class="hidden flex flex-col items-center justify-center min-h-[60vh] gap-4 p-8 text-center">
+            <div class="w-16 h-16 rounded-2xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-2">
+              <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+              </svg>
+            </div>
+            <h2 id="workspace-error-title" class="text-base font-bold text-gray-900 dark:text-white">Assessment Not Found</h2>
+            <p id="workspace-error-msg" class="text-xs text-gray-500 dark:text-gray-400 max-w-sm">The requested assessment could not be loaded.</p>
+            <a href="assessments.html" class="mt-2 px-4 py-2 text-xs font-semibold text-white bg-brand-500 rounded-lg hover:bg-brand-600 transition">
+              ← Back to Assessment Hub
+            </a>
+          </div>
+
+          <!-- ─── Workspace shell (hidden until loaded) ─── -->
+          <div id="workspace-shell" class="hidden">
+
+            <!-- Sticky Workspace Header -->
+            <div id="workspace-header-bar" class="sticky top-0 z-40 bg-white dark:bg-gray-dark border-b border-gray-200 dark:border-gray-800 shadow-xs px-4 md:px-6 py-3">
+              <div class="flex items-start gap-3 max-w-(--breakpoint-2xl) mx-auto">
+
+                <!-- Back button -->
+                <a href="assessments.html" id="btn-back-hub" class="shrink-0 mt-0.5 flex items-center gap-1.5 text-[11px] font-semibold text-brand-500 hover:text-brand-600 transition group">
+                  <svg class="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                  </svg>
+                  Hub
+                </a>
+
+                <!-- Title & meta -->
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <h1 id="ws-title" class="text-sm font-extrabold text-gray-900 dark:text-white truncate"></h1>
+                    <span id="ws-status-badge" class="px-2 py-0.5 text-[10px] font-bold uppercase rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">DRAFT</span>
+                  </div>
+                  <div id="ws-meta" class="flex items-center gap-2 mt-0.5 text-[10px] text-gray-400 flex-wrap"></div>
+                </div>
+
+                <!-- Stage stepper (desktop) -->
+                <nav id="ws-stepper" class="hidden sm:flex items-center gap-1 shrink-0">
+                  <button data-stage="setup" class="ws-stage-btn flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition" id="stage-btn-setup">
+                    <span class="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-extrabold bg-current text-white">1</span>
+                    Setup
+                  </button>
+                  <div class="w-5 h-px bg-gray-200 dark:bg-gray-700"></div>
+                  <button data-stage="exam-day" class="ws-stage-btn flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition" id="stage-btn-exam-day">
+                    <span class="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-extrabold">2</span>
+                    Exam Day
+                  </button>
+                  <div class="w-5 h-px bg-gray-200 dark:bg-gray-700"></div>
+                  <button data-stage="results" class="ws-stage-btn flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition" id="stage-btn-results">
+                    <span class="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-extrabold">3</span>
+                    Results
+                  </button>
+                  <div class="w-5 h-px bg-gray-200 dark:bg-gray-700"></div>
+                  <button data-stage="intelligence" class="ws-stage-btn flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition" id="stage-btn-intelligence">
+                    <span class="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-extrabold">4</span>
+                    Intelligence &amp; Remediation
+                  </button>
+                </nav>
+
+                <!-- Status control -->
+                <div class="shrink-0 flex items-center gap-2">
+                  <select id="ws-status-select" class="px-2 py-1.5 text-[11px] font-semibold rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-brand-500 transition">
+                    <option value="DRAFT">Draft</option>
+                    <option value="READY">Ready</option>
+                    <option value="PROCESSING">Processing</option>
+                    <option value="FINALIZED">Finalized</option>
+                  </select>
+                  <!-- Reopen button (shown only for FINALIZED) -->
+                  <button id="btn-reopen" class="hidden px-3 py-1.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/30 rounded-lg hover:bg-amber-200 transition">
+                    Reopen
+                  </button>
+                </div>
+              </div>
+
+              <!-- Mobile stepper -->
+              <div id="ws-stepper-mobile" class="flex sm:hidden items-center gap-1 mt-3 max-w-(--breakpoint-2xl) mx-auto overflow-x-auto pb-1">
+                <button data-stage="setup" class="ws-stage-btn shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition">
+                  <span class="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-extrabold">1</span>
+                  Setup
+                </button>
+                <div class="w-5 h-px bg-gray-200 dark:bg-gray-700 shrink-0"></div>
+                <button data-stage="exam-day" class="ws-stage-btn shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition">
+                  <span class="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-extrabold">2</span>
+                  Exam Day
+                </button>
+                <div class="w-5 h-px bg-gray-200 dark:bg-gray-700 shrink-0"></div>
+                <button data-stage="results" class="ws-stage-btn shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition">
+                  <span class="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-extrabold">3</span>
+                  Results
+                </button>
+              </div>
+            </div>
+
+            <!-- ─── Stage Content Areas ─── -->
+            <div class="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6 space-y-5 pb-12">
+
+              <!-- ============================
+                   STAGE: SETUP
+                   ============================ -->
+              <div id="stage-setup" class="space-y-5">
+
+                <!-- Sub-tab nav -->
+                <div class="flex items-center gap-1 border-b border-gray-200 dark:border-gray-800">
+                  <button data-subtab="details" class="ws-subtab-btn px-4 py-2.5 text-[11px] font-semibold border-b-2 transition" id="subtab-btn-details">Details</button>
+                  <button data-subtab="tos" class="ws-subtab-btn px-4 py-2.5 text-[11px] font-semibold border-b-2 transition" id="subtab-btn-tos">Table of Specifications</button>
+                  <button data-subtab="answer-key" class="ws-subtab-btn px-4 py-2.5 text-[11px] font-semibold border-b-2 transition" id="subtab-btn-answer-key">Answer Key</button>
+                </div>
+
+                <!-- Details sub-tab -->
+                <div id="subtab-details" class="ws-subtab-content space-y-4">
+                  <div class="p-5 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
+                    <h2 class="text-sm font-bold text-gray-900 dark:text-white">Assessment Details</h2>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                      <div class="p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 text-center">
+                        <span class="block text-[10px] uppercase font-bold text-gray-400 tracking-wider">Subject</span>
+                        <span id="detail-subject" class="block text-xs font-bold text-gray-900 dark:text-white mt-0.5">—</span>
+                      </div>
+                      <div class="p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 text-center">
+                        <span class="block text-[10px] uppercase font-bold text-gray-400 tracking-wider">Section</span>
+                        <span id="detail-section" class="block text-xs font-bold text-gray-900 dark:text-white mt-0.5">—</span>
+                      </div>
+                      <div class="p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 text-center">
+                        <span class="block text-[10px] uppercase font-bold text-gray-400 tracking-wider">Term</span>
+                        <span id="detail-term" class="block text-xs font-bold text-gray-900 dark:text-white mt-0.5">—</span>
+                      </div>
+                      <div class="p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 text-center">
+                        <span class="block text-[10px] uppercase font-bold text-gray-400 tracking-wider">School Year</span>
+                        <span id="detail-sy" class="block text-xs font-bold text-gray-900 dark:text-white mt-0.5">—</span>
+                      </div>
+                      <div class="p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 text-center">
+                        <span class="block text-[10px] uppercase font-bold text-gray-400 tracking-wider">Target Items</span>
+                        <span id="detail-target-items" class="block text-sm font-extrabold text-gray-900 dark:text-white mt-0.5">0</span>
+                      </div>
+                      <div class="p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 text-center">
+                        <span class="block text-[10px] uppercase font-bold text-gray-400 tracking-wider">Passing MPS</span>
+                        <span id="detail-passing-mps" class="block text-sm font-extrabold text-brand-600 dark:text-brand-400 mt-0.5">0%</span>
+                      </div>
+                      <div class="p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 text-center">
+                        <span class="block text-[10px] uppercase font-bold text-gray-400 tracking-wider">Version</span>
+                        <span id="detail-version" class="block text-sm font-extrabold text-gray-500 dark:text-gray-400 mt-0.5">v1</span>
+                      </div>
+                      <div class="p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700/60 text-center">
+                        <span class="block text-[10px] uppercase font-bold text-gray-400 tracking-wider">Created</span>
+                        <span id="detail-created-at" class="block text-xs font-bold text-gray-500 dark:text-gray-400 mt-0.5">—</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Workflow guidance card -->
+                  <div id="setup-workflow-guide" class="p-4 bg-brand-50 dark:bg-brand-900/20 rounded-xl border border-brand-200 dark:border-brand-800/50">
+                    <div class="flex items-start gap-3">
+                      <div class="w-8 h-8 rounded-lg bg-brand-100 dark:bg-brand-900/40 flex items-center justify-center shrink-0">
+                        <svg class="w-4 h-4 text-brand-600 dark:text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                      </div>
+                      <div class="space-y-1">
+                        <p class="text-[11px] font-bold text-brand-800 dark:text-brand-300">Setup Checklist</p>
+                        <ul class="text-[10px] text-brand-700 dark:text-brand-400 space-y-1">
+                          <li id="guide-tos" class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full border-2 border-current shrink-0"></span> Link a TOS document (Table of Specifications)</li>
+                          <li id="guide-ak" class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full border-2 border-current shrink-0"></span> Upload or verify the Answer Key</li>
+                          <li class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full border-2 border-current shrink-0"></span> Set status to <strong>READY</strong> when preparation is complete</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- TOS sub-tab -->
+                <div id="subtab-tos" class="ws-subtab-content hidden">
+                  <div id="tos-panel" class="space-y-4">
+                    <!-- Rendered by renderSetupTos() in setup-tos.js -->
+                    <div class="flex items-center justify-center py-10">
+                      <div class="w-5 h-5 rounded-full border-2 border-brand-500 border-t-transparent animate-spin"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Answer Key sub-tab -->
+                <div id="subtab-answer-key" class="ws-subtab-content hidden">
+                  <div id="answer-key-panel" class="p-5 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
+                    <!-- Rendered by assessment-workspace.js -->
+                    <div class="flex items-center justify-center py-10">
+                      <div class="w-5 h-5 rounded-full border-2 border-brand-500 border-t-transparent animate-spin"></div>
+                    </div>
+                  </div>
+                </div>
+
+              </div><!-- /stage-setup -->
+
+              <!-- ============================
+                   STAGE: EXAM DAY
+                   ============================ -->
+              <div id="stage-exam-day" class="hidden space-y-5">
+
+                <!-- OMR Form Generator Card -->
+                <div class="p-5 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs">
+                  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h3 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <svg class="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                        Printable OMR Answer Sheet Generator
+                      </h3>
+                      <p id="omr-form-summary-text" class="text-[10px] text-gray-400 mt-0.5">Generate, preview, and print official Project KIT OMR evaluation sheets for your class</p>
+                    </div>
+                    <div class="flex items-center gap-2 shrink-0">
+                      <button id="btn-generate-omr-form" class="px-3.5 py-1.5 text-[11px] font-semibold text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/30 rounded-lg hover:bg-brand-100 transition">
+                        ⚡ Generate Sheet
+                      </button>
+                      <button id="btn-print-omr-form" class="px-4 py-1.5 text-[11px] font-semibold text-white bg-brand-500 rounded-lg hover:bg-brand-600 shadow-xs transition flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                        Print OMR Sheet
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Attendance table -->
+                <div class="bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs overflow-hidden">
+                  <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr class="border-b border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/60 text-gray-500 dark:text-gray-400 uppercase tracking-wider font-semibold">
+                          <th class="px-4 py-3 w-10">#</th>
+                          <th class="px-4 py-3">Student Name</th>
+                          <th class="px-4 py-3 font-mono">LRN</th>
+                          <th class="px-4 py-3 text-center w-36">Status</th>
+                          <th class="px-4 py-3">Notes</th>
+                        </tr>
+                      </thead>
+                      <tbody id="attendance-tbody">
+                        <tr><td colspan="5" class="text-center py-12 text-xs text-gray-400">Loading attendance roster…</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <!-- Attendance pagination -->
+                  <div id="attendance-pagination" class="hidden p-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs text-gray-500">
+                    <span id="attendance-page-info">Page 1 of 1</span>
+                    <div class="flex items-center gap-2">
+                      <button id="btn-attendance-prev" disabled class="px-2.5 py-1 text-[10px] font-semibold rounded-lg bg-gray-100 dark:bg-gray-800 disabled:opacity-40">Previous</button>
+                      <button id="btn-attendance-next" disabled class="px-2.5 py-1 text-[10px] font-semibold rounded-lg bg-gray-100 dark:bg-gray-800 disabled:opacity-40">Next</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- OMR Sheet Ingestion & Scanner Card -->
+                <div class="p-5 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-4">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <h3 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <svg class="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h0.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        OMR Answer Sheet Ingestion
+                      </h3>
+                      <p class="text-[10px] text-gray-400 mt-0.5">Upload or capture student answer sheets for automated OMR grading & verification</p>
+                    </div>
+                    <span id="scan-status-badge" class="hidden px-2.5 py-1 text-[10px] font-bold uppercase rounded-full"></span>
+                  </div>
+
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div class="sm:col-span-2 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-4 text-center hover:border-brand-500 transition-colors bg-gray-50/50 dark:bg-gray-800/20 flex flex-col items-center justify-center space-y-2">
+                      <input type="file" id="scan-file-input" accept="image/png,image/jpeg,image/webp" class="hidden" />
+                      <div class="w-10 h-10 rounded-xl bg-brand-50 dark:bg-brand-900/30 text-brand-500 flex items-center justify-center">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                      </div>
+                      <p class="text-xs font-semibold text-gray-700 dark:text-gray-200">Click to choose sheet image or drag &amp; drop</p>
+                      <p class="text-[10px] text-gray-400">Supports PNG, JPEG, WebP (Max 10MB)</p>
+                      <button id="btn-trigger-file-select" class="px-3 py-1.5 text-[11px] font-semibold text-white bg-brand-500 rounded-lg hover:bg-brand-600 transition">Select Sheet Image</button>
+                    </div>
+
+                    <div class="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 space-y-3 text-xs">
+                      <div>
+                        <label class="block text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-1">Student LRN (Optional Override)</label>
+                        <input type="text" id="scan-student-lrn" placeholder="12-digit LRN…" class="w-full px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white font-mono" />
+                      </div>
+                      <div>
+                        <label class="block text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-1">Idempotency Key</label>
+                        <input type="text" id="scan-idempotency-key" readonly class="w-full px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-gray-800 text-gray-500 font-mono text-[10px]" />
+                      </div>
+                      <button id="btn-submit-scan" class="w-full py-2 text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition shadow-xs flex items-center justify-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Process Scan
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Verification Queue Table Card -->
+                <div class="bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs overflow-hidden">
+                  <div class="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+                    <div>
+                      <h3 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                        Verification Queue
+                      </h3>
+                      <p class="text-[10px] text-gray-400 mt-0.5">Scans requiring teacher review before grade persistence</p>
+                    </div>
+                    <span id="verification-count-badge" class="px-2 py-0.5 text-[10px] font-bold uppercase rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">0 pending</span>
+                  </div>
+                  <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr class="border-b border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/60 text-gray-500 dark:text-gray-400 uppercase tracking-wider font-semibold">
+                          <th class="px-4 py-3 w-10">#</th>
+                          <th class="px-4 py-3">Student</th>
+                          <th class="px-4 py-3 font-mono">Image Hash</th>
+                          <th class="px-4 py-3">Reason</th>
+                          <th class="px-4 py-3 text-center">Confidence</th>
+                          <th class="px-4 py-3 text-center">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody id="verification-tbody">
+                        <tr><td colspan="6" class="text-center py-10 text-xs text-gray-400">No pending verification items.</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <!-- Verification Review Modal -->
+                <div id="verification-review-modal" class="hidden fixed inset-0 z-99999 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+                  <div class="w-full max-w-lg bg-white dark:bg-gray-dark rounded-xl p-6 shadow-2xl space-y-4">
+                    <div class="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 pb-3">
+                      <h3 class="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Review OMR Scan
+                      </h3>
+                      <button id="btn-close-verification-modal" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-lg font-bold">✕</button>
+                    </div>
+                    <input type="hidden" id="verify-item-id" />
+                    <div class="space-y-3 text-xs">
+                      <div class="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 space-y-1">
+                        <p class="font-bold text-amber-800 dark:text-amber-300">Verification Reason:</p>
+                        <p id="verify-reason" class="text-amber-700 dark:text-amber-400 font-medium">—</p>
+                      </div>
+                      <div>
+                        <label class="block font-semibold text-gray-700 dark:text-gray-300 mb-1">Assign Student *</label>
+                        <select id="verify-student-select" class="w-full px-2.5 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-brand-500">
+                          <option value="">Select student from roster…</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div class="flex items-center justify-between mb-1">
+                          <label class="block font-semibold text-gray-700 dark:text-gray-300">Detected Answers &amp; Overrides</label>
+                          <span class="text-[10px] text-gray-400">Edit choices below to override</span>
+                        </div>
+                        <div id="verify-answers-preview" class="p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 max-h-44 overflow-y-auto font-mono text-[11px] space-y-1">
+                          Loading detected answers…
+                        </div>
+                      </div>
+                    </div>
+                    <div class="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-gray-800">
+                      <button id="btn-reject-verification" class="px-4 py-2 text-xs font-semibold text-red-700 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 rounded-lg transition">Reject Scan</button>
+                      <div class="flex gap-2">
+                        <button id="btn-override-verification" class="px-4 py-2 text-xs font-semibold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 hover:bg-amber-200 rounded-lg transition">Save Overrides</button>
+                        <button id="btn-approve-verification" class="px-5 py-2 text-xs font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg shadow-xs transition">Approve &amp; Grade</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div><!-- /stage-exam-day -->
+
+              <!-- ============================
+                   STAGE: RESULTS
+                   ============================ -->
+              <div id="stage-results" class="hidden space-y-5">
+
+                <!-- Stage 3 Navigation Sub-tabs -->
+                <div class="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 pb-2">
+                  <div class="flex gap-2">
+                    <button data-results-tab="summary" class="results-subtab-btn px-4 py-2 text-xs font-semibold rounded-lg bg-brand-500 text-white shadow-xs transition">Summary &amp; Distribution</button>
+                    <button data-results-tab="students" class="results-subtab-btn px-4 py-2 text-xs font-semibold rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition">Student Scores</button>
+                    <button data-results-tab="items" class="results-subtab-btn px-4 py-2 text-xs font-semibold rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition">Item Analysis &amp; Psychometrics</button>
+                    <button data-results-tab="competencies" class="results-subtab-btn px-4 py-2 text-xs font-semibold rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition">Competency Mastery</button>
+                  </div>
+                  <button id="btn-export-results-csv" class="px-3.5 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/30 hover:bg-emerald-200 rounded-lg transition flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    Export CSV
+                  </button>
+                </div>
+
+                <!-- Subtab 1: Summary & Distribution -->
+                <div id="results-panel-summary" class="results-panel space-y-5">
+                  <div class="grid grid-cols-2 lg:grid-cols-6 gap-3">
+                    <div class="p-3 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs text-center">
+                      <p class="text-[9px] font-bold uppercase text-gray-400">Class Avg %</p>
+                      <p id="results-kpi-avg" class="text-lg font-extrabold text-brand-600 dark:text-brand-400">—</p>
+                    </div>
+                    <div class="p-3 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs text-center">
+                      <p class="text-[9px] font-bold uppercase text-gray-400">Median %</p>
+                      <p id="results-kpi-median" class="text-lg font-extrabold text-indigo-600 dark:text-indigo-400">—</p>
+                    </div>
+                    <div class="p-3 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs text-center">
+                      <p class="text-[9px] font-bold uppercase text-gray-400">Passing Rate</p>
+                      <p id="results-kpi-passed" class="text-lg font-extrabold text-emerald-600 dark:text-emerald-400">—</p>
+                    </div>
+                    <div class="p-3 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs text-center">
+                      <p class="text-[9px] font-bold uppercase text-gray-400">Highest / Lowest</p>
+                      <p id="results-kpi-minmax" class="text-sm font-extrabold text-gray-900 dark:text-white mt-1">—</p>
+                    </div>
+                    <div class="p-3 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs text-center">
+                      <p class="text-[9px] font-bold uppercase text-gray-400">Std Dev</p>
+                      <p id="results-kpi-stddev" class="text-lg font-extrabold text-amber-600 dark:text-amber-400">—</p>
+                    </div>
+                    <div class="p-3 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs text-center">
+                      <p class="text-[9px] font-bold uppercase text-gray-400">Quality Rating</p>
+                      <span id="results-kpi-quality-badge" class="px-2 py-0.5 text-[10px] font-bold uppercase rounded-full bg-gray-100 text-gray-700 inline-block mt-1">—</span>
+                    </div>
+                  </div>
+
+                  <!-- Score Distribution Histogram -->
+                  <div class="p-5 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs">
+                    <h3 class="text-xs font-bold uppercase text-gray-400 tracking-wider mb-4">Score Distribution Histogram</h3>
+                    <div id="results-score-histogram" class="flex items-end gap-2 h-40 pt-4 px-2 border-b border-gray-200 dark:border-gray-800">
+                      <p class="text-xs text-gray-400 w-full text-center">Loading distribution chart…</p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Subtab 2: Student Scores -->
+                <div id="results-panel-students" class="results-panel hidden space-y-3">
+                  <div class="bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs overflow-hidden">
+                    <div class="flex items-center justify-between px-5 py-3 border-b border-gray-200 dark:border-gray-800">
+                      <h2 class="text-sm font-bold text-gray-900 dark:text-white">Ranked Student Scores</h2>
+                      <div class="flex items-center gap-3">
+                        <input type="text" id="filter-results-student-search" placeholder="Search student name or LRN…" class="px-3 py-1 text-xs rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white" />
+                      </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                      <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr class="sticky top-0 z-10 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 uppercase tracking-wider font-semibold shadow-xs">
+                            <th class="px-4 py-3 w-12 text-center">Rank</th>
+                            <th class="px-4 py-3">Student Name</th>
+                            <th class="px-4 py-3 font-mono">LRN</th>
+                            <th class="px-4 py-3 text-center">Score</th>
+                            <th class="px-4 py-3 text-center">Percentage</th>
+                            <th class="px-4 py-3 text-center">Percentile</th>
+                            <th class="px-4 py-3 text-center">MPS Status</th>
+                            <th class="px-4 py-3 text-center">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody id="responses-tbody">
+                          <tr><td colspan="8" class="text-center py-12 text-xs text-gray-400">Loading results…</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div id="responses-empty" class="hidden text-center py-10 text-xs text-gray-400">No responses recorded yet for this assessment.</div>
+                    <!-- Pagination -->
+                    <div id="responses-pagination" class="hidden px-4 py-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-[10px] text-gray-400">
+                      <span id="responses-page-info"></span>
+                      <div class="flex gap-1">
+                        <button id="btn-responses-prev" class="px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 disabled:opacity-40 transition">← Prev</button>
+                        <button id="btn-responses-next" class="px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 disabled:opacity-40 transition">Next →</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Subtab 3: Item Analysis & Psychometrics -->
+                <div id="results-panel-items" class="results-panel hidden space-y-3">
+                  <div class="bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs overflow-hidden">
+                    <div class="p-4 border-b border-gray-200 dark:border-gray-800 flex items-start justify-between gap-4">
+                      <div>
+                        <h3 class="text-sm font-bold text-gray-900 dark:text-white">Item Analysis &amp; Psychometrics</h3>
+                        <p class="text-[10px] text-gray-400 mt-0.5">Choice responses per item — <span class="text-emerald-600 font-semibold">green = correct answer</span>, <span class="text-red-500 font-semibold">red = wrong choices</span>. Count &amp; % of students per choice shown below.</p>
+                      </div>
+                      <div class="text-[10px] text-gray-400 text-right shrink-0">
+                        <p>P = Difficulty · D = Discrimination (27%)</p>
+                        <p>r<sub>pbi</sub> = Point-Biserial Correlation</p>
+                      </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                      <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr class="border-b border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/60 text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider font-semibold">
+                            <th class="px-3 py-2.5 w-12 text-center">#</th>
+                            <th class="px-2 py-2.5 text-center w-16 text-emerald-600 dark:text-emerald-400">A</th>
+                            <th class="px-2 py-2.5 text-center w-16 text-red-500">B</th>
+                            <th class="px-2 py-2.5 text-center w-16 text-red-500">C</th>
+                            <th class="px-2 py-2.5 text-center w-16 text-red-500">D</th>
+                            <th class="px-2 py-2.5 text-center w-10 text-gray-400">—</th>
+                            <th class="px-3 py-2.5 text-center">P %</th>
+                            <th class="px-3 py-2.5 text-center">Band</th>
+                            <th class="px-3 py-2.5 text-center">D</th>
+                            <th class="px-3 py-2.5 text-center">r<sub>pbi</sub></th>
+                            <th class="px-3 py-2.5 text-center">Quality</th>
+                          </tr>
+                        </thead>
+                        <tbody id="item-analysis-tbody">
+                          <tr><td colspan="11" class="text-center py-10 text-xs text-gray-400">Loading item analysis…</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Subtab 4: Competency Mastery -->
+                <div id="results-panel-competencies" class="results-panel hidden space-y-3">
+                  <div class="bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs overflow-hidden">
+                    <div class="p-4 border-b border-gray-200 dark:border-gray-800">
+                      <h3 class="text-sm font-bold text-gray-900 dark:text-white">TOS Competency Mastery Analysis</h3>
+                      <p class="text-[10px] text-gray-400 mt-0.5">Mastery rate across Learning Competencies mapped in the Table of Specifications</p>
+                    </div>
+                    <div id="competency-mastery-list" class="divide-y divide-gray-100 dark:divide-gray-800">
+                      <div class="text-center py-10 text-xs text-gray-400">Loading competency mastery…</div>
+                    </div>
+                  </div>
+                </div>
+
+              </div><!-- /stage-results -->
+
+              <!-- ============================
+                   STAGE: ACADEMIC INTELLIGENCE & REMEDIATION
+                   ============================ -->
+              <div id="stage-intelligence" class="hidden space-y-5">
+
+                <!-- Stage 4 Navigation Sub-tabs -->
+                <div class="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 pb-2">
+                  <div class="flex gap-2">
+                    <button data-intel-tab="weaknesses" class="intel-subtab-btn px-4 py-2 text-xs font-semibold rounded-lg bg-brand-500 text-white shadow-xs transition">Student Weakness Detection</button>
+                    <button data-intel-tab="timeline" class="intel-subtab-btn px-4 py-2 text-xs font-semibold rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition">Competency Progress Timeline</button>
+                  </div>
+                </div>
+
+                <!-- Subtab 1: Student Weakness Detection -->
+                <div id="intel-panel-weaknesses" class="intel-panel space-y-4">
+                  <div class="bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs overflow-hidden">
+                    <div class="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+                      <div>
+                        <h3 class="text-sm font-bold text-gray-900 dark:text-white">Individualized Weakness Analysis</h3>
+                        <p class="text-[10px] text-gray-400 mt-0.5">Identified competency weaknesses derived from Phase 5 verified assessment responses</p>
+                      </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                      <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr class="border-b border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/60 text-gray-500 dark:text-gray-400 uppercase tracking-wider font-semibold">
+                            <th class="px-4 py-3">Student Name</th>
+                            <th class="px-4 py-3">LRN</th>
+                            <th class="px-4 py-3 text-center">Score %</th>
+                            <th class="px-4 py-3">Weak Competency</th>
+                            <th class="px-4 py-3">Evidence</th>
+                            <th class="px-4 py-3 text-center">Priority</th>
+                            <th class="px-4 py-3 text-center">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody id="intel-weakness-tbody">
+                          <tr><td colspan="7" class="text-center py-10 text-xs text-gray-400">Loading student weakness analysis…</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Subtab 2: Competency Progress Timeline -->
+                <div id="intel-panel-timeline" class="intel-panel hidden space-y-4">
+                  <div class="p-5 bg-white dark:bg-gray-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-xs">
+                    <h3 class="text-sm font-bold text-gray-900 dark:text-white mb-1">Competency Progress &amp; Reassessment History</h3>
+                    <p class="text-[10px] text-gray-400 mb-4">Historical growth tracking across initial assessments, remediation completion, and reassessments</p>
+                    <div id="intel-timeline-container" class="space-y-4">
+                      <p class="text-xs text-gray-400 text-center py-8">Select a student from the weakness analysis tab to view progress timeline.</p>
+                    </div>
+                  </div>
+                </div>
+
+              </div><!-- /stage-intelligence -->
+
+            </div><!-- /content -->
+          </div><!-- /workspace-shell -->
+
+          <!-- ─── Score Override Modal ─── -->
+    <div id="score-override-modal" class="hidden fixed inset-0 z-99999 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+      <div class="w-full max-w-sm bg-white dark:bg-gray-dark rounded-xl p-5 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 pb-3">
+          <h3 class="text-sm font-bold text-gray-900 dark:text-white">Override Score</h3>
+          <button id="btn-close-override-modal" class="text-gray-400 hover:text-gray-600 text-lg font-bold">✕</button>
+        </div>
+        <div class="space-y-3 text-xs">
+          <p class="text-gray-500 dark:text-gray-400">Student: <strong id="override-student-name" class="text-gray-900 dark:text-white">—</strong></p>
+          <div>
+            <label class="block font-semibold text-gray-700 dark:text-gray-300 mb-1">New Score *</label>
+            <input type="number" id="override-new-score" min="0" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-bold text-center focus:ring-2 focus:ring-brand-500" />
+          </div>
+          <div>
+            <label class="block font-semibold text-gray-700 dark:text-gray-300 mb-1">Reason for override * (min 10 chars)</label>
+            <textarea id="override-reason" rows="3" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-brand-500 resize-none" placeholder="Explain why the score is being changed…"></textarea>
+          </div>
+          <input type="hidden" id="override-response-id" />
+        </div>
+        <div class="flex justify-end gap-2 pt-1 border-t border-gray-200 dark:border-gray-800">
+          <button id="btn-cancel-override" class="px-4 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 transition">Cancel</button>
+          <button id="btn-submit-override" class="px-5 py-1.5 text-xs font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg shadow-xs transition">Apply Override</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Reopen Modal ─── -->
+    <div id="reopen-modal" class="hidden fixed inset-0 z-99999 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+      <div class="w-full max-w-sm bg-white dark:bg-gray-dark rounded-xl p-5 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 pb-3">
+          <h3 class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z"/></svg>
+            Reopen Assessment
+          </h3>
+          <button id="btn-close-reopen-modal" class="text-gray-400 hover:text-gray-600 text-lg font-bold">✕</button>
+        </div>
+        <p class="text-xs text-gray-500 dark:text-gray-400">Reopening a finalized assessment will set its status back to PROCESSING. This action is audited.</p>
+        <div class="space-y-2 text-xs">
+          <label class="block font-semibold text-gray-700 dark:text-gray-300">Reason for reopening * (min 10 chars)</label>
+          <textarea id="reopen-reason" rows="3" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-brand-500 resize-none" placeholder="Explain why this assessment needs to be reopened…"></textarea>
+        </div>
+        <div class="flex justify-end gap-2 pt-1 border-t border-gray-200 dark:border-gray-800">
+          <button id="btn-cancel-reopen" class="px-4 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 transition">Cancel</button>
+          <button id="btn-submit-reopen" class="px-5 py-1.5 text-xs font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-lg shadow-xs transition">Reopen</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Remediation Plan Review & Edit Modal ─── -->
+    <div id="remediation-review-modal" class="hidden fixed inset-0 z-99999 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 overflow-y-auto">
+      <div class="w-full max-w-2xl bg-white dark:bg-gray-dark rounded-xl p-6 shadow-2xl space-y-4 my-8">
+        <div class="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 pb-3">
+          <div>
+            <h3 class="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <svg class="w-5 h-5 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+              Teacher Review: AI Remediation Activity
+            </h3>
+            <p class="text-[10px] text-gray-400 mt-0.5">Mandatory Teacher Authorization: Review, edit instructions/activities, then click Approve &amp; Assign</p>
+          </div>
+          <button id="btn-close-remediation-modal" class="text-gray-400 hover:text-gray-600 text-lg font-bold">✕</button>
+        </div>
+
+        <div class="space-y-4 text-xs max-h-[60vh] overflow-y-auto pr-1">
+          <div class="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg flex items-center justify-between">
+            <div>
+              <span class="block text-[10px] uppercase font-bold text-gray-400">Target Competency</span>
+              <span id="remediation-modal-competency" class="font-bold text-gray-900 dark:text-white">—</span>
+            </div>
+            <div>
+              <span class="block text-[10px] uppercase font-bold text-gray-400">Mastery Level</span>
+              <span id="remediation-modal-mastery" class="font-extrabold text-amber-600">—</span>
+            </div>
+            <div>
+              <span class="block text-[10px] uppercase font-bold text-gray-400">Status</span>
+              <span id="remediation-modal-status-badge" class="px-2 py-0.5 text-[10px] font-bold uppercase rounded-full bg-blue-100 text-blue-800">PENDING_REVIEW</span>
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-semibold text-gray-700 dark:text-gray-300 mb-1">Learning Objective</label>
+            <input type="text" id="remediation-modal-objective" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white" />
+          </div>
+
+          <div>
+            <label class="block font-semibold text-gray-700 dark:text-gray-300 mb-1">Teacher Instructions</label>
+            <textarea id="remediation-modal-instructions" rows="2" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-none"></textarea>
+          </div>
+
+          <div>
+            <label class="block font-semibold text-gray-700 dark:text-gray-300 mb-1">Practice Activities &amp; Worked Examples</label>
+            <div id="remediation-modal-activities-container" class="space-y-3">
+              <!-- Activities loaded dynamically -->
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-gray-800">
+          <button id="btn-reject-remediation" class="px-4 py-2 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition">Reject Activity</button>
+          <div class="flex gap-2">
+            <button id="btn-close-remediation-cancel" class="px-4 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 transition">Close</button>
+            <button id="btn-approve-assign-remediation" class="px-5 py-2 text-xs font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg shadow-xs transition">Approve &amp; Assign</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Reassessment Proposal Review Modal ─── -->
+    <div id="reassessment-modal" class="hidden fixed inset-0 z-99999 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 overflow-y-auto">
+      <div class="w-full max-w-2xl bg-white dark:bg-gray-dark rounded-xl p-6 shadow-2xl space-y-4 my-8">
+        <div class="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 pb-3">
+          <div>
+            <h3 class="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <svg class="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              Teacher Approval: AI Reassessment Proposal
+            </h3>
+            <p class="text-[10px] text-gray-400 mt-0.5">Edit proposed reassessment items, then click Approve to create the assessment in Project KIT</p>
+          </div>
+          <button id="btn-close-reassessment-modal" class="text-gray-400 hover:text-gray-600 text-lg font-bold">✕</button>
+        </div>
+
+        <div class="space-y-3 text-xs max-h-[60vh] overflow-y-auto pr-1">
+          <div>
+            <label class="block font-semibold text-gray-700 dark:text-gray-300 mb-1">Reassessment Title</label>
+            <input type="text" id="reassessment-modal-title" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-bold" />
+          </div>
+
+          <div>
+            <label class="block font-semibold text-gray-700 dark:text-gray-300 mb-1">Proposed Questions</label>
+            <div id="reassessment-modal-questions-container" class="space-y-3">
+              <!-- Questions loaded dynamically -->
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t border-gray-200 dark:border-gray-800">
+          <button id="btn-close-reassessment-cancel" class="px-4 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 transition">Cancel</button>
+          <button id="btn-approve-create-reassessment" class="px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-xs transition">Approve &amp; Create Reassessment</button>
+        </div>
+      </div>
+    </div>
+
+        </main>
+      </div>
+    </div>
+
+  </body>
+</html>

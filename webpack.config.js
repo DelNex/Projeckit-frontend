@@ -72,12 +72,20 @@ module.exports = {
     compress: true,
     port: 3001,
     hot: true,
+    historyApiFallback: true,
+    client: {
+      overlay: {
+        errors: true,
+        warnings: false,
+      },
+    },
     proxy: [
       {
         context: ['/api', '/health'],
         target: apiBaseUrl || 'http://localhost:4000',
         changeOrigin: true,
         secure: false,
+        ws: true,
       },
     ],
   },

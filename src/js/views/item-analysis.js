@@ -1,7 +1,7 @@
 // Psychometric Item Analysis Engine View Controller (Minimalist with Edit Toggle)
 import { ConfigStore } from '../stores/config-store.js';
 import { ResponseStore } from '../stores/response-store.js';
-import { getCompetenciesForContext } from './tos.js';
+import { getCompetenciesForContext, loadCompetencies } from './tos.js';
 import { escapeHTML, selectValueOrEmpty, ensureAddSectionsLink } from '../utils.js';
 import { NoData } from '../components/no-data.js';
 import { ImportStore } from '../stores/import-store.js';
@@ -97,11 +97,9 @@ export function initItemAnalysisView() {
     const targetItems = selectedSub ? Number(selectedSub.targetItems) || 40 : 40;
 
     if (!competencies || competencies.length === 0) {
-      return Array.from({ length: targetItems }, (_, i) => ({
-        itemNumber: i + 1,
-        code: `CS_EN11/12A-EAPP-${Math.floor(i / 6) + 1}`,
-        description: `General academic assessment item #${i + 1}`
-      }));
+      // Never fabricate items the TOS does not actually contain. The caller
+      // renders an empty state instead.
+      return [];
     }
 
     const totalHoursSum = competencies.reduce((sum, c) => sum + (c.hours || 0), 0);
@@ -213,6 +211,45 @@ export function initItemAnalysisView() {
 
     // 2. Fetch TOS Mapped Items
     const itemsStructure = buildItemsFromTOS(subject, term, sy, grade, strand, section);
+
+    // Empty state: the selected academic context has no TOS competency data.
+    // Show a clear message instead of a table full of zeroed/error rows.
+    if (!itemsStructure || itemsStructure.length === 0) {
+      const tbodyEmpty = document.getElementById('item-analysis-table-body');
+      if (tbodyEmpty) {
+        tbodyEmpty.innerHTML = NoData.renderTableRow(
+          6,
+          'No competency data is available for the selected subject or quarter.',
+          'Add competencies in the TOS Worksheet first, or choose a different academic context.',
+          'Open TOS Worksheet',
+          '/tos.html'
+        );
+      }
+
+      const elClassSizeEmpty = document.getElementById('metric-class-size');
+      const elTotalCorrectEmpty = document.getElementById('metric-total-correct');
+      const elMeanScoreEmpty = document.getElementById('metric-mean-score');
+      const elRetainEmpty = document.getElementById('metric-retain-count');
+      const elReviseEmpty = document.getElementById('metric-revise-count');
+      const elDiscardEmpty = document.getElementById('metric-discard-count');
+
+      if (elClassSizeEmpty) elClassSizeEmpty.textContent = `0 Students`;
+      if (elTotalCorrectEmpty) elTotalCorrectEmpty.textContent = `∑ R_i: 0`;
+      if (elMeanScoreEmpty) elMeanScoreEmpty.textContent = `Mean: 0.0 / 0`;
+      if (elRetainEmpty) elRetainEmpty.textContent = `0 Retain`;
+      if (elReviseEmpty) elReviseEmpty.textContent = `0 Revise`;
+      if (elDiscardEmpty) elDiscardEmpty.textContent = `0 Discard`;
+
+      const footTotalRiEmpty = document.getElementById('foot-total-ri');
+      const footAvgPiEmpty = document.getElementById('foot-avg-pi');
+      const footAvgDiEmpty = document.getElementById('foot-avg-di');
+      if (footTotalRiEmpty) footTotalRiEmpty.textContent = `0`;
+      if (footAvgPiEmpty) footAvgPiEmpty.textContent = `P_avg: 0.00`;
+      if (footAvgDiEmpty) footAvgDiEmpty.textContent = `D_avg: 0.00`;
+
+      return;
+    }
+
     const itemCount = itemsStructure.length;
 
     let upperGroup = [];
@@ -420,7 +457,10 @@ export function initItemAnalysisView() {
   }
 
   /**
-   * Handle Live Input Changes for Editable R_i fields during Edit Mode
+   * Handle Live Input Changes for Editable R_i fields during Edit Mode.
+   * The table is re-rendered after each keystroke to refresh the computed
+   * psychometrics; focus is restored on the rebuilt input so users can keep
+   * typing multi-digit values.
    */
   const handleRiInput = (inputEl) => {
     const itemNum = Number(inputEl.getAttribute('data-item-num'));
@@ -435,17 +475,17 @@ export function initItemAnalysisView() {
 
     tempDraftRiStore[itemNum] = validatedVal;
     renderItemAnalysisPage();
+
+    const rebuiltInput = document.querySelector(`.ri-input-field[data-item-num="${itemNum}"]`);
+    if (rebuiltInput) {
+      rebuiltInput.focus();
+      rebuiltInput.setSelectionRange(rebuiltInput.value.length, rebuiltInput.value.length);
+    }
   };
 
   const tableBody = document.getElementById('item-analysis-table-body');
   if (tableBody) {
     tableBody.addEventListener('input', (e) => {
-      if (e.target.matches('.ri-input-field')) {
-        handleRiInput(e.target);
-      }
-    });
-
-    tableBody.addEventListener('change', (e) => {
       if (e.target.matches('.ri-input-field')) {
         handleRiInput(e.target);
       }
@@ -475,6 +515,11 @@ export function initItemAnalysisView() {
   }
 
   renderItemAnalysisPage();
+
+  // If this page was opened directly (without visiting the TOS worksheet first),
+  // the competency database may still be empty. Load it and re-render with the
+  // real TOS data once available.
+  loadCompetencies().then(renderItemAnalysisPage).catch(() => renderItemAnalysisPage());
 }
 
 function getActionBadge(action) {

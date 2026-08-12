@@ -183,8 +183,8 @@ function buildErrorCallout(session) {
   const box = el('div', 'ai-alert ai-callout-error');
   box.appendChild(el('div', 'font-semibold', err.label));
   const detail = {
-    no_plan: 'Could the academic tool in your scope match this request? Try referencing sections, subjects, reports, or analytics.',
-    permission_denied: 'Your current role does not grant access to run this tool.',
+    no_plan: 'Try referencing sections, subjects, reports, or analytics — or ask "what can you do" for ideas.',
+    permission_denied: 'Your current role does not grant access to run this tool. Ask your administrator to grant it.',
     tool_not_found: 'The selected tool is no longer registered in this environment.',
   }[err.code] || 'No academic data matched this request. Try rephrasing it.';
   box.appendChild(el('div', 'text-sm', detail));
