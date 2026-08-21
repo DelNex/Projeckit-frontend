@@ -20,6 +20,7 @@ import { renderWorkspaceHeader } from '../components/assessment/workspace-header
 import { renderSetupTos } from '../components/assessment/setup-tos.js';
 import { renderSetupAnswerKey } from '../components/assessment/setup-answer-key.js';
 import { renderExamAttendance } from '../components/assessment/exam-attendance.js';
+import { printElement, printHtmlString } from '../components/print-engine.js';
 
 // ─── UTILITY HELPERS (DECLARED BEFORE INITIALIZATION) ────────────────────────
 function el(id) { return document.getElementById(id); }
@@ -854,16 +855,7 @@ async function handlePrintOmrForm() {
       throw new Error('Invalid OMR form document received from server.');
     }
 
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.open();
-      printWindow.document.write(html);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => printWindow.print(), 400);
-    } else {
-      showToast('Popup blocked. Please allow popups to print OMR sheets.', 'warning');
-    }
+    printHtmlString(html, { title: `OMR Answer Sheet - ${assessment.title}` });
   } catch (err) {
     console.error('[Workspace] OMR Form print failed', err);
     showToast(err?.message || 'Failed to load OMR printable form.', 'error');

@@ -360,7 +360,7 @@ layer(base);
     background: #ffffff !important;
   }
 
-  header, .sidebar, .footer, .btn, .button, .menu-item, .tabs, .filter-pill, .nav, .page-actions, .page-header > .actions, .shadow-sm, .shadow-theme-sm, .shadow-theme-lg, .no-print {
+  header, .sidebar, .footer, .btn, .button, .menu-item, .tabs, .filter-pill, .nav, .page-actions, .no-print {
     display: none !important;
   }
 

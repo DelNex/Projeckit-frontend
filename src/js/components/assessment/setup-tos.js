@@ -28,6 +28,7 @@ import {
 } from '../../views/tos.js';
 import { upsertTosDocument } from '../../api/tos-api.js';
 import { escapeHTML } from '../../utils.js';
+import { printElement } from '../print-engine.js';
 
 // ─── Public entry point ──────────────────────────────────────────────────────
 
@@ -177,6 +178,11 @@ function wireControls(containerEl, assessmentId, subject, term, schoolYear, targ
   // Delete confirm modal — mirrors tos.html inline handler
   document.getElementById('btn-confirm-delete-tos-rows')?.addEventListener('click', () => {
     document.getElementById('delete-tos-confirm-modal')?.classList.add('hidden');
+  });
+
+  // TOS print — isolated iframe print of just the DepEd TOS card
+  document.getElementById('btn-print-tos')?.addEventListener('click', () => {
+    printElement('official-tos-card', { title: 'Table of Specifications' });
   });
 }
 
@@ -386,7 +392,7 @@ function buildTOSPanelHTML({ subject, grade, section, term, schoolYear, targetIt
 
     <!-- ── PRINT PREVIEW VIEW (hidden by default) ─────────────────────────── -->
     <div id="print-preview-container" class="hidden space-y-4">
-      <div class="p-8 bg-white text-gray-900 rounded-xl border border-gray-200 shadow-md font-serif max-w-4xl mx-auto space-y-6">
+      <div id="official-tos-card" class="p-8 bg-white text-gray-900 rounded-xl border border-gray-200 shadow-md font-serif max-w-4xl mx-auto space-y-6">
         <div class="text-center space-y-1 border-b-2 border-gray-900 pb-4">
           <p class="text-xs font-bold uppercase tracking-widest text-gray-600">Republic of the Philippines</p>
           <p class="text-sm font-bold uppercase tracking-widest text-gray-800">Department of Education</p>
@@ -443,7 +449,7 @@ function buildTOSPanelHTML({ subject, grade, section, term, schoolYear, targetIt
           </div>
         </div>
         <div class="text-center pt-4 no-print">
-          <button onclick="window.print()"
+          <button id="btn-print-tos"
             class="px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold rounded-lg shadow-sm">
             🖨 Print Official TOS Document
           </button>

@@ -1,12 +1,12 @@
 /**
  * Isolated Section Print Engine
- * Renders target containers into an isolated print iframe or print-only overlay
+ * Renders target containers into an isolated print iframe
  * without altering or breaking the live application DOM.
  */
 
 export function printElement(elementOrId, options = {}) {
   const targetEl =
-    typeof elementOrId === 'string' ? document.getElementById(elementOrId) : elementOrId;
+    typeof elementOrId === 'string' ? document.getElementById(elementOrId) || document.querySelector(elementOrId) : elementOrId;
 
   if (!targetEl) {
     console.error(`[PrintEngine] Target print container not found:`, elementOrId);
@@ -40,7 +40,7 @@ export function printElement(elementOrId, options = {}) {
   const doc = printFrame.contentWindow?.document;
   if (!doc) {
     console.error('[PrintEngine] Unable to access print iframe window.');
-    document.body.removeChild(printFrame);
+    if (printFrame.parentNode) printFrame.parentNode.removeChild(printFrame);
     return;
   }
 
@@ -55,21 +55,24 @@ export function printElement(elementOrId, options = {}) {
       <head>
         <meta charset="utf-8">
         <title>${docTitle}</title>
-        <link rel="stylesheet" href="/css/style.css">
         <style>
           @page {
             size: ${paperSize} ${orientation};
-            margin: 12mm;
+            margin: 10mm;
           }
           body {
             background: #ffffff !important;
             color: #111827 !important;
-            font-family: Outfit, sans-serif !important;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
             padding: 0 !important;
             margin: 0 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
           .no-print { display: none !important; }
           .print-container { width: 100% !important; margin: 0 auto !important; }
+          table { border-collapse: collapse; width: 100%; }
+          th, td { border: 1px solid #111827; padding: 6px; }
         </style>
       </head>
       <body>
@@ -81,16 +84,57 @@ export function printElement(elementOrId, options = {}) {
   `);
   doc.close();
 
-  // Trigger print once styles/iframe load
   setTimeout(() => {
-    printFrame.contentWindow?.focus();
-    printFrame.contentWindow?.print();
+    try {
+      printFrame.contentWindow?.focus();
+      printFrame.contentWindow?.print();
+    } catch (e) {
+      console.error('[PrintEngine] Print failed', e);
+    } finally {
+      setTimeout(() => {
+        if (printFrame.parentNode) {
+          printFrame.parentNode.removeChild(printFrame);
+        }
+      }, 1500);
+    }
+  }, 350);
+}
 
-    // Clean up iframe after print dialog resolves
-    setTimeout(() => {
-      if (printFrame.parentNode) {
-        printFrame.parentNode.removeChild(printFrame);
-      }
-    }, 1000);
-  }, 300);
+export function printHtmlString(htmlString, options = {}) {
+  if (!htmlString) return;
+
+  const printFrame = document.createElement('iframe');
+  printFrame.style.position = 'fixed';
+  printFrame.style.right = '0';
+  printFrame.style.bottom = '0';
+  printFrame.style.width = '0';
+  printFrame.style.height = '0';
+  printFrame.style.border = '0';
+
+  document.body.appendChild(printFrame);
+
+  const doc = printFrame.contentWindow?.document;
+  if (!doc) {
+    if (printFrame.parentNode) printFrame.parentNode.removeChild(printFrame);
+    return;
+  }
+
+  doc.open();
+  doc.write(htmlString);
+  doc.close();
+
+  setTimeout(() => {
+    try {
+      printFrame.contentWindow?.focus();
+      printFrame.contentWindow?.print();
+    } catch (e) {
+      console.error('[PrintEngine] Print failed', e);
+    } finally {
+      setTimeout(() => {
+        if (printFrame.parentNode) {
+          printFrame.parentNode.removeChild(printFrame);
+        }
+      }, 1500);
+    }
+  }, 350);
 }

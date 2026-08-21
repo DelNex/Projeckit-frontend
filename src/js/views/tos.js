@@ -2,6 +2,7 @@ import { getCompetencies as fetchCompetencies, getTosDocuments, upsertTosDocumen
 import { NoData } from '../components/no-data.js';
 import { ConfigStore } from '../stores/config-store.js';
 import { ensureAddSectionsLink, escapeHTML, selectValueOrEmpty } from '../utils.js';
+import { printElement } from '../components/print-engine.js';
 
 let TOS_COMPETENCY_DATABASE = {};
 
@@ -432,6 +433,14 @@ function bindStaticControls() {
     targetHoursInput.addEventListener('input', () => {
       updateLiveValidation();
       triggerAutoSave();
+    });
+  }
+
+  // TOS print — isolated iframe print of just the DepEd TOS card
+  const btnPrintTos = document.getElementById('btn-print-tos');
+  if (btnPrintTos) {
+    btnPrintTos.addEventListener('click', () => {
+      printElement('official-tos-card', { title: 'Table of Specifications' });
     });
   }
 }
