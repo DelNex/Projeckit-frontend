@@ -16,32 +16,29 @@ export function getCurrentAssessmentId() {
   return id ? Number(id) : null;
 }
 
-/** Standard (non-streaming) chat request */
-export async function sendAiChat(message, context = {}, assessmentId = null) {
+import { getCurrentUiContext } from '../ai-ui-context.js';
+
+export async function sendAiChat(message, context = {}, assessmentId = null, uiContext = null) {
+  const currentUi = uiContext || getCurrentUiContext();
   const body = {
     message,
-    context: { ...context, page: getCurrentPageSlug() },
+    context: { ...context, page: currentUi.pageId || getCurrentPageSlug() },
+    uiContext: currentUi,
   };
   if (assessmentId) body.assessmentId = assessmentId;
   return post('/ai/chat', body);
 }
 
-/**
- * SSE streaming chat.
- * Returns an EventSource-compatible object. The caller should listen for:
- *   message_start, context_resolved, tool_start, tool_result,
- *   thinking_start, answer_delta, message_complete, error
- *
- * Uses fetch + ReadableStream because the backend uses POST with SSE.
- */
-export async function sendAiChatStream(message, context = {}, assessmentId = null, { signal } = {}) {
+export async function sendAiChatStream(message, context = {}, assessmentId = null, { signal, uiContext = null } = {}) {
   const base = typeof API_BASE_URL_RAW !== 'undefined' ? API_BASE_URL_RAW : '';
   const url = `${base || window.location.origin}/api/ai/stream`;
 
+  const currentUi = uiContext || getCurrentUiContext();
   const body = {
     message,
     stream: true,
-    context: { ...context, page: getCurrentPageSlug() },
+    context: { ...context, page: currentUi.pageId || getCurrentPageSlug() },
+    uiContext: currentUi,
   };
   if (assessmentId) body.assessmentId = assessmentId;
 

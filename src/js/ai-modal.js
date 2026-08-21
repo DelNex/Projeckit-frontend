@@ -5,6 +5,8 @@ import { fetchAiInfo, getAiInfoSync } from './chat/ai-info.js';
 import { buildSidebar, AI_SIDEBAR_OPEN_EVENT } from './chat/sidebar.js';
 import { AiApi } from './api/index.js';
 import { sendAiChatStream, uploadModule, getCurrentAssessmentId } from './api/ai-api.js';
+import { getCurrentUiContext } from './ai-ui-context.js';
+import { renderRichPart, highlightUiTarget } from './chat/components/rich-renderer.js';
 
 const AI_MODAL_OPEN_EVENT  = 'deped_open_ai_modal';
 const AI_MODAL_OPENED      = 'deped_ai_modal_opened';
@@ -181,43 +183,74 @@ function renderMarkdownAnswer(html) {
   return wrap;
 }
 
-// ─── Suggestion chips ─────────────────────────────────────────────────────────
-function getAssessmentChips() {
-  return [
-    { label: 'Analyze results', query: 'Analyze the results of this assessment', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z', color: 'text-brand-500' },
-    { label: 'Weak competencies', query: 'Which competencies need intervention?', icon: 'M13 10V3L4 14h7v7l9-11h-7z', color: 'text-amber-500' },
-    { label: 'Item quality', query: 'Which items are problematic?', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2', color: 'text-emerald-500' },
-    { label: 'Students needing help', query: 'Which students need remediation?', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z', color: 'text-rose-500' },
-  ];
-}
+function getPageSpecificChips(uiContext) {
+  const pageId = uiContext?.pageId || 'dashboard';
 
-function getGeneralChips() {
-  return [
-    { label: 'Class Sectional MPS', query: 'Show Class Sectional MPS achievement comparison', icon: 'M1 4h22M1 10h22M1 16h22', color: 'text-brand-500' },
-    { label: 'Students Needing Remediation', query: 'List students needing targeted academic remediation', icon: 'M12 19l9-2-9-13-9 13 9 2zm0 0v-8', color: 'text-amber-500' },
-    { label: 'Item Analysis', query: 'Evaluate test item difficulty and discrimination metrics', icon: 'M9 5h7a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2v-3m4-2h.01M17 9v2m0 4v2', color: 'text-emerald-500' },
-    { label: 'TOS Hours', query: 'Check TOS competency hours allocation', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', color: 'text-indigo-500' },
-  ];
+  switch (pageId) {
+    case 'exam-import':
+      return [
+        { label: 'How do I scan?', query: 'How do I scan student answer sheets?', color: 'text-brand-500' },
+        { label: 'Sheet not detected', query: 'My sheet wasn\'t detected by the camera', color: 'text-amber-500' },
+        { label: 'Flagged response', query: 'Why was this response flagged?', color: 'text-rose-500' },
+        { label: 'What do I do here?', query: 'What do I do on the OMR page?', color: 'text-indigo-500' },
+      ];
+    case 'item-analysis':
+      return [
+        { label: 'Difficulty index (P)', query: 'Explain difficulty index P in item analysis', color: 'text-brand-500' },
+        { label: 'Discrimination (D)', query: 'Explain discrimination index D', color: 'text-emerald-500' },
+        { label: 'Items to revise', query: 'Which items need revision?', color: 'text-amber-500' },
+        { label: 'Explain this page', query: 'What do I do on this page?', color: 'text-indigo-500' },
+      ];
+    case 'reports':
+      return [
+        { label: 'Explain this report', query: 'Explain this quarterly performance report', color: 'text-brand-500' },
+        { label: 'Print this report', query: 'Can I print this report?', color: 'text-emerald-500' },
+        { label: 'Export results', query: 'How do I export section results?', color: 'text-indigo-500' },
+      ];
+    case 'assessment-workspace':
+      return [
+        { label: 'Generate test paper', query: 'How do I generate the test?', color: 'text-brand-500' },
+        { label: 'Check TOS', query: 'Check TOS competency hours allocation', color: 'text-emerald-500' },
+        { label: 'Manage Answer Key', query: 'How do I set the answer key?', color: 'text-amber-500' },
+        { label: 'Next step', query: 'What should I do next for this assessment?', color: 'text-indigo-500' },
+      ];
+    default:
+      return [
+        { label: 'Create an assessment', query: 'How do I create an assessment?', color: 'text-brand-500' },
+        { label: 'Review performance', query: 'Show overall performance this quarter', color: 'text-emerald-500' },
+        { label: 'Teach me Project KIT', query: 'I\'m new. Teach me how to use Project KIT.', color: 'text-amber-500' },
+        { label: 'Explain this page', query: 'What do I do on this page?', color: 'text-indigo-500' },
+      ];
+  }
 }
 
 function welcomeHtml() {
-  const chips = activeAssessmentId ? getAssessmentChips() : getGeneralChips();
-  const chipsHtml = chips.map((q) => `
-    <button type="button" class="ai-suggestion-chip inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-xl border border-gray-300 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 text-gray-800 dark:text-gray-200 hover:border-brand-500 dark:hover:border-brand-500 hover:text-brand-600 dark:hover:text-brand-400 transition-colors shadow-xs" data-query="${q.query}">
-      <svg class="w-3.5 h-3.5 ${q.color}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${q.icon}"/></svg>
-      <span>${q.label}</span>
-    </button>`).join('');
+  const uiContext = getCurrentUiContext();
+  const chips = getPageSpecificChips(uiContext);
 
-  const contextNote = activeAssessmentId
-    ? `<div class="flex items-center gap-1.5 text-[11px] text-brand-600 dark:text-brand-400 font-semibold"><span class="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse"></span>Assessment context active — I already know which assessment you're working on.</div>`
-    : '';
+  const chipsHtml = chips
+    .map(
+      (q) => `
+    <button type="button" class="ai-suggestion-chip inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-xl border border-gray-300 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 text-gray-800 dark:text-gray-200 hover:border-brand-500 dark:hover:border-brand-500 hover:text-brand-600 dark:hover:text-brand-400 transition-colors shadow-xs" data-query="${q.query}">
+      <span class="w-1.5 h-1.5 rounded-full ${q.color.replace('text-', 'bg-')}"></span>
+      <span>${q.label}</span>
+    </button>`
+    )
+    .join('');
+
+  const contextNote = `
+    <div class="flex items-center gap-1.5 text-[11px] text-brand-600 dark:text-brand-400 font-semibold pt-1">
+      <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+      Page context active: <strong>${uiContext.pageTitle}</strong> (${uiContext.device.type})
+    </div>
+  `;
 
   return `<div class="space-y-3">
     <p class="text-sm font-medium text-gray-800 dark:text-gray-200">
-      Hello! I am your <strong>Project KIT Academic Copilot</strong>. I can analyze assessment data, identify student weaknesses, and help generate remediation plans.
+      Hello! I am your <strong>Project KIT Context-Aware Teaching Assistant</strong>. I understand your current page, active controls, and assessment state.
     </p>
     ${contextNote}
-    <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mt-2">Suggested</div>
+    <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mt-2">Page Quick Actions</div>
     <div class="flex flex-wrap gap-2 pt-1">${chipsHtml}</div>
   </div>`;
 }
@@ -321,12 +354,14 @@ export function initAIModal() {
 
     const startTime = Date.now();
 
+    const uiContext = getCurrentUiContext();
+
     try {
       const streamBody = await sendAiChatStream(
         query,
         { source: 'assessment-workspace' },
         activeAssessmentId,
-        { signal: abortController.signal },
+        { signal: abortController.signal, uiContext },
       );
 
       let fullAnswer = '';
@@ -340,6 +375,19 @@ export function initAIModal() {
               updateContextBar({ contextBar, contextLabel });
             }
             break;
+
+          case 'message_part':
+          case 'confirmation_required':
+          case 'ui_action': {
+            finalizeWorking(workingEl, Date.now() - startTime);
+            const partEl = renderRichPart(data.part || data, dispatchQuery, (act) => {
+              if (act.target) highlightUiTarget(act.target);
+            });
+            if (placeholderContent) placeholderContent.appendChild(partEl);
+            placeholder.removeAttribute('status');
+            scrollToBottom(messageList);
+            break;
+          }
 
           case 'tool_start':
             addWorkingStep(workingEl, data.toolId, data.label, 'running');
