@@ -1,4 +1,5 @@
-// OCR Scanner & Manual Entry Controller
+import { OmrCameraScanner } from '../omr/omr-camera.js';
+import { preprocessOmrImage } from '../omr/omr-preprocessor.js';
 import { SkeletonBuilder } from '../skeletons.js';
 import { ResponseStore } from '../stores/response-store.js';
 import { ConfigStore } from '../stores/config-store.js';
@@ -494,9 +495,56 @@ function attachOcrListeners() {
   document.getElementById('btn-run-ocr')?.addEventListener('click', runOcr);
 
   if (dropzone && fileInput) {
-    dropzone.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('border-brand-500', 'bg-brand-50/40');
+    });
+    dropzone.addEventListener('dragleave', () => {
+      dropzone.classList.remove('border-brand-500', 'bg-brand-50/40');
+    });
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('border-brand-500', 'bg-brand-50/40');
+      const file = e.dataTransfer?.files?.[0];
+      if (file) loadOcrImage(file);
+    });
+    dropzone.addEventListener('click', (e) => {
+      if (e.target === captureBtn || captureBtn?.contains(e.target)) return;
+      fileInput.click();
+    });
   }
-  captureBtn?.addEventListener('click', () => fileInput?.click());
+
+  captureBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const cameraContainer = document.createElement('div');
+    cameraContainer.id = 'omr-live-camera-modal';
+    cameraContainer.className = 'fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4';
+    document.body.appendChild(cameraContainer);
+
+    const scanner = new OmrCameraScanner({
+      containerEl: cameraContainer,
+      onCapture: (preprocessed) => {
+        currentImage = preprocessed.dataUrl;
+        const imgEl = document.getElementById('ocr-preview-img');
+        const emptyEl = document.getElementById('ocr-preview-empty');
+        const runBtn = document.getElementById('btn-run-ocr');
+        if (imgEl) {
+          imgEl.src = currentImage;
+          imgEl.classList.remove('hidden');
+        }
+        if (emptyEl) emptyEl.classList.add('hidden');
+        if (runBtn) runBtn.disabled = false;
+        scanner.stop();
+        if (cameraContainer.parentNode) cameraContainer.parentNode.removeChild(cameraContainer);
+      },
+      onError: (err) => {
+        alert(`Camera error: ${err.message || 'Unable to access camera.'}`);
+        if (cameraContainer.parentNode) cameraContainer.parentNode.removeChild(cameraContainer);
+      },
+    });
+    scanner.start();
+  });
+
   fileInput?.addEventListener('change', (e) => {
     const file = e.target.files?.[0];
     if (file) loadOcrImage(file);

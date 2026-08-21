@@ -344,17 +344,23 @@ layer(base);
 }
 
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
   body {
-    color: #111827;
-    background: #ffffff;
+    color: #111827 !important;
+    background: #ffffff !important;
+    font-family: Outfit, sans-serif !important;
   }
 
   .dark {
-    color: #111827;
-    background: #ffffff;
+    color: #111827 !important;
+    background: #ffffff !important;
   }
 
-  header, .sidebar, .footer, .btn, .button, .menu-item, .tabs, .filter-pill, .nav, .page-actions, .page-header > .actions, .shadow-sm, .shadow-theme-sm, .shadow-theme-lg {
+  header, .sidebar, .footer, .btn, .button, .menu-item, .tabs, .filter-pill, .nav, .page-actions, .page-header > .actions, .shadow-sm, .shadow-theme-sm, .shadow-theme-lg, .no-print {
     display: none !important;
   }
 
@@ -374,8 +380,26 @@ layer(base);
     border: 1px solid #d1d5db !important;
   }
 
-  .print-friendly {
+  .print-friendly, .print-only {
     display: block !important;
+  }
+
+  .print-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Fixed 100% Scale Lock for OMR Sheets */
+  .omr-sheet-container {
+    width: 210mm !important;
+    height: 297mm !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 10mm !important;
+    box-sizing: border-box !important;
+    transform: none !important;
+    break-after: page;
+    page-break-after: always;
   }
 }
 
