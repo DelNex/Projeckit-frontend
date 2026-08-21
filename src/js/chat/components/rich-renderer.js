@@ -1,7 +1,7 @@
 /**
  * Rich Assistant Component Protocol Renderer
  * Renders structured assistant message parts (Actions, Confirmations, Progress, Results, Chips)
- * and handles UI visual target highlighting ([data-ai-target]) and hover popups.
+ * and handles UI visual target highlighting ([data-ai-target]) and hover popups on all turns.
  */
 
 import { parseMarkdownToHtml } from './markdown.js';
@@ -25,51 +25,62 @@ export function appendTurnFollowUpChips(messageContainer, pageId, onDispatchQuer
 
   const chipsMap = {
     'exam-import': [
-      { label: 'How do I scan?', query: 'How do I scan student answer sheets?' },
-      { label: 'Fix tilted sheet', query: 'My sheet wasn\'t detected by camera' },
-      { label: 'Open verification', query: 'Open verification queue' },
+      { label: 'How do I scan?', query: 'How do I scan student answer sheets?', color: 'bg-brand-500' },
+      { label: 'Fix tilted sheet', query: 'My sheet wasn\'t detected by camera', color: 'bg-amber-500' },
+      { label: 'Open verification', query: 'Open verification queue', color: 'bg-rose-500' },
+      { label: 'What do I do here?', query: 'What do I do on the OMR page?', color: 'bg-indigo-500' },
     ],
     'item-analysis': [
-      { label: 'Explain Discrimination D', query: 'Explain discrimination index D in item analysis' },
-      { label: 'Show poor items', query: 'Which items need revision?' },
-      { label: 'Explain PBI', query: 'Explain point-biserial correlation PBI' },
+      { label: 'Difficulty index (P)', query: 'Explain difficulty index P in item analysis', color: 'bg-brand-500' },
+      { label: 'Discrimination (D)', query: 'Explain discrimination index D', color: 'bg-emerald-500' },
+      { label: 'Items to revise', query: 'Which items need revision?', color: 'bg-amber-500' },
+      { label: 'Explain this page', query: 'What do I do on this page?', color: 'bg-indigo-500' },
     ],
     'reports': [
-      { label: 'Explain report', query: 'Explain this quarterly performance report' },
-      { label: 'Print section report', query: 'Can I print this report?' },
-      { label: 'Export CSV', query: 'How do I export section results?' },
+      { label: 'Explain this report', query: 'Explain this quarterly performance report', color: 'bg-brand-500' },
+      { label: 'Print this report', query: 'Can I print this report?', color: 'bg-emerald-500' },
+      { label: 'Export results', query: 'How do I export section results?', color: 'bg-indigo-500' },
     ],
     'assessment-workspace': [
-      { label: 'What do I do next?', query: 'What should I do next for this assessment?' },
-      { label: 'Generate test', query: 'How do I generate the test paper?' },
-      { label: 'Setup key', query: 'How do I set the answer key?' },
+      { label: 'Generate test paper', query: 'How do I generate the test?', color: 'bg-brand-500' },
+      { label: 'Check TOS', query: 'Check TOS competency hours allocation', color: 'bg-emerald-500' },
+      { label: 'Manage Answer Key', query: 'How do I set the answer key?', color: 'bg-amber-500' },
+      { label: 'Next step', query: 'What should I do next for this assessment?', color: 'bg-indigo-500' },
     ],
     'dashboard': [
-      { label: 'Create assessment', query: 'How do I create an assessment?' },
-      { label: 'Review performance', query: 'Show overall class performance' },
-      { label: 'Teach me Project KIT', query: 'I\'m new. Teach me how to use Project KIT.' },
+      { label: 'Create an assessment', query: 'How do I create an assessment?', color: 'bg-brand-500' },
+      { label: 'Review performance', query: 'Show overall performance this quarter', color: 'bg-emerald-500' },
+      { label: 'Teach me Project KIT', query: 'I\'m new. Teach me how to use Project KIT.', color: 'bg-amber-500' },
+      { label: 'Explain this page', query: 'What do I do on this page?', color: 'bg-indigo-500' },
     ],
   };
 
   const chips = chipsMap[pageId] || chipsMap['dashboard'];
 
   const bar = document.createElement('div');
-  bar.className = 'ai-turn-follow-up-bar flex flex-wrap gap-1.5 pt-2.5 mt-2.5 border-t border-gray-200/60 dark:border-gray-800/60';
-  bar.innerHTML = `<span class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 w-full mb-1">Follow-up Suggestions</span>`;
+  bar.className = 'ai-turn-follow-up-bar space-y-2 pt-3 mt-3 border-t border-gray-200/60 dark:border-gray-800/60';
+  bar.innerHTML = `
+    <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">Page Quick Actions</div>
+    <div class="flex flex-wrap gap-2 pt-1">
+      ${chips
+        .map(
+          (c) => `
+        <button type="button" class="ai-suggestion-chip group relative inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-xl border border-gray-300 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 text-gray-800 dark:text-gray-200 hover:border-brand-500 dark:hover:border-brand-500 hover:text-brand-600 dark:hover:text-brand-400 transition-colors shadow-xs" data-query="${c.query}">
+          <span class="w-1.5 h-1.5 rounded-full ${c.color}"></span>
+          <span>${c.label}</span>
+          <span class="hidden group-hover:block absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-[10px] rounded shadow-lg whitespace-nowrap z-9999 font-normal pointer-events-none">Click to execute</span>
+        </button>
+      `
+        )
+        .join('')}
+    </div>
+  `;
 
-  chips.forEach((c) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className =
-      'ai-suggestion-chip group relative inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border border-brand-200 dark:border-brand-900/60 bg-brand-50/50 dark:bg-brand-950/30 text-brand-700 dark:text-brand-300 hover:bg-brand-500 hover:text-white dark:hover:bg-brand-500 dark:hover:text-white transition shadow-2xs';
-    btn.innerHTML = `
-      <span>${c.label}</span>
-      <span class="hidden group-hover:block absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-[10px] rounded shadow-lg whitespace-nowrap z-9999 font-normal pointer-events-none">Click to execute suggestion</span>
-    `;
+  bar.querySelectorAll('button[data-query]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      if (onDispatchQuery) onDispatchQuery(c.query);
+      const q = btn.getAttribute('data-query');
+      if (q && onDispatchQuery) onDispatchQuery(q);
     });
-    bar.appendChild(btn);
   });
 
   messageContainer.appendChild(bar);
@@ -93,8 +104,12 @@ export function renderRichPart(part = {}, onDispatchQuery, onTriggerAction) {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className =
-          'ai-suggestion-chip inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border border-gray-300 dark:border-gray-700 bg-white/60 dark:bg-gray-800/60 text-gray-800 dark:text-gray-200 hover:border-brand-500 hover:text-brand-600 transition shadow-xs';
-        btn.innerHTML = `<span>${chip.label}</span>`;
+          'ai-suggestion-chip group relative inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-xl border border-gray-300 dark:border-gray-700 bg-white/60 dark:bg-gray-800/60 text-gray-800 dark:text-gray-200 hover:border-brand-500 hover:text-brand-600 transition shadow-xs';
+        btn.innerHTML = `
+          <span class="w-1.5 h-1.5 rounded-full bg-brand-500"></span>
+          <span>${chip.label}</span>
+          <span class="hidden group-hover:block absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-[10px] rounded shadow-lg whitespace-nowrap z-9999 font-normal pointer-events-none">Click to execute</span>
+        `;
         btn.addEventListener('click', () => {
           if (onDispatchQuery) onDispatchQuery(chip.prompt);
         });
@@ -110,10 +125,11 @@ export function renderRichPart(part = {}, onDispatchQuery, onTriggerAction) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className =
-        'px-4 py-2 text-xs font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-xl shadow-xs transition flex items-center gap-2';
+        'group relative px-4 py-2 text-xs font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-xl shadow-xs transition flex items-center gap-2';
       btn.innerHTML = `
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
         <span>${act.label}</span>
+        <span class="hidden group-hover:block absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-[10px] rounded shadow-lg whitespace-nowrap z-9999 font-normal pointer-events-none">Perform Action</span>
       `;
       btn.addEventListener('click', () => {
         if (act.type === 'focus') highlightUiTarget(act.target);

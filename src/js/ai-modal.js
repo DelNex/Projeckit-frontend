@@ -448,6 +448,9 @@ export function initAIModal() {
             break;
         }
       }
+      if (placeholderContent) {
+        appendTurnFollowUpChips(placeholderContent, uiContext.pageId, dispatchQuery);
+      }
     } catch (err) {
       if (err?.name === 'AbortError') { /* user cancelled */ } else {
         finalizeWorking(workingEl, Date.now() - startTime);
