@@ -32,3 +32,6 @@ coverage/
 
 # Misc
 *.tgz
+
+# Local historical archive; do not restore these files to active source paths.
+legacy/

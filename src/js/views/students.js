@@ -342,7 +342,8 @@ function renderSummaryMetrics() {
   const sumMps = sectionStudents.reduce((acc, s) => acc + (s.mps || 0), 0);
   const avgMps = totalCount > 0 ? sumMps / totalCount : 0;
 
-  const passingCount = sectionStudents.filter(s => (s.mps || 0) >= 75).length;
+  const mpsPassThreshold = AppSettingsStore.mpsPassing();
+  const passingCount = sectionStudents.filter(s => (s.mps || 0) >= mpsPassThreshold).length;
   const passRate = totalCount > 0 ? (passingCount / totalCount) * 100 : 0;
 
   const outstandingCount = sectionStudents.filter(s => s.classification === 'Outstanding').length;

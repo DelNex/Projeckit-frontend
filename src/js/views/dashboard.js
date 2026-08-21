@@ -81,7 +81,8 @@ export function initDashboard() {
 
       totalExaminees += secStudents;
 
-      if (secMps != null && secMps < 75) {
+      const mpsPassThreshold = AppSettingsStore.mpsPassing();
+      if (secMps != null && secMps < mpsPassThreshold) {
         atRiskCount += secStudents;
       }
     });

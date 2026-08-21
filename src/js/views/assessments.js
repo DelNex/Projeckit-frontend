@@ -175,7 +175,7 @@ function renderAssessmentsList() {
     const attendanceCount = a._count?.attendance ?? 0;
 
     return `
-      <tr class="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors cursor-pointer" data-assessment-id="${a.id}">
+      <tr class="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/40 hover-lift transition-all cursor-pointer" data-assessment-id="${a.id}">
         <td class="px-4 py-3">
           <div>
             <p class="text-sm font-semibold text-gray-900 dark:text-white">${escapeHTML(a.title || 'Untitled')}</p>
