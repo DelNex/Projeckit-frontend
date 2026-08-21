@@ -845,21 +845,30 @@ async function handlePrintOmrForm() {
   const assessment = AssessmentStore.get();
   if (!assessment) return;
 
+  const btn = el('btn-print-omr-form');
+  if (btn) { btn.disabled = true; btn.textContent = 'Preparing Print…'; }
+
   try {
     const html = await AssessmentApi.getOmrFormPrintHtml(assessment.id);
+    if (!html || typeof html !== 'string' || !html.includes('<html')) {
+      throw new Error('Invalid OMR form document received from server.');
+    }
+
     const printWindow = window.open('', '_blank');
     if (printWindow) {
-      printWindow.document.write(typeof html === 'string' ? html : html?.html || '');
+      printWindow.document.open();
+      printWindow.document.write(html);
       printWindow.document.close();
       printWindow.focus();
-      setTimeout(() => printWindow.print(), 300);
+      setTimeout(() => printWindow.print(), 400);
     } else {
       showToast('Popup blocked. Please allow popups to print OMR sheets.', 'warning');
     }
   } catch (err) {
     console.error('[Workspace] OMR Form print failed', err);
-    const printUrl = AssessmentApi.getOmrFormPrintUrl(assessment.id);
-    window.open(printUrl, '_blank');
+    showToast(err?.message || 'Failed to load OMR printable form.', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🖨️ Print Sheet'; }
   }
 }
 

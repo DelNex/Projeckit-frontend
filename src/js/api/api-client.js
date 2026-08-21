@@ -104,6 +104,25 @@ export async function get(endpoint, options = {}) {
   return request(endpoint, { ...options, method: 'GET' });
 }
 
+export async function getRawHtml(endpoint, options = {}) {
+  const url = buildUrl(`/api${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`);
+  const opts = {
+    method: 'GET',
+    headers: {
+      Accept: 'text/html, text/plain, */*',
+      ...(options.headers || {}),
+    },
+    credentials: 'include',
+    signal: options.signal,
+  };
+  const response = await fetch(url, opts);
+  if (!response.ok) {
+    const payload = await parseJson(response);
+    throw normalizeErrorResponse(response, payload);
+  }
+  return await response.text();
+}
+
 export async function post(endpoint, body, options = {}) {
   return request(endpoint, { ...options, method: 'POST', body });
 }
