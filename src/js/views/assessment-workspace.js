@@ -841,11 +841,26 @@ async function handleGenerateOmrForm() {
   }
 }
 
-function handlePrintOmrForm() {
+async function handlePrintOmrForm() {
   const assessment = AssessmentStore.get();
   if (!assessment) return;
-  const printUrl = AssessmentApi.getOmrFormPrintUrl(assessment.id);
-  window.open(printUrl, '_blank');
+
+  try {
+    const html = await AssessmentApi.getOmrFormPrintHtml(assessment.id);
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(typeof html === 'string' ? html : html?.html || '');
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => printWindow.print(), 300);
+    } else {
+      showToast('Popup blocked. Please allow popups to print OMR sheets.', 'warning');
+    }
+  } catch (err) {
+    console.error('[Workspace] OMR Form print failed', err);
+    const printUrl = AssessmentApi.getOmrFormPrintUrl(assessment.id);
+    window.open(printUrl, '_blank');
+  }
 }
 
 // ─── PHASE 4 OMR SCANNER & VERIFICATION WORKFLOW ──────────────────────────────

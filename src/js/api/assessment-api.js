@@ -77,6 +77,10 @@ export function getOmrFormPrintUrl(id) {
   return `/api/assessments/${id}/omr-form/print`;
 }
 
+export function getOmrFormPrintHtml(id) {
+  return ApiClient.get(`/assessments/${id}/omr-form/print`);
+}
+
 export function getResultsSummary(id) {
   return ApiClient.get(`/assessments/${id}/results/summary`);
 }
