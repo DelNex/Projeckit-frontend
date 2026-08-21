@@ -6,7 +6,7 @@ import { buildSidebar, AI_SIDEBAR_OPEN_EVENT } from './chat/sidebar.js';
 import { AiApi } from './api/index.js';
 import { sendAiChatStream, uploadModule, getCurrentAssessmentId } from './api/ai-api.js';
 import { getCurrentUiContext } from './ai-ui-context.js';
-import { renderRichPart, highlightUiTarget, appendTurnFollowUpChips } from './chat/components/rich-renderer.js';
+import { renderRichPart, highlightUiTarget, appendTurnFollowUpChips, appendAssistantActionBar } from './chat/components/rich-renderer.js';
 
 const AI_MODAL_OPEN_EVENT  = 'deped_open_ai_modal';
 const AI_MODAL_OPENED      = 'deped_ai_modal_opened';
@@ -258,6 +258,11 @@ function welcomeHtml() {
 function ensureWelcome(list) {
   if (!list || list.children.length > 0) return;
   const item = createMessageElement({ role: 'assistant', text: welcomeHtml(), isHtml: true });
+  const contentNode = getContentNode(item);
+  if (contentNode) {
+    const textContent = contentNode.innerText || contentNode.textContent || '';
+    appendAssistantActionBar(contentNode, textContent, null);
+  }
   list.appendChild(item);
   scrollToBottom(list);
 }
@@ -427,6 +432,8 @@ export function initAIModal() {
               placeholder.removeAttribute('status');
             }
             if (placeholderContent) {
+              const textContent = placeholderContent.innerText || placeholderContent.textContent || '';
+              appendAssistantActionBar(placeholderContent, textContent, () => dispatchQuery(query));
               appendTurnFollowUpChips(placeholderContent, uiContext.pageId, dispatchQuery);
             }
             scrollToBottom(messageList);
@@ -449,6 +456,8 @@ export function initAIModal() {
         }
       }
       if (placeholderContent) {
+        const textContent = placeholderContent.innerText || placeholderContent.textContent || '';
+        appendAssistantActionBar(placeholderContent, textContent, () => dispatchQuery(query));
         appendTurnFollowUpChips(placeholderContent, uiContext.pageId, dispatchQuery);
       }
     } catch (err) {
