@@ -220,11 +220,15 @@ function attachModeListeners(containerEl, targetItems) {
     });
   }
 
-  // Save Answer Key
+  // Save Answer Key (guarantee single event binding to prevent duplicate requests)
   const saveBtn = containerEl.querySelector('#btn-save-answer-key');
-  if (saveBtn) {
+  if (saveBtn && !saveBtn.dataset.bound) {
+    saveBtn.dataset.bound = 'true';
+    let isSaving = false;
+
     saveBtn.addEventListener('click', async () => {
-      if (!activeAssessmentId) return;
+      if (!activeAssessmentId || isSaving) return;
+      isSaving = true;
       try {
         saveBtn.disabled = true;
         saveBtn.textContent = 'Saving...';
@@ -232,8 +236,8 @@ function attachModeListeners(containerEl, targetItems) {
         await AssessmentStore.load(activeAssessmentId);
       } catch (err) {
         console.error('[SetupAnswerKey] Save error', err);
-        alert('Failed to save answer key. Please try again.');
       } finally {
+        isSaving = false;
         saveBtn.disabled = false;
         saveBtn.textContent = 'Save Answer Key';
       }
