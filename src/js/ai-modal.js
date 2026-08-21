@@ -6,7 +6,7 @@ import { buildSidebar, AI_SIDEBAR_OPEN_EVENT } from './chat/sidebar.js';
 import { AiApi } from './api/index.js';
 import { sendAiChatStream, uploadModule, getCurrentAssessmentId } from './api/ai-api.js';
 import { getCurrentUiContext } from './ai-ui-context.js';
-import { renderRichPart, highlightUiTarget } from './chat/components/rich-renderer.js';
+import { renderRichPart, highlightUiTarget, appendTurnFollowUpChips } from './chat/components/rich-renderer.js';
 
 const AI_MODAL_OPEN_EVENT  = 'deped_open_ai_modal';
 const AI_MODAL_OPENED      = 'deped_ai_modal_opened';
@@ -425,6 +425,9 @@ export function initAIModal() {
               const finalNode = renderMarkdownAnswer(parseMarkdownToHtml(data.text));
               if (placeholderContent) { placeholderContent.innerHTML = ''; placeholderContent.appendChild(finalNode); }
               placeholder.removeAttribute('status');
+            }
+            if (placeholderContent) {
+              appendTurnFollowUpChips(placeholderContent, uiContext.pageId, dispatchQuery);
             }
             scrollToBottom(messageList);
             break;

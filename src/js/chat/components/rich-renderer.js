@@ -1,7 +1,7 @@
 /**
  * Rich Assistant Component Protocol Renderer
  * Renders structured assistant message parts (Actions, Confirmations, Progress, Results, Chips)
- * and handles UI visual target highlighting ([data-ai-target]).
+ * and handles UI visual target highlighting ([data-ai-target]) and hover popups.
  */
 
 import { parseMarkdownToHtml } from './markdown.js';
@@ -18,6 +18,61 @@ export function highlightUiTarget(targetQuery) {
   setTimeout(() => {
     el.classList.remove('ring-4', 'ring-brand-500', 'ring-offset-2', 'animate-pulse');
   }, 4000);
+}
+
+export function appendTurnFollowUpChips(messageContainer, pageId, onDispatchQuery) {
+  if (!messageContainer || messageContainer.querySelector('.ai-turn-follow-up-bar')) return;
+
+  const chipsMap = {
+    'exam-import': [
+      { label: 'How do I scan?', query: 'How do I scan student answer sheets?' },
+      { label: 'Fix tilted sheet', query: 'My sheet wasn\'t detected by camera' },
+      { label: 'Open verification', query: 'Open verification queue' },
+    ],
+    'item-analysis': [
+      { label: 'Explain Discrimination D', query: 'Explain discrimination index D in item analysis' },
+      { label: 'Show poor items', query: 'Which items need revision?' },
+      { label: 'Explain PBI', query: 'Explain point-biserial correlation PBI' },
+    ],
+    'reports': [
+      { label: 'Explain report', query: 'Explain this quarterly performance report' },
+      { label: 'Print section report', query: 'Can I print this report?' },
+      { label: 'Export CSV', query: 'How do I export section results?' },
+    ],
+    'assessment-workspace': [
+      { label: 'What do I do next?', query: 'What should I do next for this assessment?' },
+      { label: 'Generate test', query: 'How do I generate the test paper?' },
+      { label: 'Setup key', query: 'How do I set the answer key?' },
+    ],
+    'dashboard': [
+      { label: 'Create assessment', query: 'How do I create an assessment?' },
+      { label: 'Review performance', query: 'Show overall class performance' },
+      { label: 'Teach me Project KIT', query: 'I\'m new. Teach me how to use Project KIT.' },
+    ],
+  };
+
+  const chips = chipsMap[pageId] || chipsMap['dashboard'];
+
+  const bar = document.createElement('div');
+  bar.className = 'ai-turn-follow-up-bar flex flex-wrap gap-1.5 pt-2.5 mt-2.5 border-t border-gray-200/60 dark:border-gray-800/60';
+  bar.innerHTML = `<span class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 w-full mb-1">Follow-up Suggestions</span>`;
+
+  chips.forEach((c) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className =
+      'ai-suggestion-chip group relative inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border border-brand-200 dark:border-brand-900/60 bg-brand-50/50 dark:bg-brand-950/30 text-brand-700 dark:text-brand-300 hover:bg-brand-500 hover:text-white dark:hover:bg-brand-500 dark:hover:text-white transition shadow-2xs';
+    btn.innerHTML = `
+      <span>${c.label}</span>
+      <span class="hidden group-hover:block absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-gray-900 text-white text-[10px] rounded shadow-lg whitespace-nowrap z-9999 font-normal pointer-events-none">Click to execute suggestion</span>
+    `;
+    btn.addEventListener('click', () => {
+      if (onDispatchQuery) onDispatchQuery(c.query);
+    });
+    bar.appendChild(btn);
+  });
+
+  messageContainer.appendChild(bar);
 }
 
 export function renderRichPart(part = {}, onDispatchQuery, onTriggerAction) {
