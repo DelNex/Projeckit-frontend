@@ -1,0 +1,11 @@
+{
+  "style": "default",
+  "rsc": true,
+  "tsx": true,
+  "tailwind": {
+    "config": "tailwind.config.mjs",
+    "css": "src/app/globals.css",
+    "prefix": ""
+  },
+  "components": {}
+}

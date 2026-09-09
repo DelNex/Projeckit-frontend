@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-outfit: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    
+    /* Paint / Rendering Optimization Tokens */
+    --color-brand-50: #ecf3ff;
+    --color-brand-100: #dde9ff;
+    --color-brand-500: #465fff;
+    --color-brand-600: #3641f5;
+    --color-brand-700: #2a31d8;
+  }
+
+  body {
+    background-color: #f9fafb;
+    color: #1d2939;
+    font-family: var(--font-outfit);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+
+  .dark body,
+  body.dark {
+    background-color: #0c111d;
+    color: #f2f4f7;
+  }
+}
+
+/* ==========================================================================
+   PAINT & RENDERING PERFORMANCE OPTIMIZATIONS (CSS Engine)
+   ========================================================================== */
+
+/* 1. Paint Boundary Isolation: Prevents child repaints from causing parent reflow */
+.paint-isolate {
+  contain: layout paint;
+}
+
+/* 2. GPU Accelerated Compositing Layer for dynamic elements (Sidebar, Modals) */
+.gpu-layer {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* 3. Smooth sidebar transition using transform only (NEVER width/margin) */
+.sidebar-transition {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              width 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+/* 4. Optimized Table Rendering (Faster painting on large student/response rosters) */
+.table-optimized {
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* 5. Scrollbar styling with minimal repainting footprint */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.35);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.6);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.2);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.4);
+}
+
