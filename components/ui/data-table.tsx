@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils"
 import {
   createPaginatedRowModel,
+  flexRender,
   rowPaginationFeature,
   tableFeatures,
   useTable,
@@ -63,8 +64,11 @@ export function DataTable({
                     className="p-3 text-left text-xs font-medium text-muted-foreground"
                   >
                     {header.isPlaceholder ? null : (
-                      <header.column.table.FlexRender header={header} />
-                    )}
+  flexRender(
+    header.column.columnDef.header,
+    header.getContext()
+  )
+)}
                   </th>
                 ))}
               </tr>
