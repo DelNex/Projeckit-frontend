@@ -1,3 +1,5 @@
+"use client"
+
 import { cn } from "@/lib/utils"
 import {
   createPaginatedRowModel,
@@ -36,6 +38,7 @@ export function DataTable({
   })
 
   const pagination = table.state.pagination
+  const rows = table.getRowModel().rows
 
   return (
     <div
@@ -63,12 +66,12 @@ export function DataTable({
                     key={header.id}
                     className="p-3 text-left text-xs font-medium text-muted-foreground"
                   >
-                    {header.isPlaceholder ? null : (
-  flexRender(
-    header.column.columnDef.header,
-    header.getContext()
-  )
-)}
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext(),
+                        )}
                   </th>
                 ))}
               </tr>
@@ -76,18 +79,21 @@ export function DataTable({
           </thead>
 
           <tbody>
-            {table.getRowModel().rows.length > 0 ? (
-              table.getRowModel().rows.map((row) => (
+            {rows.length > 0 ? (
+              rows.map((row) => (
                 <tr
                   key={row.id}
                   className="border-b transition-colors hover:bg-muted/20"
                 >
-                  {row.getVisibleCells().map((cell) => (
+                  {row.getAllCells().map((cell) => (
                     <td
                       key={cell.id}
                       className="whitespace-nowrap p-3"
                     >
-                      <cell.column.table.FlexRender cell={cell} />
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext(),
+                      )}
                     </td>
                   ))}
                 </tr>
@@ -150,3 +156,4 @@ export function DataTable({
     </div>
   )
 }
+
