@@ -1,17 +1,24 @@
 'use client';
 
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export function NavigationProgress() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isNavigating, setIsNavigating] = useState(false);
   const [progress, setProgress] = useState(0);
+  const progressTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  // When pathname or query params change, navigation has completed!
+  const clearProgressTimers = useCallback(() => {
+    progressTimers.current.forEach(clearTimeout);
+    progressTimers.current = [];
+  }, []);
+
+  // When pathname or query params change, navigation has completed
   useEffect(() => {
     if (isNavigating) {
+      clearProgressTimers();
       setProgress(100);
       const timer = setTimeout(() => {
         setIsNavigating(false);
@@ -21,7 +28,7 @@ export function NavigationProgress() {
     }
   }, [pathname, searchParams]);
 
-  // Intercept all internal link clicks to give instant 0ms visual feedback
+  // Intercept internal link clicks for instant visual feedback
   useEffect(() => {
     const handleLinkClick = (e: MouseEvent) => {
       const target = (e.target as HTMLElement).closest('a');
@@ -44,32 +51,27 @@ export function NavigationProgress() {
         return;
       }
 
-      // Check if it's an internal route
       const isInternal = href.startsWith('/') || href.startsWith(window.location.origin);
       if (!isInternal) return;
 
-      // If already on this exact path and query, don't trigger progress bar
       const currentFull = window.location.pathname + window.location.search;
       if (href === currentFull) return;
 
-      // Trigger instant loading progress bar!
+      // Clear any previous timers and start fresh
+      clearProgressTimers();
       setIsNavigating(true);
       setProgress(30);
 
-      const timer1 = setTimeout(() => setProgress(65), 150);
-      const timer2 = setTimeout(() => setProgress(85), 450);
-
-      return () => {
-        clearTimeout(timer1);
-        clearTimeout(timer2);
-      };
+      progressTimers.current.push(setTimeout(() => setProgress(65), 150));
+      progressTimers.current.push(setTimeout(() => setProgress(85), 450));
     };
 
     document.addEventListener('click', handleLinkClick, { capture: true });
     return () => {
       document.removeEventListener('click', handleLinkClick, { capture: true });
+      clearProgressTimers();
     };
-  }, []);
+  }, [clearProgressTimers]);
 
   if (!isNavigating && progress === 0) return null;
 

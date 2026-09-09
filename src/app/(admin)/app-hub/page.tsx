@@ -45,7 +45,7 @@ export default function AppHubPage() {
         {hubs.map((hub) => (
           <div
             key={hub.title}
-            className="flex flex-col justify-between rounded-3xl border border-gray-200 bg-white p-6 shadow-xs transition hover:border-blue-300 hover:shadow-md dark:border-gray-800 dark:bg-gray-900 dark:hover:border-blue-900/60 paint-isolate"
+            className="flex flex-col justify-between rounded-3xl border border-gray-200 bg-white p-6 shadow-xs transition hover:border-blue-300 hover:shadow-md dark:border-gray-800 dark:bg-gray-900 dark:hover:border-blue-900/60"
           >
             <div className="space-y-2">
               <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600 dark:bg-gray-800 dark:text-gray-400">

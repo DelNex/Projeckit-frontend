@@ -2,7 +2,7 @@
 
 import { Header } from '@/components/layout/Header';
 import { Sidebar } from '@/components/layout/Sidebar';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 
 export default function DashboardLayout({
   children,
@@ -14,11 +14,13 @@ export default function DashboardLayout({
   return (
     <div className="flex min-h-screen w-full min-w-0 overflow-x-hidden bg-gray-50 dark:bg-gray-950">
       {/* Persistent / Mobile Sidebar */}
-      <Sidebar
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        isAdminMode={false}
-      />
+      <Suspense fallback={null}>
+        <Sidebar
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          isAdminMode={false}
+        />
+      </Suspense>
 
       {/* Main Content Area */}
       <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">

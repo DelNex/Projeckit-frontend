@@ -167,7 +167,7 @@ export default function SchoolSettingsPage() {
       ) : (
         <form onSubmit={handleSave} className="space-y-6">
           {/* Academic Period */}
-          <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 paint-isolate space-y-4">
+          <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 space-y-4">
             <div className="flex items-center gap-3 border-b border-gray-100 pb-3 dark:border-gray-800">
               <School className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               <h2 className="text-sm font-bold text-gray-900 dark:text-white">
@@ -211,7 +211,7 @@ export default function SchoolSettingsPage() {
           </div>
 
           {/* Faculty & Signatories */}
-          <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 paint-isolate space-y-4">
+          <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 space-y-4">
             <div className="flex items-center gap-3 border-b border-gray-100 pb-3 dark:border-gray-800">
               <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               <h2 className="text-sm font-bold text-gray-900 dark:text-white">

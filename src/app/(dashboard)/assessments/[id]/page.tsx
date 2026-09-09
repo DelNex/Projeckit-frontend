@@ -36,13 +36,18 @@ interface TosItem {
   cognitive: string;
 }
 
+function useAssessmentSearchParams() {
+  const searchParams = useSearchParams();
+  return searchParams;
+}
+
 export default function AssessmentWorkspacePage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ id: string }>
 }) {
   const resolvedParams = use(params);
-  const searchParams = useSearchParams();
+  const searchParams = useAssessmentSearchParams();
   const router = useRouter();
 
   const activeTab = searchParams.get('tab') || 'tos';

@@ -114,7 +114,7 @@ export default function AdminConsolePage() {
             <Link
               key={card.title}
               href={card.href}
-              className="flex flex-col justify-between rounded-3xl border border-gray-200 bg-white p-6 shadow-xs transition hover:border-blue-300 hover:shadow-md dark:border-gray-800 dark:bg-gray-900 dark:hover:border-blue-900/60 paint-isolate"
+              className="flex flex-col justify-between rounded-3xl border border-gray-200 bg-white p-6 shadow-xs transition hover:border-blue-300 hover:shadow-md dark:border-gray-800 dark:bg-gray-900 dark:hover:border-blue-900/60"
             >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">

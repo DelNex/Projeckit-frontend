@@ -87,7 +87,7 @@ export default function AdminSettingsPage() {
         </div>
       )}
 
-      <form onSubmit={handleSave} className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 paint-isolate space-y-5">
+      <form onSubmit={handleSave} className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 space-y-5">
         <div>
           <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
             Default Minimum Passing Score (MPS %)

@@ -96,7 +96,7 @@ export default function AuditLogsPage() {
         </div>
       )}
 
-      <div className="rounded-3xl border border-gray-200 bg-white shadow-xs dark:border-gray-800 dark:bg-gray-900 overflow-hidden paint-isolate">
+      <div className="rounded-3xl border border-gray-200 bg-white shadow-xs dark:border-gray-800 dark:bg-gray-900 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs table-optimized">
             <thead className="border-b border-gray-100 bg-gray-50/50 text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:border-gray-800 dark:bg-gray-800/40 dark:text-gray-500">
