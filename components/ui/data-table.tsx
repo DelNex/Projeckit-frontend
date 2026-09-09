@@ -1,5 +1,5 @@
 import * as React from "react"
-import { useReactTable } from "@tanstack/react-table"
+import { useTable } from "@tanstack/react-table"
 import { cn } from "@/lib/utils"
 
 interface DataTableProps<TData> {
@@ -19,7 +19,7 @@ export function DataTable<TData>(
     ...rest
   } = props
 
-  const table = useReactTable({
+  const table = useTable({
     data,
     columns,
     state: {
