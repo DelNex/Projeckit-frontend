@@ -21,3 +21,4 @@
 .env*.local
 .env
 *.env.local
+.vercel

@@ -1,8 +1,9 @@
 'use client';
 
+import { ColumnDef, DataTable } from '@/components/ui/data-table';
 import { createClient } from '@/lib/supabase/client';
-import { Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
 interface AuditLogRecord {
   id: string;
@@ -36,7 +37,7 @@ export default function AuditLogsPage() {
           profiles ( display_name, email )
         `)
         .order('created_at', { ascending: false })
-        .limit(50);
+        .limit(100);
 
       if (err) throw err;
       setLogs(data || []);
@@ -68,6 +69,63 @@ export default function AuditLogsPage() {
     }
   };
 
+  const columns = useMemo<ColumnDef<AuditLogRecord>[]>(
+    () => [
+      {
+        accessorKey: 'action',
+        header: 'Action Type',
+        cell: ({ row }) => (
+          <span className="font-mono font-bold text-gray-900 dark:text-white">
+            {row.getValue('action')}
+          </span>
+        ),
+      },
+      {
+        id: 'actor',
+        header: 'Actor',
+        cell: ({ row }) => {
+          const log = row.original;
+          return (
+            <span className="text-gray-700 dark:text-gray-300">
+              {log.profiles?.email || log.profiles?.display_name || 'System / Service'}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: 'ip',
+        header: 'IP Address',
+        cell: ({ row }) => (
+          <span className="font-mono text-gray-400">
+            {row.getValue('ip') || '—'}
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'created_at',
+        header: 'Timestamp',
+        cell: ({ row }) => (
+          <span className="text-gray-500 dark:text-gray-400">
+            {formatDate(row.getValue('created_at'))}
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'details',
+        header: 'Details',
+        cell: ({ row }) => {
+          const det = row.getValue('details');
+          return (
+            <div className="max-w-xs truncate font-mono text-[10px] text-gray-400" title={det ? JSON.stringify(det) : 'SUCCESS'}>
+              {det ? JSON.stringify(det) : 'SUCCESS'}
+            </div>
+          );
+        },
+      },
+    ],
+    []
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -83,7 +141,7 @@ export default function AuditLogsPage() {
         <button
           onClick={fetchLogs}
           disabled={loading}
-          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 shadow-2xs hover:bg-gray-50 disabled:opacity-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
+          className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 shadow-2xs hover:bg-gray-50 disabled:opacity-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 transition"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin text-blue-600' : ''}`} />
           <span>Refresh</span>
@@ -96,67 +154,16 @@ export default function AuditLogsPage() {
         </div>
       )}
 
-      <div className="rounded-3xl border border-gray-200 bg-white shadow-xs dark:border-gray-800 dark:bg-gray-900 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs table-optimized">
-            <thead className="border-b border-gray-100 bg-gray-50/50 text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:border-gray-800 dark:bg-gray-800/40 dark:text-gray-500">
-              <tr>
-                <th className="px-6 py-4">Action Type</th>
-                <th className="px-6 py-4">Actor</th>
-                <th className="px-6 py-4">IP Address</th>
-                <th className="px-6 py-4">Timestamp</th>
-                <th className="px-6 py-4 text-right">Details</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {loading ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
-                      <span>Loading audit records from Supabase...</span>
-                    </div>
-                  </td>
-                </tr>
-              ) : logs.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <ShieldCheck className="h-8 w-8 text-emerald-500/80" />
-                      <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                        Audit Log is Clean
-                      </p>
-                      <p className="text-[11px] text-gray-400 max-w-sm">
-                        No security alerts or audit events recorded yet. Authentication, tenant changes, and user sign-offs will be tracked here in real-time.
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                logs.map((log) => (
-                  <tr key={log.id} className="hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors">
-                    <td className="px-6 py-4 font-mono font-bold text-gray-900 dark:text-white">
-                      {log.action}
-                    </td>
-                    <td className="px-6 py-4 text-gray-600 dark:text-gray-300">
-                      {log.profiles?.email || log.profiles?.display_name || 'System / Service'}
-                    </td>
-                    <td className="px-6 py-4 font-mono text-gray-400">
-                      {log.ip || '—'}
-                    </td>
-                    <td className="px-6 py-4 text-gray-400">
-                      {formatDate(log.created_at)}
-                    </td>
-                    <td className="px-6 py-4 text-right font-mono text-[10px] text-gray-400">
-                      {log.details ? JSON.stringify(log.details) : 'SUCCESS'}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* Unified DataTable Component */}
+      <DataTable
+        columns={columns}
+        data={logs}
+        searchKey="action"
+        searchPlaceholder="Search audit action..."
+        loading={loading}
+        emptyTitle="Audit Log is Clean"
+        emptyDescription="No security alerts or audit events recorded yet. Authentication, tenant changes, and user sign-offs will be tracked here in real-time."
+      />
     </div>
   );
 }
