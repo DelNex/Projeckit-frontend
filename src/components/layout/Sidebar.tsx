@@ -50,6 +50,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
       group: 'ACADEMIC WORKFLOW',
       items: [
         { name: 'Assessments Workspace', href: '/assessments', icon: BookOpen },
+        { name: 'Table of Specifications', href: '/tos', icon: FileSpreadsheet },
         { name: 'Learners Roster', href: '/students', icon: Users },
       ],
     },

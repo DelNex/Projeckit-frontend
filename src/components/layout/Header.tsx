@@ -97,7 +97,7 @@ export function Header({ onToggleSidebar, title }: HeaderProps) {
             <input
               type="text"
               placeholder="Quick search... (Ctrl + K)"
-              className="h-9.5 w-48 lg:w-64 rounded-xl border border-gray-200 bg-gray-50/80 pl-10 pr-4 text-xs text-gray-800 outline-none transition-all placeholder:text-gray-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20 dark:border-gray-800 dark:bg-gray-800/60 dark:text-gray-200 dark:focus:border-blue-500"
+              className="h-9.5 w-48 lg:w-64 rounded-xl border border-gray-200 bg-gray-50/80 pl-10 pr-4 text-xs text-gray-800 outline-none transition-all placeholder:text-gray-400 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20 dark:border-gray-800 dark:bg-gray-800/60 dark:text-gray-200 dark:focus:border-blue-500 dark:focus:bg-gray-800/60"
             />
           </div>
 

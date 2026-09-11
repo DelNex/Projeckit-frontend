@@ -319,7 +319,7 @@ export default function StudentsPage() {
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   placeholder="e.g. Juan D. Dela Cruz"
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50/50 p-3 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50/50 p-3 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
                 />
               </div>
 
@@ -335,7 +335,7 @@ export default function StudentsPage() {
                   value={formLrn}
                   onChange={(e) => setFormLrn(e.target.value.replace(/\D/g, ''))}
                   placeholder="e.g. 101234567890"
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50/50 p-3 font-mono text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50/50 p-3 font-mono text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
                 />
                 <span className="text-[10px] text-gray-400 mt-1 block">
                   Must be exactly 12 numeric digits matching LIS registry.
@@ -349,7 +349,7 @@ export default function StudentsPage() {
                 <select
                   value={formSection}
                   onChange={(e) => setFormSection(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50/50 p-3 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50/50 p-3 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
                 >
                   {sectionsList.map((sec) => (
                     <option key={sec.id} value={sec.name}>
