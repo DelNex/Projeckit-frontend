@@ -116,16 +116,22 @@ export const api = {
   ai: {
     getInfo: () => apiFetch<any>('/api/ai/info'),
 
-    chat: (payload: {
+    chat: async (payload: {
       message: string;
-      assessmentId?: number;
+      assessmentId?: number | string;
       context?: Record<string, any>;
       uiContext?: Record<string, any>;
-    }) =>
-      apiFetch<{ reply: string; data?: any }>('/api/ai/chat', {
+    }) => {
+      const res = await apiFetch<any>('/api/ai/chat', {
         method: 'POST',
         body: JSON.stringify(payload),
-      }),
+      });
+      return {
+        reply: res?.reply || res?.message || 'I processed your request.',
+        message: res?.message || res?.reply || 'I processed your request.',
+        ...res,
+      };
+    },
 
     /**
      * SSE Streaming chat endpoint. Yields text chunks via callback.
@@ -133,7 +139,7 @@ export const api = {
     stream: async (
       payload: {
         message: string;
-        assessmentId?: number;
+        assessmentId?: number | string;
         context?: Record<string, any>;
         uiContext?: Record<string, any>;
       },
@@ -179,6 +185,7 @@ export const api = {
       let buffer = '';
 
       try {
+        let currentEvent = 'message';
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -191,6 +198,11 @@ export const api = {
             const trimmed = line.trim();
             if (!trimmed || trimmed.startsWith(':')) continue;
 
+            if (trimmed.startsWith('event:')) {
+              currentEvent = trimmed.slice(6).trim();
+              continue;
+            }
+
             if (trimmed.startsWith('data:')) {
               const dataStr = trimmed.slice(5).trim();
               if (dataStr === '[DONE]') {
@@ -199,7 +211,17 @@ export const api = {
               }
               try {
                 const parsed = JSON.parse(dataStr);
-                if (parsed.chunk || parsed.text || parsed.delta) {
+                if (currentEvent === 'error') {
+                  callbacks.onError?.(new Error(parsed.message || 'AI streaming error'));
+                  return;
+                }
+                if (currentEvent === 'message_complete') {
+                  callbacks.onDone?.();
+                  return;
+                }
+                if (currentEvent === 'answer_delta') {
+                  callbacks.onChunk(parsed.text || parsed.chunk || parsed.delta || '');
+                } else if (parsed.chunk || parsed.text || parsed.delta) {
                   callbacks.onChunk(parsed.chunk || parsed.text || parsed.delta);
                 }
               } catch {

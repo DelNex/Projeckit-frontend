@@ -249,7 +249,7 @@ export function AiCopilotModal({
           // Fallback to standard chat endpoint if stream failed
           try {
             const fallbackRes = await api.ai.chat(payload);
-            const reply = fallbackRes?.reply || 'I processed your request.';
+            const reply = fallbackRes?.reply || fallbackRes?.message || 'I processed your request.';
             setMessages((prev) =>
               prev.map((msg) =>
                 msg.id === assistantMsgId ? { ...msg, content: reply, status: 'complete' } : msg
@@ -278,7 +278,7 @@ export function AiCopilotModal({
       // Direct fallback call
       try {
         const fallbackRes = await api.ai.chat(payload);
-        const reply = fallbackRes?.reply || 'I processed your request.';
+        const reply = fallbackRes?.reply || fallbackRes?.message || 'I processed your request.';
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === assistantMsgId ? { ...msg, content: reply, status: 'complete' } : msg

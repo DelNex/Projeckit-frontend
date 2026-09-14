@@ -193,7 +193,7 @@ export default function TenantsPage() {
                   placeholder="e.g. Capas Senior High School"
                   value={tenantName}
                   onChange={(e) => setTenantName(e.target.value)}
-                  className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                  className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
                 />
               </div>
 
@@ -206,7 +206,7 @@ export default function TenantsPage() {
                   placeholder="e.g. CSHS-001"
                   value={tenantCode}
                   onChange={(e) => setTenantCode(e.target.value)}
-                  className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                  className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
                 />
               </div>
 

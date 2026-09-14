@@ -419,7 +419,7 @@ export default function AssessmentsPage() {
                   placeholder="e.g. Midterm Examination in General Mathematics"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                  className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
                 />
               </div>
 
@@ -432,7 +432,7 @@ export default function AssessmentsPage() {
                     required
                     value={newSubjectId}
                     onChange={(e) => setNewSubjectId(e.target.value)}
-                    className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                    className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
                   >
                     {subjectsList.map((s) => (
                       <option key={s.id} value={s.id}>{s.name}</option>
@@ -448,7 +448,7 @@ export default function AssessmentsPage() {
                     required
                     value={newSectionId}
                     onChange={(e) => setNewSectionId(e.target.value)}
-                    className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                    className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
                   >
                     {sectionsList.map((sec) => (
                       <option key={sec.id} value={sec.id}>{sec.name}</option>
@@ -469,7 +469,7 @@ export default function AssessmentsPage() {
                     required
                     value={newTargetItems}
                     onChange={(e) => setNewTargetItems(Number(e.target.value))}
-                    className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                    className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
                   />
                 </div>
 
@@ -484,7 +484,7 @@ export default function AssessmentsPage() {
                     required
                     value={newClassSize}
                     onChange={(e) => setNewClassSize(Number(e.target.value))}
-                    className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                    className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
                   />
                 </div>
               </div>
@@ -497,7 +497,7 @@ export default function AssessmentsPage() {
                   <select
                     value={newTerm}
                     onChange={(e) => setNewTerm(e.target.value)}
-                    className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                    className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
                   >
                     <option value="1st Quarter">1st Quarter</option>
                     <option value="2nd Quarter">2nd Quarter</option>
@@ -517,7 +517,7 @@ export default function AssessmentsPage() {
                     required
                     value={newSchoolYear}
                     onChange={(e) => setNewSchoolYear(e.target.value)}
-                    className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                    className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
                   />
                 </div>
 
@@ -533,7 +533,7 @@ export default function AssessmentsPage() {
                     required
                     value={newPassingMps}
                     onChange={(e) => setNewPassingMps(Number(e.target.value))}
-                    className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                    className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
                   />
                 </div>
               </div>
