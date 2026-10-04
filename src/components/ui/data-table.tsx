@@ -40,6 +40,7 @@ export interface DataTableProps<TData, TValue = any> {
   showPagination?: boolean;
   initialPageSize?: number;
   renderCustomFilter?: React.ReactNode;
+  onRowClick?: (row: TData) => void;
 }
 
 export function DataTable<TData, TValue = any>({
@@ -54,6 +55,7 @@ export function DataTable<TData, TValue = any>({
   showPagination = true,
   initialPageSize = 10,
   renderCustomFilter,
+  onRowClick,
 }: DataTableProps<TData, TValue>) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
@@ -237,7 +239,11 @@ export function DataTable<TData, TValue = any>({
                   return (
                     <tr
                       key={rowId}
-                      className="hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors"
+                      onClick={() => onRowClick?.(item)}
+                      className={cn(
+                        'hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors',
+                        onRowClick && 'cursor-pointer'
+                      )}
                     >
                       {columns.map((col, colIdx) => (
                         <td

@@ -227,6 +227,7 @@ export default function AssessmentsPage() {
             <div>
               <Link
                 href={`/assessments/${a.id}`}
+                onClick={(e) => e.stopPropagation()}
                 className="font-bold text-gray-900 hover:text-blue-600 dark:text-white dark:hover:text-blue-400 transition"
               >
                 {a.title}
@@ -311,13 +312,17 @@ export default function AssessmentsPage() {
             <div className="flex items-center justify-end gap-2">
               <Link
                 href={`/assessments/${a.id}`}
+                onClick={(e) => e.stopPropagation()}
                 className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition"
               >
                 <span>Open</span>
                 <ArrowUpRight className="h-3.5 w-3.5" />
               </Link>
               <button
-                onClick={() => handleDeleteAssessment(a.id, a.title)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteAssessment(a.id, a.title);
+                }}
                 className="rounded-lg p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-950/30 transition"
                 title="Delete Assessment"
               >
@@ -374,6 +379,9 @@ export default function AssessmentsPage() {
         loading={loading}
         emptyTitle="No matching assessments found"
         emptyDescription="Create your first assessment to begin configuring TOS documents and printing test papers."
+        onRowClick={(assessment) => {
+          window.location.href = `/assessments/${assessment.id}`;
+        }}
         renderCustomFilter={
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-gray-400" />

@@ -374,10 +374,6 @@ export default function DashboardPage() {
       {/* Executive Page Header Matching Legacy */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-gray-200 dark:border-gray-800 pb-5">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 dark:bg-blue-900/30 px-3 py-1 text-xs font-semibold text-blue-700 dark:text-blue-300 mb-2">
-            <Calendar className="h-3.5 w-3.5" />
-            <span>Academic Year 2025–2026 • Executive View</span>
-          </div>
           <h1 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
             Academic Performance Dashboard
           </h1>
