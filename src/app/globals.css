@@ -5,6 +5,7 @@
 @layer base {
   :root {
     --font-outfit: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color-scheme: light;
     
     /* Paint / Rendering Optimization Tokens */
     --color-brand-50: #ecf3ff;
@@ -12,6 +13,11 @@
     --color-brand-500: #465fff;
     --color-brand-600: #3641f5;
     --color-brand-700: #2a31d8;
+  }
+
+  :root.dark,
+  .dark {
+    color-scheme: dark;
   }
 
   body {

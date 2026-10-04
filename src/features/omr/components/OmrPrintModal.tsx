@@ -23,6 +23,30 @@ export function OmrPrintModal({ isOpen, onClose, geometry }: OmrPrintModalProps)
     return renderOmrMasterSvg(geometry);
   }, [geometry]);
 
+  const printPageConfig = useMemo(() => {
+    const widthMm = geometry.page.width / 3.779528; // px to mm approximation
+    const heightMm = geometry.page.height / 3.779528;
+
+    if (heightMm > 297) {
+      return {
+        paper: `${Math.ceil(widthMm)}mm ${Math.ceil(heightMm)}mm`,
+        viewport: 'long',
+      };
+    }
+
+    if (widthMm <= 148 && heightMm <= 210) {
+      return {
+        paper: 'A5 portrait',
+        viewport: 'a5',
+      };
+    }
+
+    return {
+      paper: 'A4 portrait',
+      viewport: 'a4',
+    };
+  }, [geometry]);
+
   if (!isOpen) return null;
 
   const handlePrint = () => {
@@ -32,43 +56,58 @@ export function OmrPrintModal({ isOpen, onClose, geometry }: OmrPrintModalProps)
       return;
     }
 
-    printWindow.document.write(`
+    const printHtml = `
       <!DOCTYPE html>
       <html>
         <head>
           <title>${geometry.templateId} — Master Answer Sheet</title>
           <style>
             @page {
-              size: A4 portrait;
+              size: ${printPageConfig.paper};
               margin: 0;
             }
-            body {
+            * { box-sizing: border-box; }
+            html, body {
               margin: 0;
+              padding: 0;
+              background: #ffffff;
+            }
+            body {
+              min-height: 100vh;
+              display: block;
+              background: white;
+            }
+            .omr-print-shell {
+              width: 100%;
+              min-height: 100vh;
               padding: 0;
               display: flex;
               justify-content: center;
-              align-items: center;
-              background-color: white;
+              align-items: flex-start;
+              background: #ffffff;
             }
-            svg {
-              width: 100vw;
-              max-width: 681px;
+            .omr-print-shell svg {
+              display: block;
+              width: 100%;
+              max-width: 100%;
               height: auto;
-              max-height: 100vh;
+              margin: 0 auto;
             }
           </style>
         </head>
         <body>
-          ${svgContent}
+          <div class="omr-print-shell">${svgContent}</div>
           <script>
             window.onload = function() {
               window.print();
-              setTimeout(() => window.close(), 1000);
+              setTimeout(() => window.close(), 1200);
             };
           </script>
         </body>
       </html>
-    `);
+    `;
+
+    printWindow.document.write(printHtml);
     printWindow.document.close();
   };
 
