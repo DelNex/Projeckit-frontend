@@ -423,7 +423,118 @@ export function TosEditor({
   };
 
   const handlePrint = () => {
-    window.print();
+    const source = document.getElementById('official-tos-card');
+
+    if (!source) {
+      window.print();
+      return;
+    }
+
+    const printableCard = source.cloneNode(true) as HTMLElement;
+    printableCard.querySelectorAll('button').forEach((button) => button.remove());
+
+    const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+    if (!printWindow) {
+      window.print();
+      return;
+    }
+
+    const printHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8" />
+          <title>Table of Specifications</title>
+          <style>
+            @page {
+              size: auto;
+              margin: 10mm 8mm;
+            }
+
+            html, body {
+              margin: 0;
+              padding: 0;
+              background: #ffffff;
+              color: #111827;
+              font-family: Georgia, "Times New Roman", serif;
+            }
+
+            body {
+              display: flex;
+              justify-content: center;
+              align-items: flex-start;
+              min-height: 100vh;
+              padding: 0;
+            }
+
+            .print-sheet {
+              width: 100%;
+              max-width: 100%;
+              box-sizing: border-box;
+            }
+
+            #official-tos-card {
+              width: 100%;
+              max-width: 100%;
+              margin: 0;
+              border: 1px solid #e5e7eb;
+              border-radius: 18px;
+              background: #ffffff;
+              color: #111827;
+              box-sizing: border-box;
+              box-shadow: none;
+              padding: 1.5rem;
+              font-family: Georgia, "Times New Roman", serif;
+            }
+
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              table-layout: fixed;
+              font-size: 11px;
+            }
+
+            th, td {
+              word-break: break-word;
+              overflow-wrap: anywhere;
+              vertical-align: top;
+            }
+
+            @media print {
+              html,
+              body {
+                background: #ffffff !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+
+              body {
+                padding: 0;
+              }
+
+              #official-tos-card {
+                box-shadow: none !important;
+                border: 1px solid #d1d5db !important;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="print-sheet">${printableCard.outerHTML}</div>
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() {
+                window.close();
+              }, 1200);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(printHtml);
+    printWindow.document.close();
   };
 
   if (loading) {
@@ -1365,7 +1476,7 @@ export function TosEditor({
         <div className="space-y-4">
           <div
             id="official-tos-card"
-            className="p-8 bg-white text-gray-900 rounded-2xl border border-gray-200 shadow-md font-serif max-w-4xl mx-auto space-y-6"
+            className="tos-print-card p-8 bg-white text-gray-900 rounded-2xl border border-gray-200 shadow-md font-serif max-w-4xl mx-auto space-y-6"
           >
             {/* DepEd Official Document Header */}
             <div className="text-center space-y-1 border-b-2 border-gray-900 pb-4">

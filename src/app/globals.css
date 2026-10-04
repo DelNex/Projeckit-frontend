@@ -86,3 +86,67 @@
   background: rgba(156, 163, 175, 0.4);
 }
 
+@page {
+  size: A4 portrait;
+  margin: 10mm 8mm;
+}
+
+@media print {
+  html,
+  body {
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  .tos-print-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    border-radius: 0 !important;
+    border: 1px solid #d1d5db !important;
+    box-shadow: none !important;
+    padding: 1.2rem !important;
+    color: #111827 !important;
+    background: #ffffff !important;
+  }
+
+  .tos-print-card table {
+    width: 100% !important;
+    table-layout: fixed !important;
+    font-size: 10px !important;
+  }
+
+  .tos-print-card th,
+  .tos-print-card td {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  .tos-print-card .print\:hidden,
+  .print\:hidden {
+    display: none !important;
+  }
+}
+
+@media print and (max-width: 210mm) {
+  @page {
+    size: A5 portrait;
+    margin: 6mm 4mm;
+  }
+
+  .tos-print-card {
+    padding: 0.8rem !important;
+    border-radius: 0 !important;
+  }
+
+  .tos-print-card table {
+    font-size: 9px !important;
+  }
+}
+
