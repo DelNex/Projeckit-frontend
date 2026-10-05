@@ -98,6 +98,11 @@ export default function AssessmentWorkspacePage({
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
+  // OMR Answer Key Scanner State
+  const [isAnswerKeyScannerOpen, setIsAnswerKeyScannerOpen] = useState(false);
+  const [omrDetectedKey, setOmrDetectedKey] = useState<Record<number, string>>({}); // latest OMR-detected key
+  const [omrKeyMismatches, setOmrKeyMismatches] = useState<number[]>([]); // items where user manually overrode OMR
+
   const supabase = createClient();
 
   // Load all assessment data from Supabase
@@ -220,6 +225,19 @@ export default function AssessmentWorkspacePage({
       updated[i] = '';
     }
     setAnswers(updated);
+  };
+
+  // Apply OMR-detected answers as the answer key (user can override individual items after)
+  const handleApplyDetectedAnswerKey = (detected: Record<number, string>) => {
+    setOmrDetectedKey(detected);
+    setOmrKeyMismatches([]);
+    setAnswers((prev) => {
+      const merged = { ...prev };
+      for (let i = 1; i <= itemCount; i++) {
+        if (detected[i]) merged[i] = detected[i];
+      }
+      return merged;
+    });
   };
 
   // Save Answer Key to Supabase
@@ -719,7 +737,14 @@ export default function AssessmentWorkspacePage({
                     Configure correct choices for automated projective OMR grading. Touch or click choices to select.
                   </p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                  <button
+                    onClick={() => setIsAnswerKeyScannerOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-3.5 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-gray-900 dark:text-emerald-400 dark:hover:bg-emerald-950/40 transition"
+                  >
+                    <Camera className="h-3.5 w-3.5" />
+                    <span>Scan Key via OMR</span>
+                  </button>
                   <button
                     onClick={handleSaveKey}
                     disabled={savingKey}
@@ -798,6 +823,32 @@ export default function AssessmentWorkspacePage({
                   </button>
                 </div>
               </div>
+
+              {/* OMR Key Applied Banner */}
+              {Object.keys(omrDetectedKey).length > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs dark:border-emerald-800 dark:bg-emerald-950/30">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span className="font-semibold text-emerald-800 dark:text-emerald-300">
+                      OMR Key Applied — {Object.keys(omrDetectedKey).length} answers auto-filled
+                    </span>
+                    {omrKeyMismatches.length > 0 && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-700 font-bold dark:bg-amber-950/60 dark:text-amber-300">
+                        {omrKeyMismatches.length} overridden
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => {
+                      setOmrDetectedKey({});
+                      setOmrKeyMismatches([]);
+                    }}
+                    className="text-[11px] text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-200 underline underline-offset-2"
+                  >
+                    Clear OMR overlay
+                  </button>
+                </div>
+              )}
 
               {/* Status Indicator / Progress Counter */}
               <div className="flex items-center justify-between text-xs px-1 text-gray-500 dark:text-gray-400">
@@ -1320,6 +1371,21 @@ export default function AssessmentWorkspacePage({
           assessmentId={assessmentId}
           template={omrTemplate}
           onScanComplete={handleScanCompleted}
+        />
+      )}
+
+      {/* OMR Answer Key Scanner Modal */}
+      {isAnswerKeyScannerOpen && (
+        <OmrCameraModal
+          isOpen={isAnswerKeyScannerOpen}
+          onClose={() => setIsAnswerKeyScannerOpen(false)}
+          assessmentId={assessmentId}
+          template={omrTemplate}
+          mode="answer_key"
+          onApplyAnswerKey={(detected) => {
+            handleApplyDetectedAnswerKey(detected);
+            setIsAnswerKeyScannerOpen(false);
+          }}
         />
       )}
     </div>

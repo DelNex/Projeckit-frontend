@@ -28,6 +28,12 @@ export interface OmrCameraModalProps {
   assessmentId: string;
   template?: KitOmrTemplate;
   onScanComplete?: (result: OmrScanResult) => void;
+  /** 'answer_key' mode skips Supabase save and calls onApplyAnswerKey instead */
+  mode?: 'examinee' | 'answer_key';
+  /** Optional header title override */
+  title?: string;
+  /** Called in answer_key mode when user confirms detected answers */
+  onApplyAnswerKey?: (detectedAnswers: Record<number, string>) => void;
 }
 
 export function OmrCameraModal({
@@ -36,6 +42,9 @@ export function OmrCameraModal({
   assessmentId,
   template,
   onScanComplete,
+  mode = 'examinee',
+  title,
+  onApplyAnswerKey,
 }: OmrCameraModalProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentResult, setCurrentResult] = useState<OmrScanResult | null>(null);
@@ -140,7 +149,9 @@ export function OmrCameraModal({
         <div className="flex items-center justify-between border-b border-gray-800 px-6 py-4">
           <div className="flex items-center gap-2">
             <Camera className="h-5 w-5 text-blue-400" />
-            <h3 className="text-base font-bold">OMR Sheet Scanner</h3>
+            <h3 className="text-base font-bold">
+              {title || (mode === 'answer_key' ? 'Master Answer Key Camera Scanner' : 'OMR Sheet Scanner')}
+            </h3>
           </div>
           <button
             onClick={() => {
@@ -219,36 +230,48 @@ export function OmrCameraModal({
 
               {/* Detected Metadata Card */}
               <div className="grid grid-cols-2 gap-3 text-xs">
+                {mode !== 'answer_key' && (
+                  <div className="rounded-xl bg-gray-800/40 p-3 border border-gray-800">
+                    <span className="text-gray-400">Student Roll No:</span>
+                    <p className="mt-0.5 font-mono font-bold text-white">
+                      {currentResult.detectedRollNumber !== null
+                        ? `#${currentResult.detectedRollNumber}`
+                        : currentResult.detectedStudentLrn || 'Not detected (Blank)'}
+                    </p>
+                  </div>
+                )}
                 <div className="rounded-xl bg-gray-800/40 p-3 border border-gray-800">
-                  <span className="text-gray-400">Student Roll No:</span>
-                  <p className="mt-0.5 font-mono font-bold text-white">
-                    {currentResult.detectedRollNumber !== null
-                      ? `#${currentResult.detectedRollNumber}`
-                      : currentResult.detectedStudentLrn || 'Not detected (Blank)'}
-                  </p>
-                </div>
-                <div className="rounded-xl bg-gray-800/40 p-3 border border-gray-800">
-                  <span className="text-gray-400">Items Scored:</span>
+                  <span className="text-gray-400">{mode === 'answer_key' ? 'Keys Detected:' : 'Items Scored:'}</span>
                   <p className="mt-0.5 font-mono font-bold text-white">
                     {currentResult.items.filter((i) => i.selectedChoice).length} /{' '}
                     {currentResult.items.length} Marked
                   </p>
                 </div>
+                {mode === 'answer_key' && (
+                  <div className="rounded-xl bg-emerald-950/40 p-3 border border-emerald-800">
+                    <span className="text-emerald-400">Mode:</span>
+                    <p className="mt-0.5 font-mono font-bold text-emerald-300">Answer Key Scan</p>
+                  </div>
+                )}
               </div>
 
               {/* Sample Detected Answers Preview */}
               <div className="space-y-2">
                 <span className="text-xs font-semibold text-gray-400">
-                  Detected Answers Preview (First 20 Items):
+                  {mode === 'answer_key'
+                    ? `Detected Answer Key — All ${currentResult.items.length} Items:`
+                    : 'Detected Answers Preview (First 20 Items):'}
                 </span>
-                <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5 max-h-40 overflow-y-auto p-1">
-                  {currentResult.items.slice(0, 20).map((item) => (
+                <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5 max-h-52 overflow-y-auto p-1">
+                  {(mode === 'answer_key' ? currentResult.items : currentResult.items.slice(0, 20)).map((item) => (
                     <div
                       key={item.itemNumber}
                       className={cn(
                         'flex flex-col items-center justify-center rounded-lg p-1.5 border text-xs',
                         item.selectedChoice
-                          ? 'border-blue-700 bg-blue-950/40 text-blue-200'
+                          ? mode === 'answer_key'
+                            ? 'border-emerald-700 bg-emerald-950/40 text-emerald-200'
+                            : 'border-blue-700 bg-blue-950/40 text-blue-200'
                           : 'border-gray-800 bg-gray-800/20 text-gray-500'
                       )}
                     >
@@ -257,6 +280,11 @@ export function OmrCameraModal({
                     </div>
                   ))}
                 </div>
+                {mode === 'answer_key' && (
+                  <p className="text-[10px] text-amber-400/80 text-center">
+                    Review detected keys above. You can manually correct mismatches after applying.
+                  </p>
+                )}
               </div>
 
               {/* Actions */}
@@ -266,30 +294,52 @@ export function OmrCameraModal({
                   className="inline-flex items-center gap-2 rounded-xl bg-gray-800 px-4 py-2.5 text-xs font-bold text-gray-300 hover:bg-gray-700 transition"
                 >
                   <RefreshCw className="h-4 w-4" />
-                  <span>Scan Another Sheet</span>
+                  <span>Scan Another</span>
                 </button>
 
-                <button
-                  onClick={handleSaveToSupabase}
-                  disabled={saveStatus === 'SAVING' || saveStatus === 'SAVED'}
-                  className={cn(
-                    'inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold text-white transition shadow-sm',
-                    saveStatus === 'SAVED'
-                      ? 'bg-emerald-600'
-                      : 'bg-blue-600 hover:bg-blue-700 disabled:opacity-50'
-                  )}
-                >
-                  {saveStatus === 'SAVING' ? (
-                    <span>Saving to Supabase…</span>
-                  ) : saveStatus === 'SAVED' ? (
-                    <>
-                      <CheckCircle2 className="h-4 w-4" />
-                      <span>Saved to Supabase</span>
-                    </>
-                  ) : (
-                    <span>Confirm & Persist Results</span>
-                  )}
-                </button>
+                {mode === 'answer_key' ? (
+                  <button
+                    onClick={() => {
+                      if (onApplyAnswerKey && currentResult) {
+                        const detected: Record<number, string> = {};
+                        currentResult.items.forEach((item) => {
+                          if (item.selectedChoice) {
+                            detected[item.itemNumber] = item.selectedChoice;
+                          }
+                        });
+                        onApplyAnswerKey(detected);
+                        stopCamera();
+                        onClose();
+                      }
+                    }}
+                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white transition shadow-sm hover:bg-emerald-700"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>Apply Detected Key</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSaveToSupabase}
+                    disabled={saveStatus === 'SAVING' || saveStatus === 'SAVED'}
+                    className={cn(
+                      'inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold text-white transition shadow-sm',
+                      saveStatus === 'SAVED'
+                        ? 'bg-emerald-600'
+                        : 'bg-blue-600 hover:bg-blue-700 disabled:opacity-50'
+                    )}
+                  >
+                    {saveStatus === 'SAVING' ? (
+                      <span>Saving to Supabase…</span>
+                    ) : saveStatus === 'SAVED' ? (
+                      <>
+                        <CheckCircle2 className="h-4 w-4" />
+                        <span>Saved to Supabase</span>
+                      </>
+                    ) : (
+                      <span>Confirm & Persist Results</span>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           ) : (
