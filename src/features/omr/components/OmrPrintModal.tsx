@@ -50,72 +50,72 @@ export function OmrPrintModal({ isOpen, onClose, geometry }: OmrPrintModalProps)
   if (!isOpen) return null;
 
   const handlePrint = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('Please allow popups to print the answer sheet.');
+    const printHtml = `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>${geometry.templateId} — Master Answer Sheet</title>
+    <style>
+      @page {
+        size: ${printPageConfig.paper};
+        margin: 0;
+      }
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: #ffffff;
+        width: 100%;
+      }
+      .omr-print-shell {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        background: #ffffff;
+      }
+      .omr-print-shell svg {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        height: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="omr-print-shell">${svgContent}</div>
+    <script>
+      window.addEventListener('load', function () {
+        window.print();
+        setTimeout(function () { window.close(); }, 1500);
+      });
+    </script>
+  </body>
+</html>`;
+
+    // Use a Blob URL so the new tab loads a real page (not about:blank).
+    // document.write on about:blank is unreliable — browsers may block it or
+    // race the load event, leaving the tab blank.
+    const blob = new Blob([printHtml], { type: 'text/html;charset=utf-8' });
+    const blobUrl = URL.createObjectURL(blob);
+
+    const printTab = window.open(blobUrl, '_blank');
+    if (!printTab) {
+      URL.revokeObjectURL(blobUrl);
+      alert('Popups are blocked. Please allow popups for this site to print.');
       return;
     }
 
-    const printHtml = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>${geometry.templateId} — Master Answer Sheet</title>
-          <style>
-            @page {
-              size: ${printPageConfig.paper};
-              margin: 0;
-            }
-            * { box-sizing: border-box; }
-            html, body {
-              margin: 0;
-              padding: 0;
-              background: #ffffff;
-            }
-            body {
-              min-height: 100vh;
-              display: block;
-              background: white;
-            }
-            .omr-print-shell {
-              width: 100%;
-              min-height: 100vh;
-              padding: 0;
-              display: flex;
-              justify-content: center;
-              align-items: flex-start;
-              background: #ffffff;
-            }
-            .omr-print-shell svg {
-              display: block;
-              width: 100%;
-              max-width: 100%;
-              height: auto;
-              margin: 0 auto;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="omr-print-shell">${svgContent}</div>
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(() => window.close(), 1200);
-            };
-          </script>
-        </body>
-      </html>
-    `;
-
-    printWindow.document.write(printHtml);
-    printWindow.document.close();
+    // Revoke after enough time for the page to load and print dialog to open
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="relative flex flex-col w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-3xl bg-gray-900 border border-gray-800 shadow-2xl text-white">
-        {/* Modal Header */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-gray-800 px-4 sm:px-6 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-2 sm:p-4">
+      <div className="relative flex flex-col w-full max-w-5xl h-[95vh] sm:h-[92vh] rounded-3xl bg-gray-900 border border-gray-800 shadow-2xl text-white overflow-hidden">
+
+        {/* Modal Header — sticky, never scrolls away */}
+        <div className="shrink-0 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-gray-800 px-4 sm:px-6 py-3.5">
           <div className="min-w-0">
             <h3 className="text-base font-bold truncate">Printable Master Answer Sheet</h3>
             <p className="text-xs text-gray-400 truncate">
@@ -139,14 +139,28 @@ export function OmrPrintModal({ isOpen, onClose, geometry }: OmrPrintModalProps)
           </div>
         </div>
 
-        {/* Modal Body: Vector SVG Preview */}
-        <div className="flex-1 overflow-auto p-6 flex justify-center bg-gray-950">
-          <div
-            className="bg-white rounded-lg shadow-lg overflow-hidden"
-            style={{ width: `${geometry.page.width}px`, maxWidth: '100%' }}
-            dangerouslySetInnerHTML={{ __html: svgContent }}
-          />
+        {/* Modal Body — independently scrollable both axes */}
+        <div className="flex-1 min-h-0 overflow-auto bg-gray-950">
+          {/* Padding wrapper — centres sheet with breathing room */}
+          <div className="p-4 sm:p-8 flex justify-center">
+            {/* Sheet at exact native pixel dimensions — no squashing, scroll reveals rest */}
+            <div
+              className="bg-white rounded-lg shadow-2xl shrink-0"
+              style={{
+                width: geometry.page.width,
+                height: geometry.page.height,
+              }}
+              dangerouslySetInnerHTML={{ __html: svgContent }}
+            />
+          </div>
         </div>
+
+        {/* Footer — sticky size/scroll hint */}
+        <div className="shrink-0 border-t border-gray-800 px-5 py-2 flex items-center justify-between text-[11px] text-gray-500 bg-gray-900 select-none">
+          <span>↕ Scroll to view full sheet</span>
+          <span className="font-mono">{geometry.page.width} × {geometry.page.height} px · {printPageConfig.paper}</span>
+        </div>
+
       </div>
     </div>
   );

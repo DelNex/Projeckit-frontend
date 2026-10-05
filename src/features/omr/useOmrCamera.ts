@@ -108,8 +108,35 @@ export function useOmrCamera(options: UseOmrCameraOptions = {}) {
       streamRef.current = stream;
 
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+        const video = videoRef.current;
+        video.srcObject = stream;
+
+        // Wait for the browser to finish loading the new stream before calling play().
+        // Calling play() before loadedmetadata fires causes:
+        //   AbortError: The play() request was interrupted by a new load request.
+        await new Promise<void>((resolve) => {
+          const onReady = () => {
+            video.removeEventListener('loadedmetadata', onReady);
+            resolve();
+          };
+          // If metadata already loaded (e.g. fast device), resolve immediately
+          if (video.readyState >= 1) {
+            resolve();
+          } else {
+            video.addEventListener('loadedmetadata', onReady, { once: true });
+          }
+        });
+
+        // Guard: stream may have been stopped while we were waiting
+        if (streamRef.current) {
+          try {
+            await video.play();
+          } catch (playErr: any) {
+            // AbortError from overlapping calls is harmless — ignore it.
+            // Any other error should still propagate.
+            if (playErr?.name !== 'AbortError') throw playErr;
+          }
+        }
       }
 
       setCameraStatus((prev) => ({
