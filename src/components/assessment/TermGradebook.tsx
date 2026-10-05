@@ -126,20 +126,39 @@ export function TermGradebook({
     setErrorMessage(null);
 
     try {
-      // 1. Fetch Students from class section
-      const { data: studentsData, error: sErr } = await (supabase as any)
+      // 1. Fetch Students from class section (excluding archived)
+      let studentsData: any[] = [];
+      const { data: sData, error: sErr } = await (supabase as any)
         .from('students')
-        .select('id, name, lrn, section_name')
+        .select('id, name, lrn, section_name, is_archived')
         .order('name', { ascending: true });
 
-      if (sErr) throw sErr;
+      if (sErr) {
+        // Fallback without is_archived
+        const { data: fbData } = await (supabase as any)
+          .from('students')
+          .select('id, name, lrn, section_name')
+          .order('name', { ascending: true });
+        studentsData = fbData || [];
+      } else {
+        studentsData = (sData || []).filter((s: any) => !s.is_archived);
+      }
+
+      // Check local archive storage fallback
+      try {
+        const storedArchived = localStorage.getItem('projectkit_archived_students_cache');
+        if (storedArchived) {
+          const archivedSet = new Set(JSON.parse(storedArchived));
+          studentsData = studentsData.filter((s: any) => !archivedSet.has(s.id));
+        }
+      } catch {}
 
       // Filter by section if match exists, otherwise show roster
-      const sectionStudents = (studentsData || []).filter((s: any) =>
+      const sectionStudents = studentsData.filter((s: any) =>
         sectionName ? s.section_name?.toLowerCase() === sectionName.toLowerCase() : true
       );
 
-      const roster = sectionStudents.length > 0 ? sectionStudents : (studentsData || []);
+      const roster = sectionStudents.length > 0 ? sectionStudents : studentsData;
 
       // 2. Fetch existing responses for this assessment
       const { data: responsesData } = await (supabase as any)

@@ -191,13 +191,23 @@ export default function AssessmentWorkspacePage({
 
       if (tData) setTosDoc(tData);
 
-      // 5. Fetch Students Roster (for Roll number matching and Gradebook)
+      // 5. Fetch Students Roster (for Roll number matching and Gradebook, excluding archived)
       const { data: stdData } = await (supabase as any)
         .from('students')
-        .select('id, name, lrn, section_name')
+        .select('id, name, lrn, section_name, is_archived')
         .order('name', { ascending: true });
 
-      if (stdData) setStudentsList(stdData);
+      if (stdData) {
+        let activeRoster = stdData.filter((s: any) => !s.is_archived);
+        try {
+          const storedArchived = localStorage.getItem('projectkit_archived_students_cache');
+          if (storedArchived) {
+            const archivedSet = new Set(JSON.parse(storedArchived));
+            activeRoster = activeRoster.filter((s: any) => !archivedSet.has(s.id));
+          }
+        } catch {}
+        setStudentsList(activeRoster);
+      }
 
       // 6. Fetch Responses (Scores)
       const { data: rData } = await (supabase as any)

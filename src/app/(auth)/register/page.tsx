@@ -1,5 +1,9 @@
 'use client';
 
+import {
+  DEPED_REGISTRATION_ERROR_MESSAGE,
+  isValidDepEdEmail,
+} from '@/lib/auth-validation';
 import { createClient } from '@/lib/supabase/client';
 import { AlertCircle, ArrowRight, CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react';
 import Link from 'next/link';
@@ -22,24 +26,33 @@ export default function RegisterPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    // 1. Client-side DepEd email restriction check
+    const cleanEmail = email.trim();
+    if (!isValidDepEdEmail(cleanEmail)) {
+      setError(DEPED_REGISTRATION_ERROR_MESSAGE);
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const { data, error: authError } = await supabase.auth.signUp({
-        email: email.trim(),
-        password,
-        options: {
-          data: {
-            display_name: displayName.trim(),
-            role: 'teacher',
-            status: 'pending',
-            recommendation_code: recommendationCode.trim(),
-          },
-        },
+      // 2. Call server-side API for secure registration
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: cleanEmail,
+          password,
+          displayName: displayName.trim(),
+          recommendationCode: recommendationCode.trim(),
+        }),
       });
 
-      if (authError) {
-        throw authError;
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create account');
       }
 
       setSuccess(true);
@@ -116,16 +129,19 @@ export default function RegisterPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                  Email Address
+                  Official DepEd Email Address
                 </label>
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="maria.santos@deped.gov.ph"
+                  placeholder="name@deped.com.ph"
                   className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-blue-600 focus:bg-white focus:ring-2 focus:ring-blue-600/20 dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:border-blue-500 dark:focus:bg-gray-800"
                 />
+                <span className="mt-1 block text-[11px] text-gray-400 dark:text-gray-500">
+                  Must be an official account ending in <strong className="text-blue-600 dark:text-blue-400 font-semibold">@deped.com.ph</strong>
+                </span>
               </div>
 
               <div>

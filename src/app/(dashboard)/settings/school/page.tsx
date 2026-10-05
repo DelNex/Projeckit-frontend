@@ -10,6 +10,8 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import {
+    Archive,
+    ArchiveRestore,
     Award,
     BookOpen,
     CheckCircle2,
@@ -17,11 +19,13 @@ import {
     Layers,
     Loader2,
     Plus,
+    RotateCcw,
     Save,
     School,
     Trash2,
     Users,
 } from 'lucide-react';
+import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import React, { useEffect, useMemo, useState } from 'react';
 
 interface SectionItem {
@@ -31,6 +35,8 @@ interface SectionItem {
   strand_code: string;
   is_advisory: boolean;
   student_count: number;
+  is_archived?: boolean;
+  archived_at?: string;
 }
 
 export default function SchoolSettingsPage() {
@@ -49,12 +55,50 @@ export default function SchoolSettingsPage() {
 
   // Sections & Grade Levels State
   const [sectionsList, setSectionsList] = useState<SectionItem[]>([]);
+  const [sectionsTab, setSectionsTab] = useState<'active' | 'archived'>('active');
+  const [selectedSectionIds, setSelectedSectionIds] = useState<Set<string>>(new Set());
   const [isAddSectionOpen, setIsAddSectionOpen] = useState(false);
   const [newSectionName, setNewSectionName] = useState('');
   const [newSectionGrade, setNewSectionGrade] = useState('11');
   const [newSectionStrand, setNewSectionStrand] = useState('STEM');
   const [newSectionAdvisory, setNewSectionAdvisory] = useState(false);
   const [addingSection, setAddingSection] = useState(false);
+
+  // Section Confirmation Modal State
+  const [sectionConfirmModal, setSectionConfirmModal] = useState<{
+    isOpen: boolean;
+    action: 'archive' | 'restore' | 'delete';
+    targetIds: string[];
+    title: string;
+    description: string;
+    affectedCount: number;
+  }>({
+    isOpen: false,
+    action: 'archive',
+    targetIds: [],
+    title: '',
+    description: '',
+    affectedCount: 0,
+  });
+  const [sectionOperating, setSectionOperating] = useState(false);
+
+  // Storage key for sections archive fallback
+  const SECTION_ARCHIVE_STORAGE_KEY = 'projectkit_archived_sections_cache';
+
+  const getLocalArchivedSectionIds = (): Set<string> => {
+    try {
+      const stored = localStorage.getItem(SECTION_ARCHIVE_STORAGE_KEY);
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  };
+
+  const setLocalArchivedSectionIds = (ids: Set<string>) => {
+    try {
+      localStorage.setItem(SECTION_ARCHIVE_STORAGE_KEY, JSON.stringify(Array.from(ids)));
+    } catch {}
+  };
 
   // DepEd SHS Grading Weights State
   const [weights, setWeights] = useState<GradeComponentWeights>(DEFAULT_SHS_WEIGHTS);
@@ -116,7 +160,15 @@ export default function SchoolSettingsPage() {
             .order('grade', { ascending: true })
             .order('name', { ascending: true });
 
-          if (secData) setSectionsList(secData);
+          if (secData) {
+            const localArchived = getLocalArchivedSectionIds();
+            setSectionsList(
+              secData.map((s: any) => ({
+                ...s,
+                is_archived: Boolean(s.is_archived || localArchived.has(s.id)),
+              }))
+            );
+          }
         }
 
         // 4. Load persistent default grading weights
@@ -241,17 +293,180 @@ export default function SchoolSettingsPage() {
     }
   };
 
-  // Delete Section Handler
-  const handleDeleteSection = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to remove section "${name}"?`)) return;
+  // Active vs Archived Sections Memo
+  const activeSections = useMemo(
+    () => sectionsList.filter((s) => !s.is_archived),
+    [sectionsList]
+  );
 
+  const archivedSections = useMemo(
+    () => sectionsList.filter((s) => Boolean(s.is_archived)),
+    [sectionsList]
+  );
+
+  const displayedSections = useMemo(
+    () => (sectionsTab === 'active' ? activeSections : archivedSections),
+    [sectionsTab, activeSections, archivedSections]
+  );
+
+  // Section Selection
+  const allSectionsSelected =
+    displayedSections.length > 0 &&
+    displayedSections.every((s) => selectedSectionIds.has(s.id));
+
+  const toggleSelectAllSections = () => {
+    if (allSectionsSelected) {
+      setSelectedSectionIds(new Set());
+    } else {
+      const newSet = new Set(selectedSectionIds);
+      displayedSections.forEach((s) => newSet.add(s.id));
+      setSelectedSectionIds(newSet);
+    }
+  };
+
+  const toggleSelectSection = (id: string) => {
+    const newSet = new Set(selectedSectionIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedSectionIds(newSet);
+  };
+
+  // Section Archive Triggers
+  const triggerArchiveSections = (ids?: string[]) => {
+    const targetIds = ids || Array.from(selectedSectionIds);
+    if (targetIds.length === 0) return;
+
+    setSectionConfirmModal({
+      isOpen: true,
+      action: 'archive',
+      targetIds,
+      title: targetIds.length > 1 ? `Archive ${targetIds.length} Sections?` : 'Archive Section?',
+      description:
+        targetIds.length > 1
+          ? `Are you sure you want to archive these ${targetIds.length} sections? They will be moved to the Archived Sections list and can be restored anytime without losing student records.`
+          : 'Are you sure you want to archive this section? It will be moved to the Archived Sections list and can be restored anytime.',
+      affectedCount: targetIds.length,
+    });
+  };
+
+  const triggerRestoreSections = (ids?: string[]) => {
+    const targetIds = ids || Array.from(selectedSectionIds);
+    if (targetIds.length === 0) return;
+
+    setSectionConfirmModal({
+      isOpen: true,
+      action: 'restore',
+      targetIds,
+      title: targetIds.length > 1 ? `Restore ${targetIds.length} Sections?` : 'Restore Section?',
+      description:
+        targetIds.length > 1
+          ? `Are you sure you want to restore these ${targetIds.length} sections back to active use?`
+          : 'Are you sure you want to restore this section back to active use?',
+      affectedCount: targetIds.length,
+    });
+  };
+
+  const triggerDeleteSections = (ids?: string[]) => {
+    const targetIds = ids || Array.from(selectedSectionIds);
+    if (targetIds.length === 0) return;
+
+    setSectionConfirmModal({
+      isOpen: true,
+      action: 'delete',
+      targetIds,
+      title:
+        targetIds.length > 1
+          ? `Permanently Delete ${targetIds.length} Sections?`
+          : 'Permanently Delete Section?',
+      description:
+        'This action permanently erases the selected section(s) from the database. This action CANNOT be undone.',
+      affectedCount: targetIds.length,
+    });
+  };
+
+  // Execute Section Action
+  const handleExecuteSectionAction = async () => {
+    const { action, targetIds } = sectionConfirmModal;
+    if (targetIds.length === 0) return;
+
+    setSectionOperating(true);
     try {
-      const { error: delErr } = await (supabase as any).from('sections').delete().eq('id', id);
-      if (delErr) throw delErr;
-      setSectionsList((prev) => prev.filter((s) => s.id !== id));
+      // 1. Try server-side API endpoint
+      const res = await fetch('/api/sections/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, sectionIds: targetIds }),
+      });
+
+      if (!res.ok) {
+        // Fallback to client Supabase call
+        if (action === 'archive') {
+          const { error: updErr } = await (supabase as any)
+            .from('sections')
+            .update({
+              is_archived: true,
+              archived_at: new Date().toISOString(),
+            })
+            .in('id', targetIds);
+
+          if (updErr) {
+            const localArchived = getLocalArchivedSectionIds();
+            targetIds.forEach((id) => localArchived.add(id));
+            setLocalArchivedSectionIds(localArchived);
+          }
+        } else if (action === 'restore') {
+          const { error: updErr } = await (supabase as any)
+            .from('sections')
+            .update({
+              is_archived: false,
+              archived_at: null,
+            })
+            .in('id', targetIds);
+
+          if (updErr) {
+            const localArchived = getLocalArchivedSectionIds();
+            targetIds.forEach((id) => localArchived.delete(id));
+            setLocalArchivedSectionIds(localArchived);
+          }
+        } else if (action === 'delete') {
+          const { error: delErr } = await (supabase as any)
+            .from('sections')
+            .delete()
+            .in('id', targetIds);
+          if (delErr) throw delErr;
+        }
+      }
+
+      // Sync local storage cache
+      const localArchived = getLocalArchivedSectionIds();
+      if (action === 'archive') {
+        targetIds.forEach((id) => localArchived.add(id));
+        setSectionsList((prev) =>
+          prev.map((s) => (targetIds.includes(s.id) ? { ...s, is_archived: true } : s))
+        );
+      } else if (action === 'restore') {
+        targetIds.forEach((id) => localArchived.delete(id));
+        setSectionsList((prev) =>
+          prev.map((s) => (targetIds.includes(s.id) ? { ...s, is_archived: false } : s))
+        );
+      } else if (action === 'delete') {
+        targetIds.forEach((id) => localArchived.delete(id));
+        setSectionsList((prev) => prev.filter((s) => !targetIds.includes(s.id)));
+      }
+      setLocalArchivedSectionIds(localArchived);
+
+      setSectionConfirmModal((prev) => ({ ...prev, isOpen: false }));
+      setSelectedSectionIds(new Set());
+      setSaved(true);
+      setTimeout(() => setSaved(false), 4000);
     } catch (err: any) {
-      console.error('Failed to delete section:', err);
-      setError(err.message || 'Failed to delete section');
+      console.error('Section operation error:', err);
+      setError(`Section action failed: ${err.message || err}`);
+    } finally {
+      setSectionOperating(false);
     }
   };
 
@@ -332,7 +547,7 @@ export default function SchoolSettingsPage() {
 
           {/* Card 2: Grades & Sections Management */}
           <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3 dark:border-gray-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3 dark:border-gray-800">
               <div className="flex items-center gap-3">
                 <GraduationCap className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 <div>
@@ -345,15 +560,118 @@ export default function SchoolSettingsPage() {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setIsAddSectionOpen(!isAddSectionOpen)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 transition"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span>Add Section</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddSectionOpen(!isAddSectionOpen)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 transition"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Add Section</span>
+                </button>
+              </div>
             </div>
+
+            {/* View Tabs: Active Sections vs Archived Sections */}
+            <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pt-1 pb-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSectionsTab('active');
+                    setSelectedSectionIds(new Set());
+                  }}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition',
+                    sectionsTab === 'active'
+                      ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300'
+                      : 'text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'
+                  )}
+                >
+                  <Layers className="h-3.5 w-3.5" />
+                  <span>Active Sections</span>
+                  <span className="ml-1 rounded-full px-1.5 py-0.2 font-mono text-[10px] bg-blue-200/60 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200">
+                    {activeSections.length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSectionsTab('archived');
+                    setSelectedSectionIds(new Set());
+                  }}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition',
+                    sectionsTab === 'archived'
+                      ? 'bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                      : 'text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'
+                  )}
+                >
+                  <Archive className="h-3.5 w-3.5" />
+                  <span>Archived Sections</span>
+                  <span className="ml-1 rounded-full px-1.5 py-0.2 font-mono text-[10px] bg-amber-200/60 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200">
+                    {archivedSections.length}
+                  </span>
+                </button>
+              </div>
+
+              {displayedSections.length > 0 && (
+                <button
+                  type="button"
+                  onClick={toggleSelectAllSections}
+                  className="text-[11px] font-semibold text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"
+                >
+                  {allSectionsSelected ? 'Deselect All' : 'Select All'}
+                </button>
+              )}
+            </div>
+
+            {/* Bulk Actions Bar for Sections */}
+            {selectedSectionIds.size > 0 && (
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-blue-50 border border-blue-200 dark:bg-blue-950/40 dark:border-blue-900/50">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white font-mono text-[11px] font-bold">
+                    {selectedSectionIds.size}
+                  </span>
+                  <span className="text-xs font-bold text-gray-900 dark:text-white">
+                    {selectedSectionIds.size} section{selectedSectionIds.size > 1 ? 's' : ''} selected
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {sectionsTab === 'active' ? (
+                    <button
+                      type="button"
+                      onClick={() => triggerArchiveSections()}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-amber-700 transition"
+                    >
+                      <Archive className="h-3.5 w-3.5" />
+                      <span>Archive Selected ({selectedSectionIds.size})</span>
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => triggerRestoreSections()}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 transition"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        <span>Restore Selected ({selectedSectionIds.size})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => triggerDeleteSections()}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-red-700 transition"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span>Permanently Delete ({selectedSectionIds.size})</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Inline Add Section Form */}
             {isAddSectionOpen && (
@@ -438,47 +756,90 @@ export default function SchoolSettingsPage() {
             )}
 
             {/* Sections List Grid */}
-            {sectionsList.length === 0 ? (
-              <p className="text-xs text-gray-400 py-4 text-center border border-dashed rounded-2xl dark:border-gray-800">
-                No sections registered. Click &quot;Add Section&quot; to enroll your grade levels and classes.
+            {displayedSections.length === 0 ? (
+              <p className="text-xs text-gray-400 py-6 text-center border border-dashed rounded-2xl dark:border-gray-800">
+                {sectionsTab === 'active'
+                  ? 'No active sections registered. Click "Add Section" to enroll your grade levels and classes.'
+                  : 'No sections have been archived.'}
               </p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {sectionsList.map((sec) => (
-                  <div
-                    key={sec.id}
-                    className="flex items-center justify-between p-3.5 rounded-2xl border border-gray-100 bg-gray-50/70 dark:border-gray-800 dark:bg-gray-800/40 hover:border-gray-200 dark:hover:border-gray-700 transition"
-                  >
-                    <div className="min-w-0 pr-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-xs text-gray-900 dark:text-white truncate">
-                          {sec.name}
-                        </span>
-                        {sec.is_advisory && (
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-                            Advisory
-                          </span>
+                {displayedSections.map((sec) => {
+                  const isSelected = selectedSectionIds.has(sec.id);
+                  return (
+                    <div
+                      key={sec.id}
+                      className={cn(
+                        'flex items-center justify-between p-3.5 rounded-2xl border transition',
+                        isSelected
+                          ? 'border-blue-400 bg-blue-50/50 dark:border-blue-700 dark:bg-blue-950/30'
+                          : 'border-gray-100 bg-gray-50/70 dark:border-gray-800 dark:bg-gray-800/40 hover:border-gray-200 dark:hover:border-gray-700'
+                      )}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectSection(sec.id)}
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 shrink-0"
+                          aria-label={`Select ${sec.name}`}
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-xs text-gray-900 dark:text-white truncate">
+                              {sec.name}
+                            </span>
+                            {sec.is_advisory && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 shrink-0">
+                                Advisory
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-400">
+                            <span className="font-semibold text-blue-600 dark:text-blue-400">
+                              Grade {sec.grade}
+                            </span>
+                            <span>•</span>
+                            <span className="font-mono">{sec.strand_code}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Section Action Buttons */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {sectionsTab === 'active' ? (
+                          <button
+                            type="button"
+                            onClick={() => triggerArchiveSections([sec.id])}
+                            className="inline-flex items-center gap-1 p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:text-amber-400 dark:hover:bg-amber-950/30 rounded-lg transition"
+                            title="Archive Section (soft delete)"
+                          >
+                            <Archive className="h-4 w-4" />
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => triggerRestoreSections([sec.id])}
+                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-lg transition"
+                              title="Restore Section"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => triggerDeleteSections([sec.id])}
+                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-950/40 rounded-lg transition"
+                              title="Permanently Delete Section"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-400">
-                        <span className="font-semibold text-blue-600 dark:text-blue-400">
-                          Grade {sec.grade}
-                        </span>
-                        <span>•</span>
-                        <span className="font-mono">{sec.strand_code}</span>
-                      </div>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteSection(sec.id, sec.name)}
-                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition"
-                      title="Delete Section"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -654,6 +1015,19 @@ export default function SchoolSettingsPage() {
           </div>
         </form>
       )}
+
+      {/* Confirmation Modal for Section Archive / Restore / Delete */}
+      <ConfirmationModal
+        isOpen={sectionConfirmModal.isOpen}
+        onClose={() => setSectionConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={handleExecuteSectionAction}
+        title={sectionConfirmModal.title}
+        description={sectionConfirmModal.description}
+        affectedCount={sectionConfirmModal.affectedCount}
+        entityName="section"
+        actionType={sectionConfirmModal.action}
+        isLoading={sectionOperating}
+      />
     </div>
   );
 }

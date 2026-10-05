@@ -32,6 +32,25 @@ export default function LoginPage() {
       }
 
       if (data.user) {
+        // Verify account profile status
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('status, role')
+          .eq('id', data.user.id)
+          .maybeSingle();
+
+        if (profile?.status === 'pending') {
+          await supabase.auth.signOut();
+          setError('Your account is currently PENDING administrator approval. Please wait for an administrator to activate your access.');
+          return;
+        }
+
+        if (profile?.status === 'rejected' || profile?.status === 'suspended') {
+          await supabase.auth.signOut();
+          setError('Your account has been suspended or rejected. Please contact your school administrator.');
+          return;
+        }
+
         router.push('/dashboard');
         router.refresh();
       }
