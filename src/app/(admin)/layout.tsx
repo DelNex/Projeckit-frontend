@@ -12,7 +12,7 @@ export default function AdminLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen w-full min-w-0 overflow-x-hidden bg-gray-50 dark:bg-gray-950">
+    <div className="flex h-screen h-dvh w-full min-w-0 overflow-hidden bg-gray-50 dark:bg-gray-950">
       {/* Persistent / Mobile Admin Sidebar */}
       <Suspense fallback={null}>
         <Sidebar
@@ -23,7 +23,7 @@ export default function AdminLayout({
       </Suspense>
 
       {/* Main Content Area */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
+      <div className="flex min-w-0 flex-1 flex-col h-full overflow-hidden">
         <Header
           onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
           title="System Administration"

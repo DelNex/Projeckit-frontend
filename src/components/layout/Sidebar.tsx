@@ -107,7 +107,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
       {/* Sidebar Navigation Drawer */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900 lg:static lg:translate-x-0 sidebar-transition',
+          'fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900 lg:static lg:h-full lg:shrink-0 lg:translate-x-0 sidebar-transition',
           isOpen ? 'translate-x-0 shadow-2xl lg:shadow-none' : '-translate-x-full'
         )}
       >

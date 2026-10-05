@@ -179,14 +179,46 @@ export function TermGradebook({
 
         const isOmr = Boolean(matchResponse || cachedStudent?.isOmrAcquired);
 
+        // Initialize quizzes: default all to 0, and cleanse any old placeholder mock scores
+        const studentQuizzes: Record<string, number> = {};
+        quizzes.forEach((q) => {
+          studentQuizzes[q.id] = 0;
+        });
+        if (cachedStudent?.quizzes) {
+          Object.keys(cachedStudent.quizzes).forEach((k) => {
+            const val = Number(cachedStudent.quizzes[k]);
+            if ((k === 'q1' && val === 18) || (k === 'q2' && val === 22)) {
+              studentQuizzes[k] = 0;
+            } else {
+              studentQuizzes[k] = isNaN(val) ? 0 : val;
+            }
+          });
+        }
+
+        // Initialize activities: default all to 0, and cleanse any old placeholder mock scores
+        const studentActivities: Record<string, number> = {};
+        activities.forEach((a) => {
+          studentActivities[a.id] = 0;
+        });
+        if (cachedStudent?.activities) {
+          Object.keys(cachedStudent.activities).forEach((k) => {
+            const val = Number(cachedStudent.activities[k]);
+            if ((k === 'act1' && val === 27) || (k === 'act2' && val === 36) || (k === 'pt1' && val === 45)) {
+              studentActivities[k] = 0;
+            } else {
+              studentActivities[k] = isNaN(val) ? 0 : val;
+            }
+          });
+        }
+
         return {
           id: s.id,
           name: s.name,
           lrn: s.lrn,
           rollNumber: rollNum,
           sectionName: s.section_name,
-          quizzes: cachedStudent?.quizzes || { q1: Math.min(18, 20), q2: Math.min(22, 25) },
-          activities: cachedStudent?.activities || { act1: 27, act2: 36, pt1: 45 },
+          quizzes: studentQuizzes,
+          activities: studentActivities,
           testScore,
           isOmrAcquired: isOmr,
           omrConfidence: matchResponse?.audit_trail?.confidence,
@@ -568,10 +600,10 @@ export function TermGradebook({
                   const preset = TRACK_WEIGHT_PRESETS[e.target.value];
                   if (preset) setWeights(preset.weights);
                 }}
-                className="mt-1 w-full rounded-lg border border-gray-300 bg-white p-1.5 text-xs dark:border-gray-700 dark:bg-gray-800"
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white p-1.5 text-xs text-gray-900 outline-none focus:border-blue-600 dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
               >
                 {Object.entries(TRACK_WEIGHT_PRESETS).map(([key, val]) => (
-                  <option key={key} value={key}>
+                  <option key={key} value={key} className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">
                     {val.label}
                   </option>
                 ))}
@@ -590,7 +622,7 @@ export function TermGradebook({
                 onChange={(e) =>
                   setWeights({ ...weights, writtenWorks: (parseFloat(e.target.value) || 0) / 100 })
                 }
-                className="mt-1 w-full rounded-lg border border-gray-300 bg-white p-1.5 text-xs dark:border-gray-700 dark:bg-gray-800"
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white p-1.5 text-xs text-gray-900 outline-none focus:border-blue-600 dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
               />
             </div>
 
@@ -609,7 +641,7 @@ export function TermGradebook({
                     performanceTasks: (parseFloat(e.target.value) || 0) / 100,
                   })
                 }
-                className="mt-1 w-full rounded-lg border border-gray-300 bg-white p-1.5 text-xs dark:border-gray-700 dark:bg-gray-800"
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white p-1.5 text-xs text-gray-900 outline-none focus:border-blue-600 dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
               />
             </div>
 
@@ -628,7 +660,7 @@ export function TermGradebook({
                     quarterlyAssessment: (parseFloat(e.target.value) || 0) / 100,
                   })
                 }
-                className="mt-1 w-full rounded-lg border border-gray-300 bg-white p-1.5 text-xs dark:border-gray-700 dark:bg-gray-800"
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white p-1.5 text-xs text-gray-900 outline-none focus:border-blue-600 dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
               />
             </div>
           </div>

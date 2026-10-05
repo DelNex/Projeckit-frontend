@@ -305,7 +305,7 @@ export default function SchoolSettingsPage() {
                   required
                   value={schoolYear}
                   onChange={(e) => setSchoolYear(e.target.value)}
-                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
                 />
               </div>
               <div>
@@ -315,16 +315,16 @@ export default function SchoolSettingsPage() {
                 <select
                   value={term}
                   onChange={(e) => setTerm(e.target.value)}
-                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
                 >
-                  <option value="1st Quarter">1st Quarter</option>
-                  <option value="2nd Quarter">2nd Quarter</option>
-                  <option value="3rd Quarter">3rd Quarter</option>
-                  <option value="4th Quarter">4th Quarter</option>
-                  <option value="First Semester">First Semester</option>
-                  <option value="Second Semester">Second Semester</option>
-                  <option value="Midterm">Midterm</option>
-                  <option value="Finals">Finals</option>
+                  <option value="1st Quarter" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">1st Quarter</option>
+                  <option value="2nd Quarter" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">2nd Quarter</option>
+                  <option value="3rd Quarter" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">3rd Quarter</option>
+                  <option value="4th Quarter" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">4th Quarter</option>
+                  <option value="First Semester" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">First Semester</option>
+                  <option value="Second Semester" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Second Semester</option>
+                  <option value="Midterm" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Midterm</option>
+                  <option value="Finals" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Finals</option>
                 </select>
               </div>
             </div>
@@ -371,7 +371,7 @@ export default function SchoolSettingsPage() {
                       placeholder="e.g. Einstein or Hawking"
                       value={newSectionName}
                       onChange={(e) => setNewSectionName(e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-gray-300 bg-white p-2 text-xs dark:border-gray-700 dark:bg-gray-800"
+                      className="mt-1 w-full rounded-xl border border-gray-300 bg-white p-2 text-xs text-gray-900 outline-none focus:border-blue-600 dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
                     />
                   </div>
                   <div>
@@ -381,10 +381,10 @@ export default function SchoolSettingsPage() {
                     <select
                       value={newSectionGrade}
                       onChange={(e) => setNewSectionGrade(e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-gray-300 bg-white p-2 text-xs dark:border-gray-700 dark:bg-gray-800"
+                      className="mt-1 w-full rounded-xl border border-gray-300 bg-white p-2 text-xs text-gray-900 outline-none focus:border-blue-600 dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
                     >
-                      <option value="11">Grade 11</option>
-                      <option value="12">Grade 12</option>
+                      <option value="11" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Grade 11</option>
+                      <option value="12" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Grade 12</option>
                     </select>
                   </div>
                   <div>
@@ -394,13 +394,13 @@ export default function SchoolSettingsPage() {
                     <select
                       value={newSectionStrand}
                       onChange={(e) => setNewSectionStrand(e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-gray-300 bg-white p-2 text-xs dark:border-gray-700 dark:bg-gray-800"
+                      className="mt-1 w-full rounded-xl border border-gray-300 bg-white p-2 text-xs text-gray-900 outline-none focus:border-blue-600 dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
                     >
-                      <option value="STEM">STEM</option>
-                      <option value="ABM">ABM</option>
-                      <option value="HUMSS">HUMSS</option>
-                      <option value="TVL">TVL</option>
-                      <option value="GAS">GAS</option>
+                      <option value="STEM" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">STEM</option>
+                      <option value="ABM" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">ABM</option>
+                      <option value="HUMSS" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">HUMSS</option>
+                      <option value="TVL" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">TVL</option>
+                      <option value="GAS" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">GAS</option>
                     </select>
                   </div>
                 </div>
@@ -411,7 +411,7 @@ export default function SchoolSettingsPage() {
                       type="checkbox"
                       checked={newSectionAdvisory}
                       onChange={(e) => setNewSectionAdvisory(e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800"
                     />
                     <span>Designate as Advisory Class</span>
                   </label>
@@ -521,10 +521,10 @@ export default function SchoolSettingsPage() {
                     const preset = TRACK_WEIGHT_PRESETS[e.target.value];
                     if (preset) setWeights(preset.weights);
                   }}
-                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
                 >
                   {Object.entries(TRACK_WEIGHT_PRESETS).map(([key, val]) => (
-                    <option key={key} value={key}>
+                    <option key={key} value={key} className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">
                       {val.label}
                     </option>
                   ))}
@@ -546,7 +546,7 @@ export default function SchoolSettingsPage() {
                       writtenWorks: (parseFloat(e.target.value) || 0) / 100,
                     })
                   }
-                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
                 />
               </div>
 
@@ -565,7 +565,7 @@ export default function SchoolSettingsPage() {
                       performanceTasks: (parseFloat(e.target.value) || 0) / 100,
                     })
                   }
-                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
                 />
               </div>
 
@@ -584,7 +584,7 @@ export default function SchoolSettingsPage() {
                       quarterlyAssessment: (parseFloat(e.target.value) || 0) / 100,
                     })
                   }
-                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
                 />
               </div>
             </div>
@@ -609,7 +609,7 @@ export default function SchoolSettingsPage() {
                   required
                   value={facultyName}
                   onChange={(e) => setFacultyName(e.target.value)}
-                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
                 />
               </div>
               <div>
@@ -620,7 +620,7 @@ export default function SchoolSettingsPage() {
                   type="text"
                   value={designation}
                   onChange={(e) => setDesignation(e.target.value)}
-                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
                 />
               </div>
             </div>
@@ -633,7 +633,7 @@ export default function SchoolSettingsPage() {
                 type="text"
                 value={approverName}
                 onChange={(e) => setApproverName(e.target.value)}
-                className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
               />
               <span className="mt-1 block text-[11px] text-gray-400">
                 Printed as the official signatory on Table of Specifications documents.
