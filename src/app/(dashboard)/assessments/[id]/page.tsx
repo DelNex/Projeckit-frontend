@@ -1,5 +1,6 @@
 'use client';
 
+import { TermGradebook } from '@/components/assessment/TermGradebook';
 import { TosEditor } from '@/components/assessment/TosEditor';
 import {
     createKitOmrTemplate,
@@ -12,6 +13,7 @@ import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import {
     ArrowLeft,
+    Award,
     BarChart3,
     Camera,
     CheckCircle2,
@@ -103,6 +105,10 @@ export default function AssessmentWorkspacePage({
   const [omrDetectedKey, setOmrDetectedKey] = useState<Record<number, string>>({}); // latest OMR-detected key
   const [omrKeyMismatches, setOmrKeyMismatches] = useState<number[]>([]); // items where user manually overrode OMR
 
+  // Students Roster and Responses
+  const [studentsList, setStudentsList] = useState<any[]>([]);
+  const [responsesList, setResponsesList] = useState<any[]>([]);
+
   const supabase = createClient();
 
   // Load all assessment data from Supabase
@@ -184,6 +190,23 @@ export default function AssessmentWorkspacePage({
         .maybeSingle();
 
       if (tData) setTosDoc(tData);
+
+      // 5. Fetch Students Roster (for Roll number matching and Gradebook)
+      const { data: stdData } = await (supabase as any)
+        .from('students')
+        .select('id, name, lrn, section_name')
+        .order('name', { ascending: true });
+
+      if (stdData) setStudentsList(stdData);
+
+      // 6. Fetch Responses (Scores)
+      const { data: rData } = await (supabase as any)
+        .from('responses')
+        .select('*')
+        .eq('assessment_id', assessmentId)
+        .order('scanned_at', { ascending: false });
+
+      if (rData) setResponsesList(rData);
 
     } catch (err: any) {
       console.error('Failed to load assessment details:', err);
@@ -289,19 +312,22 @@ export default function AssessmentWorkspacePage({
 
       const scanStatus = result.status;
 
-      // Insert scan result record
-      const { error: scanErr } = await (supabase as any)
-        .from('scan_results')
-        .insert({
-          assessment_id: assessmentId,
-          image_hash: result.imageHash,
-          confidence: result.overallConfidence,
-          raw_answers: result.rawAnswers,
-          normalized_answers: result.normalizedAnswers,
-          status: scanStatus,
-        });
+      // Match student from class roster by detected Roll Number or LRN
+      const sectionStudents = studentsList.filter((s) =>
+        assessment.section ? s.section_name?.toLowerCase() === assessment.section.toLowerCase() : true
+      );
+      const activeRoster = sectionStudents.length > 0 ? sectionStudents : studentsList;
 
-      if (scanErr) throw scanErr;
+      let matchedStudent: any = null;
+      if (
+        result.detectedRollNumber &&
+        result.detectedRollNumber > 0 &&
+        result.detectedRollNumber <= activeRoster.length
+      ) {
+        matchedStudent = activeRoster[result.detectedRollNumber - 1];
+      } else if (result.detectedStudentLrn) {
+        matchedStudent = activeRoster.find((s) => s.lrn === result.detectedStudentLrn);
+      }
 
       // Calculate score if answer key exists
       let score = 0;
@@ -312,18 +338,46 @@ export default function AssessmentWorkspacePage({
       });
       const percentage = Math.round((score / itemCount) * 1000) / 10;
 
-      // Insert into responses
-      await (supabase as any).from('responses').insert({
-        assessment_id: assessmentId,
-        tenant_id: tenantId,
-        score,
-        total_items: itemCount,
-        percentage,
-        status: 'GRADED',
-        raw_response: result.normalizedAnswers,
-      });
+      // Insert scan result record with student reference
+      const { error: scanErr } = await (supabase as any)
+        .from('scan_results')
+        .insert({
+          assessment_id: assessmentId,
+          student_id: matchedStudent?.id || null,
+          image_hash: result.imageHash,
+          confidence: result.overallConfidence,
+          raw_answers: result.rawAnswers,
+          normalized_answers: result.normalizedAnswers,
+          status: scanStatus,
+          detected_roll_number: result.detectedRollNumber,
+        });
 
-      // Refetch scan results
+      if (scanErr) throw scanErr;
+
+      // Upsert into responses
+      await (supabase as any).from('responses').upsert(
+        {
+          assessment_id: assessmentId,
+          tenant_id: tenantId,
+          student_id: matchedStudent?.id || null,
+          student_lrn: matchedStudent?.lrn || result.detectedStudentLrn || null,
+          section_name: assessment.section,
+          score,
+          total_items: itemCount,
+          percentage,
+          status: 'GRADED',
+          raw_response: result.normalizedAnswers,
+          audit_trail: {
+            studentName: matchedStudent?.name || (result.detectedRollNumber ? `Roll #${result.detectedRollNumber}` : 'Unassigned Learner'),
+            detectedRoll: result.detectedRollNumber,
+            confidence: result.overallConfidence,
+            term: assessment.term,
+          },
+        },
+        { onConflict: 'assessment_id,student_id' }
+      );
+
+      // Refetch scan results and responses
       const { data: refreshedScans } = await (supabase as any)
         .from('scan_results')
         .select('*')
@@ -331,6 +385,21 @@ export default function AssessmentWorkspacePage({
         .order('created_at', { ascending: false });
 
       if (refreshedScans) setScanResults(refreshedScans);
+
+      const { data: refreshedResponses } = await (supabase as any)
+        .from('responses')
+        .select('*')
+        .eq('assessment_id', assessmentId)
+        .order('scanned_at', { ascending: false });
+
+      if (refreshedResponses) setResponsesList(refreshedResponses);
+
+      setSaveSuccessMsg(
+        matchedStudent
+          ? `Scored ${matchedStudent.name} (Roll #${result.detectedRollNumber}): ${score}/${itemCount} (${percentage}%)`
+          : `Scanned sheet recorded: ${score}/${itemCount} (${percentage}%)`
+      );
+      setTimeout(() => setSaveSuccessMsg(null), 5000);
 
     } catch (e: any) {
       console.error('Failed to persist scan result:', e);
@@ -675,6 +744,7 @@ export default function AssessmentWorkspacePage({
             { id: 'key', label: '2. Answer Key & Scoring', icon: KeyRound },
             { id: 'scan', label: '3. Attendance & OMR Scan', icon: Camera },
             { id: 'results', label: '4. Evaluation & Results', icon: BarChart3 },
+            { id: 'grades', label: '5. Term Gradebook', icon: Award },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -999,34 +1069,63 @@ export default function AssessmentWorkspacePage({
                   </div>
                 ) : (
                   <div className="overflow-x-auto -mx-4 sm:mx-0">
-                    <table className="w-full text-left text-xs table-optimized min-w-[500px]">
+                    <table className="w-full text-left text-xs table-optimized min-w-[650px]">
                       <thead className="border-b border-gray-100 bg-gray-50 text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:border-gray-800 dark:bg-gray-800/40">
                         <tr>
-                          <th className="px-4 py-3">Scan ID</th>
-                          <th className="px-4 py-3">Confidence</th>
+                          <th className="px-4 py-3">Learner Name</th>
+                          <th className="px-4 py-3 text-center">Roll / LRN</th>
+                          <th className="px-4 py-3 text-center">Acquired Test Score</th>
+                          <th className="px-4 py-3 text-center">Confidence</th>
                           <th className="px-4 py-3 text-center">Status</th>
                           <th className="px-4 py-3 text-right">Timestamp</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                        {scanResults.map((s) => (
-                          <tr key={s.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
-                            <td className="px-4 py-3 font-mono text-[11px] text-gray-600 dark:text-gray-300">
-                              {s.image_hash?.slice(0, 16)}...
-                            </td>
-                            <td className="px-4 py-3 font-semibold text-emerald-600 dark:text-emerald-400">
-                              {Math.round((s.confidence || 1.0) * 100)}%
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-                                {s.status}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-right text-gray-400 text-[11px]">
-                              {new Date(s.created_at).toLocaleTimeString()}
-                            </td>
-                          </tr>
-                        ))}
+                        {scanResults.map((s) => {
+                          const matchedResp = responsesList.find((r) => r.student_id === s.student_id);
+                          const matchedStd = studentsList.find((std) => std.id === s.student_id);
+                          const studentName =
+                            matchedResp?.audit_trail?.studentName ||
+                            matchedStd?.name ||
+                            (s.detected_roll_number ? `Roll #${s.detected_roll_number}` : 'Unassigned Learner');
+
+                          return (
+                            <tr key={s.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
+                              <td className="px-4 py-3">
+                                <div className="font-bold text-gray-900 dark:text-white">
+                                  {studentName}
+                                </div>
+                                <div className="font-mono text-[10px] text-gray-400">
+                                  {s.image_hash?.slice(0, 16)}...
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-center font-mono text-[11px] text-gray-600 dark:text-gray-300">
+                                {s.detected_roll_number ? `#${s.detected_roll_number}` : matchedStd?.lrn || '—'}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                {matchedResp?.score !== undefined ? (
+                                  <span className="inline-flex items-center gap-1 font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                    <span>{matchedResp.score} / {itemCount} ({matchedResp.percentage}%)</span>
+                                  </span>
+                                ) : (
+                                  <span className="font-mono text-gray-400 text-[11px]">Scored</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-center font-semibold text-blue-600 dark:text-blue-400">
+                                {Math.round((s.confidence || 1.0) * 100)}%
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                                  {s.status}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-right text-gray-400 text-[11px]">
+                                {new Date(s.created_at).toLocaleTimeString()}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -1350,6 +1449,21 @@ export default function AssessmentWorkspacePage({
                 )}
               </div>
             </div>
+          )}
+
+          {/* Tab 5: DepEd E-Class Record & Term Gradebook */}
+          {activeTab === 'grades' && (
+            <TermGradebook
+              assessmentId={assessmentId}
+              assessmentTitle={assessment.title}
+              subjectTitle={assessment.subject}
+              sectionName={assessment.section}
+              schoolYear={assessment.schoolYear}
+              initialTerm={assessment.term}
+              targetItems={itemCount}
+              scannedResponses={responsesList}
+              onScoresSaved={() => loadAssessmentData()}
+            />
           )}
         </div>
       )}
