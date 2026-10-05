@@ -24,10 +24,14 @@ export interface OmrCameraStatus {
 }
 
 export function useOmrCamera(options: UseOmrCameraOptions = {}) {
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const offscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const startSeqRef = useRef<number>(0);
   const lastStateRef = useRef<{ isAligned: boolean; corners: number; lighting: boolean }>({
     isAligned: false,
     corners: 0,
@@ -44,6 +48,8 @@ export function useOmrCamera(options: UseOmrCameraOptions = {}) {
   });
 
   const stopCamera = useCallback(() => {
+    startSeqRef.current++;
+
     if (animFrameRef.current) {
       cancelAnimationFrame(animFrameRef.current);
       animFrameRef.current = null;
@@ -73,10 +79,24 @@ export function useOmrCamera(options: UseOmrCameraOptions = {}) {
 
   const captureFrame = useCallback(async (): Promise<Blob | null> => {
     const video = videoRef.current;
-    if (!video || video.readyState < 2) return null;
+    if (!video) return null;
+
+    // If video is not ready yet, wait briefly for frame data
+    if (video.readyState < 2) {
+      await new Promise<void>((resolve) => {
+        const timeout = setTimeout(resolve, 600);
+        const onCanPlay = () => {
+          clearTimeout(timeout);
+          video.removeEventListener('canplay', onCanPlay);
+          resolve();
+        };
+        video.addEventListener('canplay', onCanPlay, { once: true });
+      });
+    }
 
     const width = video.videoWidth || 800;
     const height = video.videoHeight || 1100;
+    if (width === 0 || height === 0) return null;
 
     const canvas = document.createElement('canvas');
     canvas.width = width;
@@ -93,10 +113,51 @@ export function useOmrCamera(options: UseOmrCameraOptions = {}) {
   }, []);
 
   const startCamera = useCallback(async () => {
-    try {
-      stopCamera();
+    const currentSeq = ++startSeqRef.current;
 
-      const constraints: MediaStreamConstraints = {
+    // If already streaming and video is active, do not recreate stream
+    if (
+      streamRef.current &&
+      streamRef.current.active &&
+      streamRef.current.getVideoTracks().some((t) => t.readyState === 'live')
+    ) {
+      if (videoRef.current) {
+        if (videoRef.current.srcObject !== streamRef.current) {
+          videoRef.current.srcObject = streamRef.current;
+        }
+        if (videoRef.current.paused) {
+          try {
+            await videoRef.current.play();
+          } catch (e: any) {
+            if (e?.name !== 'AbortError') console.warn('[useOmrCamera] play error:', e);
+          }
+        }
+      }
+      return;
+    }
+
+    // Clean existing tracks without resetting status to "Camera stopped"
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        try { track.stop(); } catch {}
+      });
+      streamRef.current = null;
+    }
+
+    setCameraStatus((prev) => ({
+      ...prev,
+      isStreaming: false,
+      error: null,
+      statusText: 'Starting camera…',
+    }));
+
+    try {
+      let stream: MediaStream;
+      const idealConstraints: MediaStreamConstraints = {
         video: {
           facingMode: { ideal: 'environment' },
           width: { ideal: 1920 },
@@ -104,40 +165,39 @@ export function useOmrCamera(options: UseOmrCameraOptions = {}) {
         },
       };
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(idealConstraints);
+      } catch (firstErr) {
+        console.warn('[useOmrCamera] Ideal constraints failed, falling back to basic video', firstErr);
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
+
+      // Check if another startCamera or stopCamera was called while waiting for getUserMedia
+      if (currentSeq !== startSeqRef.current) {
+        stream.getTracks().forEach((t) => {
+          try { t.stop(); } catch {}
+        });
+        return;
+      }
+
       streamRef.current = stream;
 
       if (videoRef.current) {
         const video = videoRef.current;
         video.srcObject = stream;
+        video.setAttribute('playsinline', 'true');
+        video.muted = true;
 
-        // Wait for the browser to finish loading the new stream before calling play().
-        // Calling play() before loadedmetadata fires causes:
-        //   AbortError: The play() request was interrupted by a new load request.
-        await new Promise<void>((resolve) => {
-          const onReady = () => {
-            video.removeEventListener('loadedmetadata', onReady);
-            resolve();
-          };
-          // If metadata already loaded (e.g. fast device), resolve immediately
-          if (video.readyState >= 1) {
-            resolve();
-          } else {
-            video.addEventListener('loadedmetadata', onReady, { once: true });
-          }
-        });
-
-        // Guard: stream may have been stopped while we were waiting
-        if (streamRef.current) {
-          try {
-            await video.play();
-          } catch (playErr: any) {
-            // AbortError from overlapping calls is harmless — ignore it.
-            // Any other error should still propagate.
-            if (playErr?.name !== 'AbortError') throw playErr;
+        try {
+          await video.play();
+        } catch (playErr: any) {
+          if (playErr?.name !== 'AbortError') {
+            console.warn('[useOmrCamera] video.play() warning:', playErr);
           }
         }
       }
+
+      if (currentSeq !== startSeqRef.current) return;
 
       setCameraStatus((prev) => ({
         ...prev,
@@ -154,6 +214,8 @@ export function useOmrCamera(options: UseOmrCameraOptions = {}) {
       let frameCounter = 0;
 
       const analyzeLoop = () => {
+        if (currentSeq !== startSeqRef.current) return;
+
         const video = videoRef.current;
         if (!video || !streamRef.current || video.readyState < 2) {
           animFrameRef.current = requestAnimationFrame(analyzeLoop);
@@ -217,6 +279,7 @@ export function useOmrCamera(options: UseOmrCameraOptions = {}) {
 
       animFrameRef.current = requestAnimationFrame(analyzeLoop);
     } catch (err: any) {
+      if (currentSeq !== startSeqRef.current) return;
       console.error('[useOmrCamera] Failed to access camera', err);
       const errorMsg = err.message || 'Camera access denied or unavailable.';
       setCameraStatus((prev) => ({
@@ -225,9 +288,9 @@ export function useOmrCamera(options: UseOmrCameraOptions = {}) {
         error: errorMsg,
         statusText: errorMsg,
       }));
-      if (options.onError) options.onError(err);
+      if (optionsRef.current?.onError) optionsRef.current.onError(err);
     }
-  }, [stopCamera, options]);
+  }, []);
 
   // Clean up on component unmount
   useEffect(() => {
