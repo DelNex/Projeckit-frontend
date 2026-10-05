@@ -89,7 +89,7 @@ export const metadata: Metadata = {
     apple: [{ url: '/favicon.ico' }],
   },
   other: {
-    'google-site-verification': 'google-site-verification-project-kit',
+    'google-site-verification': '530ffdb1a0b8807b',
     'apple-mobile-web-app-title': 'Project KIT',
     'application-name': 'Project KIT',
     'msapplication-TileColor': '#2563eb',

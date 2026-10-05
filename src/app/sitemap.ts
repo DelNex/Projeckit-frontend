@@ -1,9 +1,8 @@
-import type { Metadata, Route } from 'next';
 
 export const revalidate = 86400; // 24 hours
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://projectkit.deped.gov.ph';
+  const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://projectkit.vercel.app';
 
   return [
     {
