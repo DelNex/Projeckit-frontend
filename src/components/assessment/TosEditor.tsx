@@ -1,6 +1,8 @@
 'use client';
 
 import { createClient } from '@/lib/supabase/client';
+import { ConfirmationModal } from '@/components/ui/confirmation-modal';
+import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import {
     AlertTriangle,
@@ -65,6 +67,7 @@ export function TosEditor({
   onSaveSuccess,
 }: TosEditorProps) {
   const supabase = createClient();
+  const { toast } = useToast();
 
   // Academic Context State
   const [subject, setSubject] = useState(initialSubject);
@@ -83,7 +86,19 @@ export function TosEditor({
   // View and Edit Modes
   const [viewMode, setViewMode] = useState<'worksheet' | 'preview'>('worksheet');
   const [isEditing, setIsEditing] = useState(false);
+  const [isDiscardModalOpen, setIsDiscardModalOpen] = useState(false);
   const [allocationMode, setAllocationMode] = useState<'manual' | 'hamilton'>('manual');
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isEditing) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isEditing]);
 
   // Competency Rows Store - NO fake fallback rows
   const [rows, setRows] = useState<TosCompetencyRow[]>([]);
@@ -338,7 +353,7 @@ export function TosEditor({
     } catch (err: any) {
       console.error('Failed to save TOS to Supabase:', err);
       setSaveStatus('error');
-      alert(`Could not save TOS: ${err.message || err}`);
+      toast.error(`Could not save TOS: ${err.message || err}`);
     } finally {
       setSaving(false);
     }
@@ -618,7 +633,8 @@ export function TosEditor({
                 Save Changes
               </button>
               <button
-                onClick={() => setIsEditing(false)}
+                type="button"
+                onClick={() => setIsDiscardModalOpen(true)}
                 className="px-3.5 py-2 text-xs font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 rounded-xl hover:bg-gray-200 transition shrink-0"
               >
                 Cancel
@@ -1734,6 +1750,21 @@ export function TosEditor({
           </div>
         </div>
       )}
+
+      {/* Discard Unsaved Changes Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={isDiscardModalOpen}
+        onClose={() => setIsDiscardModalOpen(false)}
+        onConfirm={() => {
+          setIsEditing(false);
+          setIsDiscardModalOpen(false);
+        }}
+        title="Discard unsaved changes?"
+        description="You have unsaved changes to this Table of Specifications (TOS). Exiting edit mode will discard your modifications."
+        actionType="neutral"
+        confirmLabel="Discard Changes"
+        cancelLabel="Keep Editing"
+      />
     </div>
   );
 }

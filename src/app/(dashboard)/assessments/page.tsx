@@ -1,6 +1,8 @@
 'use client';
 
 import { ColumnDef, DataTable } from '@/components/ui/data-table';
+import { ConfirmationModal } from '@/components/ui/confirmation-modal';
+import { useToast } from '@/components/ui/toast';
 import { createClient } from '@/lib/supabase/client';
 import {
     ArrowUpRight,
@@ -36,6 +38,7 @@ interface OptionItem {
 }
 
 export default function AssessmentsPage() {
+  const { toast } = useToast();
   const [assessments, setAssessments] = useState<AssessmentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -186,17 +189,79 @@ export default function AssessmentsPage() {
       await fetchAssessments();
     } catch (err: any) {
       console.error('Failed to create assessment:', err);
-      alert(`Error creating assessment: ${err.message || err}`);
+      toast.error(`Error creating assessment: ${err.message || err}`);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDeleteAssessment = async (id: string, title: string) => {
-    if (!window.confirm(`Are you sure you want to permanently delete "${title}"?`)) {
-      return;
-    }
+  // Delete Confirmation Modal State
+  const [deleteModal, setDeleteModal] = useState<{
+    isOpen: boolean;
+    assessment: AssessmentRecord | null;
+    impactTitle?: string;
+    impactText?: string;
+    confirmTextMatch?: string;
+    isLoading: boolean;
+  }>({
+    isOpen: false,
+    assessment: null,
+    isLoading: false,
+  });
 
+  const handleDeleteClick = async (assessment: AssessmentRecord) => {
+    try {
+      // Query response / scan count for this assessment
+      const [scanRes, respRes] = await Promise.all([
+        supabase
+          .from('scan_results')
+          .select('*', { count: 'exact', head: true })
+          .eq('assessment_id', assessment.id),
+        supabase
+          .from('responses')
+          .select('*', { count: 'exact', head: true })
+          .eq('assessment_id', assessment.id),
+      ]);
+
+      const count = Math.max(scanRes.count || 0, respRes.count || 0);
+
+      if (count > 0) {
+        setDeleteModal({
+          isOpen: true,
+          assessment,
+          impactTitle: 'Student work will be lost',
+          impactText: `This assessment has ${count} scanned response${count > 1 ? 's' : ''} that will be permanently deleted.`,
+          confirmTextMatch: assessment.title,
+          isLoading: false,
+        });
+      } else {
+        setDeleteModal({
+          isOpen: true,
+          assessment,
+          impactTitle: undefined,
+          impactText: undefined,
+          confirmTextMatch: undefined,
+          isLoading: false,
+        });
+      }
+    } catch (e) {
+      console.warn('Could not query assessment response count:', e);
+      setDeleteModal({
+        isOpen: true,
+        assessment,
+        impactTitle: undefined,
+        impactText: undefined,
+        confirmTextMatch: undefined,
+        isLoading: false,
+      });
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteModal.assessment) return;
+    const { id } = deleteModal.assessment;
+
+    setDeleteModal((prev) => ({ ...prev, isLoading: true }));
     try {
       const { error: delErr } = await supabase
         .from('assessments')
@@ -205,9 +270,11 @@ export default function AssessmentsPage() {
 
       if (delErr) throw delErr;
       setAssessments((prev) => prev.filter((a) => a.id !== id));
+      setDeleteModal({ isOpen: false, assessment: null, isLoading: false });
     } catch (err: any) {
       console.error('Failed to delete assessment:', err);
-      alert(`Could not delete assessment: ${err.message || err}`);
+      toast.error(`Could not delete assessment: ${err.message || err}`);
+      setDeleteModal((prev) => ({ ...prev, isLoading: false }));
     }
   };
 
@@ -321,7 +388,7 @@ export default function AssessmentsPage() {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleDeleteAssessment(a.id, a.title);
+                  handleDeleteClick(a);
                 }}
                 className="rounded-lg p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-950/30 transition"
                 title="Delete Assessment"
@@ -567,6 +634,22 @@ export default function AssessmentsPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Assessment Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={deleteModal.isOpen}
+        onClose={() => setDeleteModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmDelete}
+        title={deleteModal.assessment ? `Delete "${deleteModal.assessment.title}"?` : 'Delete Assessment?'}
+        description="This action permanently removes the assessment and cannot be undone."
+        actionType="delete"
+        entityName="assessment"
+        affectedCount={1}
+        impactTitle={deleteModal.impactTitle}
+        impactText={deleteModal.impactText}
+        confirmTextMatch={deleteModal.confirmTextMatch}
+        isLoading={deleteModal.isLoading}
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { createClient } from '@/lib/supabase/client';
+import { useToast } from '@/components/ui/toast';
 import { Building2, Loader2, Plus, RefreshCw, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -13,6 +14,7 @@ interface TenantRecord {
 }
 
 export default function TenantsPage() {
+  const { toast } = useToast();
   const [tenants, setTenants] = useState<TenantRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,10 +69,11 @@ export default function TenantsPage() {
       setIsModalOpen(false);
       setTenantName('');
       setTenantCode('');
+      toast.success('School tenant registered successfully.');
       await fetchTenants();
     } catch (err: any) {
       console.error('Failed to create tenant:', err);
-      alert(`Could not create tenant: ${err.message || err}`);
+      toast.error(`Could not create tenant: ${err.message || err}`);
     } finally {
       setSubmitting(false);
     }

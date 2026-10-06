@@ -15,6 +15,7 @@ import {
     Award,
     BookOpen,
     CheckCircle2,
+    FileSpreadsheet,
     GraduationCap,
     Layers,
     Loader2,
@@ -24,8 +25,11 @@ import {
     School,
     Trash2,
     Users,
+    X,
+    XCircle,
 } from 'lucide-react';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
+import { useToast } from '@/components/ui/toast';
 import React, { useEffect, useMemo, useState } from 'react';
 
 interface SectionItem {
@@ -53,7 +57,7 @@ export default function SchoolSettingsPage() {
   const [designation, setDesignation] = useState('Subject Teacher');
   const [approverName, setApproverName] = useState('');
 
-  // Sections & Grade Levels State
+  const { toast } = useToast();
   const [sectionsList, setSectionsList] = useState<SectionItem[]>([]);
   const [sectionsTab, setSectionsTab] = useState<'active' | 'archived'>('active');
   const [selectedSectionIds, setSelectedSectionIds] = useState<Set<string>>(new Set());
@@ -63,6 +67,14 @@ export default function SchoolSettingsPage() {
   const [newSectionStrand, setNewSectionStrand] = useState('STEM');
   const [newSectionAdvisory, setNewSectionAdvisory] = useState(false);
   const [addingSection, setAddingSection] = useState(false);
+
+  // Bulk Sections State
+  const [isBulkSectionsOpen, setIsBulkSectionsOpen] = useState(false);
+  const [bulkSectionsText, setBulkSectionsText] = useState('');
+  const [bulkSectionGrade, setBulkSectionGrade] = useState('11');
+  const [bulkSectionStrand, setBulkSectionStrand] = useState('STEM');
+  const [bulkPrefixGrade, setBulkPrefixGrade] = useState(true);
+  const [addingBulkSections, setAddingBulkSections] = useState(false);
 
   // Section Confirmation Modal State
   const [sectionConfirmModal, setSectionConfirmModal] = useState<{
@@ -81,24 +93,7 @@ export default function SchoolSettingsPage() {
     affectedCount: 0,
   });
   const [sectionOperating, setSectionOperating] = useState(false);
-
-  // Storage key for sections archive fallback
-  const SECTION_ARCHIVE_STORAGE_KEY = 'projectkit_archived_sections_cache';
-
-  const getLocalArchivedSectionIds = (): Set<string> => {
-    try {
-      const stored = localStorage.getItem(SECTION_ARCHIVE_STORAGE_KEY);
-      return stored ? new Set(JSON.parse(stored)) : new Set();
-    } catch {
-      return new Set();
-    }
-  };
-
-  const setLocalArchivedSectionIds = (ids: Set<string>) => {
-    try {
-      localStorage.setItem(SECTION_ARCHIVE_STORAGE_KEY, JSON.stringify(Array.from(ids)));
-    } catch {}
-  };
+  const [needsMigration, setNeedsMigration] = useState(false);
 
   // DepEd SHS Grading Weights State
   const [weights, setWeights] = useState<GradeComponentWeights>(DEFAULT_SHS_WEIGHTS);
@@ -153,19 +148,33 @@ export default function SchoolSettingsPage() {
           }
 
           // 3. Fetch sections for this config
-          const { data: secData } = await (supabase as any)
+          let secData: any[] | null = null;
+          const { data: sData, error: sErr } = await (supabase as any)
             .from('sections')
-            .select('*')
+            .select('id, name, grade, strand_code, is_advisory, student_count, is_archived, archived_at')
             .eq('config_id', config.id)
             .order('grade', { ascending: true })
             .order('name', { ascending: true });
 
+          if (sErr) {
+            setNeedsMigration(true);
+            const { data: fallbackData } = await (supabase as any)
+              .from('sections')
+              .select('id, name, grade, strand_code, is_advisory, student_count')
+              .eq('config_id', config.id)
+              .order('grade', { ascending: true })
+              .order('name', { ascending: true });
+            secData = fallbackData;
+          } else {
+            setNeedsMigration(false);
+            secData = sData;
+          }
+
           if (secData) {
-            const localArchived = getLocalArchivedSectionIds();
             setSectionsList(
               secData.map((s: any) => ({
                 ...s,
-                is_archived: Boolean(s.is_archived || localArchived.has(s.id)),
+                is_archived: Boolean(s.is_archived),
               }))
             );
           }
@@ -293,6 +302,80 @@ export default function SchoolSettingsPage() {
     }
   };
 
+  // Bulk Sections Parsing & Memo
+  const parsedBulkSections = useMemo(() => {
+    if (!bulkSectionsText.trim()) return [];
+    const lines = bulkSectionsText
+      .split(/[\r\n,]+/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+
+    const existingNames = new Set(sectionsList.map((s) => s.name.trim().toLowerCase()));
+    const seenInBatch = new Set<string>();
+
+    return lines.map((rawName) => {
+      const formattedName =
+        bulkPrefixGrade && !rawName.toLowerCase().startsWith('grade')
+          ? `Grade ${bulkSectionGrade} - ${rawName}`
+          : rawName;
+      const lower = formattedName.toLowerCase();
+      let error: string | null = null;
+      if (existingNames.has(lower)) {
+        error = 'Already exists in school records';
+      } else if (seenInBatch.has(lower)) {
+        error = 'Duplicate in list';
+      }
+      seenInBatch.add(lower);
+
+      return {
+        rawName,
+        formattedName,
+        isValid: !error,
+        error,
+      };
+    });
+  }, [bulkSectionsText, bulkSectionGrade, bulkPrefixGrade, sectionsList]);
+
+  const validBulkSections = useMemo(
+    () => parsedBulkSections.filter((s) => s.isValid),
+    [parsedBulkSections]
+  );
+
+  const handleSaveBulkSections = async () => {
+    if (validBulkSections.length === 0 || !configId) return;
+    setAddingBulkSections(true);
+    try {
+      const recordsToInsert = validBulkSections.map((s) => ({
+        config_id: configId,
+        name: s.formattedName,
+        grade: bulkSectionGrade,
+        strand_code: bulkSectionStrand,
+        is_advisory: false,
+        student_count: 0,
+        is_archived: false,
+      }));
+
+      const { data: created, error: addErr } = await (supabase as any)
+        .from('sections')
+        .insert(recordsToInsert)
+        .select();
+
+      if (addErr) throw addErr;
+
+      if (created) {
+        setSectionsList((prev) => [...prev, ...created]);
+      }
+      toast.success(`Successfully created ${validBulkSections.length} class section(s)!`);
+      setBulkSectionsText('');
+      setIsBulkSectionsOpen(false);
+    } catch (err: any) {
+      console.error('Failed to bulk add sections:', err);
+      toast.error(err.message || 'Failed to add sections');
+    } finally {
+      setAddingBulkSections(false);
+    }
+  };
+
   // Active vs Archived Sections Memo
   const activeSections = useMemo(
     () => sectionsList.filter((s) => !s.is_archived),
@@ -393,6 +476,7 @@ export default function SchoolSettingsPage() {
     if (targetIds.length === 0) return;
 
     setSectionOperating(true);
+    setError(null);
     try {
       // 1. Try server-side API endpoint
       const res = await fetch('/api/sections/bulk', {
@@ -402,61 +486,19 @@ export default function SchoolSettingsPage() {
       });
 
       if (!res.ok) {
-        // Fallback to client Supabase call
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to ${action} section(s)`);
+      }
+
+      setSectionsList((prev) => {
         if (action === 'archive') {
-          const { error: updErr } = await (supabase as any)
-            .from('sections')
-            .update({
-              is_archived: true,
-              archived_at: new Date().toISOString(),
-            })
-            .in('id', targetIds);
-
-          if (updErr) {
-            const localArchived = getLocalArchivedSectionIds();
-            targetIds.forEach((id) => localArchived.add(id));
-            setLocalArchivedSectionIds(localArchived);
-          }
+          return prev.map((s) => (targetIds.includes(s.id) ? { ...s, is_archived: true } : s));
         } else if (action === 'restore') {
-          const { error: updErr } = await (supabase as any)
-            .from('sections')
-            .update({
-              is_archived: false,
-              archived_at: null,
-            })
-            .in('id', targetIds);
-
-          if (updErr) {
-            const localArchived = getLocalArchivedSectionIds();
-            targetIds.forEach((id) => localArchived.delete(id));
-            setLocalArchivedSectionIds(localArchived);
-          }
-        } else if (action === 'delete') {
-          const { error: delErr } = await (supabase as any)
-            .from('sections')
-            .delete()
-            .in('id', targetIds);
-          if (delErr) throw delErr;
+          return prev.map((s) => (targetIds.includes(s.id) ? { ...s, is_archived: false } : s));
+        } else {
+          return prev.filter((s) => !targetIds.includes(s.id));
         }
-      }
-
-      // Sync local storage cache
-      const localArchived = getLocalArchivedSectionIds();
-      if (action === 'archive') {
-        targetIds.forEach((id) => localArchived.add(id));
-        setSectionsList((prev) =>
-          prev.map((s) => (targetIds.includes(s.id) ? { ...s, is_archived: true } : s))
-        );
-      } else if (action === 'restore') {
-        targetIds.forEach((id) => localArchived.delete(id));
-        setSectionsList((prev) =>
-          prev.map((s) => (targetIds.includes(s.id) ? { ...s, is_archived: false } : s))
-        );
-      } else if (action === 'delete') {
-        targetIds.forEach((id) => localArchived.delete(id));
-        setSectionsList((prev) => prev.filter((s) => !targetIds.includes(s.id)));
-      }
-      setLocalArchivedSectionIds(localArchived);
+      });
 
       setSectionConfirmModal((prev) => ({ ...prev, isOpen: false }));
       setSelectedSectionIds(new Set());
@@ -491,6 +533,12 @@ export default function SchoolSettingsPage() {
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-600 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400">
           {error}
+        </div>
+      )}
+
+      {needsMigration && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-semibold text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+          Archive needs migration 20260908000005 applied.
         </div>
       )}
 
@@ -561,6 +609,14 @@ export default function SchoolSettingsPage() {
               </div>
 
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsBulkSectionsOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-850 dark:text-gray-300 dark:hover:bg-gray-800 shadow-xs transition"
+                >
+                  <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>Bulk Add</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => setIsAddSectionOpen(!isAddSectionOpen)}
@@ -1028,6 +1084,171 @@ export default function SchoolSettingsPage() {
         actionType={sectionConfirmModal.action}
         isLoading={sectionOperating}
       />
+
+      {/* Bulk Add Sections Modal Dialog */}
+      {isBulkSectionsOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="relative w-full max-w-2xl rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-gray-900 my-8 space-y-4">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3 dark:border-gray-800">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400">
+                  <FileSpreadsheet className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-gray-900 dark:text-white">
+                    Bulk Add Class Sections
+                  </h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Paste multiple section names to quickly populate your cohort list.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setBulkSectionsText('');
+                  setIsBulkSectionsOpen(false);
+                }}
+                disabled={addingBulkSections}
+                className="rounded-lg p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Config Options */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  Default Grade Level
+                </label>
+                <select
+                  value={bulkSectionGrade}
+                  onChange={(e) => setBulkSectionGrade(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50/50 p-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                >
+                  <option value="11">Grade 11</option>
+                  <option value="12">Grade 12</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  Academic Strand
+                </label>
+                <select
+                  value={bulkSectionStrand}
+                  onChange={(e) => setBulkSectionStrand(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50/50 p-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                >
+                  <option value="STEM">STEM</option>
+                  <option value="ABM">ABM</option>
+                  <option value="HUMSS">HUMSS</option>
+                  <option value="TVL">TVL</option>
+                  <option value="GAS">GAS</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Checkbox for Prefix */}
+            <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-700 dark:text-gray-300">
+              <input
+                type="checkbox"
+                checked={bulkPrefixGrade}
+                onChange={(e) => setBulkPrefixGrade(e.target.checked)}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800"
+              />
+              <span>Automatically prefix with &quot;Grade {bulkSectionGrade} - [Name]&quot;</span>
+            </label>
+
+            {/* Multi-line Paste Input */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                Section Names (one per line or comma-separated)
+              </label>
+              <textarea
+                rows={5}
+                value={bulkSectionsText}
+                onChange={(e) => setBulkSectionsText(e.target.value)}
+                disabled={addingBulkSections}
+                placeholder={`Diamond\nEmerald\nRuby\nSapphire\nTopaz`}
+                className="w-full rounded-xl border border-gray-200 bg-gray-50/50 p-3 font-mono text-xs text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800 resize-y"
+              />
+            </div>
+
+            {/* Preview of Parsed Sections */}
+            {parsedBulkSections.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-gray-700 dark:text-gray-300">
+                    Preview ({validBulkSections.length} valid of {parsedBulkSections.length} total)
+                  </span>
+                </div>
+                <div className="max-h-40 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-800 p-2 divide-y divide-gray-100 dark:divide-gray-800 bg-gray-50/50 dark:bg-gray-850/30">
+                  {parsedBulkSections.map((sec, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between py-1.5 px-2 text-xs"
+                    >
+                      <span className="font-medium text-gray-900 dark:text-gray-100">
+                        {sec.formattedName}
+                      </span>
+                      {sec.isValid ? (
+                        <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                          <CheckCircle2 className="h-3 w-3" /> Ready
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[11px] text-rose-600 dark:text-rose-400 font-medium">
+                          <XCircle className="h-3.5 w-3.5 shrink-0" />
+                          <span>{sec.error}</span>
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Footer Buttons */}
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setBulkSectionsText('');
+                  setIsBulkSectionsOpen(false);
+                }}
+                disabled={addingBulkSections}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveBulkSections}
+                disabled={addingBulkSections || validBulkSections.length === 0}
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition disabled:opacity-50"
+              >
+                {addingBulkSections ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Creating Sections...</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4" />
+                    <span>Create {validBulkSections.length > 0 ? validBulkSections.length : ''} Sections</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

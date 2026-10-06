@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -18,7 +20,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Verify approved profile
+    // 2. Verify approved profile & tenant linkage
     const { data: profile } = await supabase
       .from('profiles')
       .select('id, tenant_id, role, status')
@@ -32,11 +34,21 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!profile?.tenant_id) {
+      return NextResponse.json(
+        { error: 'Forbidden: Your account is not linked to a school tenant.' },
+        { status: 403 }
+      );
+    }
+
+    const tenantId = profile.tenant_id;
+
     // 3. Parse and validate payload
     const body = await request.json();
-    const { action, studentIds } = body as {
-      action: 'archive' | 'restore' | 'delete';
+    const { action, studentIds, targetSection } = body as {
+      action: 'archive' | 'restore' | 'delete' | 'move';
       studentIds: string[];
+      targetSection?: string;
     };
 
     if (!Array.isArray(studentIds) || studentIds.length === 0) {
@@ -46,32 +58,41 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!['archive', 'restore', 'delete'].includes(action)) {
+    if (studentIds.length > 500) {
       return NextResponse.json(
-        { error: 'Invalid action: Allowed actions are archive, restore, delete.' },
+        { error: 'Batch limit exceeded: Maximum 500 IDs per operation.' },
         { status: 400 }
       );
     }
 
-    const tenantId = profile?.tenant_id;
+    const allValidUuids = studentIds.every((id) => typeof id === 'string' && UUID_REGEX.test(id));
+    if (!allValidUuids) {
+      return NextResponse.json(
+        { error: 'Invalid ID format: All student IDs must be valid UUIDs.' },
+        { status: 400 }
+      );
+    }
 
-    // 4. Execute operation
+    if (!['archive', 'restore', 'delete', 'move'].includes(action)) {
+      return NextResponse.json(
+        { error: 'Invalid action: Allowed actions are archive, restore, delete, move.' },
+        { status: 400 }
+      );
+    }
+
+    // 4. Execute operation strictly scoped to tenant_id
     if (action === 'archive') {
-      let query = (supabase as any)
+      const { error: updErr } = await (supabase as any)
         .from('students')
         .update({
           is_archived: true,
           archived_at: new Date().toISOString(),
           archived_by: user.id,
         })
-        .in('id', studentIds);
+        .in('id', studentIds)
+        .eq('tenant_id', tenantId);
 
-      if (tenantId) query = query.eq('tenant_id', tenantId);
-
-      const { error: updErr } = await query;
       if (updErr) {
-        // Fallback if column not yet applied on older schema
-        console.warn('Archive column notice:', updErr.message);
         return NextResponse.json(
           { error: `Database update error: ${updErr.message}` },
           { status: 400 }
@@ -87,18 +108,16 @@ export async function POST(request: Request) {
     }
 
     if (action === 'restore') {
-      let query = (supabase as any)
+      const { error: resErr } = await (supabase as any)
         .from('students')
         .update({
           is_archived: false,
           archived_at: null,
           archived_by: null,
         })
-        .in('id', studentIds);
+        .in('id', studentIds)
+        .eq('tenant_id', tenantId);
 
-      if (tenantId) query = query.eq('tenant_id', tenantId);
-
-      const { error: resErr } = await query;
       if (resErr) {
         return NextResponse.json(
           { error: `Database restore error: ${resErr.message}` },
@@ -115,10 +134,12 @@ export async function POST(request: Request) {
     }
 
     if (action === 'delete') {
-      let query = supabase.from('students').delete().in('id', studentIds);
-      if (tenantId) query = query.eq('tenant_id', tenantId);
+      const { error: delErr } = await supabase
+        .from('students')
+        .delete()
+        .in('id', studentIds)
+        .eq('tenant_id', tenantId);
 
-      const { error: delErr } = await query;
       if (delErr) {
         return NextResponse.json(
           { error: `Failed to permanently delete records: ${delErr.message}` },
@@ -131,6 +152,37 @@ export async function POST(request: Request) {
         action: 'delete',
         count: studentIds.length,
         message: `Permanently deleted ${studentIds.length} learner(s).`,
+      });
+    }
+
+    if (action === 'move') {
+      if (!targetSection || typeof targetSection !== 'string' || !targetSection.trim()) {
+        return NextResponse.json(
+          { error: 'Invalid request: Target section name is required for move action.' },
+          { status: 400 }
+        );
+      }
+
+      const { error: moveErr } = await supabase
+        .from('students')
+        .update({
+          section_name: targetSection.trim(),
+        })
+        .in('id', studentIds)
+        .eq('tenant_id', tenantId);
+
+      if (moveErr) {
+        return NextResponse.json(
+          { error: `Failed to move learners: ${moveErr.message}` },
+          { status: 400 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        action: 'move',
+        count: studentIds.length,
+        message: `Successfully moved ${studentIds.length} learner(s) to ${targetSection.trim()}.`,
       });
     }
 

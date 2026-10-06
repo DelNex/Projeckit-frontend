@@ -1,6 +1,8 @@
 'use client';
 
 import { createClient } from '@/lib/supabase/client';
+import { ConfirmationModal } from '@/components/ui/confirmation-modal';
+import { useToast } from '@/components/ui/toast';
 import { Check, Loader2, RefreshCw, UserCheck, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -14,10 +16,20 @@ interface PendingUserProfile {
 }
 
 export default function PendingUsersPage() {
+  const { toast } = useToast();
   const [pendingUsers, setPendingUsers] = useState<PendingUserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
+
+  // Rejection Confirmation Modal State
+  const [rejectModal, setRejectModal] = useState<{
+    isOpen: boolean;
+    user: PendingUserProfile | null;
+  }>({
+    isOpen: false,
+    user: null,
+  });
 
   const supabase = createClient();
 
@@ -56,9 +68,10 @@ export default function PendingUsersPage() {
       if (updErr) throw updErr;
 
       setPendingUsers((prev) => prev.filter((u) => u.id !== id));
+      toast.success(`Applicant ${newStatus === 'approved' ? 'approved' : 'rejected'} successfully.`);
     } catch (err: any) {
       console.error(`Failed to ${newStatus} user:`, err);
-      alert(`Action failed: ${err.message || err}`);
+      toast.error(`Action failed: ${err.message || err}`);
     } finally {
       setProcessingId(null);
     }
@@ -144,7 +157,7 @@ export default function PendingUsersPage() {
                           </button>
                           <button
                             disabled={isBusy}
-                            onClick={() => handleUpdateStatus(u.id, 'rejected')}
+                            onClick={() => setRejectModal({ isOpen: true, user: u })}
                             className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-950/30 disabled:opacity-50 transition"
                           >
                             <X className="h-3.5 w-3.5" />
@@ -160,6 +173,26 @@ export default function PendingUsersPage() {
           </div>
         )}
       </div>
+
+      {/* Rejection Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={rejectModal.isOpen}
+        onClose={() => setRejectModal({ isOpen: false, user: null })}
+        onConfirm={async () => {
+          if (!rejectModal.user) return;
+          await handleUpdateStatus(rejectModal.user.id, 'rejected');
+          setRejectModal({ isOpen: false, user: null });
+        }}
+        title={rejectModal.user ? `Reject Registration for ${rejectModal.user.display_name || rejectModal.user.email}?` : 'Reject Account Request?'}
+        description="Are you sure you want to reject this faculty registration request? The applicant will not be able to log in or access student data."
+        actionType="reject"
+        entityName="account request"
+        affectedCount={1}
+        impactTitle="Account Blocked"
+        impactText="The user's status will be set to rejected and they will not be granted access to the school workspace."
+        confirmLabel="Reject Account"
+        isLoading={processingId === rejectModal.user?.id}
+      />
     </div>
   );
 }

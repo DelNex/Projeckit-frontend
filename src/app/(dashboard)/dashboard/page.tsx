@@ -103,16 +103,38 @@ export default function DashboardPage() {
 
       if (assErr) throw assErr;
 
-      // 2. Fetch Sections count
-      const { count: secCount } = await (supabase as any)
+      // 2. Fetch Sections count (active only)
+      let secCount: number | null = null;
+      const { count: activeSecCount, error: secCountErr } = await (supabase as any)
         .from('sections')
-        .select('*', { count: 'exact', head: true });
+        .select('*', { count: 'exact', head: true })
+        .eq('is_archived', false);
+
+      if (secCountErr) {
+        const { count: fallbackSecCount } = await (supabase as any)
+          .from('sections')
+          .select('*', { count: 'exact', head: true });
+        secCount = fallbackSecCount ?? 0;
+      } else {
+        secCount = activeSecCount ?? 0;
+      }
       setTotalSectionsCount(secCount || 0);
 
-      // 3. Fetch Total Students in roster
-      const { count: stuCount } = await (supabase as any)
+      // 3. Fetch Total Students in roster (active only)
+      let stuCount: number | null = null;
+      const { count: activeStuCount, error: stuCountErr } = await (supabase as any)
         .from('students')
-        .select('*', { count: 'exact', head: true });
+        .select('*', { count: 'exact', head: true })
+        .eq('is_archived', false);
+
+      if (stuCountErr) {
+        const { count: fallbackStuCount } = await (supabase as any)
+          .from('students')
+          .select('*', { count: 'exact', head: true });
+        stuCount = fallbackStuCount ?? 0;
+      } else {
+        stuCount = activeStuCount ?? 0;
+      }
       setTotalEnrolledStudents(stuCount || 0);
 
       // 4. Fetch Answer Keys

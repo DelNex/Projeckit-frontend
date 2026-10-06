@@ -10,6 +10,7 @@ import {
     OmrScanResult,
 } from '@/features/omr';
 import { createClient } from '@/lib/supabase/client';
+import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import {
     ArrowLeft,
@@ -44,6 +45,7 @@ export default function AssessmentWorkspacePage({
   const resolvedParams = use(params);
   const searchParams = useAssessmentSearchParams();
   const router = useRouter();
+  const { toast } = useToast();
 
   const activeTab = searchParams.get('tab') || 'tos';
   const assessmentId = resolvedParams.id;
@@ -302,7 +304,7 @@ export default function AssessmentWorkspacePage({
       setTimeout(() => setSaveSuccessMsg(null), 3500);
     } catch (err: any) {
       console.error('Failed to save answer key:', err);
-      alert(`Could not save answer key: ${err.message || err}`);
+      toast.error(`Could not save answer key: ${err.message || err}`);
     } finally {
       setSavingKey(false);
     }

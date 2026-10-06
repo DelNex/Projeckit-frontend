@@ -2,12 +2,17 @@
 
 import { ColumnDef, DataTable } from '@/components/ui/data-table';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
+import { BulkAddStudentsModal } from '@/components/students/BulkAddStudentsModal';
+import { useToast } from '@/components/ui/toast';
+import { getTenantContext } from '@/lib/tenant-context';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import {
   Archive,
   ArchiveRestore,
   CheckCircle2,
+  Download,
+  FileSpreadsheet,
   Filter,
   GraduationCap,
   Loader2,
@@ -32,6 +37,7 @@ interface StudentRecord {
 }
 
 export default function StudentsPage() {
+  const { toast } = useToast();
   const [students, setStudents] = useState<StudentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,9 +47,12 @@ export default function StudentsPage() {
   const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
   const [sectionFilter, setSectionFilter] = useState('ALL');
   const [sectionsList, setSectionsList] = useState<{ id: string; name: string }[]>([]);
+  const [isBulkAddOpen, setIsBulkAddOpen] = useState(false);
 
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [visiblePageStudents, setVisiblePageStudents] = useState<StudentRecord[]>([]);
+  const [targetMoveSection, setTargetMoveSection] = useState('');
 
   // Confirmation Modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -67,67 +76,118 @@ export default function StudentsPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<StudentRecord | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [archivedDuplicateId, setArchivedDuplicateId] = useState<string | null>(null);
 
   // Form State
   const [formLrn, setFormLrn] = useState('');
   const [formName, setFormName] = useState('');
   const [formSection, setFormSection] = useState('');
+  const [isDiscardModalOpen, setIsDiscardModalOpen] = useState(false);
 
-  const supabase = createClient();
+  const hasUnsavedLearner = isAddModalOpen && Boolean(formName.trim() || formLrn.trim());
 
-  // Storage key for client-side archive fallback if database column is in migration
-  const ARCHIVE_STORAGE_KEY = 'projectkit_archived_students_cache';
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedLearner) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedLearner]);
 
-  const getLocalArchivedIds = (): Set<string> => {
-    try {
-      const stored = localStorage.getItem(ARCHIVE_STORAGE_KEY);
-      return stored ? new Set(JSON.parse(stored)) : new Set();
-    } catch {
-      return new Set();
+  const handleAttemptCloseAddModal = () => {
+    if (hasUnsavedLearner) {
+      setIsDiscardModalOpen(true);
+    } else {
+      setIsAddModalOpen(false);
+      setFormError(null);
+      setArchivedDuplicateId(null);
     }
   };
 
-  const setLocalArchivedIds = (ids: Set<string>) => {
-    try {
-      localStorage.setItem(ARCHIVE_STORAGE_KEY, JSON.stringify(Array.from(ids)));
-    } catch {}
+  const handleConfirmDiscard = () => {
+    setIsDiscardModalOpen(false);
+    setIsAddModalOpen(false);
+    setFormName('');
+    setFormLrn('');
+    setFormError(null);
+    setArchivedDuplicateId(null);
   };
+
+  const supabase = createClient();
+
+  const [needsMigration, setNeedsMigration] = useState(false);
 
   const fetchStudents = async () => {
     setLoading(true);
     setError(null);
     try {
-      // 1. Try querying with is_archived and archived_at
-      let fetchedStudents: StudentRecord[] = [];
-      const { data, error: err } = await (supabase as any)
+      const PAGE_SIZE = 1000;
+      let allRecords: StudentRecord[] = [];
+      let page = 0;
+      let hasMore = true;
+      let columnFallback = false;
+
+      // Test whether is_archived column exists
+      const testQuery = await (supabase as any)
         .from('students')
-        .select('id, lrn, name, section_name, is_archived, archived_at, created_at')
-        .order('name', { ascending: true });
+        .select('id, is_archived')
+        .limit(1);
 
-      if (err) {
-        // Fallback for older database schema without is_archived column
-        console.warn('Querying without is_archived column fallback:', err.message);
-        const { data: fallbackData, error: fbErr } = await supabase
-          .from('students')
-          .select('id, lrn, name, section_name, created_at')
-          .order('name', { ascending: true });
-
-        if (fbErr) throw fbErr;
-
-        const localArchived = getLocalArchivedIds();
-        fetchedStudents = (fallbackData || []).map((s) => ({
-          ...s,
-          is_archived: localArchived.has(s.id),
-        }));
+      if (testQuery.error) {
+        columnFallback = true;
+        setNeedsMigration(true);
       } else {
-        const localArchived = getLocalArchivedIds();
-        fetchedStudents = (data || []).map((s: any) => ({
-          ...s,
-          is_archived: Boolean(s.is_archived || localArchived.has(s.id)),
-        }));
+        setNeedsMigration(false);
       }
 
-      setStudents(fetchedStudents);
+      while (hasMore) {
+        const from = page * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+
+        if (columnFallback) {
+          const { data, error: fbErr } = await supabase
+            .from('students')
+            .select('id, lrn, name, section_name, created_at')
+            .order('name', { ascending: true })
+            .range(from, to);
+
+          if (fbErr) throw fbErr;
+          const rows = (data || []).map((s) => ({
+            ...s,
+            is_archived: false,
+          }));
+          allRecords = allRecords.concat(rows);
+          if (rows.length < PAGE_SIZE) {
+            hasMore = false;
+          } else {
+            page++;
+          }
+        } else {
+          const { data, error: err } = await (supabase as any)
+            .from('students')
+            .select('id, lrn, name, section_name, is_archived, archived_at, created_at')
+            .order('name', { ascending: true })
+            .range(from, to);
+
+          if (err) throw err;
+          const rows = (data || []).map((s: any) => ({
+            ...s,
+            is_archived: Boolean(s.is_archived),
+          }));
+          allRecords = allRecords.concat(rows);
+          if (rows.length < PAGE_SIZE) {
+            hasMore = false;
+          } else {
+            page++;
+          }
+        }
+      }
+
+      setStudents(allRecords);
       // Clear selection on refresh
       setSelectedIds(new Set());
     } catch (err: any) {
@@ -140,7 +200,20 @@ export default function StudentsPage() {
 
   const fetchSections = async () => {
     try {
-      const { data } = await supabase.from('sections').select('id, name');
+      let { data, error: secErr } = await (supabase as any)
+        .from('sections')
+        .select('id, name')
+        .eq('is_archived', false)
+        .order('name', { ascending: true });
+
+      if (secErr) {
+        const { data: fallbackData } = await supabase
+          .from('sections')
+          .select('id, name')
+          .order('name', { ascending: true });
+        data = fallbackData;
+      }
+
       if (data && data.length > 0) {
         setSectionsList(data);
         if (!formSection) setFormSection(data[0].name);
@@ -172,22 +245,24 @@ export default function StudentsPage() {
     return list.filter((s) => s.section_name === sectionFilter);
   }, [activeTab, activeStudents, archivedStudents, sectionFilter]);
 
-  // Selection handlers
-  const allVisibleSelected =
-    displayedStudents.length > 0 &&
-    displayedStudents.every((s) => selectedIds.has(s.id));
+  // Selection handlers: restricted to visible rows on the current page
+  const allPageSelected =
+    visiblePageStudents.length > 0 &&
+    visiblePageStudents.every((s) => selectedIds.has(s.id));
 
-  const someVisibleSelected =
-    displayedStudents.some((s) => selectedIds.has(s.id)) && !allVisibleSelected;
+  const somePageSelected =
+    visiblePageStudents.some((s) => selectedIds.has(s.id)) && !allPageSelected;
 
   const toggleSelectAllVisible = () => {
-    if (allVisibleSelected) {
-      setSelectedIds(new Set());
+    const newSet = new Set(selectedIds);
+    if (allPageSelected) {
+      // Unticking only deselects rows visible on the current page
+      visiblePageStudents.forEach((s) => newSet.delete(s.id));
     } else {
-      const newSet = new Set(selectedIds);
-      displayedStudents.forEach((s) => newSet.add(s.id));
-      setSelectedIds(newSet);
+      // Ticking selects all rows visible on the current page
+      visiblePageStudents.forEach((s) => newSet.add(s.id));
     }
+    setSelectedIds(newSet);
   };
 
   const toggleSelectOne = (id: string) => {
@@ -205,6 +280,8 @@ export default function StudentsPage() {
     setEditingStudent(null);
     setFormLrn('');
     setFormName('');
+    setFormError(null);
+    setArchivedDuplicateId(null);
     if (sectionsList.length > 0) setFormSection(sectionsList[0].name);
     setIsAddModalOpen(true);
   };
@@ -214,51 +291,86 @@ export default function StudentsPage() {
     setFormLrn(student.lrn);
     setFormName(student.name);
     setFormSection(student.section_name);
+    setFormError(null);
+    setArchivedDuplicateId(null);
     setIsAddModalOpen(true);
+  };
+
+  const handleRestoreDirectly = async (ids: string | string[]) => {
+    const targetIds = Array.isArray(ids) ? ids : [ids];
+    if (targetIds.length === 0) return;
+    try {
+      setSubmitting(true);
+      const res = await fetch('/api/students/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'restore', studentIds: targetIds }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to restore learner');
+      }
+      setIsAddModalOpen(false);
+      setArchivedDuplicateId(null);
+      setFormError(null);
+      toast.success(
+        `Restored ${targetIds.length} learner${targetIds.length > 1 ? 's' : ''} to active roster.`
+      );
+      await fetchStudents();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to restore learner');
+      setFormError(err.message || 'Failed to restore learner');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleSaveStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formLrn.trim() || !formName.trim() || !formSection) return;
 
+    const trimmedLrn = formLrn.trim();
+    setArchivedDuplicateId(null);
+
+    // Pre-check against loaded student roster
+    const existingLearner = students.find(
+      (s) => s.lrn === trimmedLrn && (!editingStudent || s.id !== editingStudent.id)
+    );
+    if (existingLearner) {
+      if (existingLearner.is_archived) {
+        setFormError(
+          'A learner with this LRN already exists. If they were archived, restore them from the Archived tab.'
+        );
+        setArchivedDuplicateId(existingLearner.id);
+        return;
+      } else {
+        setFormError('A learner with this LRN already exists in the active roster.');
+        return;
+      }
+    }
+
     setSubmitting(true);
+    setFormError(null);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('tenant_id')
-        .eq('id', user?.id || '')
-        .maybeSingle();
-
-      const tenantId = profile?.tenant_id || 'a0000000-0000-0000-0000-000000000001';
-
-      const { data: config } = await supabase
-        .from('academic_configs')
-        .select('id')
-        .eq('tenant_id', tenantId)
-        .limit(1)
-        .maybeSingle();
-
-      const configId = config?.id || 'c0000000-0000-0000-0000-000000000001';
+      const { tenantId, configId } = await getTenantContext(supabase);
 
       if (editingStudent) {
         const { error: updErr } = await supabase
           .from('students')
           .update({
-            lrn: formLrn.trim(),
+            lrn: trimmedLrn,
             name: formName.trim(),
             section_name: formSection,
           })
-          .eq('id', editingStudent.id);
+          .eq('id', editingStudent.id)
+          .eq('tenant_id', tenantId);
 
         if (updErr) throw updErr;
       } else {
         const { error: insErr } = await supabase.from('students').insert({
           tenant_id: tenantId,
           config_id: configId,
-          lrn: formLrn.trim(),
+          lrn: trimmedLrn,
           name: formName.trim(),
           section_name: formSection,
         });
@@ -274,7 +386,23 @@ export default function StudentsPage() {
       await fetchStudents();
     } catch (err: any) {
       console.error('Failed to save student:', err);
-      alert(`Error saving student: ${err.message || err}`);
+      const isDuplicate =
+        err?.code === '23505' ||
+        err?.message?.includes('23505') ||
+        err?.message?.includes('uq_tenant_student_lrn') ||
+        err?.message?.includes('duplicate key');
+
+      if (isDuplicate) {
+        const match = students.find((s) => s.lrn === trimmedLrn);
+        if (match?.is_archived) {
+          setArchivedDuplicateId(match.id);
+        }
+        setFormError(
+          'A learner with this LRN already exists. If they were archived, restore them from the Archived tab.'
+        );
+      } else {
+        setFormError(err.message || 'Error saving student');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -333,14 +461,88 @@ export default function StudentsPage() {
     });
   };
 
+  // Bulk Move Learners to Section
+  const handleBulkMove = async () => {
+    if (!targetMoveSection || selectedIds.size === 0) return;
+    const targetIds = Array.from(selectedIds);
+    setIsOperating(true);
+    try {
+      const res = await fetch('/api/students/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'move',
+          studentIds: targetIds,
+          targetSection: targetMoveSection,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to move learners');
+      }
+
+      toast.success(
+        `Successfully moved ${targetIds.length} learner${targetIds.length > 1 ? 's' : ''} to section "${targetMoveSection}".`
+      );
+      setSelectedIds(new Set());
+      setTargetMoveSection('');
+      await fetchStudents();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to move learners');
+    } finally {
+      setIsOperating(false);
+    }
+  };
+
+  // Export current roster to CSV with formula injection sanitization
+  const handleExportCsv = () => {
+    if (displayedStudents.length === 0) {
+      toast.error('No learner records to export.');
+      return;
+    }
+
+    const sanitizeCell = (value: string | number | boolean | null | undefined): string => {
+      if (value === null || value === undefined) return '""';
+      let str = String(value);
+      // Formula injection prevention: if cell begins with =, +, -, or @, prepend '
+      if (/^[=+\-@]/.test(str)) {
+        str = `'${str}`;
+      }
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+
+    const headers = ['DepEd LRN', 'Learner Name', 'Section', 'Status'];
+    const rows = displayedStudents.map((s) => [
+      sanitizeCell(s.lrn),
+      sanitizeCell(s.name),
+      sanitizeCell(s.section_name),
+      sanitizeCell(s.is_archived ? 'Archived' : 'Active'),
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const today = new Date().toISOString().split('T')[0];
+    link.setAttribute('href', url);
+    link.setAttribute('download', `learners_roster_${today}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${displayedStudents.length} learners to CSV.`);
+  };
+
   // Execute confirmed action (Archive, Restore, or Permanent Delete)
   const handleExecuteConfirmedAction = async () => {
     const { action, targetIds } = confirmModal;
     if (targetIds.length === 0) return;
 
     setIsOperating(true);
+    setError(null);
     try {
-      // 1. Try server-side protected API endpoint first
+      // 1. Try server-side protected API endpoint
       const res = await fetch('/api/students/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -348,73 +550,33 @@ export default function StudentsPage() {
       });
 
       if (!res.ok) {
-        // Fallback directly to Supabase client if API route fails
-        if (action === 'archive') {
-          const { error: updErr } = await (supabase as any)
-            .from('students')
-            .update({
-              is_archived: true,
-              archived_at: new Date().toISOString(),
-            })
-            .in('id', targetIds);
-
-          if (updErr) {
-            // Local fallback
-            const localArchived = getLocalArchivedIds();
-            targetIds.forEach((id) => localArchived.add(id));
-            setLocalArchivedIds(localArchived);
-          }
-        } else if (action === 'restore') {
-          const { error: updErr } = await (supabase as any)
-            .from('students')
-            .update({
-              is_archived: false,
-              archived_at: null,
-            })
-            .in('id', targetIds);
-
-          if (updErr) {
-            const localArchived = getLocalArchivedIds();
-            targetIds.forEach((id) => localArchived.delete(id));
-            setLocalArchivedIds(localArchived);
-          }
-        } else if (action === 'delete') {
-          const { error: delErr } = await supabase
-            .from('students')
-            .delete()
-            .in('id', targetIds);
-          if (delErr) throw delErr;
-        }
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to ${action} learners`);
       }
-
-      // Sync local storage cache
-      const localArchived = getLocalArchivedIds();
-      if (action === 'archive') {
-        targetIds.forEach((id) => localArchived.add(id));
-      } else if (action === 'restore') {
-        targetIds.forEach((id) => localArchived.delete(id));
-      } else if (action === 'delete') {
-        targetIds.forEach((id) => localArchived.delete(id));
-      }
-      setLocalArchivedIds(localArchived);
 
       // Success notification
       const count = targetIds.length;
       if (action === 'archive') {
-        setSuccessMessage(`Archived ${count} learner${count > 1 ? 's' : ''}.`);
+        const archivedIds = [...targetIds];
+        toast.success(`Archived ${count} learner${count > 1 ? 's' : ''}.`, {
+          duration: 8000,
+          action: {
+            label: 'Undo',
+            onClick: () => handleRestoreDirectly(archivedIds),
+          },
+        });
       } else if (action === 'restore') {
-        setSuccessMessage(`Restored ${count} learner${count > 1 ? 's' : ''} to active roster.`);
+        toast.success(`Restored ${count} learner${count > 1 ? 's' : ''} to active roster.`);
       } else {
-        setSuccessMessage(`Permanently deleted ${count} learner${count > 1 ? 's' : ''}.`);
+        toast.success(`Permanently deleted ${count} learner${count > 1 ? 's' : ''}.`);
       }
-      setTimeout(() => setSuccessMessage(null), 4000);
 
       setConfirmModal((prev) => ({ ...prev, isOpen: false }));
       setSelectedIds(new Set());
       await fetchStudents();
     } catch (err: any) {
       console.error('Operation error:', err);
-      alert(`Action failed: ${err.message || err}`);
+      setError(err.message || 'Operation failed');
     } finally {
       setIsOperating(false);
     }
@@ -429,13 +591,13 @@ export default function StudentsPage() {
         header: () => (
           <input
             type="checkbox"
-            checked={allVisibleSelected}
+            checked={allPageSelected}
             ref={(el) => {
-              if (el) el.indeterminate = someVisibleSelected;
+              if (el) el.indeterminate = somePageSelected;
             }}
             onChange={toggleSelectAllVisible}
             className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800"
-            aria-label="Select all learners"
+            aria-label="Select learners on this page"
           />
         ),
         cell: ({ row }) => {
@@ -539,7 +701,7 @@ export default function StudentsPage() {
         },
       },
     ],
-    [activeTab, selectedIds, allVisibleSelected, someVisibleSelected, displayedStudents]
+    [activeTab, selectedIds, allPageSelected, somePageSelected, displayedStudents]
   );
 
   return (
@@ -556,6 +718,23 @@ export default function StudentsPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-xs font-bold text-gray-700 shadow-xs hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-850 dark:text-gray-300 dark:hover:bg-gray-800 transition"
+            title="Download CSV roster"
+          >
+            <Download className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <span>Export CSV</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsBulkAddOpen(true)}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-xs font-bold text-gray-700 shadow-xs hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-850 dark:text-gray-300 dark:hover:bg-gray-800 transition"
+          >
+            <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            <span>Bulk Import</span>
+          </button>
           <button
             onClick={openAddModal}
             className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700 transition"
@@ -583,6 +762,12 @@ export default function StudentsPage() {
           >
             <RefreshCw className="h-3.5 w-3.5" /> Retry
           </button>
+        </div>
+      )}
+
+      {needsMigration && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-semibold text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+          Archive needs migration 20260908000005 applied.
         </div>
       )}
 
@@ -646,57 +831,109 @@ export default function StudentsPage() {
       </div>
 
       {/* Floating / Sticky Bulk Action Toolbar */}
-      {selectedIds.size > 0 && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-blue-50/90 border border-blue-200 dark:bg-blue-950/40 dark:border-blue-900/60 animate-in slide-in-from-top-2 duration-150">
-          <div className="flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white font-mono text-xs font-bold">
-              {selectedIds.size}
-            </span>
-            <span className="text-xs font-bold text-gray-900 dark:text-white">
-              {selectedIds.size} learner{selectedIds.size > 1 ? 's' : ''} selected
-            </span>
-            <button
-              type="button"
-              onClick={() => setSelectedIds(new Set())}
-              className="text-[11px] font-semibold text-blue-600 hover:underline dark:text-blue-400 ml-2"
-            >
-              Clear Selection
-            </button>
-          </div>
+      {selectedIds.size > 0 && (() => {
+        const selectedOnCurrentPage = visiblePageStudents.filter((s) => selectedIds.has(s.id)).length;
+        const selectedOffPage = selectedIds.size - selectedOnCurrentPage;
 
-          <div className="flex items-center gap-2">
-            {activeTab === 'active' ? (
+        return (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-blue-50/90 border border-blue-200 dark:bg-blue-950/40 dark:border-blue-900/60 animate-in slide-in-from-top-2 duration-150">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white font-mono text-xs font-bold">
+                {selectedIds.size}
+              </span>
+              <span className="text-xs font-bold text-gray-900 dark:text-white">
+                {selectedIds.size} learner{selectedIds.size > 1 ? 's' : ''} selected
+                {selectedOffPage > 0 && (
+                  <span className="font-normal text-gray-500 dark:text-gray-400 ml-1">
+                    ({selectedOnCurrentPage} on this page, {selectedOffPage} not on current page)
+                  </span>
+                )}
+              </span>
+              {selectedIds.size < displayedStudents.length && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newSet = new Set(selectedIds);
+                    displayedStudents.forEach((s) => newSet.add(s.id));
+                    setSelectedIds(newSet);
+                  }}
+                  className="text-[11px] font-bold text-blue-600 hover:underline dark:text-blue-400 ml-1"
+                >
+                  Select all {displayedStudents.length} in this list
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => triggerArchiveSelected()}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-amber-700 transition"
+                onClick={() => setSelectedIds(new Set())}
+                className="text-[11px] font-semibold text-gray-500 hover:underline dark:text-gray-400 ml-2"
               >
-                <Archive className="h-3.5 w-3.5" />
-                <span>Archive Selected ({selectedIds.size})</span>
+                Clear Selection
               </button>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => triggerRestoreSelected()}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  <span>Restore Selected ({selectedIds.size})</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => triggerDeleteSelected()}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-red-700 transition"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  <span>Permanently Delete ({selectedIds.size})</span>
-                </button>
-              </>
-            )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {activeTab === 'active' ? (
+                <>
+                  {sectionsList.length > 0 && (
+                    <div className="flex items-center gap-1.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-1 shadow-xs">
+                      <select
+                        value={targetMoveSection}
+                        onChange={(e) => setTargetMoveSection(e.target.value)}
+                        disabled={isOperating}
+                        className="bg-transparent text-xs font-medium text-gray-800 dark:text-gray-200 px-2 py-1 outline-none"
+                        aria-label="Target section for move"
+                      >
+                        <option value="">Move to Section...</option>
+                        {sectionsList.map((sec) => (
+                          <option key={sec.id} value={sec.name}>
+                            {sec.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={!targetMoveSection || isOperating}
+                        onClick={handleBulkMove}
+                        className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-700 transition disabled:opacity-40"
+                      >
+                        {isOperating ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                        <span>Move</span>
+                      </button>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => triggerArchiveSelected()}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-amber-700 transition"
+                  >
+                    <Archive className="h-3.5 w-3.5" />
+                    <span>Archive Selected ({selectedIds.size})</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => triggerRestoreSelected()}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    <span>Restore Selected ({selectedIds.size})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => triggerDeleteSelected()}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-red-700 transition"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Permanently Delete ({selectedIds.size})</span>
+                  </button>
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Archive Context Banner when in Archived tab */}
       {activeTab === 'archived' && (
@@ -712,11 +949,12 @@ export default function StudentsPage() {
       <DataTable
         columns={columns}
         data={displayedStudents}
-        searchKey="name"
+        onVisibleRowsChange={setVisiblePageStudents}
+        searchKey={['name', 'lrn']}
         searchPlaceholder={
           activeTab === 'active'
-            ? 'Search active learners...'
-            : 'Search archived learners...'
+            ? 'Search learners by name or LRN...'
+            : 'Search archived learners by name or LRN...'
         }
         loading={loading}
         emptyTitle={
@@ -761,14 +999,22 @@ export default function StudentsPage() {
 
       {/* Add / Edit Learner Modal Dialog */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              handleAttemptCloseAddModal();
+            }
+          }}
+        >
           <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-gray-900">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3 dark:border-gray-800">
               <h3 className="text-base font-bold text-gray-900 dark:text-white">
                 {editingStudent ? 'Edit Learner' : 'Add New Learner'}
               </h3>
               <button
-                onClick={() => setIsAddModalOpen(false)}
+                type="button"
+                onClick={handleAttemptCloseAddModal}
                 className="rounded-lg p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
               >
                 <X className="h-5 w-5" />
@@ -776,6 +1022,23 @@ export default function StudentsPage() {
             </div>
 
             <form onSubmit={handleSaveStudent} className="space-y-4 pt-4 text-xs">
+              {formError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400 space-y-2">
+                  <p>{formError}</p>
+                  {archivedDuplicateId && (
+                    <button
+                      type="button"
+                      disabled={submitting}
+                      onClick={() => handleRestoreDirectly(archivedDuplicateId)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 transition disabled:opacity-50"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      <span>Restore Learner</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
               <div>
                 <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
                   Learner Full Name
@@ -800,7 +1063,11 @@ export default function StudentsPage() {
                   maxLength={12}
                   pattern="\d{12}"
                   value={formLrn}
-                  onChange={(e) => setFormLrn(e.target.value.replace(/\D/g, ''))}
+                  onChange={(e) => {
+                    setFormLrn(e.target.value.replace(/\D/g, ''));
+                    if (archivedDuplicateId) setArchivedDuplicateId(null);
+                    if (formError) setFormError(null);
+                  }}
                   placeholder="e.g. 101234567890"
                   className="w-full rounded-xl border border-gray-200 bg-gray-50/50 p-3 font-mono text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
                 />
@@ -829,7 +1096,7 @@ export default function StudentsPage() {
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100 dark:border-gray-800">
                 <button
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
+                  onClick={handleAttemptCloseAddModal}
                   className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-gray-800"
                 >
                   Cancel
@@ -847,6 +1114,27 @@ export default function StudentsPage() {
           </div>
         </div>
       )}
+
+      {/* Discard Unsaved Changes Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={isDiscardModalOpen}
+        onClose={() => setIsDiscardModalOpen(false)}
+        onConfirm={handleConfirmDiscard}
+        title="Discard unsaved changes?"
+        description="You have entered learner details that will be lost if you exit now. Are you sure you want to discard them?"
+        actionType="neutral"
+        confirmLabel="Discard Changes"
+        cancelLabel="Keep Editing"
+      />
+
+      {/* Bulk Add Learners Modal */}
+      <BulkAddStudentsModal
+        isOpen={isBulkAddOpen}
+        onClose={() => setIsBulkAddOpen(false)}
+        onSuccess={() => fetchStudents()}
+        existingStudents={students}
+        sections={sectionsList}
+      />
     </div>
   );
 }

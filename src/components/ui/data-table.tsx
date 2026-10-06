@@ -12,7 +12,7 @@ import {
     Search,
     X,
 } from 'lucide-react';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 export interface ColumnDef<TData, TValue = any> {
   id?: string;
@@ -31,7 +31,7 @@ export interface ColumnDef<TData, TValue = any> {
 export interface DataTableProps<TData, TValue = any> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
-  searchKey?: string;
+  searchKey?: string | string[];
   searchPlaceholder?: string;
   loading?: boolean;
   emptyTitle?: string;
@@ -41,6 +41,7 @@ export interface DataTableProps<TData, TValue = any> {
   initialPageSize?: number;
   renderCustomFilter?: React.ReactNode;
   onRowClick?: (row: TData) => void;
+  onVisibleRowsChange?: (rows: TData[]) => void;
 }
 
 export function DataTable<TData, TValue = any>({
@@ -56,6 +57,7 @@ export function DataTable<TData, TValue = any>({
   initialPageSize = 10,
   renderCustomFilter,
   onRowClick,
+  onVisibleRowsChange,
 }: DataTableProps<TData, TValue>) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
@@ -70,6 +72,13 @@ export function DataTable<TData, TValue = any>({
 
     return data.filter((item: any) => {
       if (searchKey) {
+        if (Array.isArray(searchKey)) {
+          return searchKey.some((key) => {
+            const val = item[key];
+            if (val === undefined || val === null) return false;
+            return String(val).toLowerCase().includes(query);
+          });
+        }
         const val = item[searchKey];
         if (val === undefined || val === null) return false;
         return String(val).toLowerCase().includes(query);
@@ -114,6 +123,10 @@ export function DataTable<TData, TValue = any>({
     const start = pageIndex * pageSize;
     return sortedData.slice(start, start + pageSize);
   }, [sortedData, pageIndex, pageSize, showPagination]);
+
+  useEffect(() => {
+    onVisibleRowsChange?.(paginatedData);
+  }, [paginatedData, onVisibleRowsChange]);
 
   // Toggle sorting on column
   const handleSort = (key?: string) => {

@@ -13,6 +13,7 @@ import {
     GradeComponentWeights,
     TRACK_WEIGHT_PRESETS,
 } from '@/lib/deped-grading';
+import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import {
@@ -94,6 +95,20 @@ export function TermGradebook({
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isDiscardModalOpen, setIsDiscardModalOpen] = useState(false);
+  const [pendingTerm, setPendingTerm] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   // Grade Component Weights
   const [weights, setWeights] = useState<GradeComponentWeights>(() => getSavedGradingWeights());
@@ -245,6 +260,7 @@ export function TermGradebook({
       });
 
       setStudents(mappedStudents);
+      setHasUnsavedChanges(false);
     } catch (err: any) {
       console.error('Failed to load gradebook roster:', err);
       setErrorMessage(err.message || 'Failed to load student roster');
@@ -265,6 +281,7 @@ export function TermGradebook({
     value: string
   ) => {
     const numVal = Math.max(0, parseFloat(value) || 0);
+    setHasUnsavedChanges(true);
 
     setStudents((prev) =>
       prev.map((student) => {
@@ -296,6 +313,7 @@ export function TermGradebook({
 
   // Add a new Quiz column
   const handleAddQuiz = () => {
+    setHasUnsavedChanges(true);
     const newId = `q${quizzes.length + 1}`;
     setQuizzes([...quizzes, { id: newId, title: `Quiz ${quizzes.length + 1}`, maxScore: 20 }]);
   };
@@ -303,11 +321,13 @@ export function TermGradebook({
   // Remove a Quiz column
   const handleRemoveQuiz = (id: string) => {
     if (quizzes.length <= 1) return;
+    setHasUnsavedChanges(true);
     setQuizzes(quizzes.filter((q) => q.id !== id));
   };
 
   // Add a new Activity column
   const handleAddActivity = () => {
+    setHasUnsavedChanges(true);
     const newId = `act${activities.length + 1}`;
     setActivities([
       ...activities,
@@ -318,7 +338,18 @@ export function TermGradebook({
   // Remove an Activity column
   const handleRemoveActivity = (id: string) => {
     if (activities.length <= 1) return;
+    setHasUnsavedChanges(true);
     setActivities(activities.filter((a) => a.id !== id));
+  };
+
+  const handleTermChange = (newTerm: string) => {
+    if (newTerm === activeTerm) return;
+    if (hasUnsavedChanges) {
+      setPendingTerm(newTerm);
+      setIsDiscardModalOpen(true);
+    } else {
+      setActiveTerm(newTerm);
+    }
   };
 
   // Save gradebook to Supabase & localStorage
@@ -394,6 +425,7 @@ export function TermGradebook({
       await Promise.all(upsertPromises);
 
       setSaveMessage(`Successfully saved term grades for ${students.length} students!`);
+      setHasUnsavedChanges(false);
       if (onScoresSaved) onScoresSaved();
       setTimeout(() => setSaveMessage(null), 4000);
     } catch (err: any) {
@@ -532,7 +564,7 @@ export function TermGradebook({
             {AVAILABLE_TERMS.map((term) => (
               <button
                 key={term}
-                onClick={() => setActiveTerm(term)}
+                onClick={() => handleTermChange(term)}
                 className={cn(
                   'px-2.5 py-1 rounded-lg text-[11px] font-bold transition whitespace-nowrap',
                   activeTerm === term
@@ -1071,6 +1103,27 @@ export function TermGradebook({
           <span>Passing Threshold: Initial 60.0 → Transmuted 75</span>
         </div>
       </div>
+
+      <ConfirmationModal
+        isOpen={isDiscardModalOpen}
+        onClose={() => {
+          setIsDiscardModalOpen(false);
+          setPendingTerm(null);
+        }}
+        onConfirm={() => {
+          setHasUnsavedChanges(false);
+          setIsDiscardModalOpen(false);
+          if (pendingTerm) {
+            setActiveTerm(pendingTerm);
+            setPendingTerm(null);
+          }
+        }}
+        title="Discard Unsaved Changes?"
+        description="You have unsaved gradebook modifications. Switching terms will discard these unsaved changes. Are you sure you want to continue?"
+        actionType="reject"
+        confirmLabel="Discard Changes"
+        cancelLabel="Keep Editing"
+      />
     </div>
   );
 }

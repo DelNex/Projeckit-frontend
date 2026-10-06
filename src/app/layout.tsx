@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { NavigationProgress } from '@/components/layout/NavigationProgress';
+import { ToastProvider } from '@/components/ui/toast';
 import { Suspense } from 'react';
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://projectkit.deped.gov.ph';
@@ -193,7 +194,7 @@ export default function RootLayout({
         <Suspense fallback={null}>
           <NavigationProgress />
         </Suspense>
-        {children}
+        <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
   );
