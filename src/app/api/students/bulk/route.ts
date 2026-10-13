@@ -134,11 +134,14 @@ export async function POST(request: Request) {
     }
 
     if (action === 'delete') {
-      const { error: delErr } = await supabase
+      // Only permanently delete rows that are already archived (Item 11)
+      const { data: deleted, error: delErr } = await (supabase as any)
         .from('students')
         .delete()
         .in('id', studentIds)
-        .eq('tenant_id', tenantId);
+        .eq('tenant_id', tenantId)
+        .eq('is_archived', true)
+        .select('id');
 
       if (delErr) {
         return NextResponse.json(
@@ -147,11 +150,24 @@ export async function POST(request: Request) {
         );
       }
 
+      const deletedCount = deleted?.length ?? 0;
+
+      if (deletedCount < studentIds.length) {
+        return NextResponse.json(
+          {
+            error: `Only ${deletedCount} of ${studentIds.length} learner(s) were deleted. Only archived learners can be permanently deleted.`,
+            deletedCount,
+            requestedCount: studentIds.length,
+          },
+          { status: 400 }
+        );
+      }
+
       return NextResponse.json({
         success: true,
         action: 'delete',
-        count: studentIds.length,
-        message: `Permanently deleted ${studentIds.length} learner(s).`,
+        count: deletedCount,
+        message: `Permanently deleted ${deletedCount} learner(s).`,
       });
     }
 
@@ -163,10 +179,52 @@ export async function POST(request: Request) {
         );
       }
 
+      const trimmedTarget = targetSection.trim();
+
+      // Resolve configs belonging to this tenant to verify section ownership
+      const { data: configs, error: cfgErr } = await (supabase as any)
+        .from('academic_configs')
+        .select('id')
+        .eq('tenant_id', tenantId);
+
+      if (cfgErr || !configs || configs.length === 0) {
+        return NextResponse.json(
+          { error: 'No active academic configuration found for your tenant.' },
+          { status: 400 }
+        );
+      }
+
+      const configIds = configs.map((c: any) => c.id);
+
+      // Verify targetSection matches an active (is_archived = false) section belonging to caller's tenant
+      const { data: matchedSections, error: secErr } = await (supabase as any)
+        .from('sections')
+        .select('id, name, is_archived')
+        .in('config_id', configIds)
+        .ilike('name', trimmedTarget);
+
+      if (secErr || !matchedSections || matchedSections.length === 0) {
+        return NextResponse.json(
+          { error: `Target section "${trimmedTarget}" does not exist in your school.` },
+          { status: 400 }
+        );
+      }
+
+      const activeSection = matchedSections.find(
+        (s: any) => !s.is_archived && s.name.trim().toLowerCase() === trimmedTarget.toLowerCase()
+      );
+
+      if (!activeSection) {
+        return NextResponse.json(
+          { error: `Target section "${trimmedTarget}" is archived or unavailable.` },
+          { status: 400 }
+        );
+      }
+
       const { error: moveErr } = await supabase
         .from('students')
         .update({
-          section_name: targetSection.trim(),
+          section_name: activeSection.name,
         })
         .in('id', studentIds)
         .eq('tenant_id', tenantId);
@@ -182,7 +240,7 @@ export async function POST(request: Request) {
         success: true,
         action: 'move',
         count: studentIds.length,
-        message: `Successfully moved ${studentIds.length} learner(s) to ${targetSection.trim()}.`,
+        message: `Successfully moved ${studentIds.length} learner(s) to ${activeSection.name}.`,
       });
     }
 

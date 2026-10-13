@@ -159,15 +159,6 @@ export function TermGradebook({
         studentsData = (sData || []).filter((s: any) => !s.is_archived);
       }
 
-      // Check local archive storage fallback
-      try {
-        const storedArchived = localStorage.getItem('projectkit_archived_students_cache');
-        if (storedArchived) {
-          const archivedSet = new Set(JSON.parse(storedArchived));
-          studentsData = studentsData.filter((s: any) => !archivedSet.has(s.id));
-        }
-      } catch {}
-
       // Filter by section if match exists, otherwise show roster
       const sectionStudents = studentsData.filter((s: any) =>
         sectionName ? s.section_name?.toLowerCase() === sectionName.toLowerCase() : true

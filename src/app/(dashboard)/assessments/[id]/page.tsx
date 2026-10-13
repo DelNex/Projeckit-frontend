@@ -10,6 +10,7 @@ import {
     OmrScanResult,
 } from '@/features/omr';
 import { createClient } from '@/lib/supabase/client';
+import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import {
@@ -85,6 +86,24 @@ export default function AssessmentWorkspacePage({
   // Answer Key State
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [numChoices, setNumChoices] = useState<3 | 4 | 5>(4);
+
+  // Track last-saved answer key for dirty checking (Item 13)
+  const [savedAnswers, setSavedAnswers] = useState<Record<number, string>>({});
+  const [savedNumChoices, setSavedNumChoices] = useState<3 | 4 | 5>(4);
+  const [pendingTab, setPendingTab] = useState<string | null>(null);
+
+  const isAnswerKeyDirty = useMemo(() => {
+    if (numChoices !== savedNumChoices) return true;
+    const keys = new Set([
+      ...Object.keys(answers),
+      ...Object.keys(savedAnswers),
+    ]);
+    for (const k of keys) {
+      const n = Number(k);
+      if ((answers[n] || '') !== (savedAnswers[n] || '')) return true;
+    }
+    return false;
+  }, [answers, savedAnswers, numChoices, savedNumChoices]);
 
   // Scans & Results State
   const [scanResults, setScanResults] = useState<any[]>([]);
@@ -167,12 +186,18 @@ export default function AssessmentWorkspacePage({
         .maybeSingle();
 
       if (kData && kData.answers && typeof kData.answers === 'object') {
-        setAnswers(kData.answers as Record<number, string>);
+        const loadedAnswers = kData.answers as Record<number, string>;
+        setAnswers(loadedAnswers);
+        setSavedAnswers(loadedAnswers);
         // Check if any answers contain 'E' to set 5 choices
         const hasChoiceE = Object.values(kData.answers).some((val) => val === 'E');
-        if (hasChoiceE) setNumChoices(5);
+        if (hasChoiceE) {
+          setNumChoices(5);
+          setSavedNumChoices(5);
+        }
       } else {
         setAnswers({});
+        setSavedAnswers({});
       }
 
       // 3. Fetch Scan Results
@@ -194,21 +219,20 @@ export default function AssessmentWorkspacePage({
       if (tData) setTosDoc(tData);
 
       // 5. Fetch Students Roster (for Roll number matching and Gradebook, excluding archived)
-      const { data: stdData } = await (supabase as any)
+      const { data: stdData, error: stdErr } = await (supabase as any)
         .from('students')
         .select('id, name, lrn, section_name, is_archived')
         .order('name', { ascending: true });
 
-      if (stdData) {
-        let activeRoster = stdData.filter((s: any) => !s.is_archived);
-        try {
-          const storedArchived = localStorage.getItem('projectkit_archived_students_cache');
-          if (storedArchived) {
-            const archivedSet = new Set(JSON.parse(storedArchived));
-            activeRoster = activeRoster.filter((s: any) => !archivedSet.has(s.id));
-          }
-        } catch {}
-        setStudentsList(activeRoster);
+      if (stdErr) {
+        // Fallback if is_archived column does not exist
+        const { data: fbStdData } = await (supabase as any)
+          .from('students')
+          .select('id, name, lrn, section_name')
+          .order('name', { ascending: true });
+        setStudentsList(fbStdData || []);
+      } else if (stdData) {
+        setStudentsList(stdData.filter((s: any) => !s.is_archived));
       }
 
       // 6. Fetch Responses (Scores)
@@ -232,7 +256,24 @@ export default function AssessmentWorkspacePage({
     loadAssessmentData();
   }, [assessmentId]);
 
+  // Warn before leaving the page with unsaved answer key changes (Item 13)
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isAnswerKeyDirty && activeTab === 'key') {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isAnswerKeyDirty, activeTab]);
+
   const handleTabChange = (tab: string) => {
+    // Guard tab switch when answer key has unsaved changes (Item 13)
+    if (isAnswerKeyDirty && activeTab === 'key' && tab !== 'key') {
+      setPendingTab(tab);
+      return;
+    }
     router.replace(`/assessments/${assessmentId}?tab=${tab}`);
   };
 
@@ -300,6 +341,9 @@ export default function AssessmentWorkspacePage({
 
       if (keyErr) throw keyErr;
 
+      // Sync saved state so dirty flag resets (Item 13)
+      setSavedAnswers({ ...answers });
+      setSavedNumChoices(numChoices);
       setSaveSuccessMsg('Master Answer Key saved to Supabase successfully!');
       setTimeout(() => setSaveSuccessMsg(null), 3500);
     } catch (err: any) {
@@ -1514,6 +1558,26 @@ export default function AssessmentWorkspacePage({
           }}
         />
       )}
+
+      {/* Unsaved answer key changes discard modal (Item 13) */}
+      <ConfirmationModal
+        isOpen={pendingTab !== null}
+        onClose={() => setPendingTab(null)}
+        onConfirm={() => {
+          if (pendingTab) {
+            // Revert to saved state and navigate
+            setAnswers({ ...savedAnswers });
+            setNumChoices(savedNumChoices);
+            router.replace(`/assessments/${assessmentId}?tab=${pendingTab}`);
+            setPendingTab(null);
+          }
+        }}
+        title="Discard unsaved changes?"
+        description="Your answer key has unsaved changes. Switching tabs will discard them."
+        actionType="neutral"
+        confirmLabel="Discard Changes"
+        cancelLabel="Keep Editing"
+      />
     </div>
   );
 }

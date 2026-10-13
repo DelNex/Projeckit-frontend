@@ -57,7 +57,7 @@ export default function PendingUsersPage() {
     fetchPendingUsers();
   }, []);
 
-  const handleUpdateStatus = async (id: string, newStatus: 'approved' | 'rejected') => {
+  const handleUpdateStatus = async (id: string, newStatus: 'approved' | 'rejected'): Promise<boolean> => {
     setProcessingId(id);
     try {
       const { error: updErr } = await supabase
@@ -69,9 +69,11 @@ export default function PendingUsersPage() {
 
       setPendingUsers((prev) => prev.filter((u) => u.id !== id));
       toast.success(`Applicant ${newStatus === 'approved' ? 'approved' : 'rejected'} successfully.`);
+      return true;
     } catch (err: any) {
       console.error(`Failed to ${newStatus} user:`, err);
       toast.error(`Action failed: ${err.message || err}`);
+      return false;
     } finally {
       setProcessingId(null);
     }
@@ -180,8 +182,10 @@ export default function PendingUsersPage() {
         onClose={() => setRejectModal({ isOpen: false, user: null })}
         onConfirm={async () => {
           if (!rejectModal.user) return;
-          await handleUpdateStatus(rejectModal.user.id, 'rejected');
-          setRejectModal({ isOpen: false, user: null });
+          const success = await handleUpdateStatus(rejectModal.user.id, 'rejected');
+          if (success) {
+            setRejectModal({ isOpen: false, user: null });
+          }
         }}
         title={rejectModal.user ? `Reject Registration for ${rejectModal.user.display_name || rejectModal.user.email}?` : 'Reject Account Request?'}
         description="Are you sure you want to reject this faculty registration request? The applicant will not be able to log in or access student data."

@@ -42,6 +42,7 @@ export interface DataTableProps<TData, TValue = any> {
   renderCustomFilter?: React.ReactNode;
   onRowClick?: (row: TData) => void;
   onVisibleRowsChange?: (rows: TData[]) => void;
+  onSearchChange?: (search: string) => void;
 }
 
 export function DataTable<TData, TValue = any>({
@@ -58,6 +59,7 @@ export function DataTable<TData, TValue = any>({
   renderCustomFilter,
   onRowClick,
   onVisibleRowsChange,
+  onSearchChange,
 }: DataTableProps<TData, TValue>) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
@@ -145,6 +147,7 @@ export function DataTable<TData, TValue = any>({
   const handleSearchChange = (val: string) => {
     setSearchFilter(val);
     setPageIndex(0);
+    onSearchChange?.(val);
   };
 
   return (

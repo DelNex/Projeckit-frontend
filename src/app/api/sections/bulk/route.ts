@@ -148,11 +148,14 @@ export async function POST(request: Request) {
     }
 
     if (action === 'delete') {
-      const { error: delErr } = await (supabase as any)
+      // Only permanently delete sections that are already archived (Item 16)
+      const { data: deleted, error: delErr } = await (supabase as any)
         .from('sections')
         .delete()
         .in('id', sectionIds)
-        .in('config_id', configIds);
+        .in('config_id', configIds)
+        .eq('is_archived', true)
+        .select('id');
 
       if (delErr) {
         return NextResponse.json(
@@ -161,11 +164,24 @@ export async function POST(request: Request) {
         );
       }
 
+      const deletedCount = deleted?.length ?? 0;
+
+      if (deletedCount < sectionIds.length) {
+        return NextResponse.json(
+          {
+            error: `Only ${deletedCount} of ${sectionIds.length} section(s) were deleted. Only archived sections can be permanently deleted.`,
+            deletedCount,
+            requestedCount: sectionIds.length,
+          },
+          { status: 400 }
+        );
+      }
+
       return NextResponse.json({
         success: true,
         action: 'delete',
-        count: sectionIds.length,
-        message: `Permanently deleted ${sectionIds.length} section(s).`,
+        count: deletedCount,
+        message: `Permanently deleted ${deletedCount} section(s).`,
       });
     }
 

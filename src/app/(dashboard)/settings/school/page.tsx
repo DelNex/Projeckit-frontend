@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { useToast } from '@/components/ui/toast';
+import { friendlyError } from '@/lib/errors';
 import React, { useEffect, useMemo, useState } from 'react';
 
 interface SectionItem {
@@ -41,6 +42,15 @@ interface SectionItem {
   student_count: number;
   is_archived?: boolean;
   archived_at?: string;
+}
+
+interface SubjectItem {
+  id: string;
+  code: string;
+  title: string;
+  grade: string;
+  target_hours?: number;
+  target_items?: number;
 }
 
 export default function SchoolSettingsPage() {
@@ -97,6 +107,18 @@ export default function SchoolSettingsPage() {
 
   // DepEd SHS Grading Weights State
   const [weights, setWeights] = useState<GradeComponentWeights>(DEFAULT_SHS_WEIGHTS);
+
+  // Subjects Management State
+  const [subjectsList, setSubjectsList] = useState<SubjectItem[]>([]);
+  const [isAddSubjectOpen, setIsAddSubjectOpen] = useState(false);
+  const [newSubjectCode, setNewSubjectCode] = useState('');
+  const [newSubjectTitle, setNewSubjectTitle] = useState('');
+  const [newSubjectGrade, setNewSubjectGrade] = useState('11');
+  const [newSubjectHours, setNewSubjectHours] = useState('80');
+  const [newSubjectItems, setNewSubjectItems] = useState('50');
+  const [addingSubject, setAddingSubject] = useState(false);
+  const [subjectToDelete, setSubjectToDelete] = useState<SubjectItem | null>(null);
+  const [deletingSubject, setDeletingSubject] = useState(false);
 
   const supabase = createClient();
 
@@ -177,6 +199,18 @@ export default function SchoolSettingsPage() {
                 is_archived: Boolean(s.is_archived),
               }))
             );
+          }
+
+          // 4. Fetch subjects for this config
+          const { data: subData } = await (supabase as any)
+            .from('subjects')
+            .select('id, code, title, grade, target_hours, target_items')
+            .eq('config_id', config.id)
+            .order('grade', { ascending: true })
+            .order('code', { ascending: true });
+
+          if (subData) {
+            setSubjectsList(subData);
           }
         }
 
@@ -302,6 +336,71 @@ export default function SchoolSettingsPage() {
     }
   };
 
+  // Add Subject Handler
+  const handleAddSubject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSubjectCode.trim() || !newSubjectTitle.trim() || !configId) return;
+
+    setAddingSubject(true);
+    try {
+      const { data: created, error: addErr } = await (supabase as any)
+        .from('subjects')
+        .insert({
+          config_id: configId,
+          code: newSubjectCode.trim().toUpperCase(),
+          title: newSubjectTitle.trim(),
+          grade: newSubjectGrade,
+          target_hours: parseInt(newSubjectHours, 10) || 80,
+          target_items: parseInt(newSubjectItems, 10) || 50,
+        })
+        .select()
+        .single();
+
+      if (addErr) throw addErr;
+
+      if (created) {
+        setSubjectsList((prev) => [...prev, created]);
+        setNewSubjectCode('');
+        setNewSubjectTitle('');
+        setIsAddSubjectOpen(false);
+        toast.success(`Subject "${created.code} - ${created.title}" added successfully!`);
+      }
+    } catch (err: any) {
+      console.error('Failed to add subject:', err);
+      toast.error(friendlyError(err, 'Failed to add subject.'));
+    } finally {
+      setAddingSubject(false);
+    }
+  };
+
+  // Delete Subject Handler
+  const handleDeleteSubject = async () => {
+    if (!subjectToDelete) return;
+    setDeletingSubject(true);
+    try {
+      const { error: delErr } = await (supabase as any)
+        .from('subjects')
+        .delete()
+        .eq('id', subjectToDelete.id);
+
+      if (delErr) {
+        if (delErr.code === '23503') {
+          throw new Error('This subject cannot be deleted because assessments are already linked to it.');
+        }
+        throw delErr;
+      }
+
+      setSubjectsList((prev) => prev.filter((s) => s.id !== subjectToDelete.id));
+      toast.success(`Subject "${subjectToDelete.code}" deleted.`);
+      setSubjectToDelete(null);
+    } catch (err: any) {
+      console.error('Failed to delete subject:', err);
+      toast.error(err.message || 'Failed to delete subject');
+    } finally {
+      setDeletingSubject(false);
+    }
+  };
+
   // Bulk Sections Parsing & Memo
   const parsedBulkSections = useMemo(() => {
     if (!bulkSectionsText.trim()) return [];
@@ -352,7 +451,6 @@ export default function SchoolSettingsPage() {
         strand_code: bulkSectionStrand,
         is_advisory: false,
         student_count: 0,
-        is_archived: false,
       }));
 
       const { data: created, error: addErr } = await (supabase as any)
@@ -900,7 +998,158 @@ export default function SchoolSettingsPage() {
             )}
           </div>
 
-          {/* Card 3: DepEd Senior High School Component Weights */}
+          {/* Card 3: Subjects & Learning Areas */}
+          <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3 dark:border-gray-800">
+              <div className="flex items-center gap-3">
+                <BookOpen className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900 dark:text-white">
+                    Subjects &amp; Learning Areas
+                  </h2>
+                  <p className="text-[11px] text-gray-400">
+                    Courses and learning areas available for Table of Specifications and test creation.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddSubjectOpen(!isAddSubjectOpen)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 transition"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Add Subject</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Inline Add Subject Form */}
+            {isAddSubjectOpen && (
+              <div className="rounded-2xl border border-blue-200 bg-blue-50/50 p-4 dark:border-blue-900/40 dark:bg-blue-950/20 space-y-3">
+                <span className="font-bold text-xs text-gray-900 dark:text-white">
+                  Add New Subject / Learning Area
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] font-semibold text-gray-600 dark:text-gray-300">
+                      Subject Code (e.g. EMP-TECH)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. EMPTECH or GENMATH"
+                      value={newSubjectCode}
+                      onChange={(e) => setNewSubjectCode(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-gray-300 bg-white p-2 text-xs text-gray-900 uppercase outline-none focus:border-blue-600 dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] font-semibold text-gray-600 dark:text-gray-300">
+                      Subject Title
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Empowerment Technologies"
+                      value={newSubjectTitle}
+                      onChange={(e) => setNewSubjectTitle(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-gray-300 bg-white p-2 text-xs text-gray-900 outline-none focus:border-blue-600 dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-gray-600 dark:text-gray-300">
+                      Grade Level
+                    </label>
+                    <select
+                      value={newSubjectGrade}
+                      onChange={(e) => setNewSubjectGrade(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-gray-300 bg-white p-2 text-xs text-gray-900 outline-none focus:border-blue-600 dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
+                    >
+                      <option value="11" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Grade 11</option>
+                      <option value="12" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Grade 12</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-gray-600 dark:text-gray-300">
+                      Target Items
+                    </label>
+                    <input
+                      type="number"
+                      min="10"
+                      max="100"
+                      value={newSubjectItems}
+                      onChange={(e) => setNewSubjectItems(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-gray-300 bg-white p-2 text-xs text-gray-900 outline-none focus:border-blue-600 dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddSubjectOpen(false)}
+                    className="rounded-xl border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddSubject}
+                    disabled={addingSubject || !newSubjectCode.trim() || !newSubjectTitle.trim()}
+                    className="rounded-xl bg-blue-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {addingSubject ? 'Adding…' : 'Add Subject'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Subjects List Grid */}
+            {subjectsList.length === 0 ? (
+              <p className="text-xs text-gray-400 py-6 text-center border border-dashed rounded-2xl dark:border-gray-800">
+                No subjects registered. Click &quot;Add Subject&quot; to register courses for your school.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {subjectsList.map((subj) => (
+                  <div
+                    key={subj.id}
+                    className="flex items-center justify-between p-3.5 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-850 hover:border-blue-300 dark:hover:border-blue-700 transition"
+                  >
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400">
+                          {subj.code}
+                        </span>
+                        <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                          Grade {subj.grade}
+                        </span>
+                      </div>
+                      <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">
+                        {subj.title}
+                      </p>
+                      <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                        <span>{subj.target_items || 50} items</span>
+                        <span>•</span>
+                        <span>{subj.target_hours || 80} hrs</span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setSubjectToDelete(subj)}
+                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-950/40 rounded-lg transition"
+                      title="Delete Subject"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Card 4: DepEd Senior High School Component Weights */}
           <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3 dark:border-gray-800">
               <div className="flex items-center gap-3">
@@ -1083,6 +1332,22 @@ export default function SchoolSettingsPage() {
         entityName="section"
         actionType={sectionConfirmModal.action}
         isLoading={sectionOperating}
+      />
+
+      {/* Confirmation Modal for Subject Delete */}
+      <ConfirmationModal
+        isOpen={subjectToDelete !== null}
+        onClose={() => setSubjectToDelete(null)}
+        onConfirm={handleDeleteSubject}
+        title={subjectToDelete ? `Delete Subject ${subjectToDelete.code}?` : 'Delete Subject?'}
+        description={`Are you sure you want to delete "${subjectToDelete?.title || ''}"? This action cannot be undone.`}
+        actionType="delete"
+        entityName="subject"
+        affectedCount={1}
+        impactTitle="Subject Removed"
+        impactText="The course will no longer appear as an option when creating new assessments."
+        confirmLabel="Delete Subject"
+        isLoading={deletingSubject}
       />
 
       {/* Bulk Add Sections Modal Dialog */}

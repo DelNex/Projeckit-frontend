@@ -57,7 +57,7 @@ export default function StudentsPage() {
   // Confirmation Modal state
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
-    action: 'archive' | 'restore' | 'delete';
+    action: 'archive' | 'restore' | 'delete' | 'move';
     targetIds: string[];
     title: string;
     description: string;
@@ -85,7 +85,26 @@ export default function StudentsPage() {
   const [formSection, setFormSection] = useState('');
   const [isDiscardModalOpen, setIsDiscardModalOpen] = useState(false);
 
-  const hasUnsavedLearner = isAddModalOpen && Boolean(formName.trim() || formLrn.trim());
+  // Track original values when edit modal opens (Item 9)
+  const [originalFormValues, setOriginalFormValues] = useState<{
+    lrn: string;
+    name: string;
+    section: string;
+  } | null>(null);
+
+  const hasUnsavedLearner = isAddModalOpen && (() => {
+    if (!editingStudent) {
+      // New learner: unsaved if any field is filled
+      return Boolean(formName.trim() || formLrn.trim());
+    }
+    // Edit: unsaved only if values differ from originals
+    if (!originalFormValues) return false;
+    return (
+      formName.trim() !== originalFormValues.name.trim() ||
+      formLrn.trim() !== originalFormValues.lrn.trim() ||
+      formSection.trim() !== originalFormValues.section.trim()
+    );
+  })();
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -153,6 +172,7 @@ export default function StudentsPage() {
             .from('students')
             .select('id, lrn, name, section_name, created_at')
             .order('name', { ascending: true })
+            .order('id', { ascending: true })
             .range(from, to);
 
           if (fbErr) throw fbErr;
@@ -171,6 +191,7 @@ export default function StudentsPage() {
             .from('students')
             .select('id, lrn, name, section_name, is_archived, archived_at, created_at')
             .order('name', { ascending: true })
+            .order('id', { ascending: true })
             .range(from, to);
 
           if (err) throw err;
@@ -228,6 +249,11 @@ export default function StudentsPage() {
     fetchSections();
   }, []);
 
+  // Clear selection whenever section filter or tab changes (Item 8)
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [sectionFilter, activeTab]);
+
   // Filter students based on active/archived tab and section filter
   const activeStudents = useMemo(
     () => students.filter((s) => !s.is_archived),
@@ -282,6 +308,7 @@ export default function StudentsPage() {
     setFormName('');
     setFormError(null);
     setArchivedDuplicateId(null);
+    setOriginalFormValues(null); // new learner: no originals
     if (sectionsList.length > 0) setFormSection(sectionsList[0].name);
     setIsAddModalOpen(true);
   };
@@ -293,6 +320,12 @@ export default function StudentsPage() {
     setFormSection(student.section_name);
     setFormError(null);
     setArchivedDuplicateId(null);
+    // Store originals so we only prompt when values actually differ (Item 9)
+    setOriginalFormValues({
+      lrn: student.lrn,
+      name: student.name,
+      section: student.section_name,
+    });
     setIsAddModalOpen(true);
   };
 
@@ -461,38 +494,18 @@ export default function StudentsPage() {
     });
   };
 
-  // Bulk Move Learners to Section
-  const handleBulkMove = async () => {
+  // Trigger Move Selected (opens ConfirmationModal)
+  const triggerMoveSelected = () => {
     if (!targetMoveSection || selectedIds.size === 0) return;
     const targetIds = Array.from(selectedIds);
-    setIsOperating(true);
-    try {
-      const res = await fetch('/api/students/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'move',
-          studentIds: targetIds,
-          targetSection: targetMoveSection,
-        }),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to move learners');
-      }
-
-      toast.success(
-        `Successfully moved ${targetIds.length} learner${targetIds.length > 1 ? 's' : ''} to section "${targetMoveSection}".`
-      );
-      setSelectedIds(new Set());
-      setTargetMoveSection('');
-      await fetchStudents();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to move learners');
-    } finally {
-      setIsOperating(false);
-    }
+    setConfirmModal({
+      isOpen: true,
+      action: 'move',
+      targetIds,
+      title: targetIds.length > 1 ? `Move ${targetIds.length} Learners?` : 'Move Learner?',
+      description: `Are you sure you want to move ${targetIds.length} learner${targetIds.length > 1 ? 's' : ''} to section "${targetMoveSection}"?`,
+      affectedCount: targetIds.length,
+    });
   };
 
   // Export current roster to CSV with formula injection sanitization
@@ -543,10 +556,15 @@ export default function StudentsPage() {
     setError(null);
     try {
       // 1. Try server-side protected API endpoint
+      const bodyPayload: any = { action, studentIds: targetIds };
+      if (action === 'move') {
+        bodyPayload.targetSection = targetMoveSection;
+      }
+
       const res = await fetch('/api/students/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, studentIds: targetIds }),
+        body: JSON.stringify(bodyPayload),
       });
 
       if (!res.ok) {
@@ -567,6 +585,11 @@ export default function StudentsPage() {
         });
       } else if (action === 'restore') {
         toast.success(`Restored ${count} learner${count > 1 ? 's' : ''} to active roster.`);
+      } else if (action === 'move') {
+        toast.success(
+          `Successfully moved ${count} learner${count > 1 ? 's' : ''} to section "${targetMoveSection}".`
+        );
+        setTargetMoveSection('');
       } else {
         toast.success(`Permanently deleted ${count} learner${count > 1 ? 's' : ''}.`);
       }
@@ -834,6 +857,9 @@ export default function StudentsPage() {
       {selectedIds.size > 0 && (() => {
         const selectedOnCurrentPage = visiblePageStudents.filter((s) => selectedIds.has(s.id)).length;
         const selectedOffPage = selectedIds.size - selectedOnCurrentPage;
+        // Count how many displayed students are already selected
+        const selectedInList = displayedStudents.filter((s) => selectedIds.has(s.id)).length;
+        const allInListSelected = selectedInList === displayedStudents.length && displayedStudents.length > 0;
 
         return (
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-blue-50/90 border border-blue-200 dark:bg-blue-950/40 dark:border-blue-900/60 animate-in slide-in-from-top-2 duration-150">
@@ -849,7 +875,7 @@ export default function StudentsPage() {
                   </span>
                 )}
               </span>
-              {selectedIds.size < displayedStudents.length && (
+              {!allInListSelected && displayedStudents.length > 0 && (
                 <button
                   type="button"
                   onClick={() => {
@@ -893,7 +919,7 @@ export default function StudentsPage() {
                       <button
                         type="button"
                         disabled={!targetMoveSection || isOperating}
-                        onClick={handleBulkMove}
+                        onClick={triggerMoveSelected}
                         className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-700 transition disabled:opacity-40"
                       >
                         {isOperating ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
@@ -950,6 +976,7 @@ export default function StudentsPage() {
         columns={columns}
         data={displayedStudents}
         onVisibleRowsChange={setVisiblePageStudents}
+        onSearchChange={() => setSelectedIds(new Set())}
         searchKey={['name', 'lrn']}
         searchPlaceholder={
           activeTab === 'active'
@@ -984,7 +1011,7 @@ export default function StudentsPage() {
         }
       />
 
-      {/* Confirmation Modal for Archive / Restore / Permanent Deletion */}
+      {/* Confirmation Modal for Archive / Restore / Permanent Deletion / Move */}
       <ConfirmationModal
         isOpen={confirmModal.isOpen}
         onClose={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
@@ -993,7 +1020,8 @@ export default function StudentsPage() {
         description={confirmModal.description}
         affectedCount={confirmModal.affectedCount}
         entityName="learner"
-        actionType={confirmModal.action}
+        actionType={confirmModal.action === 'move' ? 'neutral' : confirmModal.action}
+        confirmLabel={confirmModal.action === 'move' ? 'Move Learners' : undefined}
         isLoading={isOperating}
       />
 
