@@ -134,14 +134,41 @@ export async function POST(request: Request) {
     }
 
     if (action === 'delete') {
-      // Only permanently delete rows that are already archived (Item 11)
-      const { data: deleted, error: delErr } = await (supabase as any)
+      // 1. First SELECT the ids that match tenant AND is_archived = true (Safe permanent delete)
+      const { data: archivedRecords, error: selectErr } = await (supabase as any)
+        .from('students')
+        .select('id')
+        .in('id', studentIds)
+        .eq('tenant_id', tenantId)
+        .eq('is_archived', true);
+
+      if (selectErr) {
+        return NextResponse.json(
+          { error: `Database error verifying records: ${selectErr.message}` },
+          { status: 400 }
+        );
+      }
+
+      const archivedCount = archivedRecords?.length ?? 0;
+      if (archivedCount < studentIds.length) {
+        const notArchivedCount = studentIds.length - archivedCount;
+        return NextResponse.json(
+          {
+            error: `Only archived items can be permanently deleted; ${notArchivedCount} of ${studentIds.length} are not archived`,
+            archivedCount,
+            requestedCount: studentIds.length,
+          },
+          { status: 400 }
+        );
+      }
+
+      // 2. Only then run the delete
+      const { error: delErr } = await (supabase as any)
         .from('students')
         .delete()
         .in('id', studentIds)
         .eq('tenant_id', tenantId)
-        .eq('is_archived', true)
-        .select('id');
+        .eq('is_archived', true);
 
       if (delErr) {
         return NextResponse.json(
@@ -150,24 +177,11 @@ export async function POST(request: Request) {
         );
       }
 
-      const deletedCount = deleted?.length ?? 0;
-
-      if (deletedCount < studentIds.length) {
-        return NextResponse.json(
-          {
-            error: `Only ${deletedCount} of ${studentIds.length} learner(s) were deleted. Only archived learners can be permanently deleted.`,
-            deletedCount,
-            requestedCount: studentIds.length,
-          },
-          { status: 400 }
-        );
-      }
-
       return NextResponse.json({
         success: true,
         action: 'delete',
-        count: deletedCount,
-        message: `Permanently deleted ${deletedCount} learner(s).`,
+        count: studentIds.length,
+        message: `Permanently deleted ${studentIds.length} learner(s).`,
       });
     }
 

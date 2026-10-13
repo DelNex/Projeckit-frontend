@@ -16,6 +16,7 @@ import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { createClient } from '@/lib/supabase/client';
 import { getTenantContext } from '@/lib/tenant-context';
 import { useToast } from '@/components/ui/toast';
+import { friendlyError } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 
 interface SectionItem {
@@ -366,6 +367,9 @@ function detectColumnMapping(firstRow: string[]): ColumnMapping {
     setIsSubmitting(true);
     setInsertProgress('Validating school tenant context...');
 
+    let totalInserted = 0;
+    const failures: FailedRowItem[] = [];
+
     try {
       const { tenantId, configId } = await getTenantContext(supabase);
 
@@ -379,8 +383,6 @@ function detectColumnMapping(firstRow: string[]): ColumnMapping {
 
       // Insert in chunks of 200
       const CHUNK_SIZE = 200;
-      let totalInserted = 0;
-      const failures: FailedRowItem[] = [];
 
       for (let i = 0; i < recordsToInsert.length; i += CHUNK_SIZE) {
         const chunk = recordsToInsert.slice(i, i + CHUNK_SIZE);
@@ -415,7 +417,7 @@ function detectColumnMapping(firstRow: string[]): ColumnMapping {
                 name: row.name,
                 reason: isDuplicate
                   ? 'LRN already enrolled.'
-                  : singleErr.message || 'Failed to enroll',
+                  : 'Failed to enroll',
               });
             }
           }
@@ -429,7 +431,20 @@ function detectColumnMapping(firstRow: string[]): ColumnMapping {
       });
     } catch (err: any) {
       console.error('Bulk insert error:', err);
-      toast.error(err.message || 'Failed to complete bulk enrollment');
+      // Item 4: If import throws unexpectedly, still call onSuccess() and show result screen
+      onSuccess();
+      setImportResult({
+        enrolledCount: totalInserted,
+        failedRows: [
+          ...failures,
+          {
+            lrn: '—',
+            name: 'Remaining records',
+            reason: friendlyError(err, 'Import interrupted unexpectedly.'),
+          },
+        ],
+      });
+      toast.error(friendlyError(err, 'Failed to complete bulk enrollment.'));
     } finally {
       setIsSubmitting(false);
       setInsertProgress(null);

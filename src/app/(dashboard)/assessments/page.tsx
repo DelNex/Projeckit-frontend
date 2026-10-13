@@ -3,6 +3,7 @@
 import { ColumnDef, DataTable } from '@/components/ui/data-table';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { useToast } from '@/components/ui/toast';
+import { friendlyError } from '@/lib/errors';
 import { createClient } from '@/lib/supabase/client';
 import {
     ArrowUpRight,
@@ -189,7 +190,7 @@ export default function AssessmentsPage() {
       await fetchAssessments();
     } catch (err: any) {
       console.error('Failed to create assessment:', err);
-      toast.error(`Error creating assessment: ${err.message || err}`);
+      toast.error(friendlyError(err, 'Failed to create assessment.'));
     } finally {
       setSubmitting(false);
     }
@@ -273,7 +274,7 @@ export default function AssessmentsPage() {
       setDeleteModal({ isOpen: false, assessment: null, isLoading: false });
     } catch (err: any) {
       console.error('Failed to delete assessment:', err);
-      toast.error(`Could not delete assessment: ${err.message || err}`);
+      toast.error(friendlyError(err, 'Could not delete assessment.'));
       setDeleteModal((prev) => ({ ...prev, isLoading: false }));
     }
   };

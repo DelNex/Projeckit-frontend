@@ -4,6 +4,7 @@ import { ColumnDef, DataTable } from '@/components/ui/data-table';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { BulkAddStudentsModal } from '@/components/students/BulkAddStudentsModal';
 import { useToast } from '@/components/ui/toast';
+import { friendlyError } from '@/lib/errors';
 import { getTenantContext } from '@/lib/tenant-context';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
@@ -351,8 +352,9 @@ export default function StudentsPage() {
       );
       await fetchStudents();
     } catch (err: any) {
-      toast.error(err.message || 'Failed to restore learner');
-      setFormError(err.message || 'Failed to restore learner');
+      console.error('Failed to restore learner:', err);
+      toast.error(friendlyError(err, 'Failed to restore learner.'));
+      setFormError(friendlyError(err, 'Failed to restore learner.'));
     } finally {
       setSubmitting(false);
     }
@@ -442,8 +444,11 @@ export default function StudentsPage() {
   };
 
   // Trigger Confirmation Modals
+  const getSelectedInDisplay = () =>
+    displayedStudents.filter((s) => selectedIds.has(s.id)).map((s) => s.id);
+
   const triggerArchiveSelected = (ids?: string[]) => {
-    const targetIds = ids || Array.from(selectedIds);
+    const targetIds = ids || getSelectedInDisplay();
     if (targetIds.length === 0) return;
 
     setConfirmModal({
@@ -460,7 +465,7 @@ export default function StudentsPage() {
   };
 
   const triggerRestoreSelected = (ids?: string[]) => {
-    const targetIds = ids || Array.from(selectedIds);
+    const targetIds = ids || getSelectedInDisplay();
     if (targetIds.length === 0) return;
 
     setConfirmModal({
@@ -477,7 +482,7 @@ export default function StudentsPage() {
   };
 
   const triggerDeleteSelected = (ids?: string[]) => {
-    const targetIds = ids || Array.from(selectedIds);
+    const targetIds = ids || getSelectedInDisplay();
     if (targetIds.length === 0) return;
 
     setConfirmModal({
@@ -496,8 +501,8 @@ export default function StudentsPage() {
 
   // Trigger Move Selected (opens ConfirmationModal)
   const triggerMoveSelected = () => {
-    if (!targetMoveSection || selectedIds.size === 0) return;
-    const targetIds = Array.from(selectedIds);
+    const targetIds = getSelectedInDisplay();
+    if (!targetMoveSection || targetIds.length === 0) return;
     setConfirmModal({
       isOpen: true,
       action: 'move',
@@ -854,21 +859,23 @@ export default function StudentsPage() {
       </div>
 
       {/* Floating / Sticky Bulk Action Toolbar */}
-      {selectedIds.size > 0 && (() => {
-        const selectedOnCurrentPage = visiblePageStudents.filter((s) => selectedIds.has(s.id)).length;
-        const selectedOffPage = selectedIds.size - selectedOnCurrentPage;
+      {(() => {
         // Count how many displayed students are already selected
         const selectedInList = displayedStudents.filter((s) => selectedIds.has(s.id)).length;
+        if (selectedInList === 0) return null;
+
+        const selectedOnCurrentPage = visiblePageStudents.filter((s) => selectedIds.has(s.id)).length;
+        const selectedOffPage = selectedInList - selectedOnCurrentPage;
         const allInListSelected = selectedInList === displayedStudents.length && displayedStudents.length > 0;
 
         return (
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-blue-50/90 border border-blue-200 dark:bg-blue-950/40 dark:border-blue-900/60 animate-in slide-in-from-top-2 duration-150">
             <div className="flex flex-wrap items-center gap-2">
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white font-mono text-xs font-bold">
-                {selectedIds.size}
+                {selectedInList}
               </span>
               <span className="text-xs font-bold text-gray-900 dark:text-white">
-                {selectedIds.size} learner{selectedIds.size > 1 ? 's' : ''} selected
+                {selectedInList} learner{selectedInList > 1 ? 's' : ''} selected
                 {selectedOffPage > 0 && (
                   <span className="font-normal text-gray-500 dark:text-gray-400 ml-1">
                     ({selectedOnCurrentPage} on this page, {selectedOffPage} not on current page)
@@ -933,7 +940,7 @@ export default function StudentsPage() {
                     className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-amber-700 transition"
                   >
                     <Archive className="h-3.5 w-3.5" />
-                    <span>Archive Selected ({selectedIds.size})</span>
+                    <span>Archive Selected ({selectedInList})</span>
                   </button>
                 </>
               ) : (
@@ -944,7 +951,7 @@ export default function StudentsPage() {
                     className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition"
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
-                    <span>Restore Selected ({selectedIds.size})</span>
+                    <span>Restore Selected ({selectedInList})</span>
                   </button>
                   <button
                     type="button"
@@ -952,7 +959,7 @@ export default function StudentsPage() {
                     className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-red-700 transition"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
-                    <span>Permanently Delete ({selectedIds.size})</span>
+                    <span>Permanently Delete ({selectedInList})</span>
                   </button>
                 </>
               )}
@@ -997,7 +1004,10 @@ export default function StudentsPage() {
             <Filter className="h-4 w-4 text-gray-400" />
             <select
               value={sectionFilter}
-              onChange={(e) => setSectionFilter(e.target.value)}
+              onChange={(e) => {
+                setSectionFilter(e.target.value);
+                setSelectedIds(new Set());
+              }}
               className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 outline-none transition focus:border-blue-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300"
             >
               <option value="ALL">All Sections</option>

@@ -1,5 +1,3 @@
-'use client';
-
 /**
  * Postgres / Supabase error code to user-friendly message mapping.
  * Import and call `friendlyError(err)` to get a displayable string.
@@ -8,12 +6,7 @@
 const PG_ERROR_MAP: Record<string, string> = {
   '23505': 'A record with this value already exists. Please use a unique value.',
   '23503': 'This record is referenced by other data and cannot be changed.',
-  '23502': 'A required field is missing. Please fill in all required fields.',
-  '23514': 'A value is out of the allowed range. Please check your input.',
   '42501': 'You do not have permission to perform this action.',
-  '42P01': 'The requested resource could not be found in the database.',
-  'PGRST116': 'The requested record was not found.',
-  'PGRST301': 'You are not authorized to access this resource.',
 };
 
 /**
@@ -24,49 +17,89 @@ export function pgErrorLabel(code: string): string | undefined {
   return PG_ERROR_MAP[code];
 }
 
+const NETWORK_ERROR_MSG = 'Could not reach the server. Check your connection and try again.';
+const GENERIC_ERROR_MSG = 'Something went wrong. Please try again.';
+
+function isNetworkError(err: unknown): boolean {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return true;
+  }
+  if (!err) return false;
+  if (err instanceof TypeError && /fetch/i.test(err.message)) {
+    return true;
+  }
+  if (err instanceof Error) {
+    const msg = err.message.toLowerCase();
+    return (
+      msg.includes('failed to fetch') ||
+      msg.includes('network') ||
+      msg.includes('connection refused') ||
+      msg.includes('offline')
+    );
+  }
+  if (typeof err === 'object') {
+    const obj = err as Record<string, unknown>;
+    const msg = typeof obj.message === 'string' ? obj.message.toLowerCase() : '';
+    return (
+      msg.includes('failed to fetch') ||
+      msg.includes('network') ||
+      msg.includes('connection refused') ||
+      msg.includes('offline')
+    );
+  }
+  if (typeof err === 'string') {
+    const msg = err.toLowerCase();
+    return (
+      msg.includes('failed to fetch') ||
+      msg.includes('network') ||
+      msg.includes('offline')
+    );
+  }
+  return false;
+}
+
 /**
  * Extract a user-friendly error message from a Supabase / Postgres error,
  * a fetch Response JSON body, or a generic Error.
- *
- * Usage:
- * ```ts
- * try { … } catch (err) {
- *   toast.error(friendlyError(err));
- * }
- * ```
+ * Never returns raw database text.
  */
 export function friendlyError(
   err: unknown,
-  fallback = 'Something went wrong. Please try again.',
+  fallback = GENERIC_ERROR_MSG,
 ): string {
   if (!err) return fallback;
 
-  // Supabase client errors: { code, message, details, hint }
+  // 1. Check network / fetch failures
+  if (isNetworkError(err)) {
+    return NETWORK_ERROR_MSG;
+  }
+
+  // 2. Extract Postgres code if present in error object
   if (typeof err === 'object' && err !== null) {
     const obj = err as Record<string, unknown>;
 
-    // Postgres error code
+    // Direct error code (Postgres / Supabase)
     if (typeof obj.code === 'string' && PG_ERROR_MAP[obj.code]) {
       return PG_ERROR_MAP[obj.code];
     }
 
-    // Supabase REST error
-    if (typeof obj.message === 'string' && obj.message.length > 0) {
-      // Check for embedded PG code in the message
-      const codeMatch = obj.message.match(/violates\s+\w+\s+constraint/i);
-      if (codeMatch && typeof obj.code === 'string') {
-        return PG_ERROR_MAP[obj.code] || obj.message;
+    // Embedded code in message
+    if (typeof obj.message === 'string') {
+      for (const code of Object.keys(PG_ERROR_MAP)) {
+        if (obj.message.includes(code)) {
+          return PG_ERROR_MAP[code];
+        }
       }
-      return obj.message;
     }
   }
 
   if (err instanceof Error) {
-    return err.message || fallback;
-  }
-
-  if (typeof err === 'string') {
-    return err;
+    // Check if message itself mentions known PG codes
+    for (const code of Object.keys(PG_ERROR_MAP)) {
+      if (err.message.includes(code)) {
+        return PG_ERROR_MAP[code];
+      }
+    }
   }
 
   return fallback;
@@ -87,4 +120,3 @@ export function isForeignKeyError(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false;
   return (err as Record<string, unknown>).code === '23503';
 }
-

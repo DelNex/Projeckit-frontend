@@ -12,6 +12,7 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { useToast } from '@/components/ui/toast';
+import { friendlyError } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 import {
     ArrowLeft,
@@ -348,7 +349,7 @@ export default function AssessmentWorkspacePage({
       setTimeout(() => setSaveSuccessMsg(null), 3500);
     } catch (err: any) {
       console.error('Failed to save answer key:', err);
-      toast.error(`Could not save answer key: ${err.message || err}`);
+      toast.error(friendlyError(err, 'Could not save answer key.'));
     } finally {
       setSavingKey(false);
     }

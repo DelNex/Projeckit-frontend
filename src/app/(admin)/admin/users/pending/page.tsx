@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/client';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { useToast } from '@/components/ui/toast';
+import { friendlyError } from '@/lib/errors';
 import { Check, Loader2, RefreshCw, UserCheck, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -72,7 +73,7 @@ export default function PendingUsersPage() {
       return true;
     } catch (err: any) {
       console.error(`Failed to ${newStatus} user:`, err);
-      toast.error(`Action failed: ${err.message || err}`);
+      toast.error(friendlyError(err, 'Action failed. Please try again.'));
       return false;
     } finally {
       setProcessingId(null);

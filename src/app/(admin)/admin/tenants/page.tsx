@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/components/ui/toast';
+import { friendlyError } from '@/lib/errors';
 import { Building2, Loader2, Plus, RefreshCw, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -73,7 +74,7 @@ export default function TenantsPage() {
       await fetchTenants();
     } catch (err: any) {
       console.error('Failed to create tenant:', err);
-      toast.error(`Could not create tenant: ${err.message || err}`);
+      toast.error(friendlyError(err, 'Could not create school tenant.'));
     } finally {
       setSubmitting(false);
     }

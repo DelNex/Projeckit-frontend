@@ -85,6 +85,10 @@ export default function SchoolSettingsPage() {
   const [bulkSectionStrand, setBulkSectionStrand] = useState('STEM');
   const [bulkPrefixGrade, setBulkPrefixGrade] = useState(true);
   const [addingBulkSections, setAddingBulkSections] = useState(false);
+  const [bulkSectionResult, setBulkSectionResult] = useState<{
+    createdCount: number;
+    failedRows: { name: string; reason: string }[];
+  } | null>(null);
 
   // Section Confirmation Modal State
   const [sectionConfirmModal, setSectionConfirmModal] = useState<{
@@ -121,6 +125,37 @@ export default function SchoolSettingsPage() {
   const [deletingSubject, setDeletingSubject] = useState(false);
 
   const supabase = createClient();
+
+  const refreshSections = async (targetConfigId?: string) => {
+    const cfgId = targetConfigId || configId;
+    if (!cfgId) return;
+    try {
+      const { data: sData, error: sErr } = await (supabase as any)
+        .from('sections')
+        .select('id, name, grade, strand_code, is_advisory, student_count, is_archived, archived_at')
+        .eq('config_id', cfgId)
+        .order('grade', { ascending: true })
+        .order('name', { ascending: true });
+
+      if (sErr) {
+        setNeedsMigration(true);
+        const { data: fallbackData } = await (supabase as any)
+          .from('sections')
+          .select('id, name, grade, strand_code, is_advisory, student_count')
+          .eq('config_id', cfgId)
+          .order('grade', { ascending: true })
+          .order('name', { ascending: true });
+        if (fallbackData) {
+          setSectionsList(fallbackData.map((s: any) => ({ ...s, is_archived: false })));
+        }
+      } else if (sData) {
+        setNeedsMigration(false);
+        setSectionsList(sData.map((s: any) => ({ ...s, is_archived: Boolean(s.is_archived) })));
+      }
+    } catch (e) {
+      console.error('Failed to refresh sections:', e);
+    }
+  };
 
   useEffect(() => {
     async function loadSchoolSettings() {
@@ -170,36 +205,7 @@ export default function SchoolSettingsPage() {
           }
 
           // 3. Fetch sections for this config
-          let secData: any[] | null = null;
-          const { data: sData, error: sErr } = await (supabase as any)
-            .from('sections')
-            .select('id, name, grade, strand_code, is_advisory, student_count, is_archived, archived_at')
-            .eq('config_id', config.id)
-            .order('grade', { ascending: true })
-            .order('name', { ascending: true });
-
-          if (sErr) {
-            setNeedsMigration(true);
-            const { data: fallbackData } = await (supabase as any)
-              .from('sections')
-              .select('id, name, grade, strand_code, is_advisory, student_count')
-              .eq('config_id', config.id)
-              .order('grade', { ascending: true })
-              .order('name', { ascending: true });
-            secData = fallbackData;
-          } else {
-            setNeedsMigration(false);
-            secData = sData;
-          }
-
-          if (secData) {
-            setSectionsList(
-              secData.map((s: any) => ({
-                ...s,
-                is_archived: Boolean(s.is_archived),
-              }))
-            );
-          }
+          await refreshSections(config.id);
 
           // 4. Fetch subjects for this config
           const { data: subData } = await (supabase as any)
@@ -395,39 +401,47 @@ export default function SchoolSettingsPage() {
       setSubjectToDelete(null);
     } catch (err: any) {
       console.error('Failed to delete subject:', err);
-      toast.error(err.message || 'Failed to delete subject');
+      toast.error(friendlyError(err, 'Failed to delete subject.'));
     } finally {
       setDeletingSubject(false);
     }
   };
 
-  // Bulk Sections Parsing & Memo
+  // Bulk Sections Parsing & Memo (Item 5: Skip and report empty, duplicates, and existing)
   const parsedBulkSections = useMemo(() => {
-    if (!bulkSectionsText.trim()) return [];
-    const lines = bulkSectionsText
-      .split(/[\r\n,]+/)
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0);
+    if (!bulkSectionsText) return [];
+    const lines = bulkSectionsText.split(/\r?\n/);
 
     const existingNames = new Set(sectionsList.map((s) => s.name.trim().toLowerCase()));
     const seenInBatch = new Set<string>();
 
-    return lines.map((rawName) => {
+    return lines.map((rawLine, idx) => {
+      const trimmed = rawLine.trim();
+      if (!trimmed) {
+        return {
+          rawName: `(Line ${idx + 1})`,
+          formattedName: `(Empty line ${idx + 1})`,
+          isValid: false,
+          error: 'Empty section name (skipped)',
+        };
+      }
+
       const formattedName =
-        bulkPrefixGrade && !rawName.toLowerCase().startsWith('grade')
-          ? `Grade ${bulkSectionGrade} - ${rawName}`
-          : rawName;
+        bulkPrefixGrade && !trimmed.toLowerCase().startsWith('grade')
+          ? `Grade ${bulkSectionGrade} - ${trimmed}`
+          : trimmed;
       const lower = formattedName.toLowerCase();
       let error: string | null = null;
       if (existingNames.has(lower)) {
-        error = 'Already exists in school records';
+        error = 'Already exists in school records (including archived)';
       } else if (seenInBatch.has(lower)) {
-        error = 'Duplicate in list';
+        error = 'Duplicate in pasted list';
+      } else {
+        seenInBatch.add(lower);
       }
-      seenInBatch.add(lower);
 
       return {
-        rawName,
+        rawName: trimmed,
         formattedName,
         isValid: !error,
         error,
@@ -443,33 +457,81 @@ export default function SchoolSettingsPage() {
   const handleSaveBulkSections = async () => {
     if (validBulkSections.length === 0 || !configId) return;
     setAddingBulkSections(true);
+
+    let createdCount = 0;
+    const failures: { name: string; reason: string }[] = [];
+
+    const recordsToInsert = validBulkSections.map((s) => ({
+      config_id: configId,
+      name: s.formattedName,
+      grade: bulkSectionGrade,
+      strand_code: bulkSectionStrand,
+      is_advisory: false,
+      student_count: 0,
+    }));
+
+    // Insert in chunks of 200 with per-row retry on failure (Item 5)
+    const CHUNK_SIZE = 200;
+
     try {
-      const recordsToInsert = validBulkSections.map((s) => ({
-        config_id: configId,
-        name: s.formattedName,
-        grade: bulkSectionGrade,
-        strand_code: bulkSectionStrand,
-        is_advisory: false,
-        student_count: 0,
-      }));
+      for (let i = 0; i < recordsToInsert.length; i += CHUNK_SIZE) {
+        const chunk = recordsToInsert.slice(i, i + CHUNK_SIZE);
+        const { error: chunkErr } = await (supabase as any)
+          .from('sections')
+          .insert(chunk);
 
-      const { data: created, error: addErr } = await (supabase as any)
-        .from('sections')
-        .insert(recordsToInsert)
-        .select();
+        if (!chunkErr) {
+          createdCount += chunk.length;
+        } else {
+          // Retry chunk row-by-row on failure so one bad row doesn't block the others
+          for (const row of chunk) {
+            const { error: singleErr } = await (supabase as any)
+              .from('sections')
+              .insert(row);
 
-      if (addErr) throw addErr;
+            if (!singleErr) {
+              createdCount += 1;
+            } else {
+              const isDuplicate =
+                singleErr.code === '23505' ||
+                singleErr.message?.includes('23505') ||
+                singleErr.message?.includes('duplicate key');
 
-      if (created) {
-        setSectionsList((prev) => [...prev, ...created]);
+              failures.push({
+                name: row.name,
+                reason: isDuplicate
+                  ? 'Section already exists in school records.'
+                  : friendlyError(singleErr, 'Failed to create section.'),
+              });
+            }
+          }
+        }
       }
-      toast.success(`Successfully created ${validBulkSections.length} class section(s)!`);
-      setBulkSectionsText('');
-      setIsBulkSectionsOpen(false);
+
+      setBulkSectionResult({
+        createdCount,
+        failedRows: failures,
+      });
+
+      if (createdCount > 0) {
+        toast.success(`Successfully enrolled ${createdCount} class section(s)!`);
+      }
     } catch (err: any) {
       console.error('Failed to bulk add sections:', err);
-      toast.error(err.message || 'Failed to add sections');
+      setBulkSectionResult({
+        createdCount,
+        failedRows: [
+          ...failures,
+          {
+            name: 'Remaining sections',
+            reason: friendlyError(err, 'Bulk section enrollment failed unexpectedly.'),
+          },
+        ],
+      });
+      toast.error(friendlyError(err, 'Failed to add sections.'));
     } finally {
+      // Always refresh the list afterward (Item 5)
+      await refreshSections();
       setAddingBulkSections(false);
     }
   };
@@ -1386,131 +1448,181 @@ export default function SchoolSettingsPage() {
               </button>
             </div>
 
-            {/* Config Options */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                  Default Grade Level
-                </label>
-                <select
-                  value={bulkSectionGrade}
-                  onChange={(e) => setBulkSectionGrade(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50/50 p-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
-                >
-                  <option value="11">Grade 11</option>
-                  <option value="12">Grade 12</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                  Academic Strand
-                </label>
-                <select
-                  value={bulkSectionStrand}
-                  onChange={(e) => setBulkSectionStrand(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50/50 p-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
-                >
-                  <option value="STEM">STEM</option>
-                  <option value="ABM">ABM</option>
-                  <option value="HUMSS">HUMSS</option>
-                  <option value="TVL">TVL</option>
-                  <option value="GAS">GAS</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Checkbox for Prefix */}
-            <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-700 dark:text-gray-300">
-              <input
-                type="checkbox"
-                checked={bulkPrefixGrade}
-                onChange={(e) => setBulkPrefixGrade(e.target.checked)}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800"
-              />
-              <span>Automatically prefix with &quot;Grade {bulkSectionGrade} - [Name]&quot;</span>
-            </label>
-
-            {/* Multi-line Paste Input */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                Section Names (one per line or comma-separated)
-              </label>
-              <textarea
-                rows={5}
-                value={bulkSectionsText}
-                onChange={(e) => setBulkSectionsText(e.target.value)}
-                disabled={addingBulkSections}
-                placeholder={`Diamond\nEmerald\nRuby\nSapphire\nTopaz`}
-                className="w-full rounded-xl border border-gray-200 bg-gray-50/50 p-3 font-mono text-xs text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800 resize-y"
-              />
-            </div>
-
-            {/* Preview of Parsed Sections */}
-            {parsedBulkSections.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-gray-700 dark:text-gray-300">
-                    Preview ({validBulkSections.length} valid of {parsedBulkSections.length} total)
-                  </span>
+            {/* Body: Result Summary or Input Form */}
+            {bulkSectionResult ? (
+              <div className="space-y-4 py-2">
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/30 flex items-start gap-3">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                  <div>
+                    <h3 className="text-sm font-bold text-emerald-900 dark:text-emerald-200">
+                      Enrolled {bulkSectionResult.createdCount} Section(s) Successfully
+                    </h3>
+                    <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">
+                      The class roster list has been refreshed with the new section records.
+                    </p>
+                  </div>
                 </div>
-                <div className="max-h-40 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-800 p-2 divide-y divide-gray-100 dark:divide-gray-800 bg-gray-50/50 dark:bg-gray-850/30">
-                  {parsedBulkSections.map((sec, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between py-1.5 px-2 text-xs"
-                    >
-                      <span className="font-medium text-gray-900 dark:text-gray-100">
-                        {sec.formattedName}
-                      </span>
-                      {sec.isValid ? (
-                        <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                          <CheckCircle2 className="h-3 w-3" /> Ready
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[11px] text-rose-600 dark:text-rose-400 font-medium">
-                          <XCircle className="h-3.5 w-3.5 shrink-0" />
-                          <span>{sec.error}</span>
-                        </span>
-                      )}
+
+                {bulkSectionResult.failedRows.length > 0 && (
+                  <div className="space-y-2">
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                      Failed Records ({bulkSectionResult.failedRows.length})
+                    </span>
+                    <div className="max-h-48 overflow-y-auto rounded-xl border border-red-200 dark:border-red-900/50 p-2 divide-y divide-gray-100 dark:divide-gray-800 bg-red-50/30 dark:bg-red-950/20">
+                      {bulkSectionResult.failedRows.map((f, idx) => (
+                        <div key={idx} className="flex items-center justify-between py-1.5 px-2 text-xs">
+                          <span className="font-medium text-gray-900 dark:text-gray-100">{f.name}</span>
+                          <span className="text-red-600 dark:text-red-400 text-[11px] font-medium">{f.reason}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBulkSectionResult(null);
+                      setBulkSectionsText('');
+                      setIsBulkSectionsOpen(false);
+                    }}
+                    className="rounded-xl bg-blue-600 px-6 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition"
+                  >
+                    Done
+                  </button>
                 </div>
               </div>
-            )}
+            ) : (
+              <>
+                {/* Config Options */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                      Default Grade Level
+                    </label>
+                    <select
+                      value={bulkSectionGrade}
+                      onChange={(e) => setBulkSectionGrade(e.target.value)}
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50/50 p-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                    >
+                      <option value="11">Grade 11</option>
+                      <option value="12">Grade 12</option>
+                    </select>
+                  </div>
 
-            {/* Footer Buttons */}
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100 dark:border-gray-800">
-              <button
-                type="button"
-                onClick={() => {
-                  setBulkSectionsText('');
-                  setIsBulkSectionsOpen(false);
-                }}
-                disabled={addingBulkSections}
-                className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-gray-800"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveBulkSections}
-                disabled={addingBulkSections || validBulkSections.length === 0}
-                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition disabled:opacity-50"
-              >
-                {addingBulkSections ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Creating Sections...</span>
-                  </>
-                ) : (
-                  <>
-                    <Plus className="h-4 w-4" />
-                    <span>Create {validBulkSections.length > 0 ? validBulkSections.length : ''} Sections</span>
-                  </>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                      Academic Strand
+                    </label>
+                    <select
+                      value={bulkSectionStrand}
+                      onChange={(e) => setBulkSectionStrand(e.target.value)}
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50/50 p-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                    >
+                      <option value="STEM">STEM</option>
+                      <option value="ABM">ABM</option>
+                      <option value="HUMSS">HUMSS</option>
+                      <option value="TVL">TVL</option>
+                      <option value="GAS">GAS</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Checkbox for Prefix */}
+                <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-700 dark:text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={bulkPrefixGrade}
+                    onChange={(e) => setBulkPrefixGrade(e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800"
+                  />
+                  <span>Automatically prefix with &quot;Grade {bulkSectionGrade} - [Name]&quot;</span>
+                </label>
+
+                {/* Multi-line Paste Input */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                    Section Names (one per line)
+                  </label>
+                  <textarea
+                    rows={5}
+                    value={bulkSectionsText}
+                    onChange={(e) => setBulkSectionsText(e.target.value)}
+                    disabled={addingBulkSections}
+                    placeholder={`Diamond\nEmerald\nRuby\nSapphire\nTopaz`}
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50/50 p-3 font-mono text-xs text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800 resize-y"
+                  />
+                </div>
+
+                {/* Preview of Parsed Sections */}
+                {parsedBulkSections.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-gray-700 dark:text-gray-300">
+                        Preview ({validBulkSections.length} valid of {parsedBulkSections.length} total)
+                      </span>
+                    </div>
+                    <div className="max-h-40 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-800 p-2 divide-y divide-gray-100 dark:divide-gray-800 bg-gray-50/50 dark:bg-gray-850/30">
+                      {parsedBulkSections.map((sec, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between py-1.5 px-2 text-xs"
+                        >
+                          <span className="font-medium text-gray-900 dark:text-gray-100">
+                            {sec.formattedName}
+                          </span>
+                          {sec.isValid ? (
+                            <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                              <CheckCircle2 className="h-3 w-3" /> Ready
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-rose-600 dark:text-rose-400 font-medium">
+                              <XCircle className="h-3.5 w-3.5 shrink-0" />
+                              <span>{sec.error}</span>
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
-              </button>
-            </div>
+
+                {/* Footer Buttons */}
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBulkSectionsText('');
+                      setBulkSectionResult(null);
+                      setIsBulkSectionsOpen(false);
+                    }}
+                    disabled={addingBulkSections}
+                    className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-gray-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveBulkSections}
+                    disabled={addingBulkSections || validBulkSections.length === 0}
+                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition disabled:opacity-50"
+                  >
+                    {addingBulkSections ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Creating Sections...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4" />
+                        <span>Create {validBulkSections.length > 0 ? validBulkSections.length : ''} Sections</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/client';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { useToast } from '@/components/ui/toast';
+import { friendlyError } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 import {
     AlertTriangle,
@@ -353,7 +354,7 @@ export function TosEditor({
     } catch (err: any) {
       console.error('Failed to save TOS to Supabase:', err);
       setSaveStatus('error');
-      toast.error(`Could not save TOS: ${err.message || err}`);
+      toast.error(friendlyError(err, 'Could not save TOS.'));
     } finally {
       setSaving(false);
     }
