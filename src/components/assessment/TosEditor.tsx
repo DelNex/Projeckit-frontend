@@ -709,7 +709,7 @@ export function TosEditor({
             />
           </div>
           <div>
-            <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">Active Quarter</label>
+            <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">Active Term</label>
             {gradingPeriods.length > 0 ? (
               <select
                 value={term}
@@ -718,7 +718,7 @@ export function TosEditor({
               >
                 {gradingPeriods.map((gp) => (
                   <option key={gp.id} value={gp.name}>
-                    {gp.name} ({gp.code})
+                    {gp.name} ({gp.code.replace(/_arch_.*$/, '')})
                   </option>
                 ))}
               </select>
@@ -727,7 +727,7 @@ export function TosEditor({
                 type="text"
                 value={term}
                 onChange={(e) => setTerm(e.target.value)}
-                placeholder="e.g. 1st Quarter"
+                placeholder="e.g. 1st Term"
                 className="w-full px-2.5 py-1.5 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-bold text-blue-600 dark:text-blue-400 focus:ring-2 focus:ring-blue-500 text-xs outline-none"
               />
             )}

@@ -61,6 +61,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [assessments, setAssessments] = useState<AssessmentItem[]>([]);
+  const [gradingPeriods, setGradingPeriods] = useState<Array<{ id: string; name: string; code: string; position: number }>>([]);
   const [totalEnrolledStudents, setTotalEnrolledStudents] = useState<number>(0);
   const [totalSectionsCount, setTotalSectionsCount] = useState<number>(0);
   const [studentScores, setStudentScores] = useState<StudentScoreRecord[]>([]);
@@ -77,6 +78,21 @@ export default function DashboardPage() {
     setError(null);
 
     try {
+      // 0. Fetch Active Grading Periods
+      const { data: gpData } = await (supabase as any)
+        .from('grading_periods')
+        .select('id, name, code, position')
+        .eq('is_archived', false)
+        .order('position', { ascending: true });
+
+      const periods = (gpData || []).map((g: any) => ({
+        id: g.id,
+        name: g.name,
+        code: g.code,
+        position: Number(g.position) || 1,
+      }));
+      setGradingPeriods(periods);
+
       // 1. Fetch Assessments with Subjects and Sections
       const { data: assData, error: assErr } = await (supabase as any)
         .from('assessments')
@@ -190,7 +206,8 @@ export default function DashboardPage() {
         const scoreMps = totalItems > 0 ? (correctCount / totalItems) * 100 : 0;
         const roundedMps = Math.round(scoreMps * 10) / 10;
 
-        const qKey = normalizeQuarter(ass?.term || 'First Quarter');
+        const termPeriod = periods.find((p: { name: string; position: number }) => p.name.trim().toLowerCase() === (ass?.term || '').trim().toLowerCase());
+        const qKey = termPeriod ? (`Q${termPeriod.position}` as 'Q1' | 'Q2' | 'Q3' | 'Q4') : normalizeQuarter(ass?.term || 'First Quarter');
         const sYear = ass?.school_year || '2025-2026';
 
         computedScores.push({
@@ -274,28 +291,35 @@ export default function DashboardPage() {
     };
   }, [studentScores, totalEnrolledStudents, totalSectionsCount, assessments.length]);
 
-  // Compute Authentic Quarterly Longitudinal Trend (Q1 -> Q4)
+  // Compute Authentic Quarterly Longitudinal Trend (dynamically supporting 2 to 4 periods)
   const quarterlyTrendData = useMemo(() => {
-    const quarters: Array<{ key: 'Q1' | 'Q2' | 'Q3' | 'Q4'; label: string }> = [
-      { key: 'Q1', label: 'Q1 (First)' },
-      { key: 'Q2', label: 'Q2 (Second)' },
-      { key: 'Q3', label: 'Q3 (Third)' },
-      { key: 'Q4', label: 'Q4 (Fourth)' },
-    ];
+    const activePeriods =
+      gradingPeriods.length > 0
+        ? gradingPeriods
+        : [
+            { id: '1', name: '1st Term', code: 'T1', position: 1 },
+            { id: '2', name: '2nd Term', code: 'T2', position: 2 },
+            { id: '3', name: '3rd Term', code: 'T3', position: 3 },
+            { id: '4', name: '4th Term', code: 'T4', position: 4 },
+          ];
 
-    const results = quarters.map((q) => {
-      const scansInQuarter = studentScores.filter((s) => s.quarterKey === q.key);
+    const results = activePeriods.map((gp) => {
+      const targetQuarterKey = `Q${gp.position}`;
+      const scansInQuarter = studentScores.filter((s) => s.quarterKey === targetQuarterKey);
+      const cleanCode = gp.code.replace(/_arch_.*$/, '');
+      const label = `${cleanCode} (${gp.name})`;
+
       if (scansInQuarter.length === 0) {
-        return { key: q.key, label: q.label, mps: null, count: 0 };
+        return { key: targetQuarterKey as any, label, mps: null, count: 0 };
       }
       const sum = scansInQuarter.reduce((acc, curr) => acc + curr.mps, 0);
       const avg = Math.round((sum / scansInQuarter.length) * 10) / 10;
-      return { key: q.key, label: q.label, mps: avg, count: scansInQuarter.length };
+      return { key: targetQuarterKey as any, label, mps: avg, count: scansInQuarter.length };
     });
 
     const hasAnyData = results.some((r) => r.mps !== null);
     return { points: results, hasData: hasAnyData };
-  }, [studentScores]);
+  }, [studentScores, gradingPeriods]);
 
   // Compute Authentic Learner Performance Tiers
   const learnerTierData = useMemo(() => {

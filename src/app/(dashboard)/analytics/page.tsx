@@ -61,6 +61,26 @@ interface TosDocRecord {
   rows: any[];
 }
 
+interface GradingPeriodInfo {
+  id: string;
+  name: string;
+  code: string;
+  position: number;
+}
+
+function getAssessmentPeriodPosition(termName: string, periods: GradingPeriodInfo[]): number {
+  const clean = (termName || '').trim().toLowerCase();
+  const match = periods.find((p) => p.name.trim().toLowerCase() === clean);
+  if (match) return match.position;
+
+  // Fallback heuristics based on numbers or standard keywords
+  if (clean.includes('1st') || clean.includes('first') || clean.includes('q1') || clean.includes('s1') || clean === '1') return 1;
+  if (clean.includes('2nd') || clean.includes('second') || clean.includes('q2') || clean.includes('s2') || clean === '2') return 2;
+  if (clean.includes('3rd') || clean.includes('third') || clean.includes('q3') || clean === '3') return 3;
+  if (clean.includes('4th') || clean.includes('fourth') || clean.includes('q4') || clean === '4') return 4;
+  return 1;
+}
+
 function AnalyticsContent() {
   const supabase = createClient();
   const searchParams = useSearchParams();
@@ -74,6 +94,7 @@ function AnalyticsContent() {
   const [sections, setSections] = useState<SectionItem[]>([]);
   const [subjects, setSubjects] = useState<SubjectItem[]>([]);
   const [assessments, setAssessments] = useState<AssessmentItem[]>([]);
+  const [gradingPeriods, setGradingPeriods] = useState<GradingPeriodInfo[]>([]);
   const [scanResults, setScanResults] = useState<ScanRecord[]>([]);
   const [answerKeys, setAnswerKeys] = useState<Record<string, Record<number, string>>>({});
   const [tosDocuments, setTosDocuments] = useState<Record<string, TosDocRecord>>({});
@@ -121,6 +142,21 @@ function AnalyticsContent() {
         targetItems: s.target_items || 50,
       }));
       setSubjects(parsedSubjects);
+
+      // 2b. Grading Periods
+      const { data: gpData } = await (supabase as any)
+        .from('grading_periods')
+        .select('id, name, code, position')
+        .eq('is_archived', false)
+        .order('position', { ascending: true });
+
+      const parsedPeriods: GradingPeriodInfo[] = (gpData || []).map((g: any) => ({
+        id: g.id,
+        name: g.name,
+        code: g.code,
+        position: Number(g.position) || 1,
+      }));
+      setGradingPeriods(parsedPeriods);
 
       // 3. Assessments
       const { data: assData } = await (supabase as any)
@@ -247,9 +283,15 @@ function AnalyticsContent() {
     return assessments.filter((a) => {
       if (selectedSchoolYear !== 'all' && a.schoolYear !== selectedSchoolYear) return false;
       if (selectedQuarter !== 'all') {
-        const qtrNorm = selectedQuarter.toLowerCase().replace(/\s+/g, '');
-        const aQtrNorm = (a.term || '').toLowerCase().replace(/\s+/g, '');
-        if (!aQtrNorm.includes(qtrNorm) && !qtrNorm.includes(aQtrNorm)) return false;
+        const targetPos = parseInt(selectedQuarter, 10);
+        if (!isNaN(targetPos)) {
+          const aPos = getAssessmentPeriodPosition(a.term, gradingPeriods);
+          if (aPos !== targetPos) return false;
+        } else {
+          const qtrNorm = selectedQuarter.toLowerCase().replace(/\s+/g, '');
+          const aQtrNorm = (a.term || '').toLowerCase().replace(/\s+/g, '');
+          if (!aQtrNorm.includes(qtrNorm) && !qtrNorm.includes(aQtrNorm)) return false;
+        }
       }
       if (selectedSubject !== 'all' && a.subjectTitle !== selectedSubject) return false;
       if (selectedSection !== 'all' && a.sectionName !== selectedSection) return false;
@@ -265,7 +307,7 @@ function AnalyticsContent() {
       }
       return true;
     });
-  }, [assessments, selectedSchoolYear, selectedQuarter, selectedSubject, selectedSection, selectedGrade, selectedStrand]);
+  }, [assessments, selectedSchoolYear, selectedQuarter, selectedSubject, selectedSection, selectedGrade, selectedStrand, gradingPeriods]);
 
   // Calculate live aggregate MPS and Mastery for the Summary Badges
   const aggregateMetrics = useMemo(() => {
@@ -355,15 +397,22 @@ function AnalyticsContent() {
   // Longitudinal Growth Data (Real quarterly breakdown across school years)
   const longitudinalData = useMemo(() => {
     const years = ['2024–2025', '2025–2026', '2026–2027'];
-    const quarters = ['First Quarter', 'Second Quarter', 'Third Quarter', 'Fourth Quarter'];
+    const activePeriods =
+      gradingPeriods.length > 0
+        ? gradingPeriods
+        : [
+            { id: '1', name: '1st Term', code: 'T1', position: 1 },
+            { id: '2', name: '2nd Term', code: 'T2', position: 2 },
+            { id: '3', name: '3rd Term', code: 'T3', position: 3 },
+            { id: '4', name: '4th Term', code: 'T4', position: 4 },
+          ];
 
     return years.map((yr) => {
-      const yrSeries = quarters.map((qtr) => {
+      const yrSeries = activePeriods.map((gp) => {
         const qtrAssessments = assessments.filter((a) => {
           if (a.schoolYear !== yr && a.schoolYear !== yr.replace('–', '-')) return false;
-          const aQtrNorm = (a.term || '').toLowerCase().replace(/\s+/g, '');
-          const qtrNorm = qtr.toLowerCase().replace(/\s+/g, '');
-          if (!aQtrNorm.includes(qtrNorm) && !qtrNorm.includes(aQtrNorm)) return false;
+          const aPos = getAssessmentPeriodPosition(a.term, gradingPeriods);
+          if (aPos !== gp.position) return false;
           if (selectedSubject !== 'all' && a.subjectTitle !== selectedSubject) return false;
           if (selectedSection !== 'all' && a.sectionName !== selectedSection) return false;
           return true;
@@ -392,10 +441,11 @@ function AnalyticsContent() {
 
       return {
         schoolYear: yr,
+        periods: activePeriods,
         quarterScores: yrSeries,
       };
     });
-  }, [assessments, scanResults, answerKeys, selectedSubject, selectedSection]);
+  }, [assessments, scanResults, answerKeys, selectedSubject, selectedSection, gradingPeriods]);
 
   const hasLongitudinalData = useMemo(() => {
     return longitudinalData.some((yr) => yr.quarterScores.some((s) => s !== null));
@@ -757,10 +807,20 @@ function AnalyticsContent() {
               className="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 font-bold"
             >
               <option value="all">All Terms</option>
-              <option value="First Quarter">Q1</option>
-              <option value="Second Quarter">Q2</option>
-              <option value="Third Quarter">Q3</option>
-              <option value="Fourth Quarter">Q4</option>
+              {gradingPeriods.length > 0 ? (
+                gradingPeriods.map((gp) => (
+                  <option key={gp.id} value={String(gp.position)}>
+                    {gp.name} ({gp.code.replace(/_arch_.*$/, '')})
+                  </option>
+                ))
+              ) : (
+                <>
+                  <option value="1">1st Term (T1)</option>
+                  <option value="2">2nd Term (T2)</option>
+                  <option value="3">3rd Term (T3)</option>
+                  <option value="4">4th Term (T4)</option>
+                </>
+              )}
             </select>
 
             <select
@@ -986,11 +1046,13 @@ function AnalyticsContent() {
                       <span className="text-[10px] text-gray-400 font-medium">MPS Trajectory</span>
                     </div>
                     <div className="space-y-2">
-                      {['Q1', 'Q2', 'Q3', 'Q4'].map((qtrName, qIdx) => {
-                        const score = yr.quarterScores[qIdx];
+                      {yr.periods.map((period, pIdx) => {
+                        const score = yr.quarterScores[pIdx];
                         return (
-                          <div key={qtrName} className="flex items-center justify-between text-xs">
-                            <span className="text-gray-500 font-medium">{qtrName}</span>
+                          <div key={period.id || pIdx} className="flex items-center justify-between text-xs">
+                            <span className="text-gray-500 font-medium">
+                              {period.name} ({period.code.replace(/_arch_.*$/, '')})
+                            </span>
                             <span className="font-mono font-bold text-gray-900 dark:text-white">
                               {score !== null ? `${score}%` : '—'}
                             </span>
@@ -1271,7 +1333,12 @@ function AnalyticsContent() {
             <div className="mt-3 flex flex-wrap items-center justify-center gap-6 border-t border-gray-100 pt-3 text-xs text-gray-500 dark:border-gray-800 dark:text-gray-400">
               <div><strong>School Year:</strong> {selectedSchoolYear === 'all' ? '2025–2026' : selectedSchoolYear}</div>
               <div><strong>Strand:</strong> {selectedStrand === 'all' ? 'All Strands' : selectedStrand}</div>
-              <div><strong>Quarter:</strong> {selectedQuarter === 'all' ? 'Consolidated' : selectedQuarter}</div>
+              <div>
+                <strong>Term:</strong>{' '}
+                {selectedQuarter === 'all'
+                  ? 'Consolidated'
+                  : gradingPeriods.find((p) => String(p.position) === selectedQuarter)?.name || selectedQuarter}
+              </div>
             </div>
           </div>
 

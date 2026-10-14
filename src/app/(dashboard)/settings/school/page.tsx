@@ -32,6 +32,9 @@ import {
     Edit2,
     Check,
     Calendar,
+    ChevronDown,
+    ChevronUp,
+    AlertTriangle,
 } from 'lucide-react';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { useToast } from '@/components/ui/toast';
@@ -86,7 +89,11 @@ export default function SchoolSettingsPage() {
 
   // Grading Periods State (C2)
   const [gradingPeriods, setGradingPeriods] = useState<GradingPeriodItem[]>([]);
+  const [archivedGradingPeriods, setArchivedGradingPeriods] = useState<GradingPeriodItem[]>([]);
+  const [isArchivedExpanded, setIsArchivedExpanded] = useState(false);
   const [loadingPeriods, setLoadingPeriods] = useState(false);
+  const [rowOperatingId, setRowOperatingId] = useState<string | null>(null);
+
   const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
   const [editPeriodName, setEditPeriodName] = useState('');
   const [editPeriodCode, setEditPeriodCode] = useState('');
@@ -106,6 +113,52 @@ export default function SchoolSettingsPage() {
     affectedCount: 0,
   });
   const [savingPeriod, setSavingPeriod] = useState(false);
+
+  // Add Term Modal State
+  const [isAddTermModalOpen, setIsAddTermModalOpen] = useState(false);
+  const [newTermName, setNewTermName] = useState('');
+  const [newTermType, setNewTermType] = useState<'term' | 'semester'>('term');
+  const [newTermCode, setNewTermCode] = useState('');
+  const [addingTerm, setAddingTerm] = useState(false);
+
+  // Delete / Archive Term Modal State
+  const [deleteModalState, setDeleteModalState] = useState<{
+    isOpen: boolean;
+    period: GradingPeriodItem | null;
+    assessmentCount: number;
+    tosCount: number;
+    totalCount: number;
+    targetPeriodId: string;
+    loadingUsage: boolean;
+    operating: boolean;
+  }>({
+    isOpen: false,
+    period: null,
+    assessmentCount: 0,
+    tosCount: 0,
+    totalCount: 0,
+    targetPeriodId: '',
+    loadingUsage: false,
+    operating: false,
+  });
+
+  // Set Current Term Confirmation Modal State
+  const [setCurrentConfirmModal, setSetCurrentConfirmModal] = useState<{
+    isOpen: boolean;
+    period: GradingPeriodItem | null;
+  }>({
+    isOpen: false,
+    period: null,
+  });
+
+  // Preset Confirmation Modal State
+  const [presetConfirmModal, setPresetConfirmModal] = useState<{
+    isOpen: boolean;
+    preset: '4quarter' | '2semester';
+  }>({
+    isOpen: false,
+    preset: '4quarter',
+  });
 
   const { toast } = useToast();
   const [sectionsList, setSectionsList] = useState<SectionItem[]>([]);
@@ -202,23 +255,35 @@ export default function SchoolSettingsPage() {
     if (!tid) return [];
     try {
       setLoadingPeriods(true);
-      const { data, error: err } = await (supabase as any)
-        .from('grading_periods')
-        .select('*')
-        .eq('tenant_id', tid)
-        .eq('is_archived', false)
-        .order('position', { ascending: true });
+      const [activeRes, archRes] = await Promise.all([
+        (supabase as any)
+          .from('grading_periods')
+          .select('*')
+          .eq('tenant_id', tid)
+          .eq('is_archived', false)
+          .order('position', { ascending: true }),
+        (supabase as any)
+          .from('grading_periods')
+          .select('*')
+          .eq('tenant_id', tid)
+          .eq('is_archived', true)
+          .order('created_at', { ascending: false }),
+      ]);
 
-      if (err) throw err;
+      if (activeRes.error) throw activeRes.error;
 
-      const loaded = (data as GradingPeriodItem[]) || [];
-      console.log(`[GradingPeriods] Fetched ${loaded.length} active periods for tenant: ${tid}`);
-      setGradingPeriods(loaded);
-      const current = loaded.find((p) => p.is_current);
+      const loadedActive = (activeRes.data as GradingPeriodItem[]) || [];
+      const loadedArchived = (archRes.data as GradingPeriodItem[]) || [];
+
+      console.log(`[GradingPeriods] Fetched ${loadedActive.length} active and ${loadedArchived.length} archived periods for tenant: ${tid}`);
+      setGradingPeriods(loadedActive);
+      setArchivedGradingPeriods(loadedArchived);
+
+      const current = loadedActive.find((p) => p.is_current);
       if (current) {
         setTerm(current.name);
       }
-      return loaded;
+      return loadedActive;
     } catch (e) {
       console.warn('[GradingPeriods] Failed to load grading periods:', e);
       return [];
@@ -233,6 +298,7 @@ export default function SchoolSettingsPage() {
     const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
     if (targetIdx < 0 || targetIdx >= gradingPeriods.length) return;
 
+    setRowOperatingId(periodId);
     const currentPeriod = gradingPeriods[idx];
     const targetPeriod = gradingPeriods[targetIdx];
 
@@ -257,24 +323,42 @@ export default function SchoolSettingsPage() {
       console.error('Failed to reorder grading periods:', err);
       toast.error(friendlyError(err, 'Failed to reorder grading periods.'));
       await refreshGradingPeriods();
+    } finally {
+      setRowOperatingId(null);
     }
   };
 
-  const handleSetCurrentPeriod = async (period: GradingPeriodItem) => {
+  const handleConfirmSetCurrent = async (period: GradingPeriodItem) => {
     if (period.is_current) return;
+    setRowOperatingId(period.id);
     try {
-      await (supabase as any)
-        .from('grading_periods')
-        .update({ is_current: false })
-        .eq('tenant_id', tenantId)
-        .eq('is_current', true);
+      // 1. Try RPC first
+      const { error: rpcErr } = await (supabase as any).rpc('set_current_grading_period', {
+        p_period_id: period.id,
+      });
 
-      const { error: updErr } = await (supabase as any)
-        .from('grading_periods')
-        .update({ is_current: true })
-        .eq('id', period.id);
+      if (rpcErr) {
+        console.warn('[GradingPeriods] RPC set_current_grading_period fallback:', rpcErr.message);
+        await (supabase as any)
+          .from('grading_periods')
+          .update({ is_current: false })
+          .eq('tenant_id', tenantId)
+          .eq('is_current', true);
 
-      if (updErr) throw updErr;
+        const { error: updErr } = await (supabase as any)
+          .from('grading_periods')
+          .update({ is_current: true })
+          .eq('id', period.id);
+
+        if (updErr) throw updErr;
+
+        if (configId) {
+          await (supabase as any)
+            .from('academic_configs')
+            .update({ term: period.name, updated_at: new Date().toISOString() })
+            .eq('id', configId);
+        }
+      }
 
       setTerm(period.name);
       setGradingPeriods((prev) =>
@@ -284,9 +368,13 @@ export default function SchoolSettingsPage() {
         }))
       );
       toast.success(`"${period.name}" is now the active Current Term.`);
+      await refreshGradingPeriods();
     } catch (err: any) {
       console.error('Failed to set current period:', err);
       toast.error(friendlyError(err, 'Failed to set current term.'));
+    } finally {
+      setRowOperatingId(null);
+      setSetCurrentConfirmModal({ isOpen: false, period: null });
     }
   };
 
@@ -296,9 +384,30 @@ export default function SchoolSettingsPage() {
     newCode: string
   ) => {
     const trimmedName = newName.trim();
-    const trimmedCode = newCode.trim();
+    let trimmedCode = newCode.trim().toUpperCase();
+
     if (!trimmedName) {
       toast.error('Period display name cannot be empty.');
+      return;
+    }
+
+    if (trimmedName.length > 50) {
+      toast.error('Period display name cannot exceed 50 characters.');
+      return;
+    }
+
+    if (!trimmedCode) {
+      trimmedCode = trimmedName.toLowerCase().includes('semester')
+        ? `S${period.position}`
+        : `T${period.position}`;
+    }
+
+    // Check case-insensitive uniqueness against other active periods
+    const duplicateName = gradingPeriods.some(
+      (p) => p.id !== period.id && p.name.trim().toLowerCase() === trimmedName.toLowerCase()
+    );
+    if (duplicateName) {
+      toast.error(`A term with the name "${trimmedName}" already exists.`);
       return;
     }
 
@@ -340,6 +449,7 @@ export default function SchoolSettingsPage() {
     newCode: string
   ) => {
     setSavingPeriod(true);
+    setRowOperatingId(periodId);
     try {
       const { error: updErr } = await (supabase as any)
         .from('grading_periods')
@@ -367,7 +477,7 @@ export default function SchoolSettingsPage() {
           if (configId) {
             await (supabase as any)
               .from('academic_configs')
-              .update({ term: newName })
+              .update({ term: newName, updated_at: new Date().toISOString() })
               .eq('id', configId);
           }
         }
@@ -382,6 +492,291 @@ export default function SchoolSettingsPage() {
       toast.error(friendlyError(err, 'Failed to save period changes.'));
     } finally {
       setSavingPeriod(false);
+      setRowOperatingId(null);
+    }
+  };
+
+  const handleAddTerm = async () => {
+    if (!tenantId) {
+      toast.error('Your account is not linked to a school yet.');
+      return;
+    }
+
+    if (gradingPeriods.length >= 4) {
+      toast.error('You can have up to 4 terms. Delete or archive one first.');
+      return;
+    }
+
+    const trimmedName = newTermName.trim();
+    if (!trimmedName) {
+      toast.error('Please enter a term name.');
+      return;
+    }
+
+    if (trimmedName.length > 50) {
+      toast.error('Term name cannot exceed 50 characters.');
+      return;
+    }
+
+    const duplicateName = gradingPeriods.some(
+      (p) => p.name.trim().toLowerCase() === trimmedName.toLowerCase()
+    );
+    if (duplicateName) {
+      toast.error(`A term with the name "${trimmedName}" already exists.`);
+      return;
+    }
+
+    setAddingTerm(true);
+    try {
+      const nextPos = gradingPeriods.length + 1;
+      let finalCode = newTermCode.trim().toUpperCase();
+      if (!finalCode) {
+        finalCode = newTermType === 'semester' || trimmedName.toLowerCase().includes('semester')
+          ? `S${nextPos}`
+          : `T${nextPos}`;
+      }
+
+      // 1. Try RPC function
+      const { data: rpcData, error: rpcErr } = await (supabase as any).rpc('add_grading_period', {
+        p_name: trimmedName,
+        p_code: finalCode,
+        p_type: newTermType,
+      });
+
+      if (rpcErr) {
+        console.warn('[GradingPeriods] RPC add_grading_period fallback:', rpcErr.message);
+
+        // Fallback: direct insert
+        const { error: insErr } = await (supabase as any)
+          .from('grading_periods')
+          .insert({
+            tenant_id: tenantId,
+            name: trimmedName,
+            code: finalCode,
+            position: nextPos,
+            is_current: false,
+            is_archived: false,
+          })
+          .select('*');
+
+        if (insErr) throw insErr;
+      }
+
+      setIsAddTermModalOpen(false);
+      setNewTermName('');
+      setNewTermCode('');
+      toast.success(`Term "${trimmedName}" added successfully.`);
+      await refreshGradingPeriods();
+    } catch (err: any) {
+      console.error('Failed to add grading period:', err);
+      toast.error(friendlyError(err, 'Failed to add grading period.'));
+    } finally {
+      setAddingTerm(false);
+    }
+  };
+
+  const handleRequestDeletePeriod = async (period: GradingPeriodItem) => {
+    if (period.is_current) {
+      toast.error('Cannot delete the active current term. Set another term as current first.');
+      return;
+    }
+
+    if (gradingPeriods.length <= 1) {
+      toast.error('At least one term is required.');
+      return;
+    }
+
+    const otherActivePeriods = gradingPeriods.filter((p) => p.id !== period.id);
+    const defaultTargetId = otherActivePeriods.length > 0 ? otherActivePeriods[0].id : '';
+
+    setDeleteModalState({
+      isOpen: true,
+      period,
+      assessmentCount: 0,
+      tosCount: 0,
+      totalCount: 0,
+      targetPeriodId: defaultTargetId,
+      loadingUsage: true,
+      operating: false,
+    });
+
+    try {
+      // 1. Try RPC get_grading_period_usage
+      const { data: usageData, error: usageErr } = await (supabase as any).rpc('get_grading_period_usage', {
+        p_period_id: period.id,
+      });
+
+      if (!usageErr && usageData) {
+        setDeleteModalState((prev) => ({
+          ...prev,
+          assessmentCount: usageData.assessment_count || 0,
+          tosCount: usageData.tos_count || 0,
+          totalCount: usageData.total_count || 0,
+          loadingUsage: false,
+        }));
+      } else {
+        // Fallback: client queries
+        const [assRes, tosRes] = await Promise.all([
+          (supabase as any)
+            .from('assessments')
+            .select('id', { count: 'exact', head: true })
+            .eq('tenant_id', tenantId)
+            .eq('term', period.name),
+          (supabase as any)
+            .from('tos_documents')
+            .select('id', { count: 'exact', head: true })
+            .eq('tenant_id', tenantId)
+            .eq('term', period.name),
+        ]);
+
+        const aCount = assRes.count || 0;
+        const tCount = tosRes.count || 0;
+        setDeleteModalState((prev) => ({
+          ...prev,
+          assessmentCount: aCount,
+          tosCount: tCount,
+          totalCount: aCount + tCount,
+          loadingUsage: false,
+        }));
+      }
+    } catch (err: any) {
+      console.warn('Failed to load usage counts:', err);
+      setDeleteModalState((prev) => ({ ...prev, loadingUsage: false }));
+    }
+  };
+
+  const handleConfirmDeleteOrArchive = async (action: 'delete' | 'archive' | 'move_and_delete') => {
+    const period = deleteModalState.period;
+    if (!period) return;
+
+    setDeleteModalState((prev) => ({ ...prev, operating: true }));
+    setRowOperatingId(period.id);
+
+    try {
+      const { error: rpcErr } = await (supabase as any).rpc('delete_or_archive_grading_period', {
+        p_period_id: period.id,
+        p_action: action,
+        p_target_period_id: action === 'move_and_delete' ? deleteModalState.targetPeriodId : null,
+      });
+
+      if (rpcErr) {
+        console.warn('[GradingPeriods] RPC delete_or_archive_grading_period fallback:', rpcErr.message);
+
+        if (action === 'move_and_delete') {
+          const target = gradingPeriods.find((p) => p.id === deleteModalState.targetPeriodId);
+          if (target) {
+            await (supabase as any)
+              .from('assessments')
+              .update({ term: target.name })
+              .eq('tenant_id', tenantId)
+              .eq('term', period.name);
+
+            await (supabase as any)
+              .from('tos_documents')
+              .update({ term: target.name })
+              .eq('tenant_id', tenantId)
+              .eq('term', period.name);
+          }
+          await (supabase as any).from('grading_periods').delete().eq('id', period.id);
+        } else if (action === 'delete') {
+          await (supabase as any).from('grading_periods').delete().eq('id', period.id);
+        } else if (action === 'archive') {
+          await (supabase as any)
+            .from('grading_periods')
+            .update({
+              is_archived: true,
+              is_current: false,
+              code: `${period.code}_arch_${period.id.slice(0, 6)}`,
+            })
+            .eq('id', period.id);
+        }
+
+        // Renumber remaining active positions 1..N
+        const remaining = gradingPeriods.filter((p) => p.id !== period.id);
+        for (let i = 0; i < remaining.length; i++) {
+          await (supabase as any)
+            .from('grading_periods')
+            .update({ position: i + 1 })
+            .eq('id', remaining[i].id);
+        }
+      }
+
+      setDeleteModalState({
+        isOpen: false,
+        period: null,
+        assessmentCount: 0,
+        tosCount: 0,
+        totalCount: 0,
+        targetPeriodId: '',
+        loadingUsage: false,
+        operating: false,
+      });
+
+      const label = action === 'archive' ? 'archived' : 'deleted';
+      toast.success(`Term "${period.name}" ${label} successfully.`);
+      await refreshGradingPeriods();
+    } catch (err: any) {
+      console.error('Failed to perform delete/archive action:', err);
+      toast.error(friendlyError(err, 'Failed to update term.'));
+    } finally {
+      setRowOperatingId(null);
+      setDeleteModalState((prev) => ({ ...prev, operating: false }));
+    }
+  };
+
+  const handleRestorePeriod = async (period: GradingPeriodItem) => {
+    if (gradingPeriods.length >= 4) {
+      toast.error('Maximum of 4 active terms reached. Delete or archive one before restoring.');
+      return;
+    }
+
+    const duplicateName = gradingPeriods.some(
+      (p) => p.name.trim().toLowerCase() === period.name.trim().toLowerCase()
+    );
+    if (duplicateName) {
+      toast.error(`An active term with the name "${period.name}" already exists.`);
+      return;
+    }
+
+    setRowOperatingId(period.id);
+    try {
+      const { error: rpcErr } = await (supabase as any).rpc('restore_grading_period', {
+        p_period_id: period.id,
+      });
+
+      if (rpcErr) {
+        console.warn('[GradingPeriods] RPC restore_grading_period fallback:', rpcErr.message);
+        const cleanCode = period.code.replace(/_arch_.*$/, '');
+        const nextPos = gradingPeriods.length + 1;
+        await (supabase as any)
+          .from('grading_periods')
+          .update({
+            is_archived: false,
+            is_current: false,
+            position: nextPos,
+            code: cleanCode,
+          })
+          .eq('id', period.id);
+      }
+
+      toast.success(`Term "${period.name}" restored successfully.`);
+      await refreshGradingPeriods();
+    } catch (err: any) {
+      console.error('Failed to restore term:', err);
+      toast.error(friendlyError(err, 'Failed to restore term.'));
+    } finally {
+      setRowOperatingId(null);
+    }
+  };
+
+  const handleRequestPreset = (preset: '4quarter' | '2semester') => {
+    if (gradingPeriods.length > 0) {
+      setPresetConfirmModal({
+        isOpen: true,
+        preset,
+      });
+    } else {
+      handleApplyPreset(preset);
     }
   };
 
@@ -404,7 +799,7 @@ export default function SchoolSettingsPage() {
       if (rpcErr) {
         console.warn('[GradingPeriods] RPC unavailable, executing client fallback with verification:', rpcErr.message);
 
-        // Client-side fallback: archive existing active periods
+        // Client-side fallback: archive existing active periods safely
         const { error: archiveErr } = await (supabase as any)
           .from('grading_periods')
           .update({ is_archived: true, is_current: false })
@@ -417,10 +812,10 @@ export default function SchoolSettingsPage() {
 
         const standardRows = preset === '4quarter'
           ? [
-              { tenant_id: tenantId, name: '1st Quarter', code: 'Q1', position: 1, is_current: true, is_archived: false },
-              { tenant_id: tenantId, name: '2nd Quarter', code: 'Q2', position: 2, is_current: false, is_archived: false },
-              { tenant_id: tenantId, name: '3rd Quarter', code: 'Q3', position: 3, is_current: false, is_archived: false },
-              { tenant_id: tenantId, name: '4th Quarter', code: 'Q4', position: 4, is_current: false, is_archived: false },
+              { tenant_id: tenantId, name: '1st Term', code: 'T1', position: 1, is_current: true, is_archived: false },
+              { tenant_id: tenantId, name: '2nd Term', code: 'T2', position: 2, is_current: false, is_archived: false },
+              { tenant_id: tenantId, name: '3rd Term', code: 'T3', position: 3, is_current: false, is_archived: false },
+              { tenant_id: tenantId, name: '4th Term', code: 'T4', position: 4, is_current: false, is_archived: false },
             ]
           : [
               { tenant_id: tenantId, name: '1st Semester', code: 'S1', position: 1, is_current: true, is_archived: false },
@@ -463,6 +858,7 @@ export default function SchoolSettingsPage() {
       toast.error(friendlyError(err, 'Failed to apply preset.'));
     } finally {
       setLoadingPeriods(false);
+      setPresetConfirmModal({ isOpen: false, preset: '4quarter' });
     }
   };
 
@@ -1100,25 +1496,55 @@ export default function SchoolSettingsPage() {
                 </div>
               </div>
 
-              {/* Preset buttons */}
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-semibold text-gray-400">Presets:</span>
+              {/* Action buttons */}
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => handleApplyPreset('4quarter')}
-                  className="rounded-xl border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 transition"
+                  disabled={gradingPeriods.length >= 4 || Boolean(rowOperatingId)}
+                  onClick={() => {
+                    const nextPos = gradingPeriods.length + 1;
+                    setNewTermType('term');
+                    setNewTermName(`Term ${nextPos}`);
+                    setNewTermCode(`T${nextPos}`);
+                    setIsAddTermModalOpen(true);
+                  }}
+                  title={
+                    gradingPeriods.length >= 4
+                      ? 'You can have up to 4 terms. Delete or archive one first.'
+                      : 'Add a new grading period'
+                  }
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Add Term</span>
+                </button>
+
+                <span className="text-[11px] font-semibold text-gray-400 ml-1">Presets:</span>
+                <button
+                  type="button"
+                  disabled={Boolean(rowOperatingId)}
+                  onClick={() => handleRequestPreset('4quarter')}
+                  className="rounded-xl border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 transition disabled:opacity-50"
                 >
                   4 Terms
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleApplyPreset('2semester')}
-                  className="rounded-xl border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 transition"
+                  disabled={Boolean(rowOperatingId)}
+                  onClick={() => handleRequestPreset('2semester')}
+                  className="rounded-xl border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 transition disabled:opacity-50"
                 >
                   2 Semesters
                 </button>
               </div>
             </div>
+
+            {gradingPeriods.length >= 4 && (
+              <div className="flex items-center gap-2 rounded-xl bg-amber-50 p-2.5 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-900/40">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                <span>You can have up to 4 terms. Delete or archive one first.</span>
+              </div>
+            )}
 
             {loadingPeriods ? (
               <div className="flex items-center justify-center py-6 text-gray-400">
@@ -1127,12 +1553,13 @@ export default function SchoolSettingsPage() {
               </div>
             ) : gradingPeriods.length === 0 ? (
               <div className="text-center py-6 text-gray-400 text-xs">
-                No active grading periods configured. Click "4 Terms" above to initialize.
+                No active grading periods configured. Click "4 Terms" or "2 Semesters" above to initialize.
               </div>
             ) : (
               <div className="space-y-2">
                 {gradingPeriods.map((gp, idx) => {
                   const isEditing = editingPeriodId === gp.id;
+                  const isOperating = rowOperatingId === gp.id;
 
                   return (
                     <div
@@ -1153,7 +1580,7 @@ export default function SchoolSettingsPage() {
                           <div className="flex flex-col">
                             <button
                               type="button"
-                              disabled={idx === 0}
+                              disabled={idx === 0 || Boolean(rowOperatingId)}
                               onClick={() => handleReorderPeriod(gp.id, 'up')}
                               className="text-gray-400 hover:text-gray-600 disabled:opacity-20 transition"
                               title="Move up"
@@ -1162,7 +1589,7 @@ export default function SchoolSettingsPage() {
                             </button>
                             <button
                               type="button"
-                              disabled={idx === gradingPeriods.length - 1}
+                              disabled={idx === gradingPeriods.length - 1 || Boolean(rowOperatingId)}
                               onClick={() => handleReorderPeriod(gp.id, 'down')}
                               className="text-gray-400 hover:text-gray-600 disabled:opacity-20 transition"
                               title="Move down"
@@ -1186,7 +1613,7 @@ export default function SchoolSettingsPage() {
                               type="text"
                               value={editPeriodCode}
                               onChange={(e) => setEditPeriodCode(e.target.value)}
-                              placeholder="Code (e.g. Q1)"
+                              placeholder="Code (e.g. T1)"
                               className="w-16 rounded-lg border border-blue-400 bg-white px-2 py-1 text-xs font-mono font-semibold text-gray-900 outline-none dark:bg-gray-800 dark:text-white uppercase"
                             />
                             <button
@@ -1212,7 +1639,7 @@ export default function SchoolSettingsPage() {
                               {gp.name}
                             </span>
                             <span className="rounded-md bg-gray-200/80 px-1.5 py-0.5 text-[10px] font-mono font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-300 uppercase">
-                              {gp.code}
+                              {gp.code.replace(/_arch_.*$/, '')}
                             </span>
                             {gp.is_current && (
                               <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
@@ -1225,28 +1652,56 @@ export default function SchoolSettingsPage() {
 
                       {/* Right actions */}
                       <div className="flex items-center gap-2 shrink-0">
-                        {!isEditing && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingPeriodId(gp.id);
-                              setEditPeriodName(gp.name);
-                              setEditPeriodCode(gp.code);
-                            }}
-                            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 transition"
-                          >
-                            <Edit2 className="h-3 w-3" /> Rename
-                          </button>
-                        )}
+                        {isOperating ? (
+                          <div className="flex items-center gap-1.5 px-3 py-1 text-xs text-blue-600">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <span>Updating...</span>
+                          </div>
+                        ) : (
+                          <>
+                            {!isEditing && (
+                              <button
+                                type="button"
+                                disabled={Boolean(rowOperatingId)}
+                                onClick={() => {
+                                  setEditingPeriodId(gp.id);
+                                  setEditPeriodName(gp.name);
+                                  setEditPeriodCode(gp.code.replace(/_arch_.*$/, ''));
+                                }}
+                                className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 disabled:opacity-50 transition"
+                              >
+                                <Edit2 className="h-3 w-3" /> Rename
+                              </button>
+                            )}
 
-                        {!gp.is_current && (
-                          <button
-                            type="button"
-                            onClick={() => handleSetCurrentPeriod(gp)}
-                            className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-2xs hover:bg-blue-700 transition"
-                          >
-                            Set as Current Term
-                          </button>
+                            {!gp.is_current && (
+                              <button
+                                type="button"
+                                disabled={Boolean(rowOperatingId)}
+                                onClick={() => setSetCurrentConfirmModal({ isOpen: true, period: gp })}
+                                className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-2xs hover:bg-blue-700 disabled:opacity-50 transition"
+                              >
+                                Set as Current Term
+                              </button>
+                            )}
+
+                            {/* Delete Button */}
+                            <button
+                              type="button"
+                              disabled={gp.is_current || gradingPeriods.length <= 1 || Boolean(rowOperatingId)}
+                              onClick={() => handleRequestDeletePeriod(gp)}
+                              title={
+                                gp.is_current
+                                  ? 'Set another term as current first.'
+                                  : gradingPeriods.length <= 1
+                                  ? 'At least one term is required.'
+                                  : 'Delete or archive this term'
+                              }
+                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-950/40 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
@@ -1254,6 +1709,78 @@ export default function SchoolSettingsPage() {
                 })}
               </div>
             )}
+
+            {/* Collapsible Archived Terms Section */}
+            <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
+              <button
+                type="button"
+                onClick={() => setIsArchivedExpanded(!isArchivedExpanded)}
+                className="flex items-center gap-2 text-xs font-semibold text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 transition"
+              >
+                <Archive className="h-3.5 w-3.5" />
+                <span>Archived terms ({archivedGradingPeriods.length})</span>
+                <ChevronDown
+                  className={cn('h-3.5 w-3.5 transition-transform duration-200', isArchivedExpanded && 'rotate-180')}
+                />
+              </button>
+
+              {isArchivedExpanded && (
+                <div className="mt-3 space-y-2">
+                  {archivedGradingPeriods.length === 0 ? (
+                    <p className="text-xs text-gray-400 italic py-2">No archived terms.</p>
+                  ) : (
+                    archivedGradingPeriods.map((arch) => {
+                      const isOperating = rowOperatingId === arch.id;
+                      const hasNameCollision = gradingPeriods.some(
+                        (p) => p.name.trim().toLowerCase() === arch.name.trim().toLowerCase()
+                      );
+                      const isMaxReached = gradingPeriods.length >= 4;
+                      const canRestore = !hasNameCollision && !isMaxReached;
+
+                      return (
+                        <div
+                          key={arch.id}
+                          className="flex items-center justify-between p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/40 dark:bg-gray-850/40 text-xs"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-medium text-gray-700 dark:text-gray-300 truncate">
+                              {arch.name}
+                            </span>
+                            <span className="rounded bg-gray-200/80 px-1.5 py-0.5 text-[10px] font-mono font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-400 uppercase">
+                              {arch.code.replace(/_arch_.*$/, '')}
+                            </span>
+                            <span className="rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 px-1.5 py-0.5 text-[10px] font-medium">
+                              Archived
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={!canRestore || Boolean(rowOperatingId)}
+                            onClick={() => handleRestorePeriod(arch)}
+                            title={
+                              isMaxReached
+                                ? 'Maximum of 4 active terms reached. Delete or archive one before restoring.'
+                                : hasNameCollision
+                                ? 'An active term with this name already exists.'
+                                : 'Restore this grading period'
+                            }
+                            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-bold text-blue-600 hover:bg-blue-50 dark:border-gray-700 dark:bg-gray-800 dark:text-blue-400 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                          >
+                            {isOperating ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <ArchiveRestore className="h-3.5 w-3.5" />
+                            )}
+                            <span>Restore</span>
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Card 2: Grades & Sections Management */}
@@ -2148,6 +2675,341 @@ export default function SchoolSettingsPage() {
         description={`${periodWarningModal.affectedCount} assessment(s) are recorded under "${periodWarningModal.oldName}". Renaming it will update their display label to "${periodWarningModal.newName}".`}
         confirmLabel="Rename Period & Update Records"
       />
+
+      {/* Set Current Term Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={setCurrentConfirmModal.isOpen}
+        onClose={() => setSetCurrentConfirmModal({ isOpen: false, period: null })}
+        onConfirm={() => {
+          if (setCurrentConfirmModal.period) {
+            handleConfirmSetCurrent(setCurrentConfirmModal.period);
+          }
+        }}
+        isLoading={Boolean(rowOperatingId)}
+        actionType="neutral"
+        title="Change Active Academic Term?"
+        description={`Set "${setCurrentConfirmModal.period?.name}" as the active Current Term? This changes the default academic period for the entire school.`}
+        confirmLabel="Confirm & Set as Current"
+      />
+
+      {/* Preset Switch Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={presetConfirmModal.isOpen}
+        onClose={() => setPresetConfirmModal({ isOpen: false, preset: '4quarter' })}
+        onConfirm={() => handleApplyPreset(presetConfirmModal.preset)}
+        isLoading={loadingPeriods}
+        actionType="neutral"
+        title={`Switch to ${presetConfirmModal.preset === '4quarter' ? '4 Terms' : '2 Semesters'}?`}
+        description={`This will configure ${
+          presetConfirmModal.preset === '4quarter' ? '4 standard terms' : '2 standard semesters'
+        } for your school. Any existing active terms will be archived and all linked assessments and records will be preserved.`}
+        confirmLabel="Switch Configuration"
+      />
+
+      {/* Add Term Modal */}
+      {isAddTermModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-800 dark:bg-gray-900 space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3 dark:border-gray-800">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                  Add Academic Term
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddTermModalOpen(false)}
+                className="rounded-lg p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Type Suggestion Choice */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+                  Academic Structure Type
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextPos = gradingPeriods.length + 1;
+                      setNewTermType('term');
+                      setNewTermName(`Term ${nextPos}`);
+                      setNewTermCode(`T${nextPos}`);
+                    }}
+                    className={cn(
+                      'rounded-xl border py-2 px-3 text-xs font-bold transition text-center',
+                      newTermType === 'term'
+                        ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300'
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300'
+                    )}
+                  >
+                    Quarter / Term
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextPos = gradingPeriods.length + 1;
+                      setNewTermType('semester');
+                      setNewTermName(nextPos <= 2 ? `${nextPos === 1 ? '1st' : '2nd'} Semester` : `Semester ${nextPos}`);
+                      setNewTermCode(`S${nextPos}`);
+                    }}
+                    className={cn(
+                      'rounded-xl border py-2 px-3 text-xs font-bold transition text-center',
+                      newTermType === 'semester'
+                        ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300'
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300'
+                    )}
+                  >
+                    Semester
+                  </button>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Type choice provides default wording suggestions.
+                </p>
+              </div>
+
+              {/* Term Name */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  Term Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  maxLength={50}
+                  value={newTermName}
+                  onChange={(e) => setNewTermName(e.target.value)}
+                  placeholder="e.g. 1st Semester, Prelims, Midterms"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                />
+                <span className="text-[10px] text-gray-400 mt-1 block">
+                  {newTermName.length}/50 characters • Must be unique among active terms
+                </span>
+              </div>
+
+              {/* Code */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  Code Badge (e.g. T1, S1, PRELIM)
+                </label>
+                <input
+                  type="text"
+                  maxLength={10}
+                  value={newTermCode}
+                  onChange={(e) => setNewTermCode(e.target.value.toUpperCase())}
+                  placeholder="e.g. T1 or S1"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 font-mono text-xs uppercase font-semibold text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                />
+              </div>
+
+              <div className="rounded-xl bg-blue-50/60 p-3 text-[11px] text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                <span>New terms are assigned position #{gradingPeriods.length + 1} and are not set as current.</span>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
+              <button
+                type="button"
+                onClick={() => setIsAddTermModalOpen(false)}
+                className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={addingTerm || !newTermName.trim()}
+                onClick={handleAddTerm}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition"
+              >
+                {addingTerm ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Adding...</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>Add Term</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete / Move / Archive Term Modal */}
+      {deleteModalState.isOpen && deleteModalState.period && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-lg rounded-3xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-800 dark:bg-gray-900 space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3 dark:border-gray-800">
+              <div className="flex items-center gap-2">
+                <Trash2 className="h-5 w-5 text-red-600 dark:text-red-400" />
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                  Delete &quot;{deleteModalState.period.name}&quot;?
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setDeleteModalState((prev) => ({ ...prev, isOpen: false, period: null }))
+                }
+                className="rounded-lg p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {deleteModalState.loadingUsage ? (
+              <div className="flex items-center justify-center py-8 text-gray-400 text-xs">
+                <Loader2 className="h-5 w-5 animate-spin text-blue-600 mr-2" />
+                <span>Checking dependent records...</span>
+              </div>
+            ) : deleteModalState.totalCount === 0 ? (
+              <div className="space-y-3">
+                <p className="text-xs text-gray-600 dark:text-gray-300">
+                  Are you sure you want to permanently delete{' '}
+                  <strong className="text-gray-900 dark:text-white">
+                    &quot;{deleteModalState.period.name}&quot;
+                  </strong>
+                  ? No assessments or TOS documents are recorded under this term.
+                </p>
+                <p className="text-[11px] text-gray-400">
+                  Remaining terms will be re-numbered 1..N to keep gradebook and analytics aligned.
+                </p>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDeleteModalState((prev) => ({ ...prev, isOpen: false, period: null }))
+                    }
+                    className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deleteModalState.operating}
+                    onClick={() => handleConfirmDeleteOrArchive('delete')}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-red-700 disabled:opacity-50 transition"
+                  >
+                    {deleteModalState.operating ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span>Deleting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span>Permanently Delete</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/40 dark:bg-amber-950/30 text-xs text-amber-900 dark:text-amber-200 space-y-1">
+                  <div className="flex items-center gap-2 font-bold">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                    <span>Active Records Found</span>
+                  </div>
+                  <p>
+                    <strong>{deleteModalState.assessmentCount}</strong> assessment(s) and{' '}
+                    <strong>{deleteModalState.tosCount}</strong> TOS document(s) are recorded under{' '}
+                    &quot;{deleteModalState.period.name}&quot;.
+                  </p>
+                  <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80">
+                    To prevent broken data, you must either move these records to another active term or archive this term instead.
+                  </p>
+                </div>
+
+                {/* Move Section */}
+                <div className="rounded-2xl border border-gray-200 p-4 dark:border-gray-800 space-y-3">
+                  <span className="text-xs font-bold text-gray-900 dark:text-white">
+                    Option 1: Move Everything &amp; Delete
+                  </span>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-600 dark:text-gray-300 mb-1">
+                      Destination Term
+                    </label>
+                    <select
+                      value={deleteModalState.targetPeriodId}
+                      onChange={(e) =>
+                        setDeleteModalState((prev) => ({
+                          ...prev,
+                          targetPeriodId: e.target.value,
+                        }))
+                      }
+                      className="w-full rounded-xl border border-gray-200 bg-white p-2.5 text-xs text-gray-900 outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                    >
+                      {gradingPeriods
+                        .filter((p) => p.id !== deleteModalState.period?.id)
+                        .map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} ({p.code})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={deleteModalState.operating || !deleteModalState.targetPeriodId}
+                    onClick={() => handleConfirmDeleteOrArchive('move_and_delete')}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition"
+                  >
+                    {deleteModalState.operating ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : null}
+                    <span>Move Records &amp; Delete Term</span>
+                  </button>
+                </div>
+
+                {/* Archive Option */}
+                <div className="rounded-2xl border border-gray-200 p-4 dark:border-gray-800 space-y-2">
+                  <span className="text-xs font-bold text-gray-900 dark:text-white">
+                    Option 2: Archive Instead
+                  </span>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                    Hides &quot;{deleteModalState.period.name}&quot; from all dropdowns and gradebooks while keeping all records and historical scores completely intact.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={deleteModalState.operating}
+                    onClick={() => handleConfirmDeleteOrArchive('archive')}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300 transition"
+                  >
+                    {deleteModalState.operating ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Archive className="h-3.5 w-3.5" />
+                    )}
+                    <span>Archive Term (Preserve Data)</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDeleteModalState((prev) => ({ ...prev, isOpen: false, period: null }))
+                    }
+                    className="rounded-xl border border-gray-200 px-4 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
