@@ -99,6 +99,10 @@ export async function GET(request: Request) {
     const rawRole = url.searchParams.get('role')?.trim().toLowerCase() || 'all';
     const roleFilter = (VALID_ROLES as readonly string[]).includes(rawRole) ? rawRole : 'all';
 
+    const rawTab = url.searchParams.get('tab')?.trim().toLowerCase() || 'active';
+    const tab: 'active' | 'archived' = rawTab === 'archived' ? 'archived' : 'active';
+    const idsOnly = url.searchParams.get('idsOnly') === 'true';
+
     const schoolFilter = url.searchParams.get('school')?.trim() || 'all';
 
     const rawPage = url.searchParams.get('page');
@@ -127,14 +131,63 @@ export async function GET(request: Request) {
         : null
       : callerProfile.tenant_id;
 
+    // Handle idsOnly: return all matching IDs up to 500, excluding caller's own ID
+    if (idsOnly) {
+      let idsQuery = adminClient
+        .from('profiles')
+        .select('id', { count: 'exact' });
+
+      if (effectiveTenantId) {
+        idsQuery = idsQuery.eq('tenant_id', effectiveTenantId);
+      }
+
+      if (tab === 'archived') {
+        idsQuery = idsQuery.not('archived_at', 'is', null);
+      } else {
+        idsQuery = idsQuery.is('archived_at', null);
+      }
+
+      if (statusFilter !== 'all') {
+        idsQuery = idsQuery.eq('status', statusFilter);
+      }
+
+      if (roleFilter !== 'all') {
+        idsQuery = idsQuery.eq('role', roleFilter);
+      }
+
+      if (search) {
+        const safeSearch = search.replace(/,/g, '');
+        idsQuery = idsQuery.or(`display_name.ilike.%${safeSearch}%,email.ilike.%${safeSearch}%`);
+      }
+
+      // Admin's own row is not selectable
+      idsQuery = idsQuery.neq('id', caller.id);
+      idsQuery = idsQuery.limit(500);
+
+      const { data: matchedIds, count: matchedCount, error: idsErr } = await idsQuery;
+      if (idsErr) {
+        console.error('[admin/users GET idsOnly] Error:', idsErr);
+        return NextResponse.json({ error: 'Failed to resolve matching account IDs.' }, { status: 500 });
+      }
+
+      const ids = (matchedIds || []).map((row) => row.id);
+      return NextResponse.json({
+        ids,
+        totalMatching: matchedCount ?? ids.length,
+        capped: ids.length === 500,
+      });
+    }
+
     // 5. Compute KPI Summary Stats within caller scope
     let totalCount = 0;
     let approvedCount = 0;
     let pendingCount = 0;
     let rejectedSuspendedCount = 0;
+    let activeCount = 0;
+    let archivedCount = 0;
 
     try {
-      let statsQuery = adminClient.from('profiles').select('status');
+      let statsQuery = adminClient.from('profiles').select('status, archived_at');
       if (effectiveTenantId) {
         statsQuery = statsQuery.eq('tenant_id', effectiveTenantId);
       }
@@ -144,9 +197,14 @@ export async function GET(request: Request) {
       } else if (scopedProfiles) {
         totalCount = scopedProfiles.length;
         for (const p of scopedProfiles) {
-          if (p.status === 'approved') approvedCount++;
-          else if (p.status === 'pending') pendingCount++;
-          else if (p.status === 'rejected' || p.status === 'suspended') rejectedSuspendedCount++;
+          if (p.archived_at) {
+            archivedCount++;
+          } else {
+            activeCount++;
+            if (p.status === 'approved') approvedCount++;
+            else if (p.status === 'pending') pendingCount++;
+            else if (p.status === 'rejected' || p.status === 'suspended') rejectedSuspendedCount++;
+          }
         }
       }
     } catch (statsEx) {
@@ -156,12 +214,18 @@ export async function GET(request: Request) {
     // 6. Build Paginated Profiles Query
     let query = adminClient
       .from('profiles')
-      .select('id, email, display_name, role, status, tenant_id, created_at', {
+      .select('id, email, display_name, role, status, tenant_id, created_at, archived_at, archived_by, previous_status', {
         count: 'exact',
       });
 
     if (effectiveTenantId) {
       query = query.eq('tenant_id', effectiveTenantId);
+    }
+
+    if (tab === 'archived') {
+      query = query.not('archived_at', 'is', null);
+    } else {
+      query = query.is('archived_at', null);
     }
 
     if (statusFilter !== 'all') {
@@ -314,11 +378,38 @@ export async function GET(request: Request) {
       }
     }
 
+    // 10b. Resolve archivers display names for archived users
+    const archiverIds = Array.from(
+      new Set(
+        safeProfiles
+          .map((p) => p.archived_by)
+          .filter((id): id is string => Boolean(id))
+      )
+    );
+    const archiversMap = new Map<string, { id: string; display_name: string | null; email: string | null }>();
+    if (archiverIds.length > 0) {
+      try {
+        const { data: archiversData } = await adminClient
+          .from('profiles')
+          .select('id, display_name, email')
+          .in('id', archiverIds);
+
+        if (archiversData) {
+          for (const a of archiversData) {
+            archiversMap.set(a.id, a);
+          }
+        }
+      } catch (archErr) {
+        console.warn('[admin/users GET] Warning resolving archivers:', archErr);
+      }
+    }
+
     // 11. Assemble Result
     const resultUsers = safeProfiles.map((p) => {
       const authInfo = authMap.get(p.id);
       const metrics = metricsMap.get(p.id) || { assessmentCount: 0, learnerCount: 0 };
       const tenantRecord = p.tenant_id ? tenantsMap.get(p.tenant_id) || null : null;
+      const archiver = p.archived_by ? archiversMap.get(p.archived_by) : null;
 
       return {
         id: p.id,
@@ -329,6 +420,10 @@ export async function GET(request: Request) {
         tenant_id: p.tenant_id,
         school: tenantRecord?.name || tenantRecord?.code || 'Unassigned School',
         created_at: p.created_at,
+        archived_at: p.archived_at || null,
+        archived_by: p.archived_by || null,
+        archived_by_name: archiver ? (archiver.display_name || archiver.email || 'Administrator') : null,
+        previous_status: p.previous_status || null,
         last_sign_in_at: authInfo ? authInfo.last_sign_in_at : null,
         is_email_confirmed: authInfo ? authInfo.is_email_confirmed : false,
         assessment_count: metrics.assessmentCount,
@@ -349,6 +444,8 @@ export async function GET(request: Request) {
       },
       stats: {
         total: totalCount,
+        active: activeCount,
+        archived: archivedCount,
         approved: approvedCount,
         pending: pendingCount,
         rejectedSuspended: rejectedSuspendedCount,

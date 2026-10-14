@@ -68,6 +68,7 @@ export default function PendingUsersPage() {
         .from('profiles')
         .select('id, email, display_name, role, status, tenant_id, created_at')
         .eq('status', 'pending')
+        .is('archived_at', null)
         .order('created_at', { ascending: false });
 
       if (err) throw err;

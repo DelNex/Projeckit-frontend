@@ -41,9 +41,15 @@ export default function LoginPage() {
         // Verify account profile status
         const { data: profile } = await supabase
           .from('profiles')
-          .select('status, role')
+          .select('status, role, archived_at')
           .eq('id', data.user.id)
           .maybeSingle();
+
+        if (profile?.archived_at || profile?.status === 'suspended') {
+          await supabase.auth.signOut();
+          setError('This account has been deactivated. Please contact your school administrator.');
+          return;
+        }
 
         if (profile?.status === 'pending') {
           await supabase.auth.signOut();
@@ -51,9 +57,9 @@ export default function LoginPage() {
           return;
         }
 
-        if (profile?.status === 'rejected' || profile?.status === 'suspended') {
+        if (profile?.status === 'rejected') {
           await supabase.auth.signOut();
-          setError('Your account has been suspended or rejected. Please contact your school administrator.');
+          setError('Your account has been rejected. Please contact your school administrator.');
           return;
         }
 
@@ -62,7 +68,9 @@ export default function LoginPage() {
       }
     } catch (err: any) {
       const msg = (err?.message || '').toLowerCase();
-      if (msg.includes('email not confirmed')) {
+      if (msg.includes('banned') || msg.includes('deactivated') || msg.includes('disabled')) {
+        setError('This account has been deactivated. Please contact your school administrator.');
+      } else if (msg.includes('email not confirmed')) {
         setError(
           'Your email address is not confirmed yet. If your account has been approved, ask your administrator to confirm it, or resend the confirmation email.'
         );
