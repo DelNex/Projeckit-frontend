@@ -36,6 +36,7 @@ import {
     UserCheck,
     Users,
 } from 'lucide-react';
+import Link from 'next/link';
 import React, { useEffect, useMemo, useState } from 'react';
 
 export interface GradebookStudent {
@@ -109,6 +110,32 @@ export function TermGradebook({
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges]);
+
+  // Load active grading periods dynamically from database
+  useEffect(() => {
+    async function loadTerms() {
+      try {
+        const { data: gpData } = await (supabase as any)
+          .from('grading_periods')
+          .select('name')
+          .eq('is_archived', false)
+          .order('position', { ascending: true });
+
+        if (gpData && gpData.length > 0) {
+          const names = gpData.map((g: any) => g.name);
+          setAvailableTerms(names);
+          if (initialTerm && names.includes(initialTerm)) {
+            setActiveTerm(initialTerm);
+          } else if (!names.includes(activeTerm)) {
+            setActiveTerm(names[0]);
+          }
+        }
+      } catch (err) {
+        // Fallback to DEFAULT_AVAILABLE_TERMS
+      }
+    }
+    loadTerms();
+  }, [supabase, initialTerm]);
 
   // Grade Component Weights
   const [weights, setWeights] = useState<GradeComponentWeights>(() => getSavedGradingWeights());
@@ -572,22 +599,31 @@ export function TermGradebook({
         {/* Term Picker and Action Controls */}
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           {/* Term Switcher */}
-          <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl text-xs">
-            {availableTerms.map((term) => (
-              <button
-                key={term}
-                onClick={() => handleTermChange(term)}
-                className={cn(
-                  'px-2.5 py-1 rounded-lg text-[11px] font-bold transition whitespace-nowrap',
-                  activeTerm === term
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
-                )}
-              >
-                {term}
-              </button>
-            ))}
-          </div>
+          {availableTerms.length > 0 ? (
+            <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl text-xs">
+              {availableTerms.map((term) => (
+                <button
+                  key={term}
+                  onClick={() => handleTermChange(term)}
+                  className={cn(
+                    'px-2.5 py-1 rounded-lg text-[11px] font-bold transition whitespace-nowrap',
+                    activeTerm === term
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
+                  )}
+                >
+                  {term}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <Link
+              href="/settings/school"
+              className="rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-800 hover:text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300 transition"
+            >
+              No active terms. Configure in School Settings &rarr;
+            </Link>
+          )}
 
           {/* Configure Weights */}
           <button

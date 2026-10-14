@@ -153,6 +153,11 @@ export default function AssessmentsPage() {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
+    if (gradingPeriodsList.length === 0) {
+      toast.error('No active terms configured. Please configure grading periods in School Settings first.');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -595,26 +600,29 @@ export default function AssessmentsPage() {
                   <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
                     Term
                   </label>
-                  <select
-                    value={newTerm}
-                    onChange={(e) => setNewTerm(e.target.value)}
-                    className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
-                  >
-                    {gradingPeriodsList.length > 0 ? (
-                      gradingPeriodsList.map((gp) => (
+                  {gradingPeriodsList.length > 0 ? (
+                    <select
+                      value={newTerm}
+                      onChange={(e) => setNewTerm(e.target.value)}
+                      className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
+                    >
+                      {gradingPeriodsList.map((gp) => (
                         <option key={gp.id} value={gp.name}>
                           {gp.name} ({gp.code})
                         </option>
-                      ))
-                    ) : (
-                      <>
-                        <option value="1st Quarter">1st Quarter</option>
-                        <option value="2nd Quarter">2nd Quarter</option>
-                        <option value="3rd Quarter">3rd Quarter</option>
-                        <option value="4th Quarter">4th Quarter</option>
-                      </>
-                    )}
-                  </select>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-2.5 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300 flex items-center justify-between">
+                      <span>No active terms configured.</span>
+                      <Link
+                        href="/settings/school"
+                        className="font-bold underline text-blue-600 hover:text-blue-800 dark:text-blue-400"
+                      >
+                        Configure in School Settings &rarr;
+                      </Link>
+                    </div>
+                  )}
                 </div>
 
                 <div>

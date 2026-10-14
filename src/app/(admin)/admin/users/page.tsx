@@ -117,12 +117,16 @@ export default function AllAccountsPage() {
   const [selectedSchoolId, setSelectedSchoolId] = useState('');
   const [savingSchool, setSavingSchool] = useState(false);
 
+  // Error state for API requests
+  const [error, setError] = useState<string | null>(null);
+
   // Menu popover state
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   // Fetch accounts data from server route
   const fetchUsers = async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams({
         page: page.toString(),
@@ -136,10 +140,19 @@ export default function AllAccountsPage() {
       });
 
       const res = await fetch(`/api/admin/users?${params.toString()}`);
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to fetch user accounts');
+        if (data.code === 'MISSING_SERVICE_KEY') {
+          const msg = 'The server is missing its admin key. Ask the site owner to configure it.';
+          setError(msg);
+          toast.error(msg);
+          return;
+        }
+        const msg = data.error || 'Failed to fetch user accounts';
+        setError(msg);
+        toast.error(msg);
+        return;
       }
 
       setUsers(data.users || []);
@@ -151,7 +164,9 @@ export default function AllAccountsPage() {
       setTenantsList(data.tenants || []);
     } catch (err: any) {
       console.error('Failed to load accounts:', err);
-      toast.error(friendlyError(err, 'Failed to load accounts. Please try again.'));
+      const msg = friendlyError(err, 'Failed to load accounts. Please try again.');
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -376,6 +391,23 @@ export default function AllAccountsPage() {
         </div>
       </div>
 
+      {/* Error state banner with retry button */}
+      {error && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400 shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button
+            onClick={() => fetchUsers()}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-red-100 hover:bg-red-200 dark:bg-red-900/50 dark:hover:bg-red-900/80 px-3 py-1.5 font-bold transition"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            <span>Try again</span>
+          </button>
+        </div>
+      )}
+
       {/* Accounts Table Card (B3) */}
       <div className="rounded-2xl sm:rounded-3xl border border-gray-200 bg-white shadow-xs dark:border-gray-800 dark:bg-gray-900 overflow-hidden paint-isolate min-w-0">
         {loading ? (
@@ -386,9 +418,15 @@ export default function AllAccountsPage() {
         ) : users.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center px-4">
             <Users className="h-10 w-10 text-gray-300 dark:text-gray-600 mb-2" />
-            <p className="text-sm font-bold text-gray-800 dark:text-gray-200">No accounts match your criteria</p>
+            <p className="text-sm font-bold text-gray-800 dark:text-gray-200">
+              {search || statusFilter !== 'all' || roleFilter !== 'all' || schoolFilter !== 'all'
+                ? 'No accounts match your criteria'
+                : 'No accounts registered yet'}
+            </p>
             <p className="text-xs text-gray-400 max-w-sm mt-1">
-              Try adjusting your search terms, role filters, or status selection.
+              {search || statusFilter !== 'all' || roleFilter !== 'all' || schoolFilter !== 'all'
+                ? 'Try adjusting your search terms, role filters, or school selection.'
+                : 'Faculty accounts will appear here once teachers register.'}
             </p>
           </div>
         ) : (

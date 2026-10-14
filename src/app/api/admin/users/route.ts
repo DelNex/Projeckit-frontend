@@ -1,12 +1,18 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { createAdminClient, MissingServiceKeyError } from '@/lib/supabase/admin';
+
+const VALID_SORT_COLUMNS = ['created_at', 'display_name', 'email', 'role', 'status'] as const;
+type ValidSortColumn = (typeof VALID_SORT_COLUMNS)[number];
+
+const VALID_STATUSES = ['all', 'approved', 'pending', 'rejected', 'suspended'] as const;
+const VALID_ROLES = ['all', 'admin', 'teacher'] as const;
 
 export async function GET(request: Request) {
   try {
     const supabase = await createClient();
 
-    // 1. Authenticate caller
+    // 1. Authenticate caller session
     const {
       data: { user: caller },
       error: authError,
@@ -14,83 +20,143 @@ export async function GET(request: Request) {
 
     if (authError || !caller) {
       return NextResponse.json(
-        { error: 'Unauthorized: You must be logged in to view user accounts.' },
+        { error: 'Unauthorized: You must be logged in to view user accounts.', code: 'UNAUTHORIZED' },
         { status: 401 }
       );
     }
 
-    // 2. Verify caller is an approved admin
-    const { data: callerProfile, error: profileErr } = await supabase
+    // 2. Admin guard: verify caller is an approved admin
+    // Gracefully handle if is_platform_admin column has not been migrated yet
+    let callerProfile: {
+      id: string;
+      role: string;
+      status: string;
+      tenant_id: string | null;
+      is_platform_admin?: boolean;
+    } | null = null;
+
+    const { data: pWithPlatform, error: pErr1 } = await supabase
       .from('profiles')
-      .select('id, role, status, tenant_id')
+      .select('id, role, status, tenant_id, is_platform_admin')
       .eq('id', caller.id)
       .maybeSingle();
 
-    if (profileErr || !callerProfile) {
+    if (pErr1) {
+      console.warn(
+        '[admin/users GET] is_platform_admin column query returned error, falling back to base columns:',
+        pErr1.message
+      );
+      const { data: pBase, error: pErr2 } = await supabase
+        .from('profiles')
+        .select('id, role, status, tenant_id')
+        .eq('id', caller.id)
+        .maybeSingle();
+
+      if (pErr2 || !pBase) {
+        console.error('[admin/users GET] Failed to verify administrator privileges:', pErr2);
+        return NextResponse.json(
+          { error: 'Failed to verify administrator privileges.', code: 'FORBIDDEN' },
+          { status: 403 }
+        );
+      }
+      callerProfile = { ...pBase, is_platform_admin: false };
+    } else {
+      callerProfile = pWithPlatform;
+    }
+
+    if (!callerProfile || callerProfile.role !== 'admin' || callerProfile.status !== 'approved') {
       return NextResponse.json(
-        { error: 'Failed to verify administrator privileges.' },
+        { error: 'Forbidden: Only approved administrators can access user accounts.', code: 'FORBIDDEN' },
         { status: 403 }
       );
     }
 
-    if (callerProfile.role !== 'admin' || callerProfile.status !== 'approved') {
-      return NextResponse.json(
-        { error: 'Forbidden: Only approved administrators can access user accounts.' },
-        { status: 403 }
-      );
+    // 3. Initialize Service-Role Client
+    let adminClient: ReturnType<typeof createAdminClient>;
+    try {
+      adminClient = createAdminClient();
+    } catch (err: any) {
+      if (err instanceof MissingServiceKeyError || err?.code === 'MISSING_SERVICE_KEY') {
+        console.error('[admin/users GET] Missing service role key:', err.message);
+        return NextResponse.json(
+          {
+            error: 'The server is missing its admin key. Ask the site owner to configure it in the server environment.',
+            code: 'MISSING_SERVICE_KEY',
+          },
+          { status: 500 }
+        );
+      }
+      throw err;
     }
 
-    const adminClient = createAdminClient();
+    // 4. Query parameters parsing & validation
     const url = new URL(request.url);
-
-    // Query parameters
     const search = url.searchParams.get('search')?.trim() || '';
-    const statusFilter = url.searchParams.get('status')?.trim() || 'all';
-    const roleFilter = url.searchParams.get('role')?.trim() || 'all';
+
+    const rawStatus = url.searchParams.get('status')?.trim().toLowerCase() || 'all';
+    const statusFilter = (VALID_STATUSES as readonly string[]).includes(rawStatus) ? rawStatus : 'all';
+
+    const rawRole = url.searchParams.get('role')?.trim().toLowerCase() || 'all';
+    const roleFilter = (VALID_ROLES as readonly string[]).includes(rawRole) ? rawRole : 'all';
+
     const schoolFilter = url.searchParams.get('school')?.trim() || 'all';
-    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
-    const pageSize = Math.max(1, Math.min(100, parseInt(url.searchParams.get('pageSize') || '25', 10)));
-    const sortBy = url.searchParams.get('sortBy')?.trim() || 'created_at';
-    const sortOrder = url.searchParams.get('sortOrder')?.trim() === 'asc' ? 'asc' : 'desc';
+
+    const rawPage = url.searchParams.get('page');
+    const parsedPage = rawPage ? parseInt(rawPage, 10) : 1;
+    const page = Number.isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage;
+
+    const rawPageSize = url.searchParams.get('pageSize');
+    const parsedPageSize = rawPageSize ? parseInt(rawPageSize, 10) : 25;
+    const pageSize = Number.isNaN(parsedPageSize) ? 25 : Math.max(1, Math.min(100, parsedPageSize));
+
+    const rawSortBy = url.searchParams.get('sortBy')?.trim();
+    const sortBy: ValidSortColumn = (VALID_SORT_COLUMNS as readonly string[]).includes(rawSortBy || '')
+      ? (rawSortBy as ValidSortColumn)
+      : 'created_at';
+
+    const rawSortOrder = url.searchParams.get('sortOrder')?.trim().toLowerCase();
+    const sortOrder: 'asc' | 'desc' = rawSortOrder === 'asc' ? 'asc' : 'desc';
 
     // Tenant Scoping:
-    // If caller has a tenant_id, scope strictly to that school.
-    // If caller has no tenant_id, they are platform admin and can view across schools or filter by school.
-    const isPlatformAdmin = !callerProfile.tenant_id;
+    // If platform admin: can view across all schools or filter by school
+    // If regular admin: strictly scoped to callerProfile.tenant_id
+    const isPlatformAdmin = Boolean(callerProfile.is_platform_admin);
     const effectiveTenantId = isPlatformAdmin
       ? schoolFilter !== 'all'
         ? schoolFilter
         : null
       : callerProfile.tenant_id;
 
-    // 3. Compute KPI summary stats in the admin's scope
-    let baseStatsQuery = adminClient.from('profiles').select('status', { count: 'exact' });
-    if (!isPlatformAdmin) {
-      baseStatsQuery = baseStatsQuery.eq('tenant_id', callerProfile.tenant_id);
-    } else if (schoolFilter !== 'all') {
-      baseStatsQuery = baseStatsQuery.eq('tenant_id', schoolFilter);
-    }
-
-    const { data: allScopedProfiles } = await baseStatsQuery;
-
+    // 5. Compute KPI Summary Stats within caller scope
     let totalCount = 0;
     let approvedCount = 0;
     let pendingCount = 0;
     let rejectedSuspendedCount = 0;
 
-    if (allScopedProfiles) {
-      totalCount = allScopedProfiles.length;
-      for (const p of allScopedProfiles) {
-        if (p.status === 'approved') approvedCount++;
-        else if (p.status === 'pending') pendingCount++;
-        else if (p.status === 'rejected' || p.status === 'suspended') rejectedSuspendedCount++;
+    try {
+      let statsQuery = adminClient.from('profiles').select('status');
+      if (effectiveTenantId) {
+        statsQuery = statsQuery.eq('tenant_id', effectiveTenantId);
       }
+      const { data: scopedProfiles, error: statsErr } = await statsQuery;
+      if (statsErr) {
+        console.warn('[admin/users GET] Warning calculating stats:', statsErr.message);
+      } else if (scopedProfiles) {
+        totalCount = scopedProfiles.length;
+        for (const p of scopedProfiles) {
+          if (p.status === 'approved') approvedCount++;
+          else if (p.status === 'pending') pendingCount++;
+          else if (p.status === 'rejected' || p.status === 'suspended') rejectedSuspendedCount++;
+        }
+      }
+    } catch (statsEx) {
+      console.warn('[admin/users GET] Exception during stats calculation:', statsEx);
     }
 
-    // 4. Build Paginated Profiles Query
+    // 6. Build Paginated Profiles Query
     let query = adminClient
       .from('profiles')
-      .select('id, email, display_name, role, status, tenant_id, created_at, tenants ( id, name, code )', {
+      .select('id, email, display_name, role, status, tenant_id, created_at', {
         count: 'exact',
       });
 
@@ -107,15 +173,13 @@ export async function GET(request: Request) {
     }
 
     if (search) {
-      query = query.or(`display_name.ilike.%${search}%,email.ilike.%${search}%`);
+      // Escape commas to prevent PostgREST parsing corruption
+      const safeSearch = search.replace(/,/g, '');
+      query = query.or(`display_name.ilike.%${safeSearch}%,email.ilike.%${safeSearch}%`);
     }
 
-    // Sort column mapping (safeguard against injection)
-    const validSortColumns = ['created_at', 'display_name', 'email', 'role', 'status'];
-    const safeSortBy = validSortColumns.includes(sortBy) ? sortBy : 'created_at';
-    query = query.order(safeSortBy, { ascending: sortOrder === 'asc' });
+    query = query.order(sortBy, { ascending: sortOrder === 'asc' });
 
-    // Pagination
     const fromIndex = (page - 1) * pageSize;
     const toIndex = fromIndex + pageSize - 1;
     query = query.range(fromIndex, toIndex);
@@ -123,9 +187,9 @@ export async function GET(request: Request) {
     const { data: profiles, count: filteredCount, error: fetchErr } = await query;
 
     if (fetchErr) {
-      console.error('[Admin API] Error querying profiles:', fetchErr);
+      console.error('[admin/users GET] Database query failed for profiles:', fetchErr);
       return NextResponse.json(
-        { error: 'Failed to retrieve accounts from database.' },
+        { error: 'Failed to retrieve accounts from database.', code: 'DB_QUERY_FAILED' },
         { status: 500 }
       );
     }
@@ -133,36 +197,60 @@ export async function GET(request: Request) {
     const safeProfiles = profiles || [];
     const pageUserIds = safeProfiles.map((p) => p.id);
 
-    // 5. Fetch auth data for these users (email_confirmed_at, last_sign_in_at)
-    const authMap = new Map<string, { last_sign_in_at: string | null; is_email_confirmed: boolean }>();
-    try {
-      const { data: authListData } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
-      if (authListData?.users) {
-        for (const u of authListData.users) {
-          authMap.set(u.id, {
-            last_sign_in_at: u.last_sign_in_at || null,
-            is_email_confirmed: !!u.email_confirmed_at,
-          });
+    // 7. Resolve School Tenants for these profiles safely
+    const tenantIdsOnPage = Array.from(
+      new Set(safeProfiles.map((p) => p.tenant_id).filter((tid): tid is string => Boolean(tid)))
+    );
+
+    const tenantsMap = new Map<string, { id: string; name: string; code: string | null }>();
+    if (tenantIdsOnPage.length > 0) {
+      try {
+        const { data: tenantsData, error: tenantsErr } = await adminClient
+          .from('tenants')
+          .select('id, name, code')
+          .in('id', tenantIdsOnPage);
+
+        if (tenantsErr) {
+          console.warn('[admin/users GET] Failed to resolve tenant records:', tenantsErr.message);
+        } else if (tenantsData) {
+          for (const t of tenantsData) {
+            tenantsMap.set(t.id, t);
+          }
         }
+      } catch (tErr) {
+        console.warn('[admin/users GET] Exception resolving tenants:', tErr);
       }
-    } catch (authListErr) {
-      // Fallback: query each user individually
+    }
+
+    // 8. Fetch Auth Data by user ID for current page users only (Requirement 4)
+    const authMap = new Map<string, { last_sign_in_at: string | null; is_email_confirmed: boolean }>();
+    let authWarning = false;
+
+    if (pageUserIds.length > 0) {
       await Promise.all(
         pageUserIds.map(async (uid) => {
           try {
-            const { data: uData } = await adminClient.auth.admin.getUserById(uid);
+            const { data: uData, error: uErr } = await adminClient.auth.admin.getUserById(uid);
+            if (uErr) {
+              console.warn(`[admin/users GET] Failed to fetch auth info for user ${uid}:`, uErr.message);
+              authWarning = true;
+              return;
+            }
             if (uData?.user) {
               authMap.set(uid, {
                 last_sign_in_at: uData.user.last_sign_in_at || null,
                 is_email_confirmed: !!uData.user.email_confirmed_at,
               });
             }
-          } catch (_) {}
+          } catch (userAuthErr) {
+            console.warn(`[admin/users GET] Unexpected error fetching auth for user ${uid}:`, userAuthErr);
+            authWarning = true;
+          }
         })
       );
     }
 
-    // 6. Fetch assessment & learner metrics for users on this page (B5)
+    // 9. Fetch Assessment & Learner Metrics for current page users
     const metricsMap = new Map<string, { assessmentCount: number; learnerCount: number }>();
     if (pageUserIds.length > 0) {
       try {
@@ -172,7 +260,6 @@ export async function GET(request: Request) {
           .in('created_by', pageUserIds);
 
         if (assessmentsData) {
-          // Count assessments per user
           const userAssessments = new Map<string, typeof assessmentsData>();
           for (const a of assessmentsData) {
             if (!a.created_by) continue;
@@ -181,14 +268,10 @@ export async function GET(request: Request) {
             userAssessments.set(a.created_by, existing);
           }
 
-          // Compute metrics per user
           for (const uid of pageUserIds) {
             const userA = userAssessments.get(uid) || [];
             const assessmentCount = userA.length;
-
-            const sectionIds = Array.from(
-              new Set(userA.map((a) => a.section_id).filter(Boolean))
-            );
+            const sectionIds = Array.from(new Set(userA.map((a) => a.section_id).filter(Boolean)));
 
             let learnerCount = 0;
             if (sectionIds.length > 0) {
@@ -213,25 +296,29 @@ export async function GET(request: Request) {
           }
         }
       } catch (metricsErr) {
-        console.error('[Admin API] Error fetching user metrics:', metricsErr);
+        console.warn('[admin/users GET] Warning fetching user metrics:', metricsErr);
       }
     }
 
-    // 7. Fetch tenants list for filter dropdown if platform admin
+    // 10. Fetch available tenants list for filter dropdown if platform admin
     let availableTenants: Array<{ id: string; name: string; code: string | null }> = [];
     if (isPlatformAdmin) {
-      const { data: tenantsData } = await adminClient
-        .from('tenants')
-        .select('id, name, code')
-        .order('name');
-      availableTenants = tenantsData || [];
+      try {
+        const { data: allTenants } = await adminClient
+          .from('tenants')
+          .select('id, name, code')
+          .order('name');
+        availableTenants = allTenants || [];
+      } catch (tListErr) {
+        console.warn('[admin/users GET] Warning fetching tenants list:', tListErr);
+      }
     }
 
-    // 8. Assemble result
+    // 11. Assemble Result
     const resultUsers = safeProfiles.map((p) => {
       const authInfo = authMap.get(p.id);
       const metrics = metricsMap.get(p.id) || { assessmentCount: 0, learnerCount: 0 };
-      const tenantRecord = (p.tenants as any) || null;
+      const tenantRecord = p.tenant_id ? tenantsMap.get(p.tenant_id) || null : null;
 
       return {
         id: p.id,
@@ -242,15 +329,15 @@ export async function GET(request: Request) {
         tenant_id: p.tenant_id,
         school: tenantRecord?.name || tenantRecord?.code || 'Unassigned School',
         created_at: p.created_at,
-        last_sign_in_at: authInfo?.last_sign_in_at || null,
+        last_sign_in_at: authInfo ? authInfo.last_sign_in_at : null,
         is_email_confirmed: authInfo ? authInfo.is_email_confirmed : false,
         assessment_count: metrics.assessmentCount,
         learner_count: metrics.learnerCount,
       };
     });
 
-    const totalFiltered = filteredCount || 0;
-    const totalPages = Math.ceil(totalFiltered / pageSize) || 1;
+    const totalFiltered = filteredCount ?? safeProfiles.length;
+    const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
 
     return NextResponse.json({
       users: resultUsers,
@@ -272,11 +359,23 @@ export async function GET(request: Request) {
         tenant_id: callerProfile.tenant_id,
       },
       tenants: availableTenants,
+      auth_data_warning: authWarning,
     });
   } catch (err: any) {
-    console.error('[Admin API] Error in GET /api/admin/users:', err);
+    console.error('[admin/users GET] Unexpected error:', err);
+
+    if (err instanceof MissingServiceKeyError || err?.code === 'MISSING_SERVICE_KEY') {
+      return NextResponse.json(
+        {
+          error: 'The server is missing its admin key. Ask the site owner to configure it in the server environment.',
+          code: 'MISSING_SERVICE_KEY',
+        },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(
-      { error: 'Something went wrong fetching accounts. Please try again.' },
+      { error: 'Something went wrong fetching accounts. Please try again.', code: 'INTERNAL_ERROR' },
       { status: 500 }
     );
   }

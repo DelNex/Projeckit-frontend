@@ -756,7 +756,7 @@ function AnalyticsContent() {
               onChange={(e) => setSelectedQuarter(e.target.value)}
               className="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 font-bold"
             >
-              <option value="all">All Quarters</option>
+              <option value="all">All Terms</option>
               <option value="First Quarter">Q1</option>
               <option value="Second Quarter">Q2</option>
               <option value="Third Quarter">Q3</option>

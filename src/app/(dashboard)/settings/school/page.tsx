@@ -36,6 +36,7 @@ import {
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { useToast } from '@/components/ui/toast';
 import { friendlyError } from '@/lib/errors';
+import { getTenantContext } from '@/lib/tenant-context';
 import React, { useEffect, useMemo, useState } from 'react';
 
 interface SectionItem {
@@ -196,9 +197,9 @@ export default function SchoolSettingsPage() {
     }
   };
 
-  const refreshGradingPeriods = async (tId?: string) => {
+  const refreshGradingPeriods = async (tId?: string): Promise<GradingPeriodItem[]> => {
     const tid = tId || tenantId;
-    if (!tid) return;
+    if (!tid) return [];
     try {
       setLoadingPeriods(true);
       const { data, error: err } = await (supabase as any)
@@ -210,15 +211,17 @@ export default function SchoolSettingsPage() {
 
       if (err) throw err;
 
-      if (data && data.length > 0) {
-        setGradingPeriods(data);
-        const current = data.find((p: any) => p.is_current);
-        if (current) {
-          setTerm(current.name);
-        }
+      const loaded = (data as GradingPeriodItem[]) || [];
+      console.log(`[GradingPeriods] Fetched ${loaded.length} active periods for tenant: ${tid}`);
+      setGradingPeriods(loaded);
+      const current = loaded.find((p) => p.is_current);
+      if (current) {
+        setTerm(current.name);
       }
+      return loaded;
     } catch (e) {
-      console.warn('Failed to load grading periods:', e);
+      console.warn('[GradingPeriods] Failed to load grading periods:', e);
+      return [];
     } finally {
       setLoadingPeriods(false);
     }
@@ -383,62 +386,80 @@ export default function SchoolSettingsPage() {
   };
 
   const handleApplyPreset = async (preset: '4quarter' | '2semester') => {
-    if (!tenantId) return;
+    if (!tenantId) {
+      toast.error('Your account is not linked to a school yet.');
+      return;
+    }
+    setLoadingPeriods(true);
     try {
-      setLoadingPeriods(true);
-      if (preset === '4quarter') {
-        const standardQuarters = [
-          { name: '1st Quarter', code: 'Q1', position: 1, is_current: true },
-          { name: '2nd Quarter', code: 'Q2', position: 2, is_current: false },
-          { name: '3rd Quarter', code: 'Q3', position: 3, is_current: false },
-          { name: '4th Quarter', code: 'Q4', position: 4, is_current: false },
-        ];
+      console.log(`[GradingPeriods] Applying preset ${preset} for tenant: ${tenantId}`);
 
-        await (supabase as any)
+      // 1. Try atomic database RPC function first
+      const { data: rpcData, error: rpcErr } = await (supabase as any).rpc('apply_grading_period_preset', {
+        p_preset: preset,
+      });
+
+      console.log('[GradingPeriods] RPC apply_grading_period_preset result:', { data: rpcData, error: rpcErr });
+
+      if (rpcErr) {
+        console.warn('[GradingPeriods] RPC unavailable, executing client fallback with verification:', rpcErr.message);
+
+        // Client-side fallback: archive existing active periods
+        const { error: archiveErr } = await (supabase as any)
           .from('grading_periods')
           .update({ is_archived: true, is_current: false })
           .eq('tenant_id', tenantId);
 
-        for (const sq of standardQuarters) {
-          await (supabase as any).from('grading_periods').insert({
-            tenant_id: tenantId,
-            name: sq.name,
-            code: sq.code,
-            position: sq.position,
-            is_current: sq.is_current,
-            is_archived: false,
-          });
+        if (archiveErr) {
+          console.error('[GradingPeriods] Failed to archive existing periods:', archiveErr);
+          throw archiveErr;
         }
-        setTerm('1st Quarter');
-        toast.success('Applied standard 4-Quarter configuration.');
-      } else {
-        const standardSemesters = [
-          { name: '1st Semester', code: 'S1', position: 1, is_current: true },
-          { name: '2nd Semester', code: 'S2', position: 2, is_current: false },
-        ];
 
-        await (supabase as any)
+        const standardRows = preset === '4quarter'
+          ? [
+              { tenant_id: tenantId, name: '1st Quarter', code: 'Q1', position: 1, is_current: true, is_archived: false },
+              { tenant_id: tenantId, name: '2nd Quarter', code: 'Q2', position: 2, is_current: false, is_archived: false },
+              { tenant_id: tenantId, name: '3rd Quarter', code: 'Q3', position: 3, is_current: false, is_archived: false },
+              { tenant_id: tenantId, name: '4th Quarter', code: 'Q4', position: 4, is_current: false, is_archived: false },
+            ]
+          : [
+              { tenant_id: tenantId, name: '1st Semester', code: 'S1', position: 1, is_current: true, is_archived: false },
+              { tenant_id: tenantId, name: '2nd Semester', code: 'S2', position: 2, is_current: false, is_archived: false },
+            ];
+
+        const { data: insertedRows, error: insErr } = await (supabase as any)
           .from('grading_periods')
-          .update({ is_archived: true, is_current: false })
-          .eq('tenant_id', tenantId);
+          .insert(standardRows)
+          .select('*');
 
-        for (const sem of standardSemesters) {
-          await (supabase as any).from('grading_periods').insert({
-            tenant_id: tenantId,
-            name: sem.name,
-            code: sem.code,
-            position: sem.position,
-            is_current: sem.is_current,
-            is_archived: false,
-          });
+        console.log('[GradingPeriods] Fallback insert result:', { count: insertedRows?.length, error: insErr });
+
+        if (insErr) {
+          console.error('[GradingPeriods] Insert error:', insErr);
+          throw insErr;
         }
-        setTerm('1st Semester');
-        toast.success('Applied 2-Semester configuration.');
+
+        if (!insertedRows || insertedRows.length === 0) {
+          throw new Error('Zero grading periods were inserted into the database.');
+        }
       }
 
-      await refreshGradingPeriods();
+      // 2. Fresh fetch to confirm rows exist in the database before showing success
+      const freshRows = await refreshGradingPeriods(tenantId);
+      console.log(`[GradingPeriods] Follow-up fetch returned ${freshRows.length} rows`);
+
+      if (!freshRows || freshRows.length === 0) {
+        throw new Error('Grading periods could not be verified after applying preset.');
+      }
+
+      const active = freshRows.find((p) => p.is_current) || freshRows[0];
+      if (active) {
+        setTerm(active.name);
+      }
+
+      toast.success(preset === '4quarter' ? 'Applied standard 4-Term configuration.' : 'Applied 2-Semester configuration.');
     } catch (err: any) {
-      console.error('Failed to apply preset:', err);
+      console.error('[GradingPeriods] Failed to apply preset:', err);
       toast.error(friendlyError(err, 'Failed to apply preset.'));
     } finally {
       setLoadingPeriods(false);
@@ -450,28 +471,22 @@ export default function SchoolSettingsPage() {
       setLoading(true);
       setError(null);
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+        const { tenantId: currentTenantId, configId: currentConfigId } = await getTenantContext(supabase);
+        setTenantId(currentTenantId);
+        setConfigId(currentConfigId);
+
+        const { data: { user } } = await supabase.auth.getUser();
         const { data: profile } = await (supabase as any)
           .from('profiles')
-          .select('tenant_id, display_name')
+          .select('display_name')
           .eq('id', user?.id || '')
           .maybeSingle();
-
-        if (!profile?.tenant_id) {
-          throw new Error('Your account is not linked to a school tenant.');
-        }
-        const currentTenantId = profile.tenant_id;
-        setTenantId(currentTenantId);
 
         // 1. Fetch active academic config deterministically
         const { data: config } = await (supabase as any)
           .from('academic_configs')
           .select('id, school_year, term')
-          .eq('tenant_id', currentTenantId)
-          .order('created_at', { ascending: false })
-          .limit(1)
+          .eq('id', currentConfigId)
           .maybeSingle();
 
         // 1b. Fetch active grading periods
@@ -1043,7 +1058,7 @@ export default function SchoolSettingsPage() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                  Grading Period / Term
+                  Active Academic Term
                 </label>
                 <select
                   value={term}
@@ -1061,12 +1076,9 @@ export default function SchoolSettingsPage() {
                       </option>
                     ))
                   ) : (
-                    <>
-                      <option value="1st Quarter" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">1st Quarter</option>
-                      <option value="2nd Quarter" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">2nd Quarter</option>
-                      <option value="3rd Quarter" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">3rd Quarter</option>
-                      <option value="4th Quarter" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">4th Quarter</option>
-                    </>
+                    <option value="" disabled className="bg-white text-gray-400 dark:bg-gray-800 dark:text-gray-500">
+                      No active terms configured — apply a preset below
+                    </option>
                   )}
                 </select>
               </div>
@@ -1096,7 +1108,7 @@ export default function SchoolSettingsPage() {
                   onClick={() => handleApplyPreset('4quarter')}
                   className="rounded-xl border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 transition"
                 >
-                  4 Quarters
+                  4 Terms
                 </button>
                 <button
                   type="button"
@@ -1115,7 +1127,7 @@ export default function SchoolSettingsPage() {
               </div>
             ) : gradingPeriods.length === 0 ? (
               <div className="text-center py-6 text-gray-400 text-xs">
-                No active grading periods configured. Click "4 Quarters" above to initialize.
+                No active grading periods configured. Click "4 Terms" above to initialize.
               </div>
             ) : (
               <div className="space-y-2">
