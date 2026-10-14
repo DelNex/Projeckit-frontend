@@ -51,7 +51,10 @@ export default function AdminSettingsPage() {
         .eq('id', user?.id || '')
         .maybeSingle();
 
-      const tenantId = profile?.tenant_id || 'a0000000-0000-0000-0000-000000000001';
+      if (!profile?.tenant_id) {
+        throw new Error('Your account is not linked to a school tenant.');
+      }
+      const tenantId = profile.tenant_id;
 
       await (supabase as any).from('audit_logs').insert({
         tenant_id: tenantId,

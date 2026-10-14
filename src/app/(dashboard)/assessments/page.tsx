@@ -60,6 +60,9 @@ export default function AssessmentsPage() {
   const [newTerm, setNewTerm] = useState('1st Quarter');
   const [newSchoolYear, setNewSchoolYear] = useState('2025-2026');
   const [newPassingMps, setNewPassingMps] = useState(60.0);
+  const [gradingPeriodsList, setGradingPeriodsList] = useState<
+    Array<{ id: string; name: string; code: string; is_current: boolean }>
+  >([]);
 
   const supabase = createClient();
 
@@ -98,9 +101,14 @@ export default function AssessmentsPage() {
 
   const fetchDropdownOptions = async () => {
     try {
-      const [subjRes, secRes] = await Promise.all([
+      const [subjRes, secRes, gpRes] = await Promise.all([
         supabase.from('subjects').select('id, code, title'),
         supabase.from('sections').select('id, name'),
+        (supabase as any)
+          .from('grading_periods')
+          .select('id, name, code, is_current')
+          .eq('is_archived', false)
+          .order('position', { ascending: true }),
       ]);
 
       if (subjRes.data) {
@@ -119,6 +127,16 @@ export default function AssessmentsPage() {
         setSectionsList(secRes.data.map((s) => ({ id: s.id, name: s.name })));
         if (secRes.data.length > 0 && !newSectionId) {
           setNewSectionId(secRes.data[0].id);
+        }
+      }
+
+      if (gpRes?.data && gpRes.data.length > 0) {
+        setGradingPeriodsList(gpRes.data);
+        const currentPeriod = gpRes.data.find((g: any) => g.is_current);
+        if (currentPeriod) {
+          setNewTerm(currentPeriod.name);
+        } else {
+          setNewTerm(gpRes.data[0].name);
         }
       }
     } catch (e) {
@@ -144,16 +162,23 @@ export default function AssessmentsPage() {
         .eq('id', user?.id || '')
         .maybeSingle();
 
-      const tenantId = profile?.tenant_id || 'a0000000-0000-0000-0000-000000000001';
+      if (!profile?.tenant_id) {
+        throw new Error('Your account is not linked to a school tenant.');
+      }
+      const tenantId = profile.tenant_id;
 
       const { data: config } = await supabase
         .from('academic_configs')
         .select('id')
         .eq('tenant_id', tenantId)
+        .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      const configId = config?.id || 'c0000000-0000-0000-0000-000000000001';
+      if (!config?.id) {
+        throw new Error('No active academic configuration found for this school.');
+      }
+      const configId = config.id;
 
       const { data: created, error: insertError } = await supabase
         .from('assessments')
@@ -575,12 +600,20 @@ export default function AssessmentsPage() {
                     onChange={(e) => setNewTerm(e.target.value)}
                     className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
                   >
-                    <option value="1st Quarter">1st Quarter</option>
-                    <option value="2nd Quarter">2nd Quarter</option>
-                    <option value="3rd Quarter">3rd Quarter</option>
-                    <option value="4th Quarter">4th Quarter</option>
-                    <option value="Midterm">Midterm</option>
-                    <option value="Finals">Finals</option>
+                    {gradingPeriodsList.length > 0 ? (
+                      gradingPeriodsList.map((gp) => (
+                        <option key={gp.id} value={gp.name}>
+                          {gp.name} ({gp.code})
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="1st Quarter">1st Quarter</option>
+                        <option value="2nd Quarter">2nd Quarter</option>
+                        <option value="3rd Quarter">3rd Quarter</option>
+                        <option value="4th Quarter">4th Quarter</option>
+                      </>
+                    )}
                   </select>
                 </div>
 

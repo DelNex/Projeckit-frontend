@@ -27,6 +27,11 @@ import {
     Users,
     X,
     XCircle,
+    ArrowUp,
+    ArrowDown,
+    Edit2,
+    Check,
+    Calendar,
 } from 'lucide-react';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { useToast } from '@/components/ui/toast';
@@ -53,12 +58,23 @@ interface SubjectItem {
   target_items?: number;
 }
 
+interface GradingPeriodItem {
+  id: string;
+  tenant_id: string;
+  name: string;
+  code: string;
+  position: number;
+  is_current: boolean;
+  is_archived: boolean;
+}
+
 export default function SchoolSettingsPage() {
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [tenantId, setTenantId] = useState<string>('');
   const [configId, setConfigId] = useState<string>('');
   const [facultyId, setFacultyId] = useState<string | null>(null);
   const [schoolYear, setSchoolYear] = useState('2025-2026');
@@ -66,6 +82,29 @@ export default function SchoolSettingsPage() {
   const [facultyName, setFacultyName] = useState('');
   const [designation, setDesignation] = useState('Subject Teacher');
   const [approverName, setApproverName] = useState('');
+
+  // Grading Periods State (C2)
+  const [gradingPeriods, setGradingPeriods] = useState<GradingPeriodItem[]>([]);
+  const [loadingPeriods, setLoadingPeriods] = useState(false);
+  const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
+  const [editPeriodName, setEditPeriodName] = useState('');
+  const [editPeriodCode, setEditPeriodCode] = useState('');
+  const [periodWarningModal, setPeriodWarningModal] = useState<{
+    isOpen: boolean;
+    periodId: string;
+    oldName: string;
+    newName: string;
+    newCode: string;
+    affectedCount: number;
+  }>({
+    isOpen: false,
+    periodId: '',
+    oldName: '',
+    newName: '',
+    newCode: '',
+    affectedCount: 0,
+  });
+  const [savingPeriod, setSavingPeriod] = useState(false);
 
   const { toast } = useToast();
   const [sectionsList, setSectionsList] = useState<SectionItem[]>([]);
@@ -157,6 +196,255 @@ export default function SchoolSettingsPage() {
     }
   };
 
+  const refreshGradingPeriods = async (tId?: string) => {
+    const tid = tId || tenantId;
+    if (!tid) return;
+    try {
+      setLoadingPeriods(true);
+      const { data, error: err } = await (supabase as any)
+        .from('grading_periods')
+        .select('*')
+        .eq('tenant_id', tid)
+        .eq('is_archived', false)
+        .order('position', { ascending: true });
+
+      if (err) throw err;
+
+      if (data && data.length > 0) {
+        setGradingPeriods(data);
+        const current = data.find((p: any) => p.is_current);
+        if (current) {
+          setTerm(current.name);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load grading periods:', e);
+    } finally {
+      setLoadingPeriods(false);
+    }
+  };
+
+  const handleReorderPeriod = async (periodId: string, direction: 'up' | 'down') => {
+    const idx = gradingPeriods.findIndex((p) => p.id === periodId);
+    if (idx === -1) return;
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= gradingPeriods.length) return;
+
+    const currentPeriod = gradingPeriods[idx];
+    const targetPeriod = gradingPeriods[targetIdx];
+
+    const newPeriods = [...gradingPeriods];
+    newPeriods[idx] = { ...targetPeriod, position: currentPeriod.position };
+    newPeriods[targetIdx] = { ...currentPeriod, position: targetPeriod.position };
+    setGradingPeriods(newPeriods);
+
+    try {
+      await Promise.all([
+        (supabase as any)
+          .from('grading_periods')
+          .update({ position: currentPeriod.position })
+          .eq('id', targetPeriod.id),
+        (supabase as any)
+          .from('grading_periods')
+          .update({ position: targetPeriod.position })
+          .eq('id', currentPeriod.id),
+      ]);
+      toast.success('Grading periods reordered.');
+    } catch (err: any) {
+      console.error('Failed to reorder grading periods:', err);
+      toast.error(friendlyError(err, 'Failed to reorder grading periods.'));
+      await refreshGradingPeriods();
+    }
+  };
+
+  const handleSetCurrentPeriod = async (period: GradingPeriodItem) => {
+    if (period.is_current) return;
+    try {
+      await (supabase as any)
+        .from('grading_periods')
+        .update({ is_current: false })
+        .eq('tenant_id', tenantId)
+        .eq('is_current', true);
+
+      const { error: updErr } = await (supabase as any)
+        .from('grading_periods')
+        .update({ is_current: true })
+        .eq('id', period.id);
+
+      if (updErr) throw updErr;
+
+      setTerm(period.name);
+      setGradingPeriods((prev) =>
+        prev.map((p) => ({
+          ...p,
+          is_current: p.id === period.id,
+        }))
+      );
+      toast.success(`"${period.name}" is now the active Current Term.`);
+    } catch (err: any) {
+      console.error('Failed to set current period:', err);
+      toast.error(friendlyError(err, 'Failed to set current term.'));
+    }
+  };
+
+  const handleRequestSavePeriod = async (
+    period: GradingPeriodItem,
+    newName: string,
+    newCode: string
+  ) => {
+    const trimmedName = newName.trim();
+    const trimmedCode = newCode.trim();
+    if (!trimmedName) {
+      toast.error('Period display name cannot be empty.');
+      return;
+    }
+
+    if (trimmedName === period.name && trimmedCode === period.code) {
+      setEditingPeriodId(null);
+      return;
+    }
+
+    try {
+      const { count } = await (supabase as any)
+        .from('assessments')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId)
+        .eq('term', period.name);
+
+      if (count && count > 0 && trimmedName !== period.name) {
+        setPeriodWarningModal({
+          isOpen: true,
+          periodId: period.id,
+          oldName: period.name,
+          newName: trimmedName,
+          newCode: trimmedCode,
+          affectedCount: count,
+        });
+        return;
+      }
+
+      await applySavePeriod(period.id, period.name, trimmedName, trimmedCode);
+    } catch (err: any) {
+      console.error('Failed to check assessment impact:', err);
+      toast.error(friendlyError(err, 'Failed to update period.'));
+    }
+  };
+
+  const applySavePeriod = async (
+    periodId: string,
+    oldName: string,
+    newName: string,
+    newCode: string
+  ) => {
+    setSavingPeriod(true);
+    try {
+      const { error: updErr } = await (supabase as any)
+        .from('grading_periods')
+        .update({ name: newName, code: newCode })
+        .eq('id', periodId);
+
+      if (updErr) throw updErr;
+
+      if (oldName !== newName) {
+        await (supabase as any)
+          .from('assessments')
+          .update({ term: newName })
+          .eq('tenant_id', tenantId)
+          .eq('term', oldName);
+
+        await (supabase as any)
+          .from('tos_documents')
+          .update({ term: newName })
+          .eq('tenant_id', tenantId)
+          .eq('term', oldName);
+
+        const currentPeriod = gradingPeriods.find((p) => p.id === periodId);
+        if (currentPeriod?.is_current) {
+          setTerm(newName);
+          if (configId) {
+            await (supabase as any)
+              .from('academic_configs')
+              .update({ term: newName })
+              .eq('id', configId);
+          }
+        }
+      }
+
+      setEditingPeriodId(null);
+      setPeriodWarningModal((prev) => ({ ...prev, isOpen: false }));
+      toast.success(`Grading period "${newName}" saved.`);
+      await refreshGradingPeriods();
+    } catch (err: any) {
+      console.error('Failed to save period:', err);
+      toast.error(friendlyError(err, 'Failed to save period changes.'));
+    } finally {
+      setSavingPeriod(false);
+    }
+  };
+
+  const handleApplyPreset = async (preset: '4quarter' | '2semester') => {
+    if (!tenantId) return;
+    try {
+      setLoadingPeriods(true);
+      if (preset === '4quarter') {
+        const standardQuarters = [
+          { name: '1st Quarter', code: 'Q1', position: 1, is_current: true },
+          { name: '2nd Quarter', code: 'Q2', position: 2, is_current: false },
+          { name: '3rd Quarter', code: 'Q3', position: 3, is_current: false },
+          { name: '4th Quarter', code: 'Q4', position: 4, is_current: false },
+        ];
+
+        await (supabase as any)
+          .from('grading_periods')
+          .update({ is_archived: true, is_current: false })
+          .eq('tenant_id', tenantId);
+
+        for (const sq of standardQuarters) {
+          await (supabase as any).from('grading_periods').insert({
+            tenant_id: tenantId,
+            name: sq.name,
+            code: sq.code,
+            position: sq.position,
+            is_current: sq.is_current,
+            is_archived: false,
+          });
+        }
+        setTerm('1st Quarter');
+        toast.success('Applied standard 4-Quarter configuration.');
+      } else {
+        const standardSemesters = [
+          { name: '1st Semester', code: 'S1', position: 1, is_current: true },
+          { name: '2nd Semester', code: 'S2', position: 2, is_current: false },
+        ];
+
+        await (supabase as any)
+          .from('grading_periods')
+          .update({ is_archived: true, is_current: false })
+          .eq('tenant_id', tenantId);
+
+        for (const sem of standardSemesters) {
+          await (supabase as any).from('grading_periods').insert({
+            tenant_id: tenantId,
+            name: sem.name,
+            code: sem.code,
+            position: sem.position,
+            is_current: sem.is_current,
+            is_archived: false,
+          });
+        }
+        setTerm('1st Semester');
+        toast.success('Applied 2-Semester configuration.');
+      }
+
+      await refreshGradingPeriods();
+    } catch (err: any) {
+      console.error('Failed to apply preset:', err);
+      toast.error(friendlyError(err, 'Failed to apply preset.'));
+    } finally {
+      setLoadingPeriods(false);
+    }
+  };
+
   useEffect(() => {
     async function loadSchoolSettings() {
       setLoading(true);
@@ -171,15 +459,23 @@ export default function SchoolSettingsPage() {
           .eq('id', user?.id || '')
           .maybeSingle();
 
-        const tenantId = profile?.tenant_id || 'a0000000-0000-0000-0000-000000000001';
+        if (!profile?.tenant_id) {
+          throw new Error('Your account is not linked to a school tenant.');
+        }
+        const currentTenantId = profile.tenant_id;
+        setTenantId(currentTenantId);
 
-        // 1. Fetch active academic config
+        // 1. Fetch active academic config deterministically
         const { data: config } = await (supabase as any)
           .from('academic_configs')
           .select('id, school_year, term')
-          .eq('tenant_id', tenantId)
+          .eq('tenant_id', currentTenantId)
+          .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
+
+        // 1b. Fetch active grading periods
+        await refreshGradingPeriods(currentTenantId);
 
         if (config) {
           setConfigId(config.id);
@@ -224,7 +520,7 @@ export default function SchoolSettingsPage() {
         setWeights(getSavedGradingWeights());
       } catch (err: any) {
         console.error('Failed to load school settings:', err);
-        setError(err.message || 'Failed to load school configuration');
+        setError(friendlyError(err, 'Failed to load school configuration.'));
       } finally {
         setLoading(false);
       }
@@ -260,6 +556,20 @@ export default function SchoolSettingsPage() {
           .eq('id', configId);
 
         if (confErr) throw confErr;
+
+        if (tenantId && term) {
+          await (supabase as any)
+            .from('grading_periods')
+            .update({ is_current: false })
+            .eq('tenant_id', tenantId)
+            .eq('is_current', true);
+
+          await (supabase as any)
+            .from('grading_periods')
+            .update({ is_current: true })
+            .eq('tenant_id', tenantId)
+            .eq('name', term.trim());
+        }
       }
 
       // 2. Update or insert faculty record
@@ -740,17 +1050,198 @@ export default function SchoolSettingsPage() {
                   onChange={(e) => setTerm(e.target.value)}
                   className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
                 >
-                  <option value="1st Quarter" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">1st Quarter</option>
-                  <option value="2nd Quarter" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">2nd Quarter</option>
-                  <option value="3rd Quarter" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">3rd Quarter</option>
-                  <option value="4th Quarter" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">4th Quarter</option>
-                  <option value="First Semester" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">First Semester</option>
-                  <option value="Second Semester" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Second Semester</option>
-                  <option value="Midterm" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Midterm</option>
-                  <option value="Finals" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">Finals</option>
+                  {gradingPeriods.length > 0 ? (
+                    gradingPeriods.map((gp) => (
+                      <option
+                        key={gp.id}
+                        value={gp.name}
+                        className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white"
+                      >
+                        {gp.name} ({gp.code})
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="1st Quarter" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">1st Quarter</option>
+                      <option value="2nd Quarter" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">2nd Quarter</option>
+                      <option value="3rd Quarter" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">3rd Quarter</option>
+                      <option value="4th Quarter" className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">4th Quarter</option>
+                    </>
+                  )}
                 </select>
               </div>
             </div>
+          </div>
+
+          {/* Card: Grading Periods & Current Term (C2) */}
+          <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3 dark:border-gray-800">
+              <div className="flex items-center gap-3">
+                <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900 dark:text-white">
+                    Grading Periods &amp; Current Term
+                  </h2>
+                  <p className="text-[11px] text-gray-400">
+                    Define active academic terms, custom labels (e.g. Prelims/Midterms), display sequence, and current active period.
+                  </p>
+                </div>
+              </div>
+
+              {/* Preset buttons */}
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-gray-400">Presets:</span>
+                <button
+                  type="button"
+                  onClick={() => handleApplyPreset('4quarter')}
+                  className="rounded-xl border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 transition"
+                >
+                  4 Quarters
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyPreset('2semester')}
+                  className="rounded-xl border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 transition"
+                >
+                  2 Semesters
+                </button>
+              </div>
+            </div>
+
+            {loadingPeriods ? (
+              <div className="flex items-center justify-center py-6 text-gray-400">
+                <Loader2 className="h-5 w-5 animate-spin text-blue-600 mr-2" />
+                <span className="text-xs">Loading grading periods...</span>
+              </div>
+            ) : gradingPeriods.length === 0 ? (
+              <div className="text-center py-6 text-gray-400 text-xs">
+                No active grading periods configured. Click "4 Quarters" above to initialize.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {gradingPeriods.map((gp, idx) => {
+                  const isEditing = editingPeriodId === gp.id;
+
+                  return (
+                    <div
+                      key={gp.id}
+                      className={cn(
+                        'flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border p-3.5 transition-all',
+                        gp.is_current
+                          ? 'border-blue-200 bg-blue-50/40 dark:border-blue-900/50 dark:bg-blue-950/20'
+                          : 'border-gray-200 bg-gray-50/50 dark:border-gray-800 dark:bg-gray-800/40'
+                      )}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        {/* Position badge & reorder buttons */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-gray-200 text-[10px] font-mono font-bold text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                            #{gp.position}
+                          </span>
+                          <div className="flex flex-col">
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={() => handleReorderPeriod(gp.id, 'up')}
+                              className="text-gray-400 hover:text-gray-600 disabled:opacity-20 transition"
+                              title="Move up"
+                            >
+                              <ArrowUp className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === gradingPeriods.length - 1}
+                              onClick={() => handleReorderPeriod(gp.id, 'down')}
+                              className="text-gray-400 hover:text-gray-600 disabled:opacity-20 transition"
+                              title="Move down"
+                            >
+                              <ArrowDown className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Name & Code */}
+                        {isEditing ? (
+                          <div className="flex flex-wrap items-center gap-2 flex-1">
+                            <input
+                              type="text"
+                              value={editPeriodName}
+                              onChange={(e) => setEditPeriodName(e.target.value)}
+                              placeholder="Display label (e.g. Prelims)"
+                              className="rounded-lg border border-blue-400 bg-white px-2.5 py-1 text-xs font-semibold text-gray-900 outline-none dark:bg-gray-800 dark:text-white"
+                            />
+                            <input
+                              type="text"
+                              value={editPeriodCode}
+                              onChange={(e) => setEditPeriodCode(e.target.value)}
+                              placeholder="Code (e.g. Q1)"
+                              className="w-16 rounded-lg border border-blue-400 bg-white px-2 py-1 text-xs font-mono font-semibold text-gray-900 outline-none dark:bg-gray-800 dark:text-white uppercase"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRequestSavePeriod(gp, editPeriodName, editPeriodCode)}
+                              className="rounded-lg bg-emerald-600 p-1 text-white hover:bg-emerald-700"
+                              title="Save label"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingPeriodId(null)}
+                              className="rounded-lg bg-gray-200 p-1 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200"
+                              title="Cancel"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-bold text-xs text-gray-900 dark:text-white truncate">
+                              {gp.name}
+                            </span>
+                            <span className="rounded-md bg-gray-200/80 px-1.5 py-0.5 text-[10px] font-mono font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-300 uppercase">
+                              {gp.code}
+                            </span>
+                            {gp.is_current && (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                <CheckCircle2 className="h-3 w-3" /> Current Term
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Right actions */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {!isEditing && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingPeriodId(gp.id);
+                              setEditPeriodName(gp.name);
+                              setEditPeriodCode(gp.code);
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 transition"
+                          >
+                            <Edit2 className="h-3 w-3" /> Rename
+                          </button>
+                        )}
+
+                        {!gp.is_current && (
+                          <button
+                            type="button"
+                            onClick={() => handleSetCurrentPeriod(gp)}
+                            className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-2xs hover:bg-blue-700 transition"
+                          >
+                            Set as Current Term
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Card 2: Grades & Sections Management */}
@@ -1626,6 +2117,25 @@ export default function SchoolSettingsPage() {
           </div>
         </div>
       )}
+
+      {/* Grading Period Assessment Impact Warning Modal (C2) */}
+      <ConfirmationModal
+        isOpen={periodWarningModal.isOpen}
+        onClose={() => setPeriodWarningModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={() =>
+          applySavePeriod(
+            periodWarningModal.periodId,
+            periodWarningModal.oldName,
+            periodWarningModal.newName,
+            periodWarningModal.newCode
+          )
+        }
+        isLoading={savingPeriod}
+        actionType="neutral"
+        title="Update Linked Assessments?"
+        description={`${periodWarningModal.affectedCount} assessment(s) are recorded under "${periodWarningModal.oldName}". Renaming it will update their display label to "${periodWarningModal.newName}".`}
+        confirmLabel="Rename Period & Update Records"
+      />
     </div>
   );
 }

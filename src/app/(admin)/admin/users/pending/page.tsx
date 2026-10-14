@@ -61,12 +61,16 @@ export default function PendingUsersPage() {
   const handleUpdateStatus = async (id: string, newStatus: 'approved' | 'rejected'): Promise<boolean> => {
     setProcessingId(id);
     try {
-      const { error: updErr } = await supabase
-        .from('profiles')
-        .update({ status: newStatus, updated_at: new Date().toISOString() })
-        .eq('id', id);
+      const res = await fetch(`/api/admin/users/${id}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
 
-      if (updErr) throw updErr;
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || `Failed to ${newStatus} applicant.`);
+      }
 
       setPendingUsers((prev) => prev.filter((u) => u.id !== id));
       toast.success(`Applicant ${newStatus === 'approved' ? 'approved' : 'rejected'} successfully.`);

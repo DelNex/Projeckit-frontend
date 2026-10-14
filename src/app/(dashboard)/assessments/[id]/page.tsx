@@ -247,7 +247,7 @@ export default function AssessmentWorkspacePage({
 
     } catch (err: any) {
       console.error('Failed to load assessment details:', err);
-      setError(err?.message || 'Failed to load assessment details');
+      setError(friendlyError(err, 'Failed to load assessment details'));
     } finally {
       setLoading(false);
     }
@@ -328,7 +328,10 @@ export default function AssessmentWorkspacePage({
         .select('tenant_id')
         .eq('id', user?.id || '')
         .maybeSingle();
-      const tenantId = profile?.tenant_id || 'a0000000-0000-0000-0000-000000000001';
+      if (!profile?.tenant_id) {
+        throw new Error('Your account is not linked to a school tenant.');
+      }
+      const tenantId = profile.tenant_id;
 
       const { error: keyErr } = await (supabase as any)
         .from('answer_keys')
@@ -365,7 +368,10 @@ export default function AssessmentWorkspacePage({
         .select('tenant_id')
         .eq('id', user?.id || '')
         .maybeSingle();
-      const tenantId = profile?.tenant_id || 'a0000000-0000-0000-0000-000000000001';
+      if (!profile?.tenant_id) {
+        throw new Error('Your account is not linked to a school tenant.');
+      }
+      const tenantId = profile.tenant_id;
 
       const scanStatus = result.status;
 

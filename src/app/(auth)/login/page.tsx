@@ -1,24 +1,30 @@
 'use client';
 
 import { createClient } from '@/lib/supabase/client';
-import { AlertCircle, ArrowRight, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { useToast } from '@/components/ui/toast';
+import { friendlyError } from '@/lib/errors';
+import { AlertCircle, ArrowRight, Eye, EyeOff, Loader2, Mail } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const supabase = createClient();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [canResendEmail, setCanResendEmail] = useState(false);
+  const [resendingEmail, setResendingEmail] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setCanResendEmail(false);
     setLoading(true);
 
     try {
@@ -55,9 +61,45 @@ export default function LoginPage() {
         router.refresh();
       }
     } catch (err: any) {
-      setError(err.message || 'Invalid email or password');
+      const msg = (err?.message || '').toLowerCase();
+      if (msg.includes('email not confirmed')) {
+        setError(
+          'Your email address is not confirmed yet. If your account has been approved, ask your administrator to confirm it, or resend the confirmation email.'
+        );
+        setCanResendEmail(true);
+      } else if (msg.includes('invalid login credentials')) {
+        setError('Invalid email address or password. Please verify your credentials and try again.');
+      } else {
+        setError(friendlyError(err, 'Invalid email or password. Please try again.'));
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      toast.error('Please enter your email address to resend the confirmation.');
+      return;
+    }
+
+    setResendingEmail(true);
+    try {
+      const { error: resendErr } = await supabase.auth.resend({
+        type: 'signup',
+        email: cleanEmail,
+      });
+
+      if (resendErr) {
+        toast.error(friendlyError(resendErr, 'Failed to resend confirmation email.'));
+      } else {
+        toast.success('Confirmation email sent! Please check your inbox.');
+      }
+    } catch (resendError: any) {
+      toast.error(friendlyError(resendError, 'Failed to resend confirmation email.'));
+    } finally {
+      setResendingEmail(false);
     }
   };
 
@@ -79,9 +121,26 @@ export default function LoginPage() {
 
         {/* Error Alert */}
         {error && (
-          <div className="flex items-center gap-2.5 rounded-2xl border border-red-200 bg-red-50 p-3.5 text-xs font-semibold text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
-            <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
-            <span>{error}</span>
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-3.5 text-xs font-semibold text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+            <div className="flex items-start gap-2.5">
+              <AlertCircle className="h-4 w-4 shrink-0 text-red-500 mt-0.5" />
+              <div className="flex-1 space-y-2">
+                <span>{error}</span>
+                {canResendEmail && (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={handleResendConfirmation}
+                      disabled={resendingEmail}
+                      className="inline-flex items-center gap-1.5 font-bold text-blue-600 underline hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 disabled:opacity-50"
+                    >
+                      {resendingEmail && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                      Resend confirmation email
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 

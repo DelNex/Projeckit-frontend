@@ -417,7 +417,7 @@ function detectColumnMapping(firstRow: string[]): ColumnMapping {
                 name: row.name,
                 reason: isDuplicate
                   ? 'LRN already enrolled.'
-                  : 'Failed to enroll',
+                  : friendlyError(singleErr, 'Failed to enroll'),
               });
             }
           }

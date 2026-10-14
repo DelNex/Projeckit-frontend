@@ -1,6 +1,7 @@
 'use client';
 
 import { createClient } from '@/lib/supabase/client';
+import { normalizeQuarter } from '@/lib/deped-grading';
 import {
     AlertCircle,
     AlertTriangle,
@@ -53,14 +54,6 @@ const TIER_CONFIG = [
   { key: 'average', label: 'Average / Low', range: '35–65%', min: 35, color: '#6366F1', bgClass: 'bg-indigo-500', textClass: 'text-indigo-700 dark:text-indigo-400' },
   { key: 'atRisk', label: 'Very Low / At Risk', range: '<35%', min: 0, color: '#EF4444', bgClass: 'bg-rose-500', textClass: 'text-rose-700 dark:text-rose-400' },
 ];
-
-function normalizeQuarter(term: string): 'Q1' | 'Q2' | 'Q3' | 'Q4' {
-  const lower = (term || '').toLowerCase();
-  if (lower.includes('second') || lower.includes('q2') || lower.includes('midterm')) return 'Q2';
-  if (lower.includes('third') || lower.includes('q3') || lower.includes('semi')) return 'Q3';
-  if (lower.includes('fourth') || lower.includes('q4') || lower.includes('final')) return 'Q4';
-  return 'Q1';
-}
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);

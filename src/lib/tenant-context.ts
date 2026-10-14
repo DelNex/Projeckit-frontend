@@ -28,11 +28,12 @@ export async function getTenantContext(supabase: SupabaseClient<any, any, any>):
     .from('academic_configs')
     .select('id')
     .eq('tenant_id', profile.tenant_id)
+    .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
   if (configErr || !config?.id) {
-    throw new Error('Your account is not linked to a school yet.');
+    throw new Error('Your account is not linked to an active academic configuration yet.');
   }
 
   return {
@@ -40,3 +41,23 @@ export async function getTenantContext(supabase: SupabaseClient<any, any, any>):
     configId: config.id,
   };
 }
+
+export async function getActiveAcademicConfig(
+  supabase: SupabaseClient<any, any, any>,
+  tenantId: string
+) {
+  const { data: config, error } = await (supabase as any)
+    .from('academic_configs')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !config) {
+    throw new Error('No active academic configuration found for this school.');
+  }
+
+  return config;
+}
+

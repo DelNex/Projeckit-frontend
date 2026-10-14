@@ -29,31 +29,15 @@ function isNetworkError(err: unknown): boolean {
     return true;
   }
   if (err instanceof Error) {
-    const msg = err.message.toLowerCase();
-    return (
-      msg.includes('failed to fetch') ||
-      msg.includes('network') ||
-      msg.includes('connection refused') ||
-      msg.includes('offline')
-    );
+    return err.message.toLowerCase().includes('failed to fetch');
   }
   if (typeof err === 'object') {
     const obj = err as Record<string, unknown>;
     const msg = typeof obj.message === 'string' ? obj.message.toLowerCase() : '';
-    return (
-      msg.includes('failed to fetch') ||
-      msg.includes('network') ||
-      msg.includes('connection refused') ||
-      msg.includes('offline')
-    );
+    return msg.includes('failed to fetch');
   }
   if (typeof err === 'string') {
-    const msg = err.toLowerCase();
-    return (
-      msg.includes('failed to fetch') ||
-      msg.includes('network') ||
-      msg.includes('offline')
-    );
+    return err.toLowerCase().includes('failed to fetch');
   }
   return false;
 }

@@ -75,6 +75,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
       group: 'ADMINISTRATION',
       items: [
         { name: 'Console Overview', href: '/admin', icon: Shield },
+        { name: 'All Accounts', href: '/admin/users', icon: Users },
         { name: 'Pending Approvals', href: '/admin/users/pending', icon: UserCheck },
         { name: 'Audit Logs', href: '/admin/audit', icon: FileText },
         { name: 'App Settings', href: '/admin/settings', icon: Sliders },

@@ -242,3 +242,33 @@ export function saveGradingWeights(weights: GradeComponentWeights): void {
   }
 }
 
+/**
+ * Normalizes a grading period or term name into a DepEd Quarter key ('Q1' | 'Q2' | 'Q3' | 'Q4').
+ * Supports matching by period position (1-4) in addition to string heuristics ("Prelims", "Term 1", etc.)
+ */
+export function normalizeQuarter(term: string, position?: number | null): 'Q1' | 'Q2' | 'Q3' | 'Q4' {
+  if (position === 1) return 'Q1';
+  if (position === 2) return 'Q2';
+  if (position === 3) return 'Q3';
+  if (position === 4) return 'Q4';
+
+  const lower = (term || '').toLowerCase().trim();
+
+  // Custom term heuristics
+  if (lower.includes('prelim') || lower.includes('1st') || lower.includes('first') || lower.includes('q1') || lower.includes('term 1') || lower.includes('period 1') || lower === '1') {
+    return 'Q1';
+  }
+  if (lower.includes('midterm') || lower.includes('2nd') || lower.includes('second') || lower.includes('q2') || lower.includes('term 2') || lower.includes('period 2') || lower === '2') {
+    return 'Q2';
+  }
+  if (lower.includes('semi') || lower.includes('3rd') || lower.includes('third') || lower.includes('q3') || lower.includes('term 3') || lower.includes('period 3') || lower === '3') {
+    return 'Q3';
+  }
+  if (lower.includes('final') || lower.includes('4th') || lower.includes('fourth') || lower.includes('q4') || lower.includes('term 4') || lower.includes('period 4') || lower === '4') {
+    return 'Q4';
+  }
+
+  return 'Q1';
+}
+
+

@@ -126,6 +126,7 @@ export function TosEditor({
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [rowsToDelete, setRowsToDelete] = useState<string[]>([]);
+  const [gradingPeriods, setGradingPeriods] = useState<Array<{ id: string; name: string; code: string }>>([]);
 
   // 1. Fetch real TOS document from Supabase
   useEffect(() => {
@@ -133,13 +134,26 @@ export function TosEditor({
     async function loadTosDoc() {
       setLoading(true);
       try {
-        const { data } = await (supabase as any)
-          .from('tos_documents')
-          .select('*')
-          .eq('assessment_id', assessmentId)
-          .maybeSingle();
+        const [tosRes, gpRes] = await Promise.all([
+          (supabase as any)
+            .from('tos_documents')
+            .select('*')
+            .eq('assessment_id', assessmentId)
+            .maybeSingle(),
+          (supabase as any)
+            .from('grading_periods')
+            .select('id, name, code')
+            .eq('is_archived', false)
+            .order('position', { ascending: true }),
+        ]);
 
         if (!isMounted) return;
+
+        if (gpRes?.data && gpRes.data.length > 0) {
+          setGradingPeriods(gpRes.data);
+        }
+
+        const data = tosRes?.data;
 
         if (data && Array.isArray(data.rows) && data.rows.length > 0) {
           const parsedRows: TosCompetencyRow[] = data.rows.map((r: any, idx: number) => {
@@ -323,7 +337,10 @@ export function TosEditor({
         .eq('id', user?.id || '')
         .maybeSingle();
 
-      const tenantId = profile?.tenant_id || 'a0000000-0000-0000-0000-000000000001';
+      if (!profile?.tenant_id) {
+        throw new Error('Your account is not linked to a school tenant.');
+      }
+      const tenantId = profile.tenant_id;
 
       const payload = {
         assessment_id: assessmentId,
@@ -693,13 +710,27 @@ export function TosEditor({
           </div>
           <div>
             <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">Active Quarter</label>
-            <input
-              type="text"
-              value={term}
-              onChange={(e) => setTerm(e.target.value)}
-              placeholder="e.g. 1st Quarter"
-              className="w-full px-2.5 py-1.5 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-bold text-blue-600 dark:text-blue-400 focus:ring-2 focus:ring-blue-500 text-xs outline-none"
-            />
+            {gradingPeriods.length > 0 ? (
+              <select
+                value={term}
+                onChange={(e) => setTerm(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-bold text-blue-600 dark:text-blue-400 focus:ring-2 focus:ring-blue-500 text-xs outline-none"
+              >
+                {gradingPeriods.map((gp) => (
+                  <option key={gp.id} value={gp.name}>
+                    {gp.name} ({gp.code})
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={term}
+                onChange={(e) => setTerm(e.target.value)}
+                placeholder="e.g. 1st Quarter"
+                className="w-full px-2.5 py-1.5 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-bold text-blue-600 dark:text-blue-400 focus:ring-2 focus:ring-blue-500 text-xs outline-none"
+              />
+            )}
           </div>
           <div>
             <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">Track / Strand</label>

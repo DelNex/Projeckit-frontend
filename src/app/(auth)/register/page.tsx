@@ -5,6 +5,7 @@ import {
   isValidDepEdEmail,
 } from '@/lib/auth-validation';
 import { createClient } from '@/lib/supabase/client';
+import { friendlyError } from '@/lib/errors';
 import { AlertCircle, ArrowRight, CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -57,7 +58,7 @@ export default function RegisterPage() {
 
       setSuccess(true);
     } catch (err: any) {
-      setError(err.message || 'Failed to create account');
+      setError(friendlyError(err, 'Failed to create account'));
     } finally {
       setLoading(false);
     }

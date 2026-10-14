@@ -15,6 +15,7 @@ import {
 } from '@/lib/deped-grading';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { createClient } from '@/lib/supabase/client';
+import { friendlyError } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 import {
     AlertCircle,
@@ -68,13 +69,11 @@ export interface TermGradebookProps {
   onScoresSaved?: () => void;
 }
 
-const AVAILABLE_TERMS = [
+const DEFAULT_AVAILABLE_TERMS = [
   '1st Quarter',
   '2nd Quarter',
   '3rd Quarter',
   '4th Quarter',
-  'Midterm',
-  'Finals',
 ];
 
 export function TermGradebook({
@@ -91,6 +90,7 @@ export function TermGradebook({
   const supabase = createClient();
 
   const [activeTerm, setActiveTerm] = useState(initialTerm || '1st Quarter');
+  const [availableTerms, setAvailableTerms] = useState<string[]>(DEFAULT_AVAILABLE_TERMS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -254,11 +254,29 @@ export function TermGradebook({
       setHasUnsavedChanges(false);
     } catch (err: any) {
       console.error('Failed to load gradebook roster:', err);
-      setErrorMessage(err.message || 'Failed to load student roster');
+      setErrorMessage(friendlyError(err, 'Failed to load student roster.'));
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    async function loadGradingPeriods() {
+      try {
+        const { data: gpData } = await (supabase as any)
+          .from('grading_periods')
+          .select('name')
+          .eq('is_archived', false)
+          .order('position', { ascending: true });
+        if (gpData && gpData.length > 0) {
+          setAvailableTerms(gpData.map((g: any) => g.name));
+        }
+      } catch (e) {
+        console.warn('Failed to load grading periods in gradebook:', e);
+      }
+    }
+    loadGradingPeriods();
+  }, []);
 
   useEffect(() => {
     loadGradebookData();
@@ -359,7 +377,10 @@ export function TermGradebook({
         .eq('id', user?.id || '')
         .maybeSingle();
 
-      const tenantId = profile?.tenant_id || 'a0000000-0000-0000-0000-000000000001';
+      if (!profile?.tenant_id) {
+        throw new Error('Your account is not linked to a school tenant.');
+      }
+      const tenantId = profile.tenant_id;
 
       // 1. Save local snapshot
       const cachePayload = {
@@ -421,7 +442,7 @@ export function TermGradebook({
       setTimeout(() => setSaveMessage(null), 4000);
     } catch (err: any) {
       console.error('Failed to save gradebook:', err);
-      setErrorMessage(err.message || 'Failed to save gradebook data to database.');
+      setErrorMessage(friendlyError(err, 'Failed to save gradebook data to database.'));
     } finally {
       setSaving(false);
     }
@@ -552,7 +573,7 @@ export function TermGradebook({
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           {/* Term Switcher */}
           <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl text-xs">
-            {AVAILABLE_TERMS.map((term) => (
+            {availableTerms.map((term) => (
               <button
                 key={term}
                 onClick={() => handleTermChange(term)}
