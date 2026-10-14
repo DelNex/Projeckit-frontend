@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/components/ui/toast';
 import { friendlyError } from '@/lib/errors';
-import { Building2, Loader2, Plus, RefreshCw, X } from 'lucide-react';
+import { Building2, Edit2, Loader2, Plus, RefreshCw, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface TenantRecord {
@@ -19,12 +19,19 @@ export default function TenantsPage() {
   const [tenants, setTenants] = useState<TenantRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
 
-  // Modal State
+  // Provision Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [tenantName, setTenantName] = useState('');
   const [tenantCode, setTenantCode] = useState('');
+
+  // Edit Modal State
+  const [editingTenant, setEditingTenant] = useState<TenantRecord | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editCode, setEditCode] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const supabase = createClient();
 
@@ -32,6 +39,16 @@ export default function TenantsPage() {
     setLoading(true);
     setError(null);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('is_platform_admin')
+          .eq('id', user.id)
+          .maybeSingle();
+        setIsPlatformAdmin(!!profile?.is_platform_admin);
+      }
+
       const { data, error: err } = await supabase
         .from('tenants')
         .select('*')
@@ -41,7 +58,7 @@ export default function TenantsPage() {
       setTenants(data || []);
     } catch (err: any) {
       console.error('Failed to load tenants:', err);
-      setError(err?.message || 'Failed to load tenants');
+      setError(friendlyError(err, 'Failed to load school tenants.'));
     } finally {
       setLoading(false);
     }
@@ -57,26 +74,69 @@ export default function TenantsPage() {
 
     setSubmitting(true);
     try {
-      const { error: insErr } = await supabase
-        .from('tenants')
-        .insert({
+      const res = await fetch('/api/admin/tenants', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           name: tenantName.trim(),
-          code: tenantCode.trim() || null,
-          is_active: true,
-        });
+          code: tenantCode.trim() || undefined,
+        }),
+      });
 
-      if (insErr) throw insErr;
+      const resData = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        if (res.status === 403) {
+          toast.error('Only the platform administrator can add schools.');
+        } else {
+          toast.error(resData.error || 'Could not create school tenant.');
+        }
+        return;
+      }
 
       setIsModalOpen(false);
       setTenantName('');
       setTenantCode('');
-      toast.success('School tenant registered successfully.');
+      toast.success('School tenant provisioned successfully.');
       await fetchTenants();
     } catch (err: any) {
       console.error('Failed to create tenant:', err);
       toast.error(friendlyError(err, 'Could not create school tenant.'));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleStartEdit = (t: TenantRecord) => {
+    setEditingTenant(t);
+    setEditName(t.name);
+    setEditCode(t.code || '');
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTenant || !editName.trim()) return;
+
+    setSavingEdit(true);
+    try {
+      const { error: updErr } = await supabase
+        .from('tenants')
+        .update({
+          name: editName.trim(),
+          code: editCode.trim() || null,
+        })
+        .eq('id', editingTenant.id);
+
+      if (updErr) throw updErr;
+
+      toast.success('School tenant updated successfully.');
+      setEditingTenant(null);
+      await fetchTenants();
+    } catch (err: any) {
+      console.error('Failed to update tenant:', err);
+      toast.error(friendlyError(err, 'Could not update school tenant.'));
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -92,13 +152,15 @@ export default function TenantsPage() {
           </p>
         </div>
 
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Provision Tenant</span>
-        </button>
+        {isPlatformAdmin && (
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Provision Tenant</span>
+          </button>
+        )}
       </div>
 
       {error && (
@@ -122,17 +184,21 @@ export default function TenantsPage() {
         ) : tenants.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center px-4">
             <Building2 className="h-10 w-10 text-gray-300 dark:text-gray-600 mb-2" />
-            <p className="text-sm font-bold text-gray-800 dark:text-gray-200">No tenants provisioned yet</p>
+            <p className="text-sm font-bold text-gray-800 dark:text-gray-200">No tenants found</p>
             <p className="text-xs text-gray-400 max-w-sm mt-1 mb-4">
-              Provision your school tenant to partition user accounts and academic data.
+              {isPlatformAdmin 
+                ? 'Provision your school tenant to partition user accounts and academic data.'
+                : 'No school tenant is currently associated with your account.'}
             </p>
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Provision First Tenant</span>
-            </button>
+            {isPlatformAdmin && (
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Provision First Tenant</span>
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -143,6 +209,7 @@ export default function TenantsPage() {
                   <th className="px-4 sm:px-6 py-4">Tenant Code</th>
                   <th className="px-4 sm:px-6 py-4 text-center">Status</th>
                   <th className="px-4 sm:px-6 py-4 text-right">Provisioned</th>
+                  <th className="px-4 sm:px-6 py-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -162,6 +229,15 @@ export default function TenantsPage() {
                     <td className="px-4 sm:px-6 py-4 text-right text-gray-400 text-[11px]">
                       {new Date(t.created_at).toLocaleDateString()}
                     </td>
+                    <td className="px-4 sm:px-6 py-4 text-right">
+                      <button
+                        onClick={() => handleStartEdit(t)}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                        <span>Edit</span>
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -170,8 +246,8 @@ export default function TenantsPage() {
         )}
       </div>
 
-      {/* Provision Tenant Modal */}
-      {isModalOpen && (
+      {/* Provision Tenant Modal (Platform Admin Only) */}
+      {isModalOpen && isPlatformAdmin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
           <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-gray-900">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3 dark:border-gray-800">
@@ -229,6 +305,72 @@ export default function TenantsPage() {
                 >
                   {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
                   <span>{submitting ? 'Provisioning...' : 'Provision Tenant'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit School Tenant Modal (Platform Admin or School Admin of that Tenant) */}
+      {editingTenant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-gray-900">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3 dark:border-gray-800">
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">
+                Edit School Details
+              </h3>
+              <button
+                onClick={() => setEditingTenant(null)}
+                className="rounded-lg p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-4 pt-4 text-xs">
+              <div>
+                <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                  School Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Capas Senior High School"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                  School / DepEd Code
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. CSHS-001"
+                  value={editCode}
+                  onChange={(e) => setEditCode(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-100 dark:border-gray-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingTenant(null)}
+                  className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-gray-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {savingEdit && <Loader2 className="h-4 w-4 animate-spin" />}
+                  <span>{savingEdit ? 'Saving...' : 'Save Changes'}</span>
                 </button>
               </div>
             </form>

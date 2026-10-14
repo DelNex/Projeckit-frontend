@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import {
   DEPED_REGISTRATION_ERROR_MESSAGE,
   isValidDepEdEmail,
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
     }
 
     // 4. Create User in Supabase Auth
+    // Note: Never pass role or status in metadata (closed sign-up hole)
     const supabase = await createClient();
     const cleanEmail = email.trim().toLowerCase();
 
@@ -44,9 +46,6 @@ export async function POST(request: Request) {
       options: {
         data: {
           display_name: displayName.trim(),
-          role: 'teacher',
-          status: 'pending',
-          recommendation_code: (recommendationCode || '').trim(),
         },
       },
     });
@@ -56,6 +55,29 @@ export async function POST(request: Request) {
         { error: error.message },
         { status: 400 }
       );
+    }
+
+    // 5. Look up school tenant if recommendation / school code is provided
+    if (data.user && recommendationCode && typeof recommendationCode === 'string' && recommendationCode.trim()) {
+      try {
+        const adminClient = createAdminClient();
+        const cleanCode = recommendationCode.trim();
+        const { data: matchedTenant } = await adminClient
+          .from('tenants')
+          .select('id')
+          .ilike('code', cleanCode)
+          .maybeSingle();
+
+        if (matchedTenant?.id) {
+          await adminClient
+            .from('profiles')
+            .update({ tenant_id: matchedTenant.id })
+            .eq('id', data.user.id);
+        }
+      } catch (tenantLookupErr) {
+        console.error('Failed to link school tenant during registration:', tenantLookupErr);
+        // Do not fail registration; tenant_id remains null for admin review
+      }
     }
 
     return NextResponse.json({

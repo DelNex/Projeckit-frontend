@@ -47,6 +47,7 @@ export interface Database {
           tenant_id: string | null;
           role: UserRole;
           status: UserStatus;
+          is_platform_admin: boolean;
           display_name: string | null;
           email: string | null;
           avatar_url: string | null;
@@ -58,6 +59,7 @@ export interface Database {
           tenant_id?: string | null;
           role?: UserRole;
           status?: UserStatus;
+          is_platform_admin?: boolean;
           display_name?: string | null;
           email?: string | null;
           avatar_url?: string | null;
@@ -69,6 +71,7 @@ export interface Database {
           tenant_id?: string | null;
           role?: UserRole;
           status?: UserStatus;
+          is_platform_admin?: boolean;
           display_name?: string | null;
           email?: string | null;
           avatar_url?: string | null;

@@ -22,6 +22,8 @@ import {
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 
+import { useEffect, useState } from 'react';
+
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
@@ -33,6 +35,28 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
   const searchParams = useSearchParams();
   const currentTab = searchParams ? searchParams.get('tab') : null;
   const supabase = createClient();
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+
+  useEffect(() => {
+    async function checkPlatformAdmin() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('is_platform_admin')
+            .eq('id', user.id)
+            .maybeSingle();
+          if (profile?.is_platform_admin) {
+            setIsPlatformAdmin(true);
+          }
+        }
+      } catch {
+        // Fallback
+      }
+    }
+    checkPlatformAdmin();
+  }, [supabase]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -79,7 +103,9 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
         { name: 'Pending Approvals', href: '/admin/users/pending', icon: UserCheck },
         { name: 'Audit Logs', href: '/admin/audit', icon: FileText },
         { name: 'App Settings', href: '/admin/settings', icon: Sliders },
-        { name: 'School Tenants', href: '/admin/tenants', icon: Building2 },
+        ...(isPlatformAdmin
+          ? [{ name: 'School Tenants', href: '/admin/tenants', icon: Building2 }]
+          : []),
         { name: 'App Hub', href: '/app-hub', icon: Grid },
       ],
     },

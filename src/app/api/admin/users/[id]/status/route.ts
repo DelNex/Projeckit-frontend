@@ -41,7 +41,7 @@ export async function POST(
     // 2. Verify caller is an approved admin
     const { data: callerProfile, error: profileErr } = await supabase
       .from('profiles')
-      .select('id, role, status, tenant_id')
+      .select('id, role, status, tenant_id, is_platform_admin')
       .eq('id', caller.id)
       .maybeSingle();
 
@@ -99,15 +99,31 @@ export async function POST(
       );
     }
 
-    // 6. Tenant Scoping: only touch users in caller's school unless caller is a platform-level admin (tenant_id is null)
-    if (callerProfile.tenant_id && targetProfile.tenant_id !== callerProfile.tenant_id) {
-      return NextResponse.json(
-        { error: 'Forbidden: You can only manage user accounts within your assigned school.' },
-        { status: 403 }
-      );
+    // 6. Tenant Scoping: only touch users in caller's school unless caller is a platform-level admin
+    if (!callerProfile.is_platform_admin) {
+      if (!callerProfile.tenant_id || targetProfile.tenant_id !== callerProfile.tenant_id) {
+        return NextResponse.json(
+          { error: 'Forbidden: You can only manage user accounts within your assigned school.' },
+          { status: 403 }
+        );
+      }
     }
 
-    // 7. Last Admin Protection: Prevent suspending or rejecting the last remaining admin
+    // 7. Require School Assignment for Approval (D5)
+    let effectiveTenantId = targetProfile.tenant_id;
+    if (targetStatus === 'approved') {
+      if (!effectiveTenantId && body.tenant_id && callerProfile.is_platform_admin) {
+        effectiveTenantId = typeof body.tenant_id === 'string' ? body.tenant_id.trim() : null;
+      }
+      if (!effectiveTenantId) {
+        return NextResponse.json(
+          { error: 'Cannot approve: this teacher is not assigned to any school. Assign a school first.' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // 8. Last Admin Protection: Prevent suspending or rejecting the last remaining admin
     if (
       targetProfile.role === 'admin' &&
       targetProfile.status === 'approved' &&
@@ -145,12 +161,17 @@ export async function POST(
     }
 
     // 9. Update profile status in database
+    const updatePayload: Record<string, any> = {
+      status: targetStatus,
+      updated_at: new Date().toISOString(),
+    };
+    if (effectiveTenantId && effectiveTenantId !== targetProfile.tenant_id) {
+      updatePayload.tenant_id = effectiveTenantId;
+    }
+
     const { error: updateErr } = await adminClient
       .from('profiles')
-      .update({
-        status: targetStatus,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('id', targetUserId);
 
     if (updateErr) {

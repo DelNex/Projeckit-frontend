@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/client';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { useToast } from '@/components/ui/toast';
 import { friendlyError } from '@/lib/errors';
-import { Check, Loader2, RefreshCw, UserCheck, X } from 'lucide-react';
+import { AlertTriangle, Building2, Check, Loader2, RefreshCw, UserCheck, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface PendingUserProfile {
@@ -13,12 +13,21 @@ interface PendingUserProfile {
   display_name: string | null;
   role: string;
   status: string;
+  tenant_id: string | null;
   created_at: string;
+}
+
+interface TenantItem {
+  id: string;
+  name: string;
+  code: string | null;
 }
 
 export default function PendingUsersPage() {
   const { toast } = useToast();
   const [pendingUsers, setPendingUsers] = useState<PendingUserProfile[]>([]);
+  const [tenants, setTenants] = useState<TenantItem[]>([]);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -38,9 +47,26 @@ export default function PendingUsersPage() {
     setLoading(true);
     setError(null);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('is_platform_admin')
+          .eq('id', user.id)
+          .maybeSingle();
+        setIsPlatformAdmin(!!profile?.is_platform_admin);
+      }
+
+      // Fetch tenants for school resolution & selector
+      const { data: tenantData } = await supabase
+        .from('tenants')
+        .select('id, name, code')
+        .order('name');
+      setTenants(tenantData || []);
+
       const { data, error: err } = await supabase
         .from('profiles')
-        .select('id, email, display_name, role, status, created_at')
+        .select('id, email, display_name, role, status, tenant_id, created_at')
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
@@ -48,7 +74,7 @@ export default function PendingUsersPage() {
       setPendingUsers(data || []);
     } catch (err: any) {
       console.error('Failed to load pending users:', err);
-      setError(err?.message || 'Failed to load pending users');
+      setError(friendlyError(err, 'Failed to load pending users.'));
     } finally {
       setLoading(false);
     }
@@ -57,6 +83,33 @@ export default function PendingUsersPage() {
   useEffect(() => {
     fetchPendingUsers();
   }, []);
+
+  const handleAssignSchool = async (userId: string, newTenantId: string) => {
+    setProcessingId(userId);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/school`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenant_id: newTenantId || null }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to assign school.');
+        return;
+      }
+
+      setPendingUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, tenant_id: newTenantId || null } : u))
+      );
+      toast.success('School assigned successfully.');
+    } catch (err: any) {
+      console.error('Failed to assign school:', err);
+      toast.error(friendlyError(err, 'Could not assign school.'));
+    } finally {
+      setProcessingId(null);
+    }
+  };
 
   const handleUpdateStatus = async (id: string, newStatus: 'approved' | 'rejected'): Promise<boolean> => {
     setProcessingId(id);
@@ -67,9 +120,10 @@ export default function PendingUsersPage() {
         body: JSON.stringify({ status: newStatus }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.error || `Failed to ${newStatus} applicant.`);
+        toast.error(data.error || friendlyError(data, `Failed to ${newStatus} applicant.`));
+        return false;
       }
 
       setPendingUsers((prev) => prev.filter((u) => u.id !== id));
@@ -123,11 +177,12 @@ export default function PendingUsersPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs table-optimized min-w-[550px]">
+            <table className="w-full text-left text-xs table-optimized min-w-[650px]">
               <thead className="border-b border-gray-100 bg-gray-50/50 text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:border-gray-800 dark:bg-gray-800/40 dark:text-gray-500">
                 <tr>
                   <th className="px-4 sm:px-6 py-4">Applicant Name</th>
                   <th className="px-4 sm:px-6 py-4">Email Address</th>
+                  <th className="px-4 sm:px-6 py-4">Assigned School</th>
                   <th className="px-4 sm:px-6 py-4 text-center">Assigned Role</th>
                   <th className="px-4 sm:px-6 py-4">Registered Date</th>
                   <th className="px-4 sm:px-6 py-4 text-right">Actions</th>
@@ -136,13 +191,58 @@ export default function PendingUsersPage() {
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {pendingUsers.map((u) => {
                   const isBusy = processingId === u.id;
+                  const matchedTenant = tenants.find((t) => t.id === u.tenant_id);
+
                   return (
                     <tr key={u.id} className="hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors">
                       <td className="px-4 sm:px-6 py-4 font-semibold text-gray-900 dark:text-white">
                         {u.display_name || 'Faculty Member'}
                       </td>
-                      <td className="px-4 sm:px-6 py-4 text-gray-500 dark:text-gray-400">
+                      <td className="px-4 sm:px-6 py-4 text-gray-500 dark:text-gray-400 font-mono">
                         {u.email}
+                      </td>
+                      <td className="px-4 sm:px-6 py-4">
+                        {matchedTenant ? (
+                          <div className="flex items-center gap-1.5 font-medium text-gray-700 dark:text-gray-300">
+                            <Building2 className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                            <span>{matchedTenant.name}</span>
+                            {isPlatformAdmin && (
+                              <select
+                                value={u.tenant_id || ''}
+                                onChange={(e) => handleAssignSchool(u.id, e.target.value)}
+                                disabled={isBusy}
+                                className="ml-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 outline-none"
+                              >
+                                {tenants.map((t) => (
+                                  <option key={t.id} value={t.id}>
+                                    {t.name} {t.code ? `(${t.code})` : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                        ) : isPlatformAdmin ? (
+                          <select
+                            defaultValue=""
+                            onChange={(e) => handleAssignSchool(u.id, e.target.value)}
+                            disabled={isBusy}
+                            className="rounded-lg border border-amber-300 bg-amber-50/70 px-2 py-1 text-xs text-amber-900 focus:border-amber-500 focus:outline-none dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200"
+                          >
+                            <option value="" disabled>
+                              Select school to assign...
+                            </option>
+                            {tenants.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name} {t.code ? `(${t.code})` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                            No School Assigned
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 sm:px-6 py-4 text-center">
                         <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-mono text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 uppercase">

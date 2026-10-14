@@ -112,6 +112,11 @@ export default function AllAccountsPage() {
   // Detail Modal State (B5)
   const [detailUser, setDetailUser] = useState<AdminUserRecord | null>(null);
 
+  // School Assignment Modal State (D5)
+  const [schoolModalUser, setSchoolModalUser] = useState<AdminUserRecord | null>(null);
+  const [selectedSchoolId, setSelectedSchoolId] = useState('');
+  const [savingSchool, setSavingSchool] = useState(false);
+
   // Menu popover state
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
@@ -467,9 +472,18 @@ export default function AllAccountsPage() {
                             </span>
                           )}
                         </div>
-                        <div className="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
-                          <Building2 className="h-3 w-3 shrink-0" />
-                          <span>{u.school}</span>
+                        <div className="text-[11px] flex items-center gap-1 mt-0.5">
+                          {u.tenant_id ? (
+                            <span className="text-gray-400 flex items-center gap-1">
+                              <Building2 className="h-3 w-3 shrink-0" />
+                              <span>{u.school}</span>
+                            </span>
+                          ) : (
+                            <span className="text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3 shrink-0" />
+                              <span>No School Assigned</span>
+                            </span>
+                          )}
                         </div>
                       </td>
 
@@ -649,6 +663,24 @@ export default function AllAccountsPage() {
                                         {u.role === 'admin'
                                           ? 'Demote to Teacher'
                                           : 'Promote to Admin'}
+                                      </span>
+                                    </button>
+                                  )}
+
+                                  {/* Change / Assign School (Platform Admin Only) */}
+                                  {isPlatformAdmin && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenMenuId(null);
+                                        setSchoolModalUser(u);
+                                        setSelectedSchoolId(u.tenant_id || '');
+                                      }}
+                                      className="flex w-full items-center gap-2 px-3.5 py-2 text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800"
+                                    >
+                                      <Building2 className="h-3.5 w-3.5 text-blue-500" />
+                                      <span>
+                                        {u.tenant_id ? 'Change School' : 'Assign School'}
                                       </span>
                                     </button>
                                   )}
@@ -929,6 +961,92 @@ export default function AllAccountsPage() {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* School Assignment Modal (Platform Admin Only - D5) */}
+      {schoolModalUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-gray-900">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3 dark:border-gray-800">
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">
+                {schoolModalUser.tenant_id ? 'Change School Assignment' : 'Assign School'}
+              </h3>
+              <button
+                onClick={() => setSchoolModalUser(null)}
+                className="rounded-lg p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                <XCircle className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="py-4 space-y-4 text-xs">
+              <div>
+                <span className="text-gray-500">Account: </span>
+                <span className="font-bold text-gray-900 dark:text-white">{schoolModalUser.display_name}</span>
+                <span className="text-gray-400 ml-1">({schoolModalUser.email})</span>
+              </div>
+
+              <div>
+                <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                  Select School Organization
+                </label>
+                <select
+                  value={selectedSchoolId}
+                  onChange={(e) => setSelectedSchoolId(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
+                >
+                  <option value="">No School Assigned (Unlink)</option>
+                  {tenantsList.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} {t.code ? `(${t.code})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-100 dark:border-gray-800">
+                <button
+                  type="button"
+                  onClick={() => setSchoolModalUser(null)}
+                  className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-gray-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={savingSchool}
+                  onClick={async () => {
+                    setSavingSchool(true);
+                    try {
+                      const res = await fetch(`/api/admin/users/${schoolModalUser.id}/school`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ tenant_id: selectedSchoolId || null }),
+                      });
+                      const resData = await res.json().catch(() => ({}));
+                      if (!res.ok) {
+                        toast.error(resData.error || 'Failed to update school assignment.');
+                        return;
+                      }
+                      toast.success('School assignment updated successfully.');
+                      setSchoolModalUser(null);
+                      await fetchUsers();
+                    } catch (err: any) {
+                      console.error('Failed to change school:', err);
+                      toast.error(friendlyError(err, 'Failed to update school.'));
+                    } finally {
+                      setSavingSchool(false);
+                    }
+                  }}
+                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {savingSchool && <Loader2 className="h-4 w-4 animate-spin" />}
+                  <span>Save Assignment</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
