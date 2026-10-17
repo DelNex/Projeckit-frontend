@@ -27,11 +27,13 @@ export function validateCanonicalGeometry(geometry: CanonicalOmrGeometry): Geome
     errors.push(`Invalid classSize: ${config.classSize}. Must be between 1 and 70.`);
   }
 
-  // 3. Verify exact Roll Number count
-  if (rollNumberGrid.length !== config.classSize) {
-    errors.push(
-      `Roll target mismatch: expected exactly ${config.classSize} roll targets, got ${rollNumberGrid.length}.`
-    );
+  // 3. Verify exact Roll Number count (legacy sheets only)
+  if (rollNumberGrid && rollNumberGrid.length > 0) {
+    if (rollNumberGrid.length !== config.classSize) {
+      errors.push(
+        `Roll target mismatch: expected exactly ${config.classSize} roll targets, got ${rollNumberGrid.length}.`
+      );
+    }
   }
 
   // 4. Verify exact Answer Items count
@@ -127,19 +129,65 @@ export function validateCanonicalGeometry(geometry: CanonicalOmrGeometry): Geome
     }
   }
 
+  // 8. Scanner Safety Minimums (Bubble radius, row pitch, marker size)
+  const isHalf = geometry.sheetFormat === 'HALF';
+  const minRadius = isHalf ? 7.0 : 8.0;
+  const minPitch = isHalf ? 19.0 : 20.0;
+  const minMarkerSize = isHalf ? 14 : 16;
+
+  const layout = geometry.layout;
+  const bubbleRadius = layout?.answerArea?.bubbleRadius ?? 7.0;
+  const rowPitch = layout?.answerArea?.rowPitch ?? 19.0;
+  const markerSize = layout?.answerArea?.markerSize ?? 14;
+
+  if (bubbleRadius < minRadius - 0.05) {
+    errors.push(
+      `Bubble radius ${bubbleRadius.toFixed(1)} is less than safety minimum ${minRadius} for ${geometry.sheetFormat} sheet.`
+    );
+  }
+  if (rowPitch < minPitch - 0.05) {
+    errors.push(
+      `Row pitch ${rowPitch.toFixed(1)} is less than safety minimum ${minPitch} for ${geometry.sheetFormat} sheet.`
+    );
+  }
+  if (markerSize < minMarkerSize) {
+    errors.push(
+      `Marker size ${markerSize} is less than safety minimum ${minMarkerSize} for ${geometry.sheetFormat} sheet.`
+    );
+  }
+
+  // 9. Bottom Gap Limit: Never leave more than 3% of sheet height empty below bottom markers
+  const answersRegion = geometry.regionMap['ANSWERS'] || geometry.regions[0];
+  let bottomMarkerBottomY = answersRegion ? answersRegion.bounds.y + answersRegion.bounds.height : page.height;
+  if (answersRegion?.markers?.BL) {
+    bottomMarkerBottomY = answersRegion.markers.BL.bounds.y + answersRegion.markers.BL.bounds.height;
+  }
+  const bottomGap = page.height - bottomMarkerBottomY;
+  const bottomGapPercent = (bottomGap / page.height) * 100;
+
+  if (bottomGapPercent > 3.01) {
+    errors.push(
+      `Empty paper below bottom markers is ${bottomGapPercent.toFixed(2)}% (${bottomGap.toFixed(1)}px), which exceeds the 3% sheet height limit (${(page.height * 0.03).toFixed(1)}px).`
+    );
+  }
+
   return {
     valid: errors.length === 0,
     errors,
     warnings,
     metrics: {
       totalItems: answerBlocks.length,
-      totalRollTargets: rollNumberGrid.length,
+      totalRollTargets: rollNumberGrid ? rollNumberGrid.length : 0,
       totalRegions: regions.length,
       totalMarkers: markers.length,
       requiredHeight: maxY,
       availableHeight: page.height,
       requiredWidth: maxX,
       availableWidth: page.width,
+      bottomGap,
+      bottomGapPercent,
+      rowPitch,
+      bubbleRadius,
     },
   };
 }

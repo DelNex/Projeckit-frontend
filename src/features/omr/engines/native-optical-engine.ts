@@ -60,7 +60,7 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
 
     const avgLuminance = pixelCount > 0 ? totalLuminance / pixelCount : 128;
     const contrastRatio = maxLum > 0 ? (maxLum - minLum) / maxLum : 0;
-    const isLightingAcceptable = avgLuminance >= 35 && avgLuminance <= 235 && contrastRatio >= 0.35;
+    const isLightingAcceptable = avgLuminance >= 35 && avgLuminance <= 250 && contrastRatio >= 0.35;
 
     // Outer corner marker detection in 4 quadrants (12% bounding zones)
     const cornerSize = Math.floor(Math.min(width, height) * 0.12);

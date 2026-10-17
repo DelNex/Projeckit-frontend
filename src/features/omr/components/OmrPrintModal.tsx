@@ -1,9 +1,12 @@
 /**
  * Project KIT — Dynamic OMR Master & Personalized Answer Sheet Print Modal
  * Supports:
- * 1. Blank Master Answer Sheet (standard)
- * 2. Personalized Answer Sheets: One sheet per learner with pre-printed header,
- *    Code 39 machine-readable identifier, pre-shaded roll numbers, and multi-page batch print.
+ * 1. HALF sheet (A5 portrait, 559 x 794) for <= 60 items:
+ *    Two sheets side by side on one A4 landscape page (1123 x 794) with dashed cut line.
+ * 2. FULL sheet (A4 portrait, 794 x 1123) for 61..90 items:
+ *    One sheet per page.
+ * 3. Personalized Answer Sheets: pre-printed header, Code 39 barcode identifier,
+ *    and multi-page batch printing.
  */
 
 'use client';
@@ -71,7 +74,7 @@ export function OmrPrintModal({
   totalPoints,
 }: OmrPrintModalProps) {
   const [printMode, setPrintMode] = useState<'blank' | 'personalized'>('blank');
-  const [currentStudentIdx, setCurrentStudentIdx] = useState(0);
+  const [currentPageIdx, setCurrentPageIdx] = useState(0);
   const [showConfigDrawer, setShowConfigDrawer] = useState(false);
 
   // Today's date default YYYY-MM-DD
@@ -100,12 +103,14 @@ export function OmrPrintModal({
       return (s.section_name || '').toLowerCase().trim() === targetSection;
     });
 
-    // If section match yielded 0, fall back to non-archived roster
     const roster = filtered.length > 0 ? filtered : students.filter((s) => !s.is_archived);
     return roster.slice(0, 70);
   }, [students, assessment?.section, geometry?.config?.section]);
 
-  const currentStudent = activeLearners[currentStudentIdx] || activeLearners[0] || null;
+  const isHalfSheet = geometry?.sheetFormat === 'HALF';
+  const totalPages = isHalfSheet
+    ? Math.max(1, Math.ceil(activeLearners.length / 2))
+    : Math.max(1, activeLearners.length);
 
   // Build personalized config for a specific student
   const getStudentPersonalizedData = (
@@ -129,51 +134,40 @@ export function OmrPrintModal({
       logoData: logoData || undefined,
       totalPoints,
       studentId: student.id,
-      rollNumber: rollIndex + 1, // 1..classSize
+      rollNumber: rollIndex + 1,
       visibleFields,
     };
   };
 
-  // Preview SVG for currently displayed page
-  const previewSvg = useMemo(() => {
+  const blankSheetData: PersonalizedSheetData = {
+    schoolName,
+    region,
+    division,
+    logoData,
+    totalPoints,
+  };
+
+  // Preview SVGs
+  const previewSvgLeft = useMemo(() => {
     if (!geometry) return '';
     if (printMode === 'blank') {
-      return renderOmrMasterSvg(geometry, {
-        schoolName,
-        region,
-        division,
-        logoData,
-        totalPoints,
-      });
+      return renderOmrMasterSvg(geometry, blankSheetData);
     }
-    const studentData = getStudentPersonalizedData(currentStudent, currentStudentIdx);
-    return renderOmrMasterSvg(geometry, studentData);
-  }, [geometry, printMode, currentStudent, currentStudentIdx, examDate, visibleFields, assessment, teacherName, schoolName, region, division, logoData, totalPoints]);
+    const sIdx = isHalfSheet ? currentPageIdx * 2 : currentPageIdx;
+    const student = activeLearners[sIdx] || null;
+    return renderOmrMasterSvg(geometry, getStudentPersonalizedData(student, sIdx));
+  }, [geometry, printMode, currentPageIdx, isHalfSheet, activeLearners, examDate, visibleFields, assessment, teacherName, schoolName, region, division, logoData, totalPoints]);
 
-  const printPageConfig = useMemo(() => {
-    if (!geometry) return { paper: 'A4 portrait', viewport: 'a4' };
-    const widthMm = geometry.page.width / 3.779528;
-    const heightMm = geometry.page.height / 3.779528;
-
-    if (heightMm > 297) {
-      return {
-        paper: `${Math.ceil(widthMm)}mm ${Math.ceil(heightMm)}mm`,
-        viewport: 'long',
-      };
+  const previewSvgRight = useMemo(() => {
+    if (!geometry || !isHalfSheet) return '';
+    if (printMode === 'blank') {
+      return renderOmrMasterSvg(geometry, blankSheetData);
     }
-
-    if (widthMm <= 148 && heightMm <= 210) {
-      return {
-        paper: 'A5 portrait',
-        viewport: 'a5',
-      };
-    }
-
-    return {
-      paper: 'A4 portrait',
-      viewport: 'a4',
-    };
-  }, [geometry]);
+    const sIdx = currentPageIdx * 2 + 1;
+    const student = activeLearners[sIdx] || null;
+    if (!student) return '';
+    return renderOmrMasterSvg(geometry, getStudentPersonalizedData(student, sIdx));
+  }, [geometry, printMode, currentPageIdx, isHalfSheet, activeLearners, examDate, visibleFields, assessment, teacherName, schoolName, region, division, logoData, totalPoints]);
 
   if (!isOpen || !geometry) return null;
 
@@ -187,29 +181,66 @@ export function OmrPrintModal({
   const handlePrint = () => {
     let pagesHtml = '';
 
-    if (printMode === 'blank') {
-      const blankSvg = renderOmrMasterSvg(geometry, {
-        schoolName,
-        region,
-        division,
-        logoData,
-        totalPoints,
-      });
-      pagesHtml = `<div class="omr-print-page">${blankSvg}</div>`;
-    } else {
-      if (activeLearners.length === 0) {
-        alert('No enrolled active learners found for this section.');
-        return;
-      }
+    if (isHalfSheet) {
+      // 2 half sheets side by side on A4 landscape (1123 x 794)
+      if (printMode === 'blank') {
+        const svg = renderOmrMasterSvg(geometry, blankSheetData);
+        pagesHtml = `
+          <div class="omr-print-page-landscape">
+            <div class="omr-sheet-half">${svg}</div>
+            <div class="omr-cut-line"></div>
+            <div class="omr-sheet-half">${svg}</div>
+          </div>
+        `;
+      } else {
+        if (activeLearners.length === 0) {
+          alert('No enrolled active learners found for this section.');
+          return;
+        }
 
-      pagesHtml = activeLearners
-        .map((student, idx) => {
-          const studentData = getStudentPersonalizedData(student, idx);
-          const svg = renderOmrMasterSvg(geometry, studentData);
-          return `<div class="omr-print-page">${svg}</div>`;
-        })
-        .join('\n');
+        const pairs: Array<[OmrPrintModalStudent, OmrPrintModalStudent | null]> = [];
+        for (let i = 0; i < activeLearners.length; i += 2) {
+          pairs.push([activeLearners[i], activeLearners[i + 1] || null]);
+        }
+
+        pagesHtml = pairs
+          .map(([s1, s2], pairIdx) => {
+            const svg1 = renderOmrMasterSvg(geometry, getStudentPersonalizedData(s1, pairIdx * 2));
+            const svg2 = s2
+              ? renderOmrMasterSvg(geometry, getStudentPersonalizedData(s2, pairIdx * 2 + 1))
+              : '';
+            return `
+              <div class="omr-print-page-landscape">
+                <div class="omr-sheet-half">${svg1}</div>
+                <div class="omr-cut-line"></div>
+                <div class="omr-sheet-half">${svg2}</div>
+              </div>
+            `;
+          })
+          .join('\n');
+      }
+    } else {
+      // Full sheet (A4 portrait, 794 x 1123)
+      if (printMode === 'blank') {
+        const svg = renderOmrMasterSvg(geometry, blankSheetData);
+        pagesHtml = `<div class="omr-print-page-portrait">${svg}</div>`;
+      } else {
+        if (activeLearners.length === 0) {
+          alert('No enrolled active learners found for this section.');
+          return;
+        }
+
+        pagesHtml = activeLearners
+          .map((student, idx) => {
+            const studentData = getStudentPersonalizedData(student, idx);
+            const svg = renderOmrMasterSvg(geometry, studentData);
+            return `<div class="omr-print-page-portrait">${svg}</div>`;
+          })
+          .join('\n');
+      }
     }
+
+    const pageSizeCss = isHalfSheet ? 'A4 landscape' : 'A4 portrait';
 
     const printHtml = `<!DOCTYPE html>
 <html>
@@ -218,18 +249,57 @@ export function OmrPrintModal({
     <title>${geometry.templateId} — ${printMode === 'personalized' ? `Personalized Sheets (${activeLearners.length})` : 'Master Sheet'}</title>
     <style>
       @page {
-        size: ${printPageConfig.paper};
+        size: ${pageSizeCss};
         margin: 0;
       }
-      *, *::before, *::after { box-sizing: border-box; }
+      *, *::before, *::after {
+        box-sizing: border-box;
+      }
       html, body {
         margin: 0;
         padding: 0;
         background: #ffffff;
         width: 100%;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
       }
-      .omr-print-page {
-        width: 100%;
+      .omr-print-page-landscape {
+        width: 1123px;
+        height: 794px;
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: stretch;
+        position: relative;
+        page-break-after: always;
+        break-after: page;
+        background: #ffffff;
+      }
+      .omr-print-page-landscape:last-child {
+        page-break-after: auto;
+        break-after: auto;
+      }
+      .omr-sheet-half {
+        width: 559px;
+        height: 794px;
+        flex-shrink: 0;
+      }
+      .omr-sheet-half svg {
+        width: 559px;
+        height: 794px;
+        display: block;
+      }
+      .omr-cut-line {
+        position: absolute;
+        left: 561px;
+        top: 0;
+        bottom: 0;
+        width: 0;
+        border-left: 1px dashed #9CA3AF;
+      }
+      .omr-print-page-portrait {
+        width: 794px;
+        height: 1123px;
         display: flex;
         justify-content: center;
         align-items: flex-start;
@@ -237,15 +307,14 @@ export function OmrPrintModal({
         page-break-after: always;
         break-after: page;
       }
-      .omr-print-page:last-child {
+      .omr-print-page-portrait:last-child {
         page-break-after: auto;
         break-after: auto;
       }
-      .omr-print-page svg {
+      .omr-print-page-portrait svg {
         display: block;
-        width: 100%;
-        max-width: 100%;
-        height: auto;
+        width: 794px;
+        height: 1123px;
       }
     </style>
   </head>
@@ -285,7 +354,10 @@ export function OmrPrintModal({
               <div className="inline-flex items-center rounded-xl bg-gray-800 p-0.5 border border-gray-700">
                 <button
                   type="button"
-                  onClick={() => setPrintMode('blank')}
+                  onClick={() => {
+                    setPrintMode('blank');
+                    setCurrentPageIdx(0);
+                  }}
                   className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
                     printMode === 'blank'
                       ? 'bg-blue-600 text-white shadow-xs'
@@ -297,7 +369,10 @@ export function OmrPrintModal({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPrintMode('personalized')}
+                  onClick={() => {
+                    setPrintMode('personalized');
+                    setCurrentPageIdx(0);
+                  }}
                   className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
                     printMode === 'personalized'
                       ? 'bg-emerald-600 text-white shadow-xs'
@@ -308,13 +383,16 @@ export function OmrPrintModal({
                   Personalized ({activeLearners.length})
                 </button>
               </div>
+
+              {/* Format Badge */}
+              <span className="rounded-md bg-gray-800 px-2 py-0.5 text-[11px] font-mono font-medium text-gray-300 border border-gray-700">
+                {isHalfSheet ? 'A5 Half (2 per A4 Landscape)' : 'A4 Full Sheet'}
+              </span>
             </div>
-            <p className="text-xs text-gray-400 truncate mt-1">
+
+            <p className="text-xs text-gray-400 mt-1 truncate">
               {printMode === 'blank' ? (
-                <>
-                  Template: <span className="font-mono text-blue-400">{geometry.templateId}</span> • Items:{' '}
-                  {geometry.config.itemCount} • Class Size: {geometry.config.classSize}
-                </>
+                <>Blank master sheet with empty underlines for learner info.</>
               ) : (
                 <>
                   Pre-printed for <span className="text-emerald-400 font-semibold">{activeLearners.length} learners</span> • Section:{' '}
@@ -409,34 +487,38 @@ export function OmrPrintModal({
         {printMode === 'personalized' && activeLearners.length > 0 && (
           <div className="shrink-0 flex items-center justify-between bg-gray-900/60 border-b border-gray-800/80 px-4 sm:px-6 py-2 text-xs">
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-gray-300">Previewing Learner:</span>
+              <span className="font-semibold text-gray-300">Previewing Page:</span>
               <span className="font-bold text-emerald-400">
-                #{currentStudentIdx + 1} — {currentStudent?.name || 'Unknown'}
+                {isHalfSheet ? (
+                  <>
+                    Sheets #{currentPageIdx * 2 + 1}
+                    {activeLearners[currentPageIdx * 2 + 1] ? ` & #${currentPageIdx * 2 + 2}` : ''}
+                  </>
+                ) : (
+                  <>Sheet #{currentPageIdx + 1} — {activeLearners[currentPageIdx]?.name}</>
+                )}
               </span>
-              {currentStudent?.lrn && (
-                <span className="text-gray-500 font-mono text-[11px]">(LRN: {currentStudent.lrn})</span>
-              )}
             </div>
 
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
-                disabled={currentStudentIdx <= 0}
-                onClick={() => setCurrentStudentIdx((prev) => Math.max(0, prev - 1))}
+                disabled={currentPageIdx <= 0}
+                onClick={() => setCurrentPageIdx((prev) => Math.max(0, prev - 1))}
                 className="p-1 rounded-lg bg-gray-800 text-gray-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                title="Previous Learner"
+                title="Previous Page"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <span className="font-mono text-gray-400 text-xs px-2">
-                {currentStudentIdx + 1} / {activeLearners.length}
+                {currentPageIdx + 1} / {totalPages}
               </span>
               <button
                 type="button"
-                disabled={currentStudentIdx >= activeLearners.length - 1}
-                onClick={() => setCurrentStudentIdx((prev) => Math.min(activeLearners.length - 1, prev + 1))}
+                disabled={currentPageIdx >= totalPages - 1}
+                onClick={() => setCurrentPageIdx((prev) => Math.min(totalPages - 1, prev + 1))}
                 className="p-1 rounded-lg bg-gray-800 text-gray-300 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
-                title="Next Learner"
+                title="Next Page"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
@@ -444,26 +526,48 @@ export function OmrPrintModal({
           </div>
         )}
 
-        {/* Modal Body */}
+        {/* Modal Body: Preview Container */}
         <div className="flex-1 min-h-0 overflow-auto bg-gray-950">
           <div className="p-4 sm:p-8 flex justify-center">
-            <div
-              className="bg-white rounded-lg shadow-2xl shrink-0"
-              style={{
-                width: geometry.page.width,
-                height: geometry.page.height,
-              }}
-              dangerouslySetInnerHTML={{ __html: previewSvg }}
-            />
+            {isHalfSheet ? (
+              /* A4 Landscape 2-Up Container (1123 x 794) */
+              <div
+                className="relative bg-white rounded-lg shadow-2xl shrink-0 flex flex-row justify-between overflow-hidden"
+                style={{ width: 1123, height: 794 }}
+              >
+                <div
+                  className="w-[559px] h-[794px] shrink-0"
+                  dangerouslySetInnerHTML={{ __html: previewSvgLeft }}
+                />
+                {/* Thin dashed cut line in center */}
+                <div
+                  className="absolute left-[561px] top-0 bottom-0 border-l border-dashed border-gray-400 pointer-events-none"
+                  style={{ width: 0 }}
+                />
+                <div
+                  className="w-[559px] h-[794px] shrink-0"
+                  dangerouslySetInnerHTML={{ __html: previewSvgRight }}
+                />
+              </div>
+            ) : (
+              /* A4 Portrait Single Sheet (794 x 1123) */
+              <div
+                className="bg-white rounded-lg shadow-2xl shrink-0"
+                style={{ width: 794, height: 1123 }}
+                dangerouslySetInnerHTML={{ __html: previewSvgLeft }}
+              />
+            )}
           </div>
         </div>
 
         {/* Footer */}
         <div className="shrink-0 border-t border-gray-800 px-5 py-2 flex items-center justify-between text-[11px] text-gray-500 bg-gray-900 select-none">
-          <span>↕ Scroll to view full sheet</span>
+          <span>↕ Scroll to view full page preview</span>
           <span className="font-mono">
-            {geometry.page.width} × {geometry.page.height} px · {printPageConfig.paper}
-            {printMode === 'personalized' && ` · ${activeLearners.length} Pages`}
+            {isHalfSheet
+              ? 'A4 Landscape (1123 × 794 px) · 2 A5 Sheets / Page'
+              : 'A4 Portrait (794 × 1123 px) · 1 Sheet / Page'}
+            {printMode === 'personalized' && ` · ${activeLearners.length} Learners (${totalPages} Pages)`}
           </span>
         </div>
       </div>

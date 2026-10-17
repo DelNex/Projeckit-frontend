@@ -47,8 +47,8 @@ export function createKitOmrTemplate(options: CreateTemplateOptions = {}): KitOm
       itemCount,
       classSize,
       choices,
-      pageWidth: options.width || options.pageWidth || 681,
-      pageHeight: options.height || options.pageHeight || 880,
+      pageWidth: options.width || options.pageWidth,
+      pageHeight: options.height || options.pageHeight,
     });
 
   const { page, answerBlocks } = geometry;
