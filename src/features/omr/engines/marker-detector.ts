@@ -253,30 +253,54 @@ export class MarkerDetector {
       };
     }
 
-    // Reference canonical outer top markers: STUDENT_INFO.TL and ROLL_NUMBER.TR
-    const refTL = geometry.markerMap['STUDENT_INFO.TL']?.center || { x: 47, y: 42 };
-    const refTR = geometry.markerMap['ROLL_NUMBER.TR']?.center || { x: 634, y: 42 };
+    // Reference canonical outer top markers: ANSWERS.TL and ANSWERS.TR
+    const refTL =
+      geometry.markerMap['ANSWERS.TL']?.center ||
+      geometry.markers.find((m) => m.corner === 'TL')?.center || { x: 47, y: 287 };
+    const refTR =
+      geometry.markerMap['ANSWERS.TR']?.center ||
+      geometry.markers.find((m) => m.corner === 'TR')?.center || { x: 634, y: 287 };
 
-    // Find candidate closest to expected top-left corner
-    let candTL = candidates[0];
-    let minScoreTL = Infinity;
-    for (const c of candidates) {
-      const score = c.cx + c.cy * 1.5;
-      if (score < minScoreTL) {
-        minScoreTL = score;
+    const scaleX = imgWidth / geometry.page.width;
+    const scaleY = imgHeight / geometry.page.height;
+
+    // Filter candidates to solid squares with high fill factor (markers are solid squares with fillFactor >= 0.80)
+    const solidCandidates = candidates.filter((c) => c.fillFactor >= 0.80);
+    const pool = solidCandidates.length >= 4 ? solidCandidates : candidates;
+
+    // Expected nominal positions
+    const expectedTL = { x: refTL.x * scaleX, y: refTL.y * scaleY };
+    const expectedTR = { x: refTR.x * scaleX, y: refTR.y * scaleY };
+
+    let candTL = pool[0];
+    let minDistTL = Infinity;
+    for (const c of pool) {
+      const dist = Math.hypot(c.cx - expectedTL.x, c.cy - expectedTL.y);
+      if (dist < minDistTL) {
+        minDistTL = dist;
         candTL = c;
       }
     }
 
-    // Find candidate closest to expected top-right corner
-    let candTR = candidates[0];
-    let maxScoreTR = -Infinity;
-    for (const c of candidates) {
-      const score = c.cx - c.cy * 1.5;
-      if (score > maxScoreTR) {
-        maxScoreTR = score;
+    let candTR = pool[0];
+    let minDistTR = Infinity;
+    for (const c of pool) {
+      const dist = Math.hypot(c.cx - expectedTR.x, c.cy - expectedTR.y);
+      if (dist < minDistTR) {
+        minDistTR = dist;
         candTR = c;
       }
+    }
+
+    const maxPoseSearchDist = 40 * nominalScale;
+    if (minDistTL > maxPoseSearchDist || minDistTR > maxPoseSearchDist) {
+      return {
+        scale: nominalScale,
+        transformPoint: (cx, cy) => ({
+          x: cx * scaleX,
+          y: cy * scaleY,
+        }),
+      };
     }
 
     const d0 = Math.hypot(refTR.x - refTL.x, refTR.y - refTL.y);

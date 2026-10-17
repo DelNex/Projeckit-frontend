@@ -52,7 +52,7 @@ export default function AssessmentWorkspacePage({
   const activeTab = rawTab === 'grades' ? 'tos' : rawTab;
   const assessmentId = resolvedParams.id;
 
-  const { tenantName } = useTenant();
+  const { tenantName, region, division, logoData } = useTenant();
   const [currentTeacherName, setCurrentTeacherName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1586,6 +1586,9 @@ export default function AssessmentWorkspacePage({
           }}
           teacherName={currentTeacherName}
           schoolName={tenantName}
+          region={region}
+          division={division}
+          logoData={logoData}
         />
       )}
 

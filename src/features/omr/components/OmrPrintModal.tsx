@@ -51,6 +51,10 @@ export interface OmrPrintModalProps {
   };
   teacherName?: string;
   schoolName?: string;
+  region?: string;
+  division?: string;
+  logoData?: string;
+  totalPoints?: number;
 }
 
 export function OmrPrintModal({
@@ -61,6 +65,10 @@ export function OmrPrintModal({
   assessment,
   teacherName,
   schoolName,
+  region,
+  division,
+  logoData,
+  totalPoints,
 }: OmrPrintModalProps) {
   const [printMode, setPrintMode] = useState<'blank' | 'personalized'>('blank');
   const [currentStudentIdx, setCurrentStudentIdx] = useState(0);
@@ -116,6 +124,10 @@ export function OmrPrintModal({
       assessmentTitle: assessment?.title || geometry.config.title,
       teacherName: teacherName || undefined,
       schoolName: schoolName || undefined,
+      region: region || undefined,
+      division: division || undefined,
+      logoData: logoData || undefined,
+      totalPoints,
       studentId: student.id,
       rollNumber: rollIndex + 1, // 1..classSize
       visibleFields,
@@ -126,11 +138,17 @@ export function OmrPrintModal({
   const previewSvg = useMemo(() => {
     if (!geometry) return '';
     if (printMode === 'blank') {
-      return renderOmrMasterSvg(geometry);
+      return renderOmrMasterSvg(geometry, {
+        schoolName,
+        region,
+        division,
+        logoData,
+        totalPoints,
+      });
     }
     const studentData = getStudentPersonalizedData(currentStudent, currentStudentIdx);
     return renderOmrMasterSvg(geometry, studentData);
-  }, [geometry, printMode, currentStudent, currentStudentIdx, examDate, visibleFields, assessment, teacherName, schoolName]);
+  }, [geometry, printMode, currentStudent, currentStudentIdx, examDate, visibleFields, assessment, teacherName, schoolName, region, division, logoData, totalPoints]);
 
   const printPageConfig = useMemo(() => {
     if (!geometry) return { paper: 'A4 portrait', viewport: 'a4' };
@@ -170,7 +188,13 @@ export function OmrPrintModal({
     let pagesHtml = '';
 
     if (printMode === 'blank') {
-      const blankSvg = renderOmrMasterSvg(geometry);
+      const blankSvg = renderOmrMasterSvg(geometry, {
+        schoolName,
+        region,
+        division,
+        logoData,
+        totalPoints,
+      });
       pagesHtml = `<div class="omr-print-page">${blankSvg}</div>`;
     } else {
       if (activeLearners.length === 0) {

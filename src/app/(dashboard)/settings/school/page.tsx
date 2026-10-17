@@ -35,6 +35,8 @@ import {
     ChevronDown,
     ChevronUp,
     AlertTriangle,
+    Image as ImageIcon,
+    Upload,
 } from 'lucide-react';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { useToast } from '@/components/ui/toast';
@@ -94,6 +96,15 @@ export default function SchoolSettingsPage() {
   const [facultyName, setFacultyName] = useState('');
   const [designation, setDesignation] = useState('Subject Teacher');
   const [approverName, setApproverName] = useState('');
+
+  // School Official Header State (DepEd answer sheets and reports)
+  const [tenantSchoolName, setTenantSchoolName] = useState('');
+  const [region, setRegion] = useState('');
+  const [division, setDivision] = useState('');
+  const [logoData, setLogoData] = useState('');
+  const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
+  const [schoolHeaderConfirmModal, setSchoolHeaderConfirmModal] = useState(false);
+  const [savingSchoolHeader, setSavingSchoolHeader] = useState(false);
 
   // Grading Periods State (C2)
   const [gradingPeriods, setGradingPeriods] = useState<GradingPeriodItem[]>([]);
@@ -886,10 +897,24 @@ export default function SchoolSettingsPage() {
           .eq('id', user?.id || '')
           .maybeSingle();
 
+        // 0. Fetch tenant details (Name, Region, Division, Logo)
+        const { data: tenantData } = await (supabase as any)
+          .from('tenants')
+          .select('id, name, region, division, logo_data')
+          .eq('id', currentTenantId)
+          .maybeSingle();
+
+        if (tenantData) {
+          setTenantSchoolName(tenantData.name || '');
+          setRegion(tenantData.region || '');
+          setDivision(tenantData.division || '');
+          setLogoData(tenantData.logo_data || '');
+        }
+
         // 1. Fetch active academic config deterministically
         const { data: config } = await (supabase as any)
           .from('academic_configs')
-          .select('id, school_year, term')
+          .select('id, school_year, term, region, division, logo_data')
           .eq('id', currentConfigId)
           .maybeSingle();
 
@@ -902,6 +927,9 @@ export default function SchoolSettingsPage() {
           setSchoolYear(loadedSy);
           setInitialSavedSchoolYear(loadedSy);
           if (config.term) setTerm(config.term);
+          if (!tenantData?.region && config.region) setRegion(config.region);
+          if (!tenantData?.division && config.division) setDivision(config.division);
+          if (!tenantData?.logo_data && config.logo_data) setLogoData(config.logo_data);
 
           // 2. Fetch faculty record for this config
           const { data: fac } = await (supabase as any)
@@ -949,6 +977,80 @@ export default function SchoolSettingsPage() {
 
     loadSchoolSettings();
   }, [supabase]);
+
+  // Logo Upload and School Header handlers
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setLogoUploadError(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) {
+      setLogoUploadError('Only PNG and JPEG formats are supported.');
+      toast.error('Only PNG and JPEG images are supported.');
+      return;
+    }
+
+    if (file.size > 200 * 1024) {
+      setLogoUploadError('Logo file size must be less than 200 KB.');
+      toast.error('Logo file size exceeds the 200 KB limit.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      setLogoData(dataUrl);
+      toast.success('Logo uploaded. Click "Save School Header" to apply changes.');
+    };
+    reader.onerror = () => {
+      setLogoUploadError('Failed to read image file.');
+      toast.error('Failed to read image file.');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveSchoolHeader = async () => {
+    if (!tenantId) {
+      toast.error('No school tenant found.');
+      return;
+    }
+
+    setSavingSchoolHeader(true);
+    try {
+      const { error: tErr } = await (supabase as any)
+        .from('tenants')
+        .update({
+          region: region.trim() || null,
+          division: division.trim() || null,
+          logo_data: logoData || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', tenantId);
+
+      if (tErr) throw tErr;
+
+      if (configId) {
+        await (supabase as any)
+          .from('academic_configs')
+          .update({
+            region: region.trim() || null,
+            division: division.trim() || null,
+            logo_data: logoData || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', configId);
+      }
+
+      await refetchTenant();
+      toast.success('School header information successfully saved.');
+      setSchoolHeaderConfirmModal(false);
+    } catch (err: any) {
+      console.error('Failed to save school header info:', err);
+      toast.error(friendlyError(err, 'Failed to save school header settings.'));
+    } finally {
+      setSavingSchoolHeader(false);
+    }
+  };
 
   // Compute total weights percentage
   const totalWeightsPercent = useMemo(() => {
@@ -1485,6 +1587,144 @@ export default function SchoolSettingsPage() {
         </div>
       ) : (
         <form onSubmit={handleSave} className="space-y-6">
+          {/* Card 0: School Identity & DepEd Official Header */}
+          <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 space-y-5">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3 dark:border-gray-800">
+              <div className="flex items-center gap-3">
+                <School className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900 dark:text-white">
+                    School Identity &amp; DepEd Official Header
+                  </h2>
+                  <p className="text-[11px] text-gray-400">
+                    Configures the official DepEd header lines and school seal for printed OMR answer sheets and reports.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSchoolHeaderConfirmModal(true)}
+                disabled={savingSchoolHeader}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 transition disabled:opacity-50"
+              >
+                {savingSchoolHeader ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5" />
+                )}
+                <span>Save School Header</span>
+              </button>
+            </div>
+
+            {/* Live DepEd Header Preview */}
+            <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/70 p-4 text-center dark:border-gray-800 dark:bg-gray-800/40 space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                Printed Answer Sheet Header Preview
+              </span>
+              <div className="pt-2 flex flex-col items-center">
+                {logoData ? (
+                  <img
+                    src={logoData}
+                    alt="School Seal"
+                    className="h-10 w-10 object-contain mb-1.5 rounded-full"
+                  />
+                ) : (
+                  <div className="h-8 w-8 mb-1.5 rounded-full border border-dashed border-gray-300 dark:border-gray-700 flex items-center justify-center text-gray-400 text-[9px]">
+                    Seal
+                  </div>
+                )}
+                <div className="text-[10px] font-medium text-gray-600 dark:text-gray-300">Republic of the Philippines</div>
+                <div className="text-[11px] font-bold text-gray-900 dark:text-white">Department of Education</div>
+                {region ? (
+                  <div className="text-[10px] text-gray-500 dark:text-gray-400">{region}</div>
+                ) : (
+                  <div className="text-[10px] italic text-gray-400">[Region not set — optional]</div>
+                )}
+                {division ? (
+                  <div className="text-[10px] text-gray-500 dark:text-gray-400">{division}</div>
+                ) : (
+                  <div className="text-[10px] italic text-gray-400">[Schools Division Office not set — optional]</div>
+                )}
+                <div className="text-xs font-black uppercase tracking-wide text-gray-900 dark:text-white pt-0.5">
+                  {tenantSchoolName || 'School Name'}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                  Region Line (e.g. Region III - Central Luzon)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Region III - Central Luzon"
+                  value={region}
+                  onChange={(e) => setRegion(e.target.value)}
+                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-indigo-600 focus:bg-white dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                  Schools Division Office (e.g. Schools Division Office of Tarlac Province)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Schools Division Office of Tarlac Province"
+                  value={division}
+                  onChange={(e) => setDivision(e.target.value)}
+                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-indigo-600 focus:bg-white dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            {/* School Logo / Seal Upload */}
+            <div className="rounded-2xl border border-gray-100 bg-gray-50/50 p-4 dark:border-gray-800/80 dark:bg-gray-800/30">
+              <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                School Seal / Official Logo (Max 200 KB, PNG or JPEG)
+              </label>
+              <div className="flex flex-wrap items-center gap-4">
+                {logoData ? (
+                  <div className="relative group">
+                    <img
+                      src={logoData}
+                      alt="Uploaded seal"
+                      className="h-14 w-14 rounded-xl border border-gray-200 object-contain p-1 bg-white dark:border-gray-700"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setLogoData('')}
+                      className="absolute -top-2 -right-2 rounded-full bg-red-600 text-white p-1 shadow-xs hover:bg-red-700 transition"
+                      title="Remove Logo"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-dashed border-gray-300 bg-white text-gray-400 dark:border-gray-700 dark:bg-gray-800">
+                    <ImageIcon className="h-6 w-6" />
+                  </div>
+                )}
+
+                <div className="flex-1 min-w-[200px]">
+                  <input
+                    type="file"
+                    accept="image/png, image/jpeg"
+                    onChange={handleLogoUpload}
+                    className="block w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-950/50 dark:file:text-indigo-300 transition"
+                  />
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    Stored safely in school settings. DepEd schools upload their own official seal.
+                  </p>
+                  {logoUploadError && (
+                    <p className="mt-1 text-xs text-red-600 dark:text-red-400">{logoUploadError}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Card 1: Current Academic Period */}
           <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 space-y-4">
             <div className="flex items-center gap-3 border-b border-gray-100 pb-3 dark:border-gray-800">
@@ -2972,6 +3212,18 @@ export default function SchoolSettingsPage() {
         confirmLabel="Apply to Entire School"
         cancelLabel="Keep Current Year"
         isLoading={saving}
+      />
+
+      {/* School Header Save Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={schoolHeaderConfirmModal}
+        onClose={() => setSchoolHeaderConfirmModal(false)}
+        onConfirm={handleSaveSchoolHeader}
+        title="Save School Header Information?"
+        description="These changes will update the official DepEd header (Region, Division, and School Seal) on all printed OMR answer sheets and reports across the school."
+        confirmLabel="Save Header Information"
+        actionType="neutral"
+        isLoading={savingSchoolHeader}
       />
     </div>
   );

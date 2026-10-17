@@ -271,7 +271,7 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
     let rollAmbiguity = false;
     let rollMultipleMarks = false;
 
-    const rollRegion = detectedRegions['ROLL_NUMBER'];
+    const rollRegion = detectedRegions['ROLL_NUMBER'] || detectedRegions['ANSWERS'];
     if (rollRegion && geometry.rollNumberGrid.length > 0) {
       const H = rollRegion.homography;
       const markedRolls: Array<{ rollNumber: number; score: number }> = [];

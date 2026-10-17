@@ -2,19 +2,25 @@
  * Project KIT — Canonical OMR Geometry Generator
  * Single source of truth for the physical assessment sheet geometry.
  *
- * Implements deterministic dynamic layouts driven exclusively by the teacher's
- * assessment configuration (itemCount, classSize, choices).
+ * Implements the E-ClassRoom standard single rectangular answer area
+ * framed by exactly 4 solid black square corner markers (TL, TR, BL, BR).
+ *
+ * Layout rules:
+ * - 2 columns for <= 50 items (column 1: 1..ceil(items/2), column 2: remainder)
+ * - 3 columns for 51..90 items (column 1: 1..ceil(items/3), etc.)
+ * - Dynamic row pitch and bubble radius >= 6.5 maintained
+ * - Single source of truth: All bubbles and roll-number targets strictly derived
  */
 
 import {
-    AnswerChoiceBubble,
-    AnswerItem,
-    AssessmentOmrConfig,
-    CanonicalOmrGeometry,
-    OmrRegionGeometry,
-    ReferenceMarker,
-    RegionFiducials,
-    RollNumberTarget,
+  AnswerChoiceBubble,
+  AnswerItem,
+  AssessmentOmrConfig,
+  CanonicalOmrGeometry,
+  OmrRegionGeometry,
+  ReferenceMarker,
+  RegionFiducials,
+  RollNumberTarget,
 } from './geometry-types';
 import { validateCanonicalGeometry } from './geometry-validator';
 
@@ -127,7 +133,7 @@ export function generateCanonicalGeometry(rawConfig: AssessmentOmrConfig): Canon
     pageHeight,
   };
 
-  const margins = { top: 30, right: 30, bottom: 30, left: 30 };
+  const margins = { top: 25, right: 30, bottom: 25, left: 30 };
   const regions: OmrRegionGeometry[] = [];
   const allMarkers: ReferenceMarker[] = [];
   const rollNumberGrid: RollNumberTarget[] = [];
@@ -136,50 +142,98 @@ export function generateCanonicalGeometry(rawConfig: AssessmentOmrConfig): Canon
   const markerSize = 14;
 
   // =========================================================================
-  // 1. STUDENT_INFO Region (Header & Metadata)
+  // 1. Column and Row Distribution
+  // 2 columns for <= 50 items; 3 columns for 51..90 items
   // =========================================================================
-  const studentInfoBounds = { x: 40, y: 35, width: 350, height: 160 };
-  const studentInfoMarkers = createRegionMarkers('STUDENT_INFO', 40, 35, 350, 160, markerSize);
-  allMarkers.push(...studentInfoMarkers.markersList);
+  const cols = config.itemCount <= 50 ? 2 : 3;
+  const rowsPerCol = Math.max(1, Math.ceil(config.itemCount / cols));
 
-  const studentInfoRegion: OmrRegionGeometry = {
-    id: 'STUDENT_INFO',
-    type: 'STUDENT_INFO',
-    bounds: studentInfoBounds,
-    markers: studentInfoMarkers.fiducials,
-    contentBounds: { x: 58, y: 48, width: 314, height: 134 },
+  const rowPitch = cols === 2 ? 18.0 : 16.5;
+  const headerOffset = 42;
+  const bottomPadding = 26;
+
+  const answerAreaX = 40;
+  const answerAreaWidth = 601; // x = 40 to 641
+  const answerAreaY = 280;
+  const answerAreaHeight = Math.round(headerOffset + (rowsPerCol - 1) * rowPitch + bottomPadding);
+
+  // Exactly 4 solid black square markers framing the ONE rectangular answer area
+  const answersMarkers = createRegionMarkers('ANSWERS', answerAreaX, answerAreaY, answerAreaWidth, answerAreaHeight, markerSize);
+  allMarkers.push(...answersMarkers.markersList);
+
+  // Column boundaries
+  const colWidth = answerAreaWidth / cols;
+  const bubbleRadius = 6.5;
+  const choiceSpacing = choices.length > 4 ? (cols === 2 ? 22.0 : 19.5) : (cols === 2 ? 26.0 : 23.5);
+
+  const blockAnswerItems: AnswerItem[] = [];
+
+  for (let itemNum = 1; itemNum <= config.itemCount; itemNum++) {
+    // 0-indexed column and row
+    const colIdx = Math.floor((itemNum - 1) / rowsPerCol);
+    const rowIdx = (itemNum - 1) % rowsPerCol;
+
+    const colBaseX = answerAreaX + colIdx * colWidth;
+    const cy = answerAreaY + headerOffset + rowIdx * rowPitch;
+
+    // Label and choices start X within column
+    const labelX = cols === 2 ? colBaseX + 62 : colBaseX + 30;
+    const choicesStartX = cols === 2 ? colBaseX + 85 : colBaseX + 48;
+
+    const choiceBubbles: AnswerChoiceBubble[] = [];
+    choices.forEach((choice, cIdx) => {
+      const cx = choicesStartX + cIdx * choiceSpacing;
+      const relativePosition = computeRelativePosition(cx, cy, answersMarkers.fiducials);
+
+      choiceBubbles.push({
+        choice,
+        relativePosition,
+        canonicalCenter: { x: cx, y: cy },
+        radius: bubbleRadius,
+      });
+    });
+
+    const answerItem: AnswerItem = {
+      itemNumber: itemNum,
+      regionId: 'ANSWERS',
+      label: `${itemNum}.`,
+      labelPosition: { x: labelX, y: cy + 3 },
+      choices: choiceBubbles,
+    };
+
+    blockAnswerItems.push(answerItem);
+    answerBlocks.push(answerItem);
+  }
+
+  const answersRegion: OmrRegionGeometry = {
+    id: 'ANSWERS',
+    type: 'ANSWER_BLOCK',
+    bounds: { x: answerAreaX, y: answerAreaY, width: answerAreaWidth, height: answerAreaHeight },
+    markers: answersMarkers.fiducials,
+    contentBounds: { x: answerAreaX + 16, y: answerAreaY + 16, width: answerAreaWidth - 32, height: answerAreaHeight - 32 },
+    answerItems: blockAnswerItems,
+    itemRange: { start: 1, end: config.itemCount },
   };
-  regions.push(studentInfoRegion);
+  regions.push(answersRegion);
 
   // =========================================================================
-  // 2. ROLL_NUMBER Region (7 × 10 Student Grid)
+  // 2. Compact Roll-Number Grid in Header Zone (Blank Sheets, 1..classSize)
+  // Outside the 4-marker frame, placed on the right of the learner info area
   // =========================================================================
-  const rollBounds = { x: 410, y: 35, width: 231, height: 160 };
-  const rollMarkers = createRegionMarkers('ROLL_NUMBER', 410, 35, 231, 160, markerSize);
-  allMarkers.push(...rollMarkers.markersList);
+  const rollStartX = 458;
+  const rollStartY = 138;
+  const rollColSpacing = 17.5;
+  const rollRowSpacing = 8.5;
+  const rollRadius = 4.0;
 
-  // Physical grid layout:
-  // Columns: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
-  // Rows: 1, 2, 3, 4, 5, 6, 7
-  // Grid origins inside region:
-  const rollStartX = 444;
-  const rollStartY = 72;
-  const colSpacing = 17.5;
-  const rowSpacing = 15.5;
-  const rollRadius = 6.0;
-
-  // Generate ONLY valid student targets for k = 1..classSize
   for (let k = 1; k <= config.classSize; k++) {
-    // Exact mapping from Section 8:
-    // row (0..6): Math.floor((k - 1) / 10)
-    // col (0..9): k % 10
     const row = Math.floor((k - 1) / 10);
     const col = k % 10;
 
-    const cx = rollStartX + col * colSpacing;
-    const cy = rollStartY + row * rowSpacing;
+    const cx = rollStartX + col * rollColSpacing;
+    const cy = rollStartY + row * rollRowSpacing;
 
-    const relativePosition = computeRelativePosition(cx, cy, rollMarkers.fiducials);
+    const relativePosition = computeRelativePosition(cx, cy, answersMarkers.fiducials);
 
     const target: RollNumberTarget = {
       rollNumber: k,
@@ -191,93 +245,6 @@ export function generateCanonicalGeometry(rawConfig: AssessmentOmrConfig): Canon
     };
 
     rollNumberGrid.push(target);
-  }
-
-  const rollRegion: OmrRegionGeometry = {
-    id: 'ROLL_NUMBER',
-    type: 'ROLL_NUMBER',
-    bounds: rollBounds,
-    markers: rollMarkers.fiducials,
-    contentBounds: { x: 426, y: 48, width: 199, height: 134 },
-    rollNumberTargets: rollNumberGrid,
-  };
-  regions.push(rollRegion);
-
-  // =========================================================================
-  // 3. Dynamic ANSWER_BLOCK Regions (10-item chunks, up to 90 items)
-  // =========================================================================
-  const blockSize = 10;
-  const totalBlocks = Math.ceil(config.itemCount / blockSize);
-  const blockWidth = 180;
-  const blockHeight = 200;
-
-  const columnXs = [40, 250, 460];
-  const rowYs = [215, 425, 635];
-
-  for (let b = 0; b < totalBlocks; b++) {
-    const colIdx = Math.floor(b / 3);
-    const rowIdx = b % 3;
-
-    const blockX = columnXs[colIdx];
-    const blockY = rowYs[rowIdx];
-
-    const startItem = b * blockSize + 1;
-    const endItem = Math.min((b + 1) * blockSize, config.itemCount);
-    const rangeEndPadded = pad2((b + 1) * blockSize);
-    const regionId = `ANSWERS_${pad2(startItem)}_${rangeEndPadded}`;
-
-    const blockMarkers = createRegionMarkers(regionId, blockX, blockY, blockWidth, blockHeight, markerSize);
-    allMarkers.push(...blockMarkers.markersList);
-
-    const blockAnswerItems: AnswerItem[] = [];
-
-    // Spacing within the block
-    const itemStartY = blockY + 36;
-    const itemRowSpacing = 16.0;
-    const choiceSpacing = choices.length > 4 ? 22.0 : 26.0;
-    const bubbleRadius = 6.5;
-
-    for (let itemNum = startItem; itemNum <= endItem; itemNum++) {
-      const inBlockIndex = itemNum - startItem;
-      const cy = itemStartY + inBlockIndex * itemRowSpacing;
-      const labelX = blockX + 32;
-
-      const choiceBubbles: AnswerChoiceBubble[] = [];
-      choices.forEach((choice, cIdx) => {
-        const cx = blockX + 50 + cIdx * choiceSpacing;
-        const relativePosition = computeRelativePosition(cx, cy, blockMarkers.fiducials);
-
-        choiceBubbles.push({
-          choice,
-          relativePosition,
-          canonicalCenter: { x: cx, y: cy },
-          radius: bubbleRadius,
-        });
-      });
-
-      const answerItem: AnswerItem = {
-        itemNumber: itemNum,
-        regionId,
-        label: `${itemNum}.`,
-        labelPosition: { x: labelX, y: cy + 3 },
-        choices: choiceBubbles,
-      };
-
-      blockAnswerItems.push(answerItem);
-      answerBlocks.push(answerItem);
-    }
-
-    const blockRegion: OmrRegionGeometry = {
-      id: regionId,
-      type: 'ANSWER_BLOCK',
-      bounds: { x: blockX, y: blockY, width: blockWidth, height: blockHeight },
-      markers: blockMarkers.fiducials,
-      contentBounds: { x: blockX + 16, y: blockY + 16, width: blockWidth - 32, height: blockHeight - 32 },
-      answerItems: blockAnswerItems,
-      itemRange: { start: startItem, end: endItem },
-    };
-
-    regions.push(blockRegion);
   }
 
   // Build lookups
@@ -321,4 +288,3 @@ export function generateCanonicalGeometry(rawConfig: AssessmentOmrConfig): Canon
 
   return geometry;
 }
-

@@ -7,6 +7,9 @@ export interface TenantContextValue {
   tenantId: string | null;
   tenantName: string;
   tenantCode: string | null;
+  region: string;
+  division: string;
+  logoData: string;
   configId: string | null;
   schoolYear: string;
   term: string;
@@ -24,6 +27,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [tenantName, setTenantName] = useState<string>('');
   const [tenantCode, setTenantCode] = useState<string | null>(null);
+  const [region, setRegion] = useState<string>('');
+  const [division, setDivision] = useState<string>('');
+  const [logoData, setLogoData] = useState<string>('');
   const [configId, setConfigId] = useState<string | null>(null);
   const [schoolYear, setSchoolYear] = useState<string>('');
   const [term, setTerm] = useState<string>('');
@@ -85,7 +91,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       // 2. Fetch tenant record
       const { data: tenant, error: tenantErr } = await (supabase as any)
         .from('tenants')
-        .select('id, name, code')
+        .select('id, name, code, region, division, logo_data')
         .eq('id', currentTenantId)
         .maybeSingle();
 
@@ -94,12 +100,15 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       } else if (tenant) {
         setTenantName(tenant.name || '');
         setTenantCode(tenant.code || null);
+        setRegion(tenant.region || '');
+        setDivision(tenant.division || '');
+        setLogoData(tenant.logo_data || '');
       }
 
       // 3. Fetch active academic config
       const { data: config, error: configErr } = await (supabase as any)
         .from('academic_configs')
-        .select('id, school_year, term')
+        .select('id, school_year, term, region, division, logo_data')
         .eq('tenant_id', currentTenantId)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -111,6 +120,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         setConfigId(config.id);
         setSchoolYear(config.school_year || '');
         setTerm(config.term || '');
+        if (!tenant?.region && config.region) setRegion(config.region);
+        if (!tenant?.division && config.division) setDivision(config.division);
+        if (!tenant?.logo_data && config.logo_data) setLogoData(config.logo_data);
       }
     } catch (err: any) {
       console.error('[TenantContext] Error loading school context:', err);
@@ -136,6 +148,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     tenantId,
     tenantName,
     tenantCode,
+    region,
+    division,
+    logoData,
     configId,
     schoolYear,
     term,
@@ -149,6 +164,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     tenantId,
     tenantName,
     tenantCode,
+    region,
+    division,
+    logoData,
     configId,
     schoolYear,
     term,
@@ -174,6 +192,9 @@ export function useTenant(): TenantContextValue {
       tenantId: null,
       tenantName: '',
       tenantCode: null,
+      region: '',
+      division: '',
+      logoData: '',
       configId: null,
       schoolYear: '',
       term: '',

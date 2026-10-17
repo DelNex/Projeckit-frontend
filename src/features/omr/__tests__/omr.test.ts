@@ -35,8 +35,8 @@ describe('Project KIT — OMR Pipeline & Adapter Tests', () => {
 
       // Verify item grid coordinates derived from canonical geometry
       assert.strictEqual(template.itemGrid.length, 60);
-      assert.strictEqual(template.itemGrid[0].bubbles['A'].x, 90);
-      assert.strictEqual(template.itemGrid[0].bubbles['A'].y, 251);
+      assert.strictEqual(template.itemGrid[0].bubbles['A'].x, geometry.answerBlocks[0].choices[0].canonicalCenter.x);
+      assert.strictEqual(template.itemGrid[0].bubbles['A'].y, geometry.answerBlocks[0].choices[0].canonicalCenter.y);
 
       // Verify canonical geometry attachment
       assert.ok(template.canonicalGeometry);
@@ -50,9 +50,8 @@ describe('Project KIT — OMR Pipeline & Adapter Tests', () => {
       assert.deepStrictEqual(checkerTpl.bubbleDimensions, [14, 14]);
       assert.strictEqual(checkerTpl.preProcessors[0].name, 'CropPage');
 
-      // Verify fieldBlocks generated for answer blocks
-      assert.ok(checkerTpl.fieldBlocks['ANSWERS_01_10']);
-      assert.ok(checkerTpl.fieldBlocks['ANSWERS_11_20']);
+      // Verify fieldBlocks generated for answer block and roll number
+      assert.ok(checkerTpl.fieldBlocks['ANSWERS']);
       assert.ok(checkerTpl.fieldBlocks['ROLL_NUMBER']);
     });
   });

@@ -183,9 +183,9 @@ describe('Project KIT — Dynamic OMR Scanner Integration Tests', () => {
       const sourcePng = path.join(SCRATCH_DIR, 'marked_60.png');
       const png = PNG.sync.read(fs.readFileSync(sourcePng));
 
-      // White out ANSWERS_01_10.TL marker (x: 40..54, y: 215..229)
-      for (let y = 215; y < 235; y++) {
-        for (let x = 40; x < 60; x++) {
+      // White out ANSWERS.TL marker (x: 40..54, y: 280..294)
+      for (let y = 278; y < 296; y++) {
+        for (let x = 38; x < 56; x++) {
           const idx = (y * png.width + x) * 4;
           png.data[idx] = 255;
           png.data[idx + 1] = 255;
@@ -201,9 +201,9 @@ describe('Project KIT — Dynamic OMR Scanner Integration Tests', () => {
       assert.strictEqual(result.status, 'VERIFICATION_REQUIRED');
       assert.strictEqual(result.errorCode, 'REGION_MARKER_DETECTION_FAILED');
       assert.ok(result.failedRegion !== undefined);
-      assert.strictEqual(result.failedRegion?.regionId, 'ANSWERS_01_10');
+      assert.strictEqual(result.failedRegion?.regionId, 'ANSWERS');
       assert.strictEqual(result.failedRegion?.expectedMarkerCount, 4);
-      assert.ok(result.failedRegion?.reason.includes('ANSWERS_01_10.TL'));
+      assert.ok(result.failedRegion?.reason.includes('ANSWERS.TL'));
     });
   });
 

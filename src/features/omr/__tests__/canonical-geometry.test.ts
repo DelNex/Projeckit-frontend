@@ -11,19 +11,19 @@ import { generateCanonicalGeometry } from '../geometry/canonical-geometry';
 import { validateCanonicalGeometry } from '../geometry/geometry-validator';
 
 describe('Project KIT — Canonical Geometry Engine Tests', () => {
-  describe('1. Item Count Variations & Dynamic Chunking', () => {
+  describe('1. Item Count Variations & Dynamic Columns', () => {
     const testCases = [
-      { itemCount: 10, expectedBlocks: 1, expectedTotalRegions: 3 }, // STUDENT_INFO + ROLL_NUMBER + 1 block
-      { itemCount: 20, expectedBlocks: 2, expectedTotalRegions: 4 },
-      { itemCount: 50, expectedBlocks: 5, expectedTotalRegions: 7 },
-      { itemCount: 60, expectedBlocks: 6, expectedTotalRegions: 8 },
-      { itemCount: 63, expectedBlocks: 7, expectedTotalRegions: 9 },
-      { itemCount: 70, expectedBlocks: 7, expectedTotalRegions: 9 },
-      { itemCount: 90, expectedBlocks: 9, expectedTotalRegions: 11 },
+      { itemCount: 10, expectedCols: 2, expectedRowsPerCol: 5 },
+      { itemCount: 20, expectedCols: 2, expectedRowsPerCol: 10 },
+      { itemCount: 50, expectedCols: 2, expectedRowsPerCol: 25 },
+      { itemCount: 60, expectedCols: 3, expectedRowsPerCol: 20 },
+      { itemCount: 63, expectedCols: 3, expectedRowsPerCol: 21 },
+      { itemCount: 70, expectedCols: 3, expectedRowsPerCol: 24 },
+      { itemCount: 90, expectedCols: 3, expectedRowsPerCol: 30 },
     ];
 
     for (const tc of testCases) {
-      it(`generates exactly ${tc.itemCount} items across ${tc.expectedBlocks} answer blocks`, () => {
+      it(`generates exactly ${tc.itemCount} items in single answer area with ${tc.expectedCols} columns`, () => {
         const geom = generateCanonicalGeometry({
           assessmentId: `test-${tc.itemCount}`,
           itemCount: tc.itemCount,
@@ -33,9 +33,26 @@ describe('Project KIT — Canonical Geometry Engine Tests', () => {
         assert.strictEqual(geom.config.itemCount, tc.itemCount);
         assert.strictEqual(geom.answerBlocks.length, tc.itemCount);
 
+        // Single rectangular answer area with 4 corner markers
         const answerRegions = geom.regions.filter((r) => r.type === 'ANSWER_BLOCK');
-        assert.strictEqual(answerRegions.length, tc.expectedBlocks);
-        assert.strictEqual(geom.regions.length, tc.expectedTotalRegions);
+        assert.strictEqual(answerRegions.length, 1);
+        assert.strictEqual(geom.regions.length, 1);
+        assert.strictEqual(answerRegions[0].id, 'ANSWERS');
+        assert.strictEqual(answerRegions[0].answerItems?.length, tc.itemCount);
+
+        // Verify column distribution
+        const rowsPerCol = tc.expectedRowsPerCol;
+        const firstColLastItem = geom.answerBlocks[rowsPerCol - 1];
+        assert.strictEqual(firstColLastItem.itemNumber, rowsPerCol);
+
+        if (tc.itemCount > rowsPerCol) {
+          const secondColFirstItem = geom.answerBlocks[rowsPerCol];
+          assert.strictEqual(secondColFirstItem.itemNumber, rowsPerCol + 1);
+          assert.ok(
+            secondColFirstItem.choices[0].canonicalCenter.x > firstColLastItem.choices[0].canonicalCenter.x,
+            'Column 2 items must be to the right of Column 1'
+          );
+        }
 
         // Verify validation passes
         const val = validateCanonicalGeometry(geom);
@@ -43,7 +60,7 @@ describe('Project KIT — Canonical Geometry Engine Tests', () => {
       });
     }
 
-    it('generates partial final block correctly with no fake questions (63 items)', () => {
+    it('generates 3 columns for 63 items with exactly 21 rows per column and no fake questions', () => {
       const geom = generateCanonicalGeometry({
         assessmentId: 'test-63',
         itemCount: 63,
@@ -51,22 +68,21 @@ describe('Project KIT — Canonical Geometry Engine Tests', () => {
       });
 
       const answerRegions = geom.regions.filter((r) => r.type === 'ANSWER_BLOCK');
-      assert.strictEqual(answerRegions.length, 7);
+      assert.strictEqual(answerRegions.length, 1);
+      assert.strictEqual(answerRegions[0].answerItems?.length, 63);
 
-      // Blocks 1..6 have 10 items
-      for (let i = 0; i < 6; i++) {
-        assert.strictEqual(answerRegions[i].answerItems?.length, 10);
-      }
+      // Verify column boundaries: 21 rows per col
+      // Col 1: items 1..21
+      assert.strictEqual(geom.answerBlocks[0].itemNumber, 1);
+      assert.strictEqual(geom.answerBlocks[20].itemNumber, 21);
+      // Col 2: items 22..42
+      assert.strictEqual(geom.answerBlocks[21].itemNumber, 22);
+      assert.strictEqual(geom.answerBlocks[41].itemNumber, 42);
+      // Col 3: items 43..63
+      assert.strictEqual(geom.answerBlocks[42].itemNumber, 43);
+      assert.strictEqual(geom.answerBlocks[62].itemNumber, 63);
 
-      // Block 7 (ANSWERS_61_70) has EXACTLY 3 items (61, 62, 63)
-      const finalRegion = answerRegions[6];
-      assert.strictEqual(finalRegion.id, 'ANSWERS_61_70');
-      assert.strictEqual(finalRegion.answerItems?.length, 3);
-      assert.strictEqual(finalRegion.answerItems?.[0].itemNumber, 61);
-      assert.strictEqual(finalRegion.answerItems?.[1].itemNumber, 62);
-      assert.strictEqual(finalRegion.answerItems?.[2].itemNumber, 63);
-
-      // Verify questions 64..70 do NOT exist
+      // Verify questions 64..90 do NOT exist
       const q64 = geom.answerBlocks.find((b) => b.itemNumber === 64);
       assert.strictEqual(q64, undefined, 'Fake question 64 must not exist');
     });
@@ -175,7 +191,7 @@ describe('Project KIT — Canonical Geometry Engine Tests', () => {
       }
     });
 
-    it('all normalized bubble coordinates (u, v) lie strictly inside [0, 1]', () => {
+    it('all normalized answer bubble coordinates (u, v) lie strictly inside [0, 1]', () => {
       const geom = generateCanonicalGeometry({
         assessmentId: 'test-uv',
         itemCount: 63,
@@ -189,9 +205,10 @@ describe('Project KIT — Canonical Geometry Engine Tests', () => {
         }
       }
 
+      // Roll numbers are located in the header zone outside the 4-marker frame (u in [0, 1], v < 0)
       for (const roll of geom.rollNumberGrid) {
         assert.ok(roll.relativePosition.u >= 0 && roll.relativePosition.u <= 1, `Roll u=${roll.relativePosition.u} outside [0, 1]`);
-        assert.ok(roll.relativePosition.v >= 0 && roll.relativePosition.v <= 1, `Roll v=${roll.relativePosition.v} outside [0, 1]`);
+        assert.ok(roll.relativePosition.v < 0, `Roll v=${roll.relativePosition.v} should be in header zone (v < 0)`);
       }
     });
   });

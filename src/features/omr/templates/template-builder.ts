@@ -136,18 +136,20 @@ export function buildOmrCheckerTemplate(templateOrGeometry: KitOmrTemplate | Can
         direction: 'horizontal',
         bubbleDimensions: [14, 14],
       };
-    } else if (region.type === 'ROLL_NUMBER' && region.rollNumberTargets && region.rollNumberTargets.length > 0) {
-      const firstTarget = region.rollNumberTargets[0];
-      fieldBlocks['ROLL_NUMBER'] = {
-        fieldType: 'QTYPE_INT',
-        origin: [firstTarget.canonicalCenter.x - 8, firstTarget.canonicalCenter.y - 8],
-        fieldLabels: [`roll1..${region.rollNumberTargets.length}`],
-        bubblesGap: 17,
-        labelsGap: 15,
-        direction: 'vertical',
-        bubbleDimensions: [12, 12],
-      };
     }
+  }
+
+  if (geometry.rollNumberGrid && geometry.rollNumberGrid.length > 0) {
+    const firstTarget = geometry.rollNumberGrid[0];
+    fieldBlocks['ROLL_NUMBER'] = {
+      fieldType: 'QTYPE_INT',
+      origin: [firstTarget.canonicalCenter.x - 8, firstTarget.canonicalCenter.y - 8],
+      fieldLabels: [`roll1..${geometry.rollNumberGrid.length}`],
+      bubblesGap: 17,
+      labelsGap: 15,
+      direction: 'vertical',
+      bubbleDimensions: [12, 12],
+    };
   }
 
   return {
