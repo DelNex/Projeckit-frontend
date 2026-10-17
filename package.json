@@ -16,6 +16,7 @@
     "@supabase/supabase-js": "^2.49.1",
     "@tanstack/react-table": "^9.2.4",
     "clsx": "^2.1.1",
+    "docx": "9.0.3",
     "jszip": "3.10.1",
     "lucide-react": "^0.475.0",
     "mammoth": "1.8.0",

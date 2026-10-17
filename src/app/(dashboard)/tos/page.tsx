@@ -1,75 +1,105 @@
 'use client';
 
-import { TosEditor } from '@/components/assessment/TosEditor';
-import { ConfirmationModal } from '@/components/ui/confirmation-modal';
-import { useToast } from '@/components/ui/toast';
-import { getPhilippineSchoolYear } from '@/lib/academic-calendar';
-import { friendlyError } from '@/lib/errors';
-import { createClient } from '@/lib/supabase/client';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-    ArrowRight,
-    CheckCircle2,
-    FileSpreadsheet,
-    Loader2,
-    Plus,
-    Trash2
+  FileSpreadsheet,
+  Plus,
+  RefreshCw,
+  Search,
+  Filter,
+  AlertTriangle,
+  Loader2,
+  Calendar,
 } from 'lucide-react';
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useTenant } from '@/context/TenantContext';
+import { createClient } from '@/lib/supabase/client';
+import { useToast } from '@/components/ui/toast';
+import { friendlyError } from '@/lib/errors';
+import { getPhilippineSchoolYear } from '@/lib/academic-calendar';
+import { TosDocument, STANDARD_EXAM_TYPES } from '@/types/tos';
+import { TosCard } from '@/features/tos/components/TosCard';
+import { TosCreateEditModal } from '@/features/tos/components/TosCreateEditModal';
+import { TosViewModal } from '@/features/tos/components/TosViewModal';
+import { TosExamModal } from '@/features/tos/components/TosExamModal';
+import { SchemaHealthBanner } from '@/features/tos/components/SchemaHealthBanner';
+import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 
-interface TosDocumentItem {
-  id: string;
-  assessment_id?: string | null;
-  subject: string;
-  term: string;
-  school_year: string;
-  grade?: string;
-  strand?: string;
-  section?: string;
-  target_items: number;
-  total_days?: number;
-  status: string;
-  teacher_name?: string;
-  created_at: string;
-  rows?: any[];
-  assessments?: { id: string; title: string } | null;
-}
-
-export default function TosStandalonePage() {
+export default function TosPage() {
   const { toast } = useToast();
   const supabase = createClient();
+  const tenant = useTenant();
 
-  const [tosList, setTosList] = useState<TosDocumentItem[]>([]);
-  const [selectedTosId, setSelectedTosId] = useState<string>('');
+  // Primary Data
+  const [tosList, setTosList] = useState<TosDocument[]>([]);
+  const [sections, setSections] = useState<Array<{ id: string; name: string; track?: string; grade_level?: string }>>([]);
+  const [gradingPeriods, setGradingPeriods] = useState<Array<{ id: string; name: string; is_current: boolean }>>([]);
+  const [availableSchoolYears, setAvailableSchoolYears] = useState<string[]>([]);
+
+  // Page Controls & Filters
+  const [selectedSchoolYear, setSelectedSchoolYear] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterTerm, setFilterTerm] = useState('ALL');
+  const [filterExamType, setFilterExamType] = useState('ALL');
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // New TOS Modal State
-  const [isNewTosModalOpen, setIsNewTosModalOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [newSubject, setNewSubject] = useState('');
-  const [newTerm, setNewTerm] = useState('1st Term');
-  const [newSchoolYear, setNewSchoolYear] = useState(() => getPhilippineSchoolYear());
-  const [newTargetItems, setNewTargetItems] = useState(50);
-  const [newGrade, setNewGrade] = useState('Grade 11');
-  const [newStrand, setNewStrand] = useState('STEM');
-  const [newSection, setNewSection] = useState('');
+  // Schema Health (Admin only)
+  const [schemaHealthy, setSchemaHealthy] = useState(true);
+  const [missingColumns, setMissingColumns] = useState<string[]>([]);
+  const [schemaError, setSchemaError] = useState<string | null>(null);
+
+  // Modal States
+  const [isCreateEditOpen, setIsCreateEditOpen] = useState(false);
+  const [editingTos, setEditingTos] = useState<TosDocument | null>(null);
+  const [viewingTos, setViewingTos] = useState<TosDocument | null>(null);
+  const [examModalTos, setExamModalTos] = useState<TosDocument | null>(null);
 
   // Delete State
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [tosToDelete, setTosToDelete] = useState<TosDocumentItem | null>(null);
+  const [tosToDelete, setTosToDelete] = useState<TosDocument | null>(null);
+  const [linkedAssessmentsCount, setLinkedAssessmentsCount] = useState<number>(0);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  // Grading Periods
-  const [gradingPeriods, setGradingPeriods] = useState<Array<{ id: string; name: string; is_current: boolean }>>([]);
+  // Fallback school year
+  const defaultSchoolYear = tenant?.schoolYear || getPhilippineSchoolYear();
 
-  async function loadTosDocuments() {
-    setLoading(true);
+  useEffect(() => {
+    if (defaultSchoolYear && !selectedSchoolYear) {
+      setSelectedSchoolYear(defaultSchoolYear);
+    }
+  }, [defaultSchoolYear, selectedSchoolYear]);
+
+  // Check Schema Health
+  const checkSchema = useCallback(async () => {
     try {
-      const [tosRes, gpRes] = await Promise.all([
+      const res = await fetch('/api/admin/schema-health');
+      if (res.ok) {
+        const data = await res.json();
+        setSchemaHealthy(Boolean(data.healthy));
+        setMissingColumns(data.missingColumns || []);
+        if (!data.healthy) {
+          setSchemaError(data.error || 'Required database columns missing.');
+        }
+      }
+    } catch (e) {
+      // Non-blocking schema probe
+      console.warn('Schema probe notice:', e);
+    }
+  }, []);
+
+  // Load All TOS Data
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setFetchError(null);
+
+    try {
+      const [tosRes, secRes, gpRes] = await Promise.all([
         (supabase as any)
           .from('tos_documents')
           .select(`
             id,
             assessment_id,
+            tenant_id,
             subject,
             term,
             school_year,
@@ -78,13 +108,26 @@ export default function TosStandalonePage() {
             section,
             target_items,
             total_days,
+            days_taught,
             status,
-            teacher_name,
-            created_at,
             rows,
+            teacher_name,
+            exam_type,
+            description,
+            sections,
+            generated_at,
+            created_at,
+            updated_at,
             assessments ( id, title )
           `)
           .order('created_at', { ascending: false }),
+
+        (supabase as any)
+          .from('sections')
+          .select('id, name, track, grade_level')
+          .eq('is_archived', false)
+          .order('name', { ascending: true }),
+
         (supabase as any)
           .from('grading_periods')
           .select('id, name, is_current')
@@ -92,402 +135,421 @@ export default function TosStandalonePage() {
           .order('position', { ascending: true }),
       ]);
 
-      if (gpRes?.data && gpRes.data.length > 0) {
-        setGradingPeriods(gpRes.data);
-        const cur = gpRes.data.find((g: any) => g.is_current);
-        if (cur) setNewTerm(cur.name);
+      if (tosRes.error) throw tosRes.error;
+      const documents: TosDocument[] = tosRes.data || [];
+      setTosList(documents);
+
+      if (secRes.data) {
+        setSections(secRes.data);
       }
 
-      if (tosRes?.data) {
-        setTosList(tosRes.data);
-        if (tosRes.data.length > 0 && !selectedTosId) {
-          setSelectedTosId(tosRes.data[0].id);
-        }
+      if (gpRes.data && gpRes.data.length > 0) {
+        setGradingPeriods(gpRes.data);
+      } else {
+        // Fallback standard grading periods
+        setGradingPeriods([
+          { id: 't1', name: 'Term 1', is_current: true },
+          { id: 't2', name: 'Term 2', is_current: false },
+          { id: 't3', name: 'Term 3', is_current: false },
+          { id: 't4', name: 'Term 4', is_current: false },
+        ]);
       }
-    } catch (e: any) {
-      console.error('Failed to fetch TOS documents:', e);
-      toast.error(friendlyError(e, 'Failed to load Table of Specifications list.'));
+
+      // Collect available school years
+      const years = Array.from(
+        new Set([
+          defaultSchoolYear,
+          ...documents.map((d) => d.school_year).filter(Boolean),
+        ])
+      ).sort().reverse();
+      setAvailableSchoolYears(years);
+    } catch (err: any) {
+      console.error('Failed to load Table of Specifications documents:', err);
+      setFetchError(friendlyError(err, 'Could not retrieve Table of Specifications.'));
     } finally {
       setLoading(false);
     }
-  }
+  }, [supabase, defaultSchoolYear]);
 
   useEffect(() => {
-    loadTosDocuments();
-  }, []);
+    loadData();
+    checkSchema();
+  }, [loadData, checkSchema]);
 
-  const handleCreateNewTos = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newSubject.trim()) {
-      toast.error('Please enter a subject name.');
-      return;
-    }
-
-    setCreating(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile } = await (supabase as any)
-        .from('profiles')
-        .select('tenant_id, display_name')
-        .eq('id', user?.id || '')
-        .maybeSingle();
-
-      if (!profile?.tenant_id) {
-        throw new Error('Your account is not linked to an active school tenant.');
+  // Filtered Cards
+  const filteredTosList = useMemo(() => {
+    return tosList.filter((tos) => {
+      // School Year filter
+      if (selectedSchoolYear && tos.school_year !== selectedSchoolYear) {
+        return false;
       }
 
-      const initialRows = [
-        {
-          id: '1',
-          code: 'COMP-1',
-          description: `${newSubject.trim()} - Core Competency 1`,
-          daysTaught: 5,
-          days: 5,
-          domains: { remembering: 0, understanding: 0, applying: 0, analyzing: 0, evaluating: 0, creating: 0 },
-        },
-      ];
+      // Term filter
+      if (filterTerm !== 'ALL' && tos.term !== filterTerm) {
+        return false;
+      }
 
-      const payload = {
-        tenant_id: profile.tenant_id,
-        subject: newSubject.trim(),
-        term: newTerm,
-        school_year: newSchoolYear,
-        grade: newGrade.trim(),
-        strand: newStrand.trim(),
-        section: newSection.trim() || undefined,
-        target_items: newTargetItems,
-        total_days: 5,
-        days_taught: 5,
-        status: 'DRAFT',
-        teacher_name: profile.display_name || 'Subject Teacher',
-        created_by: user?.id,
-        rows: initialRows,
-      };
+      // Exam Type filter
+      if (filterExamType !== 'ALL' && (tos.exam_type || 'Summative Test 1') !== filterExamType) {
+        return false;
+      }
 
-      const { data: inserted, error: insErr } = await (supabase as any)
+      // Search Query
+      if (searchTerm.trim()) {
+        const query = searchTerm.toLowerCase();
+        const subjectMatch = tos.subject.toLowerCase().includes(query);
+        const descMatch = (tos.description || '').toLowerCase().includes(query);
+        const sectionMatch = (tos.section || '').toLowerCase().includes(query);
+        return subjectMatch || descMatch || sectionMatch;
+      }
+
+      return true;
+    });
+  }, [tosList, selectedSchoolYear, filterTerm, filterExamType, searchTerm]);
+
+  // Unique list of subjects for autocomplete
+  const existingSubjects = useMemo(() => {
+    return Array.from(new Set(tosList.map((t) => t.subject).filter(Boolean))).sort();
+  }, [tosList]);
+
+  // Create or Update Action
+  const handleSaveTos = async (payload: any) => {
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const tenantId = tenant?.tenantId;
+    if (!tenantId) {
+      throw new Error('Your user profile is not associated with an active school.');
+    }
+
+    const completePayload = {
+      ...payload,
+      tenant_id: tenantId,
+      created_by: user?.id,
+    };
+
+    if (editingTos) {
+      const { data: updated, error } = await (supabase as any)
         .from('tos_documents')
-        .insert(payload)
+        .update(completePayload)
+        .eq('id', editingTos.id)
         .select()
         .single();
 
-      if (insErr) throw insErr;
+      if (error) throw error;
+      toast.success(`Table of Specification for "${updated.subject}" updated.`);
+      await loadData();
+      setViewingTos(updated);
+      return updated;
+    } else {
+      const { data: inserted, error } = await (supabase as any)
+        .from('tos_documents')
+        .insert(completePayload)
+        .select()
+        .single();
 
-      toast.success('Table of Specifications created. You can now define competencies and days taught.');
-      setIsNewTosModalOpen(false);
-      setNewSubject('');
-      await loadTosDocuments();
-      if (inserted?.id) {
-        setSelectedTosId(inserted.id);
-      }
-    } catch (err: any) {
-      console.error('Failed to create TOS:', err);
-      toast.error(friendlyError(err, 'Failed to create Table of Specifications.'));
-    } finally {
-      setCreating(false);
+      if (error) throw error;
+      toast.success(`Table of Specification for "${inserted.subject}" created!`);
+      await loadData();
+      setViewingTos(inserted);
+      return inserted;
     }
   };
 
-  const handleDeleteTos = async () => {
-    if (!tosToDelete) return;
+  // Delete Action
+  const handleRequestDelete = async (tos: TosDocument) => {
+    setTosToDelete(tos);
+    setLinkedAssessmentsCount(0);
+
     try {
-      const { error: delErr } = await (supabase as any)
+      const { count } = await (supabase as any)
+        .from('assessments')
+        .select('id', { count: 'exact', head: true })
+        .eq('tos_id', tos.id);
+
+      setLinkedAssessmentsCount(count || 0);
+    } catch (e) {
+      console.warn('Check linked assessment count error:', e);
+    }
+
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!tosToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      const { error } = await (supabase as any)
         .from('tos_documents')
         .delete()
         .eq('id', tosToDelete.id);
 
-      if (delErr) throw delErr;
+      if (error) throw error;
 
-      toast.success(`TOS for "${tosToDelete.subject}" deleted.`);
+      toast.success(`Table of Specification for "${tosToDelete.subject}" deleted.`);
       setDeleteModalOpen(false);
       setTosToDelete(null);
-      const remaining = tosList.filter((t) => t.id !== tosToDelete.id);
-      setTosList(remaining);
-      setSelectedTosId(remaining.length > 0 ? remaining[0].id : '');
+      await loadData();
     } catch (err: any) {
       console.error('Failed to delete TOS:', err);
-      toast.error(friendlyError(err, 'Failed to delete Table of Specifications.'));
+      toast.error(friendlyError(err, 'Failed to delete Table of Specification.'));
+    } finally {
+      setIsDeleting(false);
     }
   };
 
-  const activeTos = tosList.find((t) => t.id === selectedTosId) || (tosList.length > 0 ? tosList[0] : null);
+  const currentUser = {
+    id: '',
+    displayName: tenant?.userDisplayName || 'Subject Teacher',
+    isAdmin: tenant?.userRole === 'admin' || tenant?.userRole === 'super_admin',
+  };
 
   return (
-    <div className="space-y-6 min-w-0">
-      {/* Top Banner & TOS Selector */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-5 rounded-3xl bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <FileSpreadsheet className="h-6 w-6 text-blue-200" />
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight">
-              Table of Specifications (TOS) Workspace
-            </h1>
-          </div>
-          <p className="text-xs text-blue-100 max-w-xl">
-            DepEd-standard Table of Specifications: define learning competencies, instructional days taught, and test item allocations first before deriving exams and assessments.
+    <div className="space-y-6 pb-12 max-w-7xl mx-auto px-4 sm:px-6">
+      {/* Schema Health Warning Banner (Admins only) */}
+      {!schemaHealthy && currentUser.isAdmin && (
+        <SchemaHealthBanner
+          missingColumns={missingColumns}
+          requiredMigration="20260908000020_tos_eclassroom_redesign.sql"
+          technicalError={schemaError}
+        />
+      )}
+
+      {/* Main Header (Copy screenshot 6) */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-2">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
+            <span>Table of Specification</span>
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+              DepEd Order 8, s. 2015
+            </span>
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+            Design standard competency allocation matrices, Bloom taxonomy distributions, and examinations.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
-          {tosList.length > 0 && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-blue-100 whitespace-nowrap">Active TOS:</span>
-              <select
-                value={activeTos?.id || ''}
-                onChange={(e) => setSelectedTosId(e.target.value)}
-                className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold outline-none focus:ring-2 focus:ring-white"
-              >
-                {tosList.map((t) => (
-                  <option key={t.id} value={t.id} className="text-gray-900">
-                    {t.subject} ({t.term} · {t.target_items} items)
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* School Year Selector */}
+          <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs shadow-sm">
+            <Calendar className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+            <span className="font-semibold text-slate-700 dark:text-slate-300">School Year:</span>
+            <select
+              value={selectedSchoolYear}
+              onChange={(e) => setSelectedSchoolYear(e.target.value)}
+              className="bg-transparent font-bold text-slate-900 dark:text-white outline-none cursor-pointer"
+            >
+              {availableSchoolYears.map((sy) => (
+                <option key={sy} value={sy}>
+                  {sy} {sy === defaultSchoolYear ? '(Current)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
 
+          {/* Refresh Button */}
           <button
-            onClick={() => setIsNewTosModalOpen(true)}
-            className="px-4 py-2 bg-white text-blue-700 hover:bg-blue-50 font-bold rounded-xl text-xs shadow-xs transition flex items-center gap-1.5 shrink-0"
+            onClick={() => loadData()}
+            disabled={loading}
+            className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
+            title="Refresh Table of Specifications"
+            aria-label="Refresh"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+
+          {/* Create TOS Button */}
+          <button
+            onClick={() => {
+              setEditingTos(null);
+              setIsCreateEditOpen(true);
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-emerald-600/20 transition-all"
           >
             <Plus className="h-4 w-4" />
-            <span>New TOS</span>
+            <span>Create TOS</span>
           </button>
         </div>
       </div>
 
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-2" />
-          <span className="text-xs">Loading Table of Specifications workspace...</span>
+      {/* Filter and Search Bar */}
+      <div className="flex flex-col sm:flex-row items-center gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+        {/* Search Input */}
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search by subject, description or section..."
+            className="w-full text-xs sm:text-sm pl-10 pr-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border-none outline-none text-slate-900 dark:text-white placeholder:text-slate-400"
+          />
         </div>
-      ) : tosList.length === 0 ? (
-        <div className="p-12 text-center border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-3xl space-y-4">
-          <FileSpreadsheet className="h-10 w-10 text-gray-400 mx-auto" />
-          <div>
-            <h3 className="text-base font-bold text-gray-900 dark:text-white">No Table of Specifications Created Yet</h3>
-            <p className="text-xs text-gray-500 max-w-md mx-auto mt-1">
-              Start by creating your first Table of Specifications. Enter competencies, instructional days taught, and total test items. Once finalized, derive an assessment or generate an exam directly from it.
+
+        {/* Term Filter */}
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <select
+            value={filterTerm}
+            onChange={(e) => setFilterTerm(e.target.value)}
+            className="w-full sm:w-auto text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 outline-none font-medium"
+          >
+            <option value="ALL">All Terms</option>
+            {gradingPeriods.map((gp) => (
+              <option key={gp.id} value={gp.name}>
+                {gp.name}
+              </option>
+            ))}
+          </select>
+
+          {/* Exam Type Filter */}
+          <select
+            value={filterExamType}
+            onChange={(e) => setFilterExamType(e.target.value)}
+            className="w-full sm:w-auto text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 outline-none font-medium"
+          >
+            <option value="ALL">All Exam Types</option>
+            {STANDARD_EXAM_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Content States: Loading, Error, Empty, or Cards Grid */}
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div
+              key={i}
+              className="h-56 rounded-2xl bg-slate-100 dark:bg-slate-800/50 animate-pulse border border-slate-200 dark:border-slate-800 p-5 space-y-4"
+            >
+              <div className="flex gap-2">
+                <div className="h-5 w-16 bg-slate-200 dark:bg-slate-700 rounded-full" />
+                <div className="h-5 w-32 bg-slate-200 dark:bg-slate-700 rounded-full" />
+              </div>
+              <div className="h-6 w-3/4 bg-slate-200 dark:bg-slate-700 rounded-lg" />
+              <div className="h-4 w-full bg-slate-200 dark:bg-slate-700 rounded-lg" />
+              <div className="h-4 w-1/2 bg-slate-200 dark:bg-slate-700 rounded-lg pt-4" />
+            </div>
+          ))}
+        </div>
+      ) : fetchError ? (
+        <div className="p-8 rounded-3xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-center space-y-3">
+          <AlertTriangle className="h-8 w-8 text-rose-600 dark:text-rose-400 mx-auto" />
+          <h3 className="text-base font-bold text-rose-900 dark:text-rose-100">{fetchError}</h3>
+          <button
+            onClick={() => loadData()}
+            className="px-4 py-2 rounded-xl text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 shadow-sm"
+          >
+            Retry Loading
+          </button>
+        </div>
+      ) : filteredTosList.length === 0 ? (
+        <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 space-y-4">
+          <div className="w-16 h-16 mx-auto rounded-3xl bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+            <FileSpreadsheet className="h-8 w-8" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+              {searchTerm || filterTerm !== 'ALL' || filterExamType !== 'ALL'
+                ? 'No matching Table of Specifications found'
+                : 'Create your first Table of Specification'}
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
+              {searchTerm || filterTerm !== 'ALL' || filterExamType !== 'ALL'
+                ? 'Try adjusting your search query, term filter, or exam type.'
+                : 'Define competencies and instructional days to automatically allocate Bloom domains and generate standardized tests.'}
             </p>
           </div>
           <button
-            onClick={() => setIsNewTosModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition"
+            onClick={() => {
+              setEditingTos(null);
+              setIsCreateEditOpen(true);
+            }}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-emerald-600/20"
           >
             <Plus className="h-4 w-4" />
-            <span>Create Table of Specifications</span>
+            <span>Create your first TOS</span>
           </button>
         </div>
-      ) : activeTos ? (
-        <div className="space-y-4">
-          {/* Linked Assessment CTA Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 rounded-2xl text-xs">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-blue-600 shrink-0" />
-              <span>
-                {activeTos.assessment_id ? (
-                  <span className="text-gray-700 dark:text-gray-300">
-                    Linked Assessment: <strong>{activeTos.assessments?.title || 'Active Assessment'}</strong>
-                  </span>
-                ) : (
-                  <span className="text-gray-700 dark:text-gray-300">
-                    This TOS is ready to be used. Derive an exam or create an assessment from it.
-                  </span>
-                )}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {activeTos.assessment_id ? (
-                <Link
-                  href={`/assessments/${activeTos.assessment_id}`}
-                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition flex items-center gap-1.5"
-                >
-                  <span>Open Assessment</span>
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              ) : (
-                <Link
-                  href={`/assessments?new=true&tos_id=${activeTos.id}`}
-                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition flex items-center gap-1.5"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>Create Assessment from this TOS</span>
-                </Link>
-              )}
-
-              <button
-                onClick={() => {
-                  setTosToDelete(activeTos);
-                  setDeleteModalOpen(true);
-                }}
-                className="p-1.5 text-gray-400 hover:text-rose-600 transition rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                title="Delete this TOS"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-
-          <TosEditor
-            key={activeTos.id}
-            tosDocId={activeTos.id}
-            assessmentId={activeTos.assessment_id || ''}
-            initialSubject={activeTos.subject}
-            initialTerm={activeTos.term}
-            initialSchoolYear={activeTos.school_year}
-            initialGrade={activeTos.grade || ''}
-            initialStrand={activeTos.strand || ''}
-            initialSection={activeTos.section || ''}
-            initialTargetItems={activeTos.target_items || 50}
-            initialStatus={activeTos.status || 'DRAFT'}
-            teacherName={activeTos.teacher_name || ''}
-            onSaveSuccess={loadTosDocuments}
-          />
-        </div>
-      ) : null}
-
-      {/* ── New TOS Modal ── */}
-      {isNewTosModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-3xl p-6 shadow-2xl space-y-5 border border-gray-200 dark:border-gray-800">
-            <div className="border-b border-gray-100 dark:border-gray-800 pb-3">
-              <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                <FileSpreadsheet className="h-5 w-5 text-blue-600" />
-                Create Table of Specifications (TOS)
-              </h3>
-              <p className="text-xs text-gray-500 mt-1">
-                Step 1 of the DepEd curriculum workflow. Derive assessments and personalized answer sheets after finalizing this TOS.
-              </p>
-            </div>
-
-            <form onSubmit={handleCreateNewTos} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                  Subject Title *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. General Mathematics"
-                  value={newSubject}
-                  onChange={(e) => setNewSubject(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                    Grading Term *
-                  </label>
-                  {gradingPeriods.length > 0 ? (
-                    <select
-                      value={newTerm}
-                      onChange={(e) => setNewTerm(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-semibold outline-none"
-                    >
-                      {gradingPeriods.map((gp) => (
-                        <option key={gp.id} value={gp.name}>
-                          {gp.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      value={newTerm}
-                      onChange={(e) => setNewTerm(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white outline-none"
-                    />
-                  )}
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                    School Year *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newSchoolYear}
-                    onChange={(e) => setNewSchoolYear(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-semibold outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                    Target Items (N)
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="200"
-                    value={newTargetItems}
-                    onChange={(e) => setNewTargetItems(Number(e.target.value) || 50)}
-                    className="w-full px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-center font-bold text-blue-600 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                    Grade Level
-                  </label>
-                  <input
-                    type="text"
-                    value={newGrade}
-                    onChange={(e) => setNewGrade(e.target.value)}
-                    placeholder="e.g. Grade 11"
-                    className="w-full px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                    Track / Strand
-                  </label>
-                  <input
-                    type="text"
-                    value={newStrand}
-                    onChange={(e) => setNewStrand(e.target.value)}
-                    placeholder="e.g. STEM"
-                    className="w-full px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-3 border-t border-gray-100 dark:border-gray-800">
-                <button
-                  type="button"
-                  onClick={() => setIsNewTosModalOpen(false)}
-                  className="px-4 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-xl hover:bg-gray-200 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition flex items-center gap-1.5"
-                >
-                  {creating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  <span>Create TOS</span>
-                </button>
-              </div>
-            </form>
-          </div>
+      ) : (
+        /* Responsive Card Grid (1 col phone, 2 tablet, 3 desktop) */
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredTosList.map((tos) => (
+            <TosCard
+              key={tos.id}
+              tos={tos}
+              onView={(target) => setViewingTos(target)}
+              onEdit={(target) => {
+                setEditingTos(target);
+                setIsCreateEditOpen(true);
+              }}
+              onCreateExam={(target) => setExamModalTos(target)}
+              onDelete={(target) => handleRequestDelete(target)}
+              onPrintPdf={(target) => setViewingTos(target)}
+            />
+          ))}
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Modals */}
+
+      {/* 1. Create / Edit Modal (Phase 3) */}
+      <TosCreateEditModal
+        isOpen={isCreateEditOpen}
+        onClose={() => {
+          setIsCreateEditOpen(false);
+          setEditingTos(null);
+        }}
+        onSave={handleSaveTos}
+        existingTos={editingTos}
+        availableSections={sections}
+        availableGradingPeriods={gradingPeriods}
+        existingSubjects={existingSubjects}
+        currentSchoolYear={selectedSchoolYear || defaultSchoolYear}
+        schoolName={tenant?.tenantName || 'Project KIT School'}
+        currentUser={currentUser}
+        hasLinkedExam={Boolean(editingTos?.assessment_id)}
+      />
+
+      {/* 2. Official Table View Modal (Phase 4) */}
+      <TosViewModal
+        isOpen={Boolean(viewingTos)}
+        onClose={() => setViewingTos(null)}
+        tos={viewingTos}
+        schoolName={tenant?.tenantName || 'Project KIT School'}
+        region={tenant?.region}
+        division={tenant?.division}
+        onCreateExam={(target) => setExamModalTos(target)}
+      />
+
+      {/* 3. Examination Generator Modal (Phase 5) */}
+      <TosExamModal
+        isOpen={Boolean(examModalTos)}
+        onClose={() => setExamModalTos(null)}
+        tos={examModalTos}
+        schoolName={tenant?.tenantName || 'Project KIT School'}
+      />
+
+      {/* 4. Delete Confirmation Modal with Linked Exam Warning */}
       <ConfirmationModal
         isOpen={deleteModalOpen}
-        onClose={() => setDeleteModalOpen(false)}
-        onConfirm={handleDeleteTos}
-        title="Delete Table of Specifications?"
-        description={`Are you sure you want to delete the TOS for "${tosToDelete?.subject}"? This action cannot be undone.`}
-        actionType="delete"
-        confirmLabel="Delete TOS"
+        title="Delete Table of Specification?"
+        description={
+          linkedAssessmentsCount > 0
+            ? `This TOS is currently linked to an examination. Deleting this Table of Specification will also remove the linked examination draft and its answer key. Are you sure you want to permanently delete it?`
+            : `Are you sure you want to permanently delete the Table of Specification for "${tosToDelete?.subject}"? This action cannot be undone.`
+        }
+        confirmLabel={isDeleting ? 'Deleting...' : 'Delete Permanently'}
         cancelLabel="Cancel"
+        actionType="delete"
+        onConfirm={handleConfirmDelete}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setTosToDelete(null);
+        }}
       />
     </div>
   );
