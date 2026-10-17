@@ -1599,6 +1599,7 @@ export default function AssessmentWorkspacePage({
           onClose={() => setIsScannerOpen(false)}
           assessmentId={assessmentId}
           template={omrTemplate}
+          students={studentsList}
           onScanComplete={handleScanCompleted}
         />
       )}

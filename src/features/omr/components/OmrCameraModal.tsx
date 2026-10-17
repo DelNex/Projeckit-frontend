@@ -22,11 +22,19 @@ import { persistOmrScan } from '../storage';
 import { KitOmrTemplate, OmrScanResult } from '../types';
 import { useOmrCamera } from '../useOmrCamera';
 
+export interface OmrCameraModalStudent {
+  id: string;
+  name: string;
+  lrn?: string | null;
+  section_name?: string | null;
+}
+
 export interface OmrCameraModalProps {
   isOpen: boolean;
   onClose: () => void;
   assessmentId: string;
   template?: KitOmrTemplate;
+  students?: OmrCameraModalStudent[];
   onScanComplete?: (result: OmrScanResult) => void;
   /** 'answer_key' mode skips Supabase save and calls onApplyAnswerKey instead */
   mode?: 'examinee' | 'answer_key';
@@ -41,6 +49,7 @@ export function OmrCameraModal({
   onClose,
   assessmentId,
   template,
+  students = [],
   onScanComplete,
   mode = 'examinee',
   title,
@@ -49,6 +58,7 @@ export function OmrCameraModal({
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentResult, setCurrentResult] = useState<OmrScanResult | null>(null);
   const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [saveStatus, setSaveStatus] = useState<'IDLE' | 'SAVING' | 'SAVED' | 'ERROR'>('IDLE');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -130,6 +140,12 @@ export function OmrCameraModal({
 
       if (barcodeData?.studentId) {
         result.detectedStudentId = barcodeData.studentId;
+        setSelectedStudentId(barcodeData.studentId);
+      } else if (result.detectedRollNumber !== null && students.length >= result.detectedRollNumber) {
+        setSelectedStudentId(students[result.detectedRollNumber - 1]?.id || '');
+      } else if (result.detectedStudentLrn && students.length > 0) {
+        const match = students.find((s) => s.lrn === result.detectedStudentLrn);
+        if (match) setSelectedStudentId(match.id);
       }
 
       setCurrentResult(result);
@@ -159,6 +175,12 @@ export function OmrCameraModal({
 
       if (barcodeData?.studentId) {
         result.detectedStudentId = barcodeData.studentId;
+        setSelectedStudentId(barcodeData.studentId);
+      } else if (result.detectedRollNumber !== null && students.length >= result.detectedRollNumber) {
+        setSelectedStudentId(students[result.detectedRollNumber - 1]?.id || '');
+      } else if (result.detectedStudentLrn && students.length > 0) {
+        const match = students.find((s) => s.lrn === result.detectedStudentLrn);
+        if (match) setSelectedStudentId(match.id);
       }
 
       setCurrentResult(result);
@@ -172,10 +194,18 @@ export function OmrCameraModal({
 
   const handleSaveToSupabase = async () => {
     if (!currentResult) return;
+
+    const effectiveStudentId = selectedStudentId || currentResult.detectedStudentId || undefined;
+    if (mode === 'examinee' && !effectiveStudentId) {
+      setErrorMessage('Please assign a learner from the dropdown before persisting results.');
+      return;
+    }
+
     setSaveStatus('SAVING');
 
     const res = await persistOmrScan({
       assessmentId,
+      studentId: effectiveStudentId,
       scanResult: currentResult,
       imageBlob: capturedBlob || undefined,
     });
@@ -191,6 +221,7 @@ export function OmrCameraModal({
   const handleReset = () => {
     setCurrentResult(null);
     setCapturedBlob(null);
+    setSelectedStudentId('');
     setSaveStatus('IDLE');
     setErrorMessage(null);
     startCamera();
@@ -319,6 +350,39 @@ export function OmrCameraModal({
                 )}
               </div>
 
+              {/* Learner Assignment (Required before saving in examinee mode) */}
+              {mode !== 'answer_key' && (
+                <div className="rounded-2xl bg-gray-800/60 p-3 sm:p-4 border border-gray-700 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-200">Assign to Learner:</span>
+                    {!selectedStudentId ? (
+                      <span className="text-[11px] font-bold text-amber-400">
+                        * Required to persist
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Assigned
+                      </span>
+                    )}
+                  </div>
+                  <select
+                    value={selectedStudentId}
+                    onChange={(e) => {
+                      setSelectedStudentId(e.target.value);
+                      setErrorMessage(null);
+                    }}
+                    className="w-full rounded-xl bg-gray-900 border border-gray-700 px-3 py-2 text-xs text-white focus:outline-hidden focus:border-blue-500 font-medium"
+                  >
+                    <option value="">— Select learner from section roster —</option>
+                    {students.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} {s.lrn ? `• LRN: ${s.lrn}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {/* Detected Answers Preview */}
               <div className="space-y-2">
                 <span className="text-xs font-semibold text-gray-400">
@@ -384,12 +448,14 @@ export function OmrCameraModal({
                 ) : (
                   <button
                     onClick={handleSaveToSupabase}
-                    disabled={saveStatus === 'SAVING' || saveStatus === 'SAVED'}
+                    disabled={saveStatus === 'SAVING' || saveStatus === 'SAVED' || !selectedStudentId}
                     className={cn(
                       'inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-xs font-bold text-white transition shadow-sm',
                       saveStatus === 'SAVED'
                         ? 'bg-emerald-600'
-                        : 'bg-blue-600 hover:bg-blue-700 disabled:opacity-50'
+                        : !selectedStudentId
+                        ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                        : 'bg-blue-600 hover:bg-blue-700'
                     )}
                   >
                     {saveStatus === 'SAVING' ? (
@@ -399,6 +465,8 @@ export function OmrCameraModal({
                         <CheckCircle2 className="h-4 w-4" />
                         <span>Saved to Supabase</span>
                       </>
+                    ) : !selectedStudentId ? (
+                      <span>Select Learner to Persist</span>
                     ) : (
                       <span>Confirm & Persist Results</span>
                     )}

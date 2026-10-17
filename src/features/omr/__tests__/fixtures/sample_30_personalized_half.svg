@@ -1,0 +1,404 @@
+<svg width="559" height="794" viewBox="0 0 559 794" fill="none" xmlns="http://www.w3.org/2000/svg" class="omr-master-svg" data-assessment-id="sample-30-assessment" data-student-id="LRN987654">
+  <!-- Outer Page Surface -->
+  <rect width="559" height="794" fill="#FFFFFF"/>
+
+  <!-- 1. Header (DepEd Official Header) -->
+  <text x="279.5" y="20" font-family="sans-serif" font-size="8" font-weight="500" fill="#4B5563" text-anchor="middle">Republic of the Philippines</text>
+  <text x="279.5" y="31" font-family="sans-serif" font-size="9" font-weight="bold" fill="#111827" text-anchor="middle">Department of Education</text>
+  <text x="279.5" y="43" font-family="sans-serif" font-size="8" fill="#4B5563" text-anchor="middle">National Capital Region</text>
+  <text x="279.5" y="54" font-family="sans-serif" font-size="8" fill="#4B5563" text-anchor="middle">Schools Division Office of Manila</text>
+  <text x="279.5" y="65" font-family="sans-serif" font-size="10" font-weight="900" fill="#111827" text-anchor="middle">RAMON MAGSAYSAY HIGH SCHOOL</text>
+  <!-- 2. Learner Information & Identification -->
+  <text x="28" y="118.25" font-family="sans-serif" font-size="8" font-weight="bold" fill="#111827">NAME:</text>
+  <line x1="62" y1="121.25" x2="225" y2="121.25" stroke="#1E293B" stroke-width="0.75"/>
+  <text x="64" y="118.25" font-family="sans-serif" font-size="8" font-weight="bold" fill="#1D4ED8">DELA CRUZ, JUAN PEDRO</text>
+  <text x="235" y="118.25" font-family="sans-serif" font-size="8" font-weight="bold" fill="#111827">DATE:</text>
+  <line x1="267" y1="121.25" x2="355" y2="121.25" stroke="#1E293B" stroke-width="0.75"/>
+  <text x="269" y="118.25" font-family="sans-serif" font-size="8" fill="#334155">2026-10-20</text>
+  <text x="385" y="118.25" font-family="sans-serif" font-size="8" font-weight="bold" fill="#111827">SCORE:</text>
+  <line x1="423" y1="121.25" x2="485" y2="121.25" stroke="#1E293B" stroke-width="0.75"/>
+  <text x="28" y="135.25" font-family="sans-serif" font-size="8" font-weight="bold" fill="#111827">LRN:</text>
+  <line x1="54" y1="138.25" x2="200" y2="138.25" stroke="#1E293B" stroke-width="0.75"/>
+  <text x="56" y="135.25" font-family="monospace" font-size="8" font-weight="bold" fill="#334155">109876543210</text>
+  <text x="210" y="135.25" font-family="sans-serif" font-size="8" font-weight="bold" fill="#111827">YEAR/SECTION:</text>
+  <line x1="285" y1="138.25" x2="485" y2="138.25" stroke="#1E293B" stroke-width="0.75"/>
+  <text x="287" y="135.25" font-family="sans-serif" font-size="8" fill="#334155">Grade 10 - Einstein</text>
+  <!-- Code 39 Barcode: KAE30AE-987654 -->
+  <g class="omr-barcode" data-code="KAE30AE-987654">
+    <rect x="396.00" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="397.98" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="399.22" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="401.21" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="403.19" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="404.43" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="406.42" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="407.66" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="408.90" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="410.88" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="412.86" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="414.85" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="416.09" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="418.07" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="419.31" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="421.30" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="423.28" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="424.52" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="427.25" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="428.49" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="429.73" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="431.71" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="434.44" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="435.68" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="436.92" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="438.16" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="439.40" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="441.38" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="443.37" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="445.35" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="446.59" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="448.58" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="449.82" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="451.80" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="453.04" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="455.02" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="457.01" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="458.25" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="460.98" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="462.22" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="463.46" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="465.44" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="466.68" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="467.92" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="469.90" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="471.89" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="473.13" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="475.86" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="477.10" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="479.08" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="480.32" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="482.30" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="484.29" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="485.53" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="487.51" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="488.75" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="489.99" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="491.98" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="493.22" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="495.20" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="497.18" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="498.42" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="501.15" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="503.14" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="504.38" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="505.62" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="507.60" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="509.58" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="511.57" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="512.81" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="514.05" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="515.29" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="517.27" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="519.26" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="520.50" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="522.48" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="524.46" y="201" width="0.62" height="26" fill="#000000"/>
+    <rect x="525.70" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="527.69" y="201" width="1.36" height="26" fill="#000000"/>
+    <rect x="529.67" y="201" width="0.62" height="26" fill="#000000"/>
+    <text x="463.15" y="236" font-family="monospace" font-size="7" font-weight="bold" text-anchor="middle" fill="#374151">KAE30AE-987654</text>
+  </g>
+  <!-- 3. Title Block -->
+  <text x="279.5" y="191.5" font-family="sans-serif" font-size="8" font-weight="900" fill="#111827" text-anchor="middle">QUARTER 1 FIRST PERIODICAL EXAMINATION ANSWER SHEET</text>
+  <text x="279.5" y="204.5" font-family="sans-serif" font-size="8.5" font-weight="bold" fill="#374151" text-anchor="middle">SCIENCE 10</text>
+  <text x="279.5" y="216.5" font-family="sans-serif" font-size="8" fill="#4B5563" text-anchor="middle">S.Y. 2026-2027</text>
+  <!-- 4. Section Bar -->
+  <line x1="28" y1="268.75" x2="531" y2="268.75" stroke="#000000" stroke-width="1"/>
+  <text x="30" y="279.75" font-family="sans-serif" font-size="8" font-weight="900" fill="#111827">MULTIPLE CHOICE (30 POINTS)</text>
+  <text x="30" y="289.75" font-family="sans-serif" font-size="7" font-style="italic" fill="#4B5563">Instructions: Shade the circle for the correct answer on the answer sheet.</text>
+  <text x="531" y="279.75" font-family="monospace" font-size="7.5" font-weight="bold" text-anchor="end" fill="#6B7280">KIT:AE30AEE</text>
+  <line x1="28" y1="295.75" x2="531" y2="295.75" stroke="#000000" stroke-width="0.75"/>
+  <!-- 5. Answer Area (Framed by exactly 4 solid square markers) -->
+  <rect id="ANSWERS.TL" x="28" y="337" width="14" height="14" fill="#000000"/>
+  <rect id="ANSWERS.TR" x="517" y="337" width="14" height="14" fill="#000000"/>
+  <rect id="ANSWERS.BL" x="28" y="757" width="14" height="14" fill="#000000"/>
+  <rect id="ANSWERS.BR" x="517" y="757" width="14" height="14" fill="#000000"/>
+  <line x1="279.5" y1="337" x2="279.5" y2="771" stroke="#E5E7EB" stroke-width="1"/>
+  <text x="113" y="351" font-family="sans-serif" font-size="7" font-weight="900" text-anchor="middle" fill="#6B7280">A</text>
+  <text x="137" y="351" font-family="sans-serif" font-size="7" font-weight="900" text-anchor="middle" fill="#6B7280">B</text>
+  <text x="161" y="351" font-family="sans-serif" font-size="7" font-weight="900" text-anchor="middle" fill="#6B7280">C</text>
+  <text x="185" y="351" font-family="sans-serif" font-size="7" font-weight="900" text-anchor="middle" fill="#6B7280">D</text>
+  <text x="365" y="351" font-family="sans-serif" font-size="7" font-weight="900" text-anchor="middle" fill="#6B7280">A</text>
+  <text x="389" y="351" font-family="sans-serif" font-size="7" font-weight="900" text-anchor="middle" fill="#6B7280">B</text>
+  <text x="413" y="351" font-family="sans-serif" font-size="7" font-weight="900" text-anchor="middle" fill="#6B7280">C</text>
+  <text x="437" y="351" font-family="sans-serif" font-size="7" font-weight="900" text-anchor="middle" fill="#6B7280">D</text>
+  <text x="90" y="366" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">1.</text>
+  <circle cx="113" cy="363" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="113" y="365.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="137" cy="363" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="137" y="365.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="161" cy="363" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="161" y="365.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="185" cy="363" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="185" y="365.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="90" y="394" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">2.</text>
+  <circle cx="113" cy="391" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="113" y="393.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="137" cy="391" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="137" y="393.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="161" cy="391" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="161" y="393.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="185" cy="391" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="185" y="393.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="90" y="422" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">3.</text>
+  <circle cx="113" cy="419" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="113" y="421.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="137" cy="419" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="137" y="421.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="161" cy="419" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="161" y="421.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="185" cy="419" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="185" y="421.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="90" y="450" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">4.</text>
+  <circle cx="113" cy="447" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="113" y="449.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="137" cy="447" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="137" y="449.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="161" cy="447" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="161" y="449.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="185" cy="447" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="185" y="449.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="90" y="478" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">5.</text>
+  <circle cx="113" cy="475" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="113" y="477.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="137" cy="475" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="137" y="477.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="161" cy="475" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="161" y="477.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="185" cy="475" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="185" y="477.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="90" y="506" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">6.</text>
+  <circle cx="113" cy="503" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="113" y="505.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="137" cy="503" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="137" y="505.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="161" cy="503" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="161" y="505.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="185" cy="503" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="185" y="505.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="90" y="534" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">7.</text>
+  <circle cx="113" cy="531" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="113" y="533.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="137" cy="531" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="137" y="533.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="161" cy="531" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="161" y="533.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="185" cy="531" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="185" y="533.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="90" y="562" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">8.</text>
+  <circle cx="113" cy="559" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="113" y="561.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="137" cy="559" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="137" y="561.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="161" cy="559" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="161" y="561.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="185" cy="559" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="185" y="561.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="90" y="590" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">9.</text>
+  <circle cx="113" cy="587" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="113" y="589.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="137" cy="587" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="137" y="589.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="161" cy="587" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="161" y="589.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="185" cy="587" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="185" y="589.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="90" y="618" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">10.</text>
+  <circle cx="113" cy="615" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="113" y="617.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="137" cy="615" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="137" y="617.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="161" cy="615" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="161" y="617.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="185" cy="615" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="185" y="617.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="90" y="646" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">11.</text>
+  <circle cx="113" cy="643" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="113" y="645.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="137" cy="643" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="137" y="645.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="161" cy="643" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="161" y="645.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="185" cy="643" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="185" y="645.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="90" y="674" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">12.</text>
+  <circle cx="113" cy="671" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="113" y="673.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="137" cy="671" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="137" y="673.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="161" cy="671" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="161" y="673.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="185" cy="671" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="185" y="673.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="90" y="702" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">13.</text>
+  <circle cx="113" cy="699" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="113" y="701.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="137" cy="699" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="137" y="701.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="161" cy="699" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="161" y="701.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="185" cy="699" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="185" y="701.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="90" y="730" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">14.</text>
+  <circle cx="113" cy="727" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="113" y="729.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="137" cy="727" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="137" y="729.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="161" cy="727" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="161" y="729.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="185" cy="727" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="185" y="729.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="90" y="758" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">15.</text>
+  <circle cx="113" cy="755" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="113" y="757.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="137" cy="755" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="137" y="757.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="161" cy="755" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="161" y="757.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="185" cy="755" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="185" y="757.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="341.5" y="366" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">16.</text>
+  <circle cx="365" cy="363" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="365" y="365.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="389" cy="363" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="389" y="365.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="413" cy="363" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="413" y="365.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="437" cy="363" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="437" y="365.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="341.5" y="394" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">17.</text>
+  <circle cx="365" cy="391" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="365" y="393.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="389" cy="391" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="389" y="393.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="413" cy="391" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="413" y="393.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="437" cy="391" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="437" y="393.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="341.5" y="422" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">18.</text>
+  <circle cx="365" cy="419" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="365" y="421.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="389" cy="419" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="389" y="421.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="413" cy="419" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="413" y="421.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="437" cy="419" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="437" y="421.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="341.5" y="450" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">19.</text>
+  <circle cx="365" cy="447" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="365" y="449.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="389" cy="447" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="389" y="449.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="413" cy="447" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="413" y="449.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="437" cy="447" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="437" y="449.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="341.5" y="478" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">20.</text>
+  <circle cx="365" cy="475" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="365" y="477.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="389" cy="475" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="389" y="477.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="413" cy="475" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="413" y="477.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="437" cy="475" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="437" y="477.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="341.5" y="506" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">21.</text>
+  <circle cx="365" cy="503" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="365" y="505.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="389" cy="503" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="389" y="505.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="413" cy="503" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="413" y="505.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="437" cy="503" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="437" y="505.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="341.5" y="534" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">22.</text>
+  <circle cx="365" cy="531" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="365" y="533.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="389" cy="531" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="389" y="533.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="413" cy="531" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="413" y="533.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="437" cy="531" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="437" y="533.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="341.5" y="562" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">23.</text>
+  <circle cx="365" cy="559" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="365" y="561.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="389" cy="559" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="389" y="561.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="413" cy="559" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="413" y="561.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="437" cy="559" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="437" y="561.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="341.5" y="590" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">24.</text>
+  <circle cx="365" cy="587" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="365" y="589.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="389" cy="587" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="389" y="589.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="413" cy="587" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="413" y="589.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="437" cy="587" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="437" y="589.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="341.5" y="618" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">25.</text>
+  <circle cx="365" cy="615" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="365" y="617.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="389" cy="615" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="389" y="617.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="413" cy="615" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="413" y="617.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="437" cy="615" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="437" y="617.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="341.5" y="646" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">26.</text>
+  <circle cx="365" cy="643" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="365" y="645.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="389" cy="643" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="389" y="645.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="413" cy="643" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="413" y="645.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="437" cy="643" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="437" y="645.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="341.5" y="674" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">27.</text>
+  <circle cx="365" cy="671" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="365" y="673.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="389" cy="671" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="389" y="673.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="413" cy="671" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="413" y="673.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="437" cy="671" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="437" y="673.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="341.5" y="702" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">28.</text>
+  <circle cx="365" cy="699" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="365" y="701.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="389" cy="699" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="389" y="701.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="413" cy="699" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="413" y="701.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="437" cy="699" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="437" y="701.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="341.5" y="730" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">29.</text>
+  <circle cx="365" cy="727" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="365" y="729.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="389" cy="727" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="389" y="729.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="413" cy="727" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="413" y="729.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="437" cy="727" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="437" y="729.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+  <text x="341.5" y="758" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">30.</text>
+  <circle cx="365" cy="755" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="365" y="757.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">A</text>
+  <circle cx="389" cy="755" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="389" y="757.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">B</text>
+  <circle cx="413" cy="755" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="413" y="757.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">C</text>
+  <circle cx="437" cy="755" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>
+  <text x="437" y="757.5" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">D</text>
+</svg>

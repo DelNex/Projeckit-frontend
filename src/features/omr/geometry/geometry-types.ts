@@ -12,11 +12,16 @@ export interface AssessmentOmrConfig {
   schoolYear?: string;
   term?: string;
   formCode?: string;
+  schoolName?: string;
+  region?: string;
+  division?: string;
+  hasLogo?: boolean;
+  sheetFormat?: 'HALF' | 'FULL';
   itemCount: number; // e.g. 10, 20, 50, 60, 63, 70, 90
   classSize: number; // e.g. 1..70 (e.g. 60, 67, 70)
   choices?: string[]; // default ['A', 'B', 'C', 'D']
-  pageWidth?: number; // default 681
-  pageHeight?: number; // default 880
+  pageWidth?: number;
+  pageHeight?: number;
 }
 
 export type MarkerCorner = 'TL' | 'TR' | 'BL' | 'BR';
@@ -26,7 +31,7 @@ export interface ReferenceMarker {
   regionId: string;
   corner: MarkerCorner;
   center: { x: number; y: number };
-  size: number; // width and height of solid square (e.g. 12px or 14px)
+  size: number; // width and height of solid square (e.g. 12px, 14px, 16px)
   bounds: { x: number; y: number; width: number; height: number };
 }
 
@@ -64,15 +69,104 @@ export interface AnswerItem {
 export type OmrRegionType = 'STUDENT_INFO' | 'ROLL_NUMBER' | 'ANSWER_BLOCK';
 
 export interface OmrRegionGeometry {
-  id: string; // e.g. 'STUDENT_INFO', 'ROLL_NUMBER', 'ANSWERS_01_10'
+  id: string; // e.g. 'STUDENT_INFO', 'ROLL_NUMBER', 'ANSWERS'
   type: OmrRegionType;
   bounds: { x: number; y: number; width: number; height: number };
   markers: RegionFiducials;
   contentBounds: { x: number; y: number; width: number; height: number };
-  rollNumberTargets?: RollNumberTarget[]; // Only present for ROLL_NUMBER
-  answerItems?: AnswerItem[]; // Only present for ANSWER_BLOCK
+  rollNumberTargets?: RollNumberTarget[]; // Legacy ROLL_NUMBER
+  answerItems?: AnswerItem[]; // ANSWER_BLOCK
   itemRange?: { start: number; end: number }; // e.g. { start: 1, end: 10 }
   metadata?: Record<string, unknown>;
+}
+
+export interface HeaderLayoutCoordinates {
+  hasLogo: boolean;
+  logoBounds?: { x: number; y: number; width: number; height: number };
+  republicY: number;
+  depedY: number;
+  regionY?: number;
+  divisionY?: number;
+  schoolY: number;
+}
+
+export interface LearnerInfoLayoutCoordinates {
+  row1Y: number; // NAME, DATE, SCORE
+  nameLabelX: number;
+  nameLineStartX: number;
+  nameLineEndX: number;
+  dateLabelX: number;
+  dateLineStartX: number;
+  dateLineEndX: number;
+  scoreLabelX: number;
+  scoreLineStartX: number;
+  scoreLineEndX: number;
+
+  row2Y: number; // LRN, YEAR/SECTION
+  lrnLabelX: number;
+  lrnLineStartX: number;
+  lrnLineEndX: number;
+  yearSectionLabelX: number;
+  yearSectionLineStartX: number;
+  yearSectionLineEndX: number;
+}
+
+export interface TitleBlockLayoutCoordinates {
+  titleY: number;
+  titleFontSize: number;
+  subjectY: number;
+  schoolYearY: number;
+}
+
+export interface BarcodeLayoutCoordinates {
+  x: number;
+  y: number;
+  height: number;
+  narrowBarWidth: number;
+  wideBarRatio: number;
+}
+
+export interface SectionBarLayoutCoordinates {
+  topLineY: number;
+  titleY: number;
+  instructionsY: number;
+  formCodeY: number;
+  bottomLineY: number;
+  x1: number;
+  x2: number;
+}
+
+export interface AnswerAreaLayoutCoordinates {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  markerSize: number;
+  cols: number;
+  rowsPerCol: number;
+  rowPitch: number;
+  bubbleRadius: number;
+  choiceSpacing: number;
+  headerChoicesY: number;
+  colWidth: number;
+  columnDividers: number[];
+  columns: Array<{
+    colIdx: number;
+    colBaseX: number;
+    labelX: number;
+    choicesStartX: number;
+  }>;
+}
+
+export interface SheetLayoutCoordinates {
+  sheetFormat: 'HALF' | 'FULL';
+  centerX: number;
+  header: HeaderLayoutCoordinates;
+  learnerInfo: LearnerInfoLayoutCoordinates;
+  titleBlock: TitleBlockLayoutCoordinates;
+  barcode: BarcodeLayoutCoordinates;
+  sectionBar: SectionBarLayoutCoordinates;
+  answerArea: AnswerAreaLayoutCoordinates;
 }
 
 export interface CanonicalOmrGeometry {
@@ -80,6 +174,8 @@ export interface CanonicalOmrGeometry {
   templateVersion: string;
   geometryVersion: string;
   assessmentId: string;
+  sheetFormat: 'HALF' | 'FULL';
+  layout: SheetLayoutCoordinates;
   config: Required<AssessmentOmrConfig>;
   page: {
     width: number;
@@ -104,6 +200,10 @@ export interface GeometryValidationMetrics {
   availableHeight: number;
   requiredWidth: number;
   availableWidth: number;
+  bottomGap: number;
+  bottomGapPercent: number;
+  rowPitch: number;
+  bubbleRadius: number;
 }
 
 export interface GeometryValidationResult {
