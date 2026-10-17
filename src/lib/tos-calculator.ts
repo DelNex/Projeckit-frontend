@@ -3,9 +3,37 @@
  * 
  * Implements:
  * - DepEd Hamilton Largest-Remainder Item Allocation based on Days Taught
- * - Multi-tier Cognitive Domain Distribution (REM, UND, APP, ANA, EVA, CRE)
- * - Contiguous Item Number Range Assignment per Competency & Cognitive Domain
+ * - Action-Verb Driven Bloom's Taxonomy Placement (Balanced with primary action verb)
+ * - DepEd Order 8, s. 2015 60/30/10 Cognitive Distribution mode
+ * - Exact Item Numbers per Bloom Domain (e.g. "4, 7" or "15, 23")
+ * - Uniqueness and completeness validation across all item numbers [1..N]
  */
+
+export type BloomLevel =
+  | 'remembering'
+  | 'understanding'
+  | 'applying'
+  | 'analyzing'
+  | 'evaluating'
+  | 'creating';
+
+export const BLOOM_LEVELS: BloomLevel[] = [
+  'remembering',
+  'understanding',
+  'applying',
+  'analyzing',
+  'evaluating',
+  'creating',
+];
+
+export const BLOOM_LEVEL_LABELS: Record<BloomLevel, string> = {
+  remembering: 'Remembering',
+  understanding: 'Understanding',
+  applying: 'Applying',
+  analyzing: 'Analyzing',
+  evaluating: 'Evaluating',
+  creating: 'Creating',
+};
 
 export interface CognitiveDistributionConfig {
   lower: number;   // Default 60% (Remembering + Understanding)
@@ -57,6 +85,9 @@ export interface CalculatedCompetencyRow {
   endItem: number;
   domains: CognitiveDomains;
   domainRanges: CognitiveRanges;
+  domainItemNumbers: Record<BloomLevel, number[]>;
+  domainDisplay: Record<BloomLevel, string>;
+  primaryBloomLevel: BloomLevel;
 }
 
 export interface TosCalculationResult {
@@ -69,18 +100,24 @@ export interface TosCalculationResult {
   validationError?: string;
   warnings?: string[];
   zeroItemCompetencies?: string[];
+  allocationMode: 'action_verb' | 'deped_order_8';
 }
 
 /**
  * Format a contiguous range: start to end.
- * If start > end, returns "—" (0 items).
- * If start === end, returns "start" (e.g. "5").
- * If start < end, returns "start-end" (e.g. "1-8").
  */
 export function formatRange(start: number, end: number): string {
   if (start > end || start <= 0) return '—';
   if (start === end) return `${start}`;
   return `${start}–${end}`;
+}
+
+/**
+ * Format an array of item numbers for display in Bloom cells (e.g. "4" or "15, 23").
+ */
+export function formatItemList(items: number[]): string {
+  if (!items || items.length === 0) return '—';
+  return items.join(', ');
 }
 
 /**
@@ -114,11 +151,200 @@ export function validateTosInputs(
 }
 
 /**
- * Distributes an item count into 6 Bloom's cognitive domains using Hamilton largest-remainder.
- * Breakdown:
- * - Lower: remembering (lower / 2), understanding (lower / 2)
- * - Mid: applying (mid / 2), analyzing (mid / 2)
- * - Higher: evaluating (higher / 2), creating (higher / 2)
+ * Action Verb dictionary mapping English and Filipino verbs to Bloom's taxonomy levels.
+ */
+const VERB_TO_BLOOM: Record<string, BloomLevel> = {
+  // Remembering
+  define: 'remembering',
+  defines: 'remembering',
+  recall: 'remembering',
+  recalls: 'remembering',
+  identify: 'remembering',
+  identifies: 'remembering',
+  list: 'remembering',
+  lists: 'remembering',
+  name: 'remembering',
+  names: 'remembering',
+  state: 'remembering',
+  states: 'remembering',
+  label: 'remembering',
+  labels: 'remembering',
+  match: 'remembering',
+  matches: 'remembering',
+  repeat: 'remembering',
+  repeats: 'remembering',
+  recognize: 'remembering',
+  recognizes: 'remembering',
+  memorize: 'remembering',
+  memorizes: 'remembering',
+  kilalanin: 'remembering',
+  alalahanin: 'remembering',
+  itala: 'remembering',
+  magbigay: 'remembering',
+  'isa-isahin': 'remembering',
+  tukuyin: 'remembering',
+
+  // Understanding
+  describe: 'understanding',
+  describes: 'understanding',
+  explain: 'understanding',
+  explains: 'understanding',
+  discuss: 'understanding',
+  discusses: 'understanding',
+  summarize: 'understanding',
+  summarizes: 'understanding',
+  interpret: 'understanding',
+  interprets: 'understanding',
+  clarify: 'understanding',
+  clarifies: 'understanding',
+  classify: 'understanding',
+  classifies: 'understanding',
+  illustrate: 'understanding',
+  illustrates: 'understanding',
+  locate: 'understanding',
+  locates: 'understanding',
+  report: 'understanding',
+  reports: 'understanding',
+  translate: 'understanding',
+  translates: 'understanding',
+  paraphrase: 'understanding',
+  paraphrases: 'understanding',
+  distinguish: 'understanding',
+  distinguishes: 'understanding',
+  ilarawan: 'understanding',
+  ipaliwanag: 'understanding',
+  talakayin: 'understanding',
+  buurin: 'understanding',
+  paghambingin: 'understanding',
+
+  // Applying
+  apply: 'applying',
+  applies: 'applying',
+  demonstrate: 'applying',
+  demonstrates: 'applying',
+  calculate: 'applying',
+  calculates: 'applying',
+  solve: 'applying',
+  solves: 'applying',
+  compute: 'applying',
+  computes: 'applying',
+  implement: 'applying',
+  implements: 'applying',
+  use: 'applying',
+  uses: 'applying',
+  construct: 'applying',
+  constructs: 'applying',
+  practice: 'applying',
+  practices: 'applying',
+  operate: 'applying',
+  operates: 'applying',
+  execute: 'applying',
+  executes: 'applying',
+  perform: 'applying',
+  performs: 'applying',
+  show: 'applying',
+  shows: 'applying',
+  ilapat: 'applying',
+  isagawa: 'applying',
+  gamitin: 'applying',
+  lutasin: 'applying',
+  kwentahin: 'applying',
+  patakbuhin: 'applying',
+
+  // Analyzing
+  analyze: 'analyzing',
+  analyzes: 'analyzing',
+  compare: 'analyzing',
+  compares: 'analyzing',
+  contrast: 'analyzing',
+  contrasts: 'analyzing',
+  examine: 'analyzing',
+  examines: 'analyzing',
+  differentiate: 'analyzing',
+  differentiates: 'analyzing',
+  categorize: 'analyzing',
+  categorizes: 'analyzing',
+  investigate: 'analyzing',
+  investigates: 'analyzing',
+  inspect: 'analyzing',
+  inspects: 'analyzing',
+  test: 'analyzing',
+  tests: 'analyzing',
+  suriin: 'analyzing',
+  ihambing: 'analyzing',
+  'pag-ibahin': 'analyzing',
+  siyasatin: 'analyzing',
+
+  // Evaluating
+  evaluate: 'evaluating',
+  evaluates: 'evaluating',
+  judge: 'evaluating',
+  judges: 'evaluating',
+  assess: 'evaluating',
+  assesses: 'evaluating',
+  critique: 'evaluating',
+  critiques: 'evaluating',
+  defend: 'evaluating',
+  defends: 'evaluating',
+  justify: 'evaluating',
+  justifies: 'evaluating',
+  rate: 'evaluating',
+  rates: 'evaluating',
+  verify: 'evaluating',
+  verifies: 'evaluating',
+  validate: 'evaluating',
+  validates: 'evaluating',
+  appraise: 'evaluating',
+  appraises: 'evaluating',
+  tayain: 'evaluating',
+  hatulan: 'evaluating',
+  pangatwiranan: 'evaluating',
+
+  // Creating
+  create: 'creating',
+  creates: 'creating',
+  design: 'creating',
+  designs: 'creating',
+  develop: 'creating',
+  develops: 'creating',
+  formulate: 'creating',
+  formulates: 'creating',
+  generate: 'creating',
+  generates: 'creating',
+  compose: 'creating',
+  composes: 'creating',
+  produce: 'creating',
+  produces: 'creating',
+  assemble: 'creating',
+  assembles: 'creating',
+  write: 'creating',
+  writes: 'creating',
+  synthesize: 'creating',
+  synthesizes: 'creating',
+  bumuo: 'creating',
+  lumikha: 'creating',
+  magdisenyo: 'creating',
+  gumawa: 'creating',
+};
+
+/**
+ * Classifies the primary Bloom's taxonomy level from the leading action verb.
+ * Defaults to 'understanding' if no matching verb is found.
+ */
+export function classifyActionVerb(description: string): BloomLevel {
+  if (!description || !description.trim()) return 'understanding';
+  const clean = description.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').trim();
+  const words = clean.split(/\s+/);
+  for (const word of words) {
+    if (VERB_TO_BLOOM[word]) {
+      return VERB_TO_BLOOM[word];
+    }
+  }
+  return 'understanding';
+}
+
+/**
+ * Distributes an item count into 6 Bloom's levels using the DepEd Order 8 60/30/10 ratio.
  */
 export function allocateCognitiveDomains(
   itemCount: number,
@@ -133,11 +359,8 @@ export function allocateCognitiveDomains(
     creating: 0,
   };
 
-  if (itemCount <= 0) {
-    return result;
-  }
+  if (itemCount <= 0) return result;
 
-  // Exact weights summing to 1.0
   const totalWeight = distConfig.lower + distConfig.mid + distConfig.higher;
   const weights = [
     { key: 'remembering' as const, weight: (distConfig.lower / 2) / totalWeight },
@@ -148,7 +371,6 @@ export function allocateCognitiveDomains(
     { key: 'creating' as const, weight: (distConfig.higher / 2) / totalWeight },
   ];
 
-  // Hamilton Largest-Remainder Method
   const quotas = weights.map((w, index) => {
     const exact = itemCount * w.weight;
     const floor = Math.floor(exact);
@@ -157,14 +379,13 @@ export function allocateCognitiveDomains(
       key: w.key,
       floor,
       remainder,
-      index, // For deterministic tie-breaking by domain priority
+      index,
     };
   });
 
-  let allocated = quotas.reduce((sum, q) => sum + q.floor, 0);
-  let remainderItems = itemCount - allocated;
+  const allocated = quotas.reduce((sum, q) => sum + q.floor, 0);
+  const remainderItems = itemCount - allocated;
 
-  // Sort descending by remainder, then ascending by original index (tie-breaker)
   const sortedByRemainder = [...quotas].sort((a, b) => {
     if (Math.abs(b.remainder - a.remainder) > 1e-9) {
       return b.remainder - a.remainder;
@@ -188,13 +409,99 @@ export function allocateCognitiveDomains(
 }
 
 /**
- * Full Hamilton calculation for all competencies and cognitive levels.
+ * Balanced Bloom allocation based on the competency's primary action verb and exam type.
+ * Divides items evenly across all 6 levels and distributes remainder starting from primary verb level.
+ */
+export function allocateBalancedCognitiveDomains(
+  itemCount: number,
+  primaryLevel: BloomLevel,
+  examType = 'Summative Test 1'
+): CognitiveDomains {
+  const result: CognitiveDomains = {
+    remembering: 0,
+    understanding: 0,
+    applying: 0,
+    analyzing: 0,
+    evaluating: 0,
+    creating: 0,
+  };
+
+  if (itemCount <= 0) return result;
+
+  const baseEach = Math.floor(itemCount / 6);
+  let remainder = itemCount % 6;
+
+  BLOOM_LEVELS.forEach((level) => {
+    result[level] = baseEach;
+  });
+
+  // Priority order for remainder: primary level first, then adjacent levels
+  const primaryIdx = BLOOM_LEVELS.indexOf(primaryLevel);
+  const remainderPriority: BloomLevel[] = [];
+  remainderPriority.push(primaryLevel);
+
+  // Add adjacent levels in alternating pattern (primary+1, primary-1, etc.)
+  for (let step = 1; step < 6; step++) {
+    const nextIdx = (primaryIdx + step) % 6;
+    if (!remainderPriority.includes(BLOOM_LEVELS[nextIdx])) {
+      remainderPriority.push(BLOOM_LEVELS[nextIdx]);
+    }
+    const prevIdx = (primaryIdx - step + 6) % 6;
+    if (!remainderPriority.includes(BLOOM_LEVELS[prevIdx])) {
+      remainderPriority.push(BLOOM_LEVELS[prevIdx]);
+    }
+  }
+
+  for (let i = 0; i < remainder; i++) {
+    const levelToIncrement = remainderPriority[i % remainderPriority.length];
+    result[levelToIncrement] += 1;
+  }
+
+  // Preset adjustment for "Long Quiz" if exam type is quiz: lean slightly toward lower-order thinking
+  const cleanExamType = examType.toLowerCase();
+  if (cleanExamType.includes('quiz') && itemCount >= 6 && result.creating > 0) {
+    // Transfer 1 item from creating to remembering/understanding for quiz preset
+    result.creating -= 1;
+    if (primaryLevel === 'remembering' || primaryLevel === 'understanding') {
+      result[primaryLevel] += 1;
+    } else {
+      result.understanding += 1;
+    }
+  }
+
+  return result;
+}
+
+export interface CalculateTosOptions {
+  allocationMode?: 'action_verb' | 'deped_order_8';
+  examType?: string;
+  distConfig?: CognitiveDistributionConfig;
+}
+
+/**
+ * Full deterministic calculation for all competencies and cognitive levels.
  */
 export function calculateTos(
   competencies: TosCompetencyInput[],
   totalItems: number,
-  distConfig: CognitiveDistributionConfig = DEFAULT_COGNITIVE_DISTRIBUTION
+  optionsOrDistConfig?: CalculateTosOptions | CognitiveDistributionConfig
 ): TosCalculationResult {
+  let mode: 'action_verb' | 'deped_order_8' = 'action_verb';
+  let examType = 'Summative Test 1';
+  let distConfig = DEFAULT_COGNITIVE_DISTRIBUTION;
+
+  if (optionsOrDistConfig) {
+    if ('lower' in optionsOrDistConfig) {
+      mode = 'deped_order_8';
+      distConfig = optionsOrDistConfig as CognitiveDistributionConfig;
+    } else {
+      const opts = optionsOrDistConfig as CalculateTosOptions;
+      if (opts.allocationMode) mode = opts.allocationMode;
+      if (opts.examType) examType = opts.examType;
+      if (opts.distConfig) distConfig = opts.distConfig;
+    }
+  }
+
   const validation = validateTosInputs(competencies, totalItems);
   if (!validation.valid) {
     return {
@@ -207,6 +514,7 @@ export function calculateTos(
       validationError: validation.error,
       warnings: [],
       zeroItemCompetencies: [],
+      allocationMode: mode,
     };
   }
 
@@ -222,11 +530,11 @@ export function calculateTos(
       validationError: 'Total days taught must be greater than 0.',
       warnings: [],
       zeroItemCompetencies: [],
+      allocationMode: mode,
     };
   }
 
   // Step 1: Hamilton allocation for competencies based on days taught
-  // Requirement C4: Every competency with days > 0 gets at least 1 item when totalItems >= competencies.length.
   const hasMinimumGuarantee = totalItems >= competencies.length;
   const itemsToDistribute = hasMinimumGuarantee ? totalItems - competencies.length : totalItems;
 
@@ -249,7 +557,6 @@ export function calculateTos(
   const baseAllocated = compQuotas.reduce((sum, q) => sum + q.floor, 0);
   const surplus = totalItems - baseAllocated;
 
-  // Allocate leftover items by largest remainder, using index as deterministic tie-breaker
   const sortedCompByRemainder = [...compQuotas].sort((a, b) => {
     if (Math.abs(b.remainder - a.remainder) > 1e-9) {
       return b.remainder - a.remainder;
@@ -265,7 +572,7 @@ export function calculateTos(
     }
   }
 
-  // Step 2: Assign contiguous item numbers & cognitive domain ranges
+  // Step 2: Assign contiguous item numbers & individual item placement
   let currentItemCursor = 1;
 
   const rows: CalculatedCompetencyRow[] = compQuotas.map((cq) => {
@@ -274,19 +581,11 @@ export function calculateTos(
     const endItem = itemCount > 0 ? currentItemCursor + itemCount - 1 : 0;
     const itemRange = formatRange(startItem, endItem);
 
-    // Compute cognitive domains for this row
-    const domains = allocateCognitiveDomains(itemCount, distConfig);
+    const primaryBloomLevel = classifyActionVerb(cq.comp.description);
 
-    // Assign contiguous ranges within cognitive domains in Bloom's order
-    let domainCursor = startItem;
-    const domainKeys: (keyof CognitiveDomains)[] = [
-      'remembering',
-      'understanding',
-      'applying',
-      'analyzing',
-      'evaluating',
-      'creating',
-    ];
+    const domains = mode === 'action_verb'
+      ? allocateBalancedCognitiveDomains(itemCount, primaryBloomLevel, examType)
+      : allocateCognitiveDomains(itemCount, distConfig);
 
     const domainRanges: CognitiveRanges = {
       remembering: '—',
@@ -297,16 +596,39 @@ export function calculateTos(
       creating: '—',
     };
 
+    const domainItemNumbers: Record<BloomLevel, number[]> = {
+      remembering: [],
+      understanding: [],
+      applying: [],
+      analyzing: [],
+      evaluating: [],
+      creating: [],
+    };
+
+    const domainDisplay: Record<BloomLevel, string> = {
+      remembering: '—',
+      understanding: '—',
+      applying: '—',
+      analyzing: '—',
+      evaluating: '—',
+      creating: '—',
+    };
+
     if (itemCount > 0) {
-      domainKeys.forEach((key) => {
-        const count = domains[key];
+      let domainCursor = startItem;
+      BLOOM_LEVELS.forEach((level) => {
+        const count = domains[level];
         if (count > 0) {
           const dStart = domainCursor;
           const dEnd = domainCursor + count - 1;
-          domainRanges[key] = formatRange(dStart, dEnd);
+          domainRanges[level] = formatRange(dStart, dEnd);
+          const itemArr: number[] = [];
+          for (let it = dStart; it <= dEnd; it++) {
+            itemArr.push(it);
+          }
+          domainItemNumbers[level] = itemArr;
+          domainDisplay[level] = formatItemList(itemArr);
           domainCursor += count;
-        } else {
-          domainRanges[key] = '—';
         }
       });
       currentItemCursor = endItem + 1;
@@ -324,6 +646,9 @@ export function calculateTos(
       endItem,
       domains,
       domainRanges,
+      domainItemNumbers,
+      domainDisplay,
+      primaryBloomLevel,
     };
   });
 
@@ -353,5 +678,43 @@ export function calculateTos(
     isValid: totalAllocatedItems === totalItems,
     warnings,
     zeroItemCompetencies,
+    allocationMode: mode,
+  };
+}
+
+/**
+ * Validates that all item numbers placed across all competencies and Bloom levels
+ * are strictly unique and form an exact contiguous cover of 1 to targetItems.
+ */
+export function validateItemPlacementUniqueness(result: TosCalculationResult): {
+  valid: boolean;
+  missing: number[];
+  duplicates: number[];
+} {
+  const seen = new Map<number, number>();
+  result.rows.forEach((row) => {
+    BLOOM_LEVELS.forEach((level) => {
+      row.domainItemNumbers[level].forEach((num) => {
+        seen.set(num, (seen.get(num) || 0) + 1);
+      });
+    });
+  });
+
+  const duplicates: number[] = [];
+  seen.forEach((count, num) => {
+    if (count > 1) duplicates.push(num);
+  });
+
+  const missing: number[] = [];
+  for (let i = 1; i <= result.targetItems; i++) {
+    if (!seen.has(i)) {
+      missing.push(i);
+    }
+  }
+
+  return {
+    valid: duplicates.length === 0 && missing.length === 0 && seen.size === result.targetItems,
+    missing,
+    duplicates,
   };
 }

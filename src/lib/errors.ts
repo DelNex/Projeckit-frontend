@@ -7,7 +7,40 @@ const PG_ERROR_MAP: Record<string, string> = {
   '23505': 'A record with this value already exists. Please use a unique value.',
   '23503': 'This record is referenced by other data and cannot be changed.',
   '42501': 'You do not have permission to perform this action.',
+  'PGRST204': 'A required database column is missing from the database schema cache. Please ensure all migrations have been applied.',
+  'P0001': 'A database validation rule blocked this action.',
 };
+
+export interface TechnicalErrorDetails {
+  code?: string;
+  message?: string;
+  details?: string;
+  hint?: string;
+  fullText: string;
+}
+
+/**
+ * Extracts raw technical error details for admin diagnostics and copy-to-clipboard.
+ */
+export function extractTechnicalError(err: unknown): TechnicalErrorDetails {
+  if (!err) {
+    return { fullText: 'Unknown error (null or undefined)' };
+  }
+  if (typeof err === 'object') {
+    const obj = err as Record<string, unknown>;
+    const code = typeof obj.code === 'string' ? obj.code : undefined;
+    const message = typeof obj.message === 'string' ? obj.message : undefined;
+    const details = typeof obj.details === 'string' ? obj.details : undefined;
+    const hint = typeof obj.hint === 'string' ? obj.hint : undefined;
+    const fullText = JSON.stringify(
+      { code, message, details, hint, ...obj },
+      null,
+      2
+    );
+    return { code, message, details, hint, fullText };
+  }
+  return { fullText: String(err) };
+}
 
 /**
  * Map a Postgres / Supabase error code to a human-readable label.
@@ -61,6 +94,20 @@ export function friendlyError(
   // 2. Extract Postgres code if present in error object
   if (typeof err === 'object' && err !== null) {
     const obj = err as Record<string, unknown>;
+
+    // Specific PostgREST missing column handling
+    if (obj.code === 'PGRST204') {
+      const colMatch = typeof obj.message === 'string' ? obj.message.match(/Could not find the '([^']+)' column/i) : null;
+      if (colMatch) {
+        return `Database schema is missing column '${colMatch[1]}'. Please run the latest Supabase migrations.`;
+      }
+      return PG_ERROR_MAP['PGRST204'];
+    }
+
+    // Specific PostgreSQL business rule exception (RAISE EXCEPTION)
+    if (obj.code === 'P0001' && typeof obj.message === 'string' && obj.message.trim()) {
+      return obj.message.trim();
+    }
 
     // Direct error code (Postgres / Supabase)
     if (typeof obj.code === 'string' && PG_ERROR_MAP[obj.code]) {
