@@ -204,5 +204,38 @@ describe('TOS Deterministic Math & Allocation Engine', () => {
     ];
     assert.strictEqual(calculateTos(zeroItems, 0).isValid, false);
   });
+
+  // Requirement 8: TOS warning when total items < competencies or competency has 0 items
+  it('Requirement 8: flags warning when total items is less than competencies count or competency has 0 items', () => {
+    const competencies: TosCompetencyInput[] = [
+      { id: 'c1', code: 'MATH-1', description: 'Algebra', daysTaught: 5 },
+      { id: 'c2', code: 'MATH-2', description: 'Geometry', daysTaught: 3 },
+      { id: 'c3', code: 'MATH-3', description: 'Calculus', daysTaught: 1 },
+    ];
+
+    // Case A: 2 items with 3 competencies (totalItems < competencies.length)
+    const resA = calculateTos(competencies, 2);
+    assert.strictEqual(resA.isValid, true);
+    assert.strictEqual(resA.totalAllocatedItems, 2);
+    assert.ok(resA.warnings && resA.warnings.length > 0, 'Must have warnings');
+    assert.ok(
+      resA.warnings.some((w) => w.includes('Total items (2) is less than the number of competencies (3)')),
+      'Must warn about total items < competencies'
+    );
+    assert.ok(
+      resA.warnings.some((w) => w.includes('has no items')),
+      'Must warn that at least one competency has no items'
+    );
+    assert.ok(
+      resA.zeroItemCompetencies && resA.zeroItemCompetencies.length > 0,
+      'Must list zero-item competencies'
+    );
+
+    // Case B: Normal allocation (40 items, 3 competencies)
+    const resB = calculateTos(competencies, 40);
+    assert.strictEqual(resB.isValid, true);
+    assert.deepStrictEqual(resB.warnings, []);
+    assert.deepStrictEqual(resB.zeroItemCompetencies, []);
+  });
 });
 

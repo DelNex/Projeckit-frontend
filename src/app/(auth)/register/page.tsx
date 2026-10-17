@@ -2,6 +2,7 @@
 
 import {
   DEPED_REGISTRATION_ERROR_MESSAGE,
+  getRegistrationErrorMessage,
   isValidDepEdEmail,
 } from '@/lib/auth-validation';
 import { createClient } from '@/lib/supabase/client';
@@ -31,7 +32,7 @@ export default function RegisterPage() {
     // 1. Client-side DepEd email restriction check
     const cleanEmail = email.trim();
     if (!isValidDepEdEmail(cleanEmail)) {
-      setError(DEPED_REGISTRATION_ERROR_MESSAGE);
+      setError(getRegistrationErrorMessage());
       return;
     }
 

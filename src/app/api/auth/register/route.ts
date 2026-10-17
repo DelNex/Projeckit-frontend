@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   DEPED_REGISTRATION_ERROR_MESSAGE,
+  getRegistrationErrorMessage,
   isValidDepEdEmail,
 } from '@/lib/auth-validation';
 
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
     // 1. Strict Server-Side DepEd Email Restriction
     if (!isValidDepEdEmail(email)) {
       return NextResponse.json(
-        { error: DEPED_REGISTRATION_ERROR_MESSAGE },
+        { error: getRegistrationErrorMessage() },
         { status: 400 }
       );
     }

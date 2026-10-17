@@ -87,6 +87,7 @@ export function validateExamQuestions(
   }
 
   const seenNumbers = new Set<number>();
+  const seenStems: Array<{ itemNum: number; stem: string }> = [];
 
   rawQuestions.forEach((item: any, idx) => {
     const parsedNum = Number(item?.item_number || item?.number || idx + 1);
@@ -136,6 +137,28 @@ export function validateExamQuestions(
     // Check if any option is empty
     if (!formattedOptions.A || !formattedOptions.B || !formattedOptions.C || !formattedOptions.D) {
       errors.push(`${itemLabel}: One or more multiple-choice options (A-D) are blank.`);
+    } else {
+      // Check for four distinct options
+      const optSet = new Set([
+        formattedOptions.A.toLowerCase(),
+        formattedOptions.B.toLowerCase(),
+        formattedOptions.C.toLowerCase(),
+        formattedOptions.D.toLowerCase(),
+      ]);
+      if (optSet.size < 4) {
+        errors.push(`${itemLabel}: Duplicate options detected; all four options must be distinct.`);
+      }
+    }
+
+    // Check duplicate question stems across the exam
+    const normalizedStem = questionText.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
+    if (normalizedStem && normalizedStem.length > 10) {
+      const matchExisting = seenStems.find((s) => s.stem === normalizedStem);
+      if (matchExisting) {
+        errors.push(`${itemLabel}: Duplicate question detected across exam (identical to Item ${matchExisting.itemNum}).`);
+      } else {
+        seenStems.push({ itemNum, stem: normalizedStem });
+      }
     }
 
     // Validate correct answer

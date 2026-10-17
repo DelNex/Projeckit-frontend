@@ -194,5 +194,46 @@ test('AI Exam Validator — Unit Tests', async (t) => {
     assert.equal(slots[4].cognitive_level, 'remembering');
     assert.equal(slots[5].cognitive_level, 'applying');
   });
+
+  await t.test('6. Rejects questions with duplicate options', () => {
+    const rawQuestions = [
+      {
+        item_number: 1,
+        question: 'What is 2 + 2?',
+        options: {
+          A: '4',
+          B: '4', // duplicate
+          C: '5',
+          D: '6',
+        },
+        correct_answer: 'A',
+      },
+    ];
+
+    const result = validateExamQuestions(rawQuestions, 1);
+    assert.equal(result.isValid, false);
+    assert.ok(result.errors.some((e) => e.includes('Duplicate options detected')));
+  });
+
+  await t.test('7. Detects duplicate question stems across the exam', () => {
+    const rawQuestions = [
+      {
+        item_number: 1,
+        question: 'What is the speed of light in vacuum?',
+        options: { A: '3x10^8 m/s', B: '3x10^6 m/s', C: '3x10^4 m/s', D: '3x10^2 m/s' },
+        correct_answer: 'A',
+      },
+      {
+        item_number: 2,
+        question: 'What is the speed of light in vacuum?', // duplicate stem
+        options: { A: 'Approx 300,000 km/s', B: '150,000 km/s', C: '75,000 km/s', D: '1,000 km/s' },
+        correct_answer: 'A',
+      },
+    ];
+
+    const result = validateExamQuestions(rawQuestions, 2);
+    assert.equal(result.isValid, false);
+    assert.ok(result.errors.some((e) => e.includes('Duplicate question detected across exam')));
+  });
 });
 

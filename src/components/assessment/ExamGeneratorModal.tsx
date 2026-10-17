@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { extractTextFromFile } from '@/lib/lesson-parser';
+import { extractTextFromFiles } from '@/lib/lesson-parser';
 import { ExamQuestion } from '@/lib/exam-types';
 import { useToast } from '@/components/ui/toast';
 import { friendlyError } from '@/lib/errors';
@@ -16,6 +16,7 @@ import {
   UploadCloud,
   X,
 } from 'lucide-react';
+import { buildTosBlueprintSlots, TosBlueprintSlot } from '@/lib/exam-types';
 
 interface ExamGeneratorModalProps {
   isOpen: boolean;
@@ -25,7 +26,13 @@ interface ExamGeneratorModalProps {
   targetItems: number;
   tosRows: any[];
   subjectTitle: string;
-  onExamGenerated: (questions: ExamQuestion[], lessonText: string) => void;
+  onExamGenerated: (
+    questions: ExamQuestion[],
+    lessonText: string,
+    source?: string,
+    missingItemNumbers?: number[],
+    isSampleDemo?: boolean
+  ) => void;
 }
 
 type GenerationStep =
@@ -39,8 +46,8 @@ type GenerationStep =
 
 const STEP_LABELS: Record<GenerationStep, string> = {
   idle: 'Ready to start',
-  uploading: 'Uploading lesson file...',
-  extracting: 'Extracting text from document...',
+  uploading: 'Uploading lesson file(s)...',
+  extracting: 'Extracting text from document(s)...',
   analyzing: 'Analyzing lesson coverage against TOS...',
   generating: 'Generating questions matching Bloom cognitive matrix...',
   validating: 'Validating distribution and self-healing...',
@@ -61,30 +68,52 @@ export function ExamGeneratorModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [currentStep, setCurrentStep] = useState<GenerationStep>('idle');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [pastedText, setPastedText] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [truncationNotice, setTruncationNotice] = useState<string | null>(null);
+  const [chunkProgress, setChunkProgress] = useState<{
+    completed: number;
+    total: number;
+    label: string;
+  } | null>(null);
 
   if (!isOpen) return null;
 
-  const handleFileSelect = (file: File) => {
+  const handleFilesSelect = (files: FileList | File[]) => {
     const validExts = ['.pdf', '.docx', '.pptx', '.txt', '.md'];
-    const lowerName = file.name.toLowerCase();
-    const isValid = validExts.some((ext) => lowerName.endsWith(ext));
+    const incoming = Array.from(files);
 
-    if (!isValid) {
-      toast.error('Supported formats: PDF, DOCX, PPTX, or TXT.');
+    if (selectedFiles.length + incoming.length > 5) {
+      toast.error('Maximum 5 files allowed per upload.');
       return;
     }
 
-    if (file.size > 25 * 1024 * 1024) {
-      toast.error('File size exceeds the 25MB limit.');
-      return;
+    const validFiles: File[] = [];
+    for (const file of incoming) {
+      const lowerName = file.name.toLowerCase();
+      const isValid = validExts.some((ext) => lowerName.endsWith(ext));
+
+      if (!isValid) {
+        toast.error(`'${file.name}' is not supported. Use PDF, DOCX, PPTX, or TXT.`);
+        return;
+      }
+
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error(`'${file.name}' exceeds the 10 MB limit.`);
+        return;
+      }
+
+      validFiles.push(file);
     }
 
-    setSelectedFile(file);
+    setSelectedFiles((prev) => [...prev, ...validFiles].slice(0, 5));
     setErrorMsg(null);
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -100,68 +129,168 @@ export function ExamGeneratorModal({
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleFileSelect(e.dataTransfer.files[0]);
+      handleFilesSelect(e.dataTransfer.files);
     }
   };
 
   const handleStartGeneration = async () => {
-    if (!selectedFile && !pastedText.trim()) {
+    if (selectedFiles.length === 0 && !pastedText.trim()) {
       toast.error('Please upload a lesson document or paste lesson content.');
       return;
     }
 
     setErrorMsg(null);
+    setTruncationNotice(null);
     let extractedLessonText = pastedText.trim();
 
     try {
       // Step 1: Uploading
-      if (selectedFile) {
+      if (selectedFiles.length > 0) {
         setCurrentStep('uploading');
-        await new Promise((r) => setTimeout(r, 600));
+        await new Promise((r) => setTimeout(r, 400));
 
-        // Step 2: Extracting text
+        // Step 2: Extracting text on server
         setCurrentStep('extracting');
-        extractedLessonText = await extractTextFromFile(selectedFile);
+        const extractResult = await extractTextFromFiles(selectedFiles);
+        extractedLessonText = (extractResult.text + (extractedLessonText ? `\n\n${extractedLessonText}` : '')).trim();
+
+        if (extractResult.notice) {
+          setTruncationNotice(extractResult.notice);
+          toast.info(extractResult.notice);
+        }
 
         if (!extractedLessonText.trim()) {
-          throw new Error('Could not extract text from the uploaded document. Please check the file or paste text directly.');
+          throw new Error('This file has no readable text. Upload a text-based PDF, DOCX or PPTX.');
         }
       }
 
       // Step 3: Analyzing lesson coverage
       setCurrentStep('analyzing');
-      await new Promise((r) => setTimeout(r, 700));
+      await new Promise((r) => setTimeout(r, 400));
 
-      // Step 4: Generating questions
+      // Step 4: Generating questions in chunks (one per competency / max 10 items) (Requirement 5)
       setCurrentStep('generating');
 
-      const res = await fetch('/api/ai/generate-exam', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          assessmentId,
-          tosId,
-          lessonText: extractedLessonText,
-          targetItems: Number(targetItems) || 50,
-          tosRows,
-        }),
+      const allSlots = buildTosBlueprintSlots(tosRows, Number(targetItems) || 50);
+
+      // Group slots by competency, with at most 10 items per chunk
+      const compMap = new Map<string, TosBlueprintSlot[]>();
+      for (const slot of allSlots) {
+        const k = slot.competency_id || slot.competency_code || 'default';
+        if (!compMap.has(k)) compMap.set(k, []);
+        compMap.get(k)!.push(slot);
+      }
+
+      const chunks: TosBlueprintSlot[][] = [];
+      for (const group of compMap.values()) {
+        for (let i = 0; i < group.length; i += 10) {
+          chunks.push(group.slice(i, i + 10));
+        }
+      }
+
+      const totalChunks = chunks.length;
+      let completedChunks = 0;
+      setChunkProgress({
+        completed: 0,
+        total: totalChunks,
+        label: `0 of ${totalChunks} competencies done`,
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Exam generation request failed');
+      const collectedQuestions: ExamQuestion[] = [];
+      let lastSource = 'AI Engine';
+      let isDemo = false;
+      const failedSlots: number[] = [];
+
+      // Concurrency: 2 to 3 workers
+      const concurrency = Math.min(3, Math.max(1, totalChunks));
+      let chunkIdx = 0;
+
+      const runWorker = async () => {
+        while (chunkIdx < totalChunks) {
+          const currentChunkIdx = chunkIdx++;
+          const chunk = chunks[currentChunkIdx];
+
+          let success = false;
+          // Retry failed chunks up to 2 times (3 attempts total)
+          for (let attempt = 0; attempt <= 2; attempt++) {
+            try {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s per-chunk timeout
+
+              const res = await fetch('/api/ai/generate-exam', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  assessmentId,
+                  tosId,
+                  lessonText: extractedLessonText,
+                  targetItems: Number(targetItems) || 50,
+                  tosRows,
+                  slots: chunk,
+                  chunkIndex: currentChunkIdx,
+                  totalChunks,
+                }),
+                signal: controller.signal,
+              });
+
+              clearTimeout(timeoutId);
+
+              const data = await res.json();
+              if (res.ok && data.questions && Array.isArray(data.questions)) {
+                collectedQuestions.push(...data.questions);
+                if (data.source) lastSource = data.source;
+                if (data.isSampleDemo) isDemo = true;
+                success = true;
+                break;
+              } else if (res.status === 429) {
+                throw new Error(data.error || 'Rate limit exceeded');
+              }
+            } catch (chunkErr: any) {
+              if (chunkErr.message?.includes('Rate limit') || chunkErr.message?.includes('hourly limit')) {
+                throw chunkErr;
+              }
+            }
+          }
+
+          if (!success) {
+            chunk.forEach((s) => failedSlots.push(s.item_number));
+          }
+
+          completedChunks++;
+          setChunkProgress({
+            completed: completedChunks,
+            total: totalChunks,
+            label: `${completedChunks} of ${totalChunks} competencies done`,
+          });
+        }
+      };
+
+      const workers = Array.from({ length: concurrency }, () => runWorker());
+      await Promise.all(workers);
+
+      if (collectedQuestions.length === 0) {
+        throw new Error('The AI service is not available right now. Please try again later.');
       }
 
       // Step 5: Validating distribution
       setCurrentStep('validating');
-      await new Promise((r) => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 400));
 
       // Step 6: Done
       setCurrentStep('done');
-      await new Promise((r) => setTimeout(r, 400));
+      await new Promise((r) => setTimeout(r, 300));
 
-      toast.success(`Generated ${data.questions.length} questions matching the TOS blueprint.`);
-      onExamGenerated(data.questions, extractedLessonText);
+      const generatedSet = new Set(collectedQuestions.map((q) => q.item_number));
+      const missingNumbers = allSlots
+        .map((s) => s.item_number)
+        .filter((n) => !generatedSet.has(n));
+
+      toast.success(
+        `Generated ${collectedQuestions.length} questions matching the TOS blueprint.${
+          missingNumbers.length ? ` (${missingNumbers.length} items need regeneration)` : ''
+        }`
+      );
+      onExamGenerated(collectedQuestions, extractedLessonText, lastSource, missingNumbers, isDemo);
       onClose();
     } catch (err: any) {
       console.error('Exam generation failed:', err);
@@ -225,7 +354,9 @@ export function ExamGeneratorModal({
           <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4 dark:border-blue-900/40 dark:bg-blue-950/20 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-blue-900 dark:text-blue-300">
-                {STEP_LABELS[currentStep]}
+                {currentStep === 'generating' && chunkProgress
+                  ? `Generating questions: ${chunkProgress.label}`
+                  : STEP_LABELS[currentStep]}
               </span>
               <Loader2 className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />
             </div>
@@ -266,6 +397,13 @@ export function ExamGeneratorModal({
           </div>
         )}
 
+        {truncationNotice && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300 flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
+            <span>{truncationNotice}</span>
+          </div>
+        )}
+
         {/* Upload Dropzone (Disabled when generating) */}
         {!isGenerating && (
           <div className="space-y-4">
@@ -277,7 +415,7 @@ export function ExamGeneratorModal({
               className={`flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-2xl cursor-pointer transition text-center ${
                 isDragging
                   ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/20'
-                  : selectedFile
+                  : selectedFiles.length > 0
                   ? 'border-emerald-300 bg-emerald-50/30 dark:border-emerald-800'
                   : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
               }`}
@@ -285,41 +423,71 @@ export function ExamGeneratorModal({
               <input
                 ref={fileInputRef}
                 type="file"
+                multiple
                 accept=".pdf,.docx,.pptx,.txt,.md"
                 onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    handleFileSelect(e.target.files[0]);
+                  if (e.target.files && e.target.files.length > 0) {
+                    handleFilesSelect(e.target.files);
                   }
                 }}
                 className="hidden"
               />
 
-              {selectedFile ? (
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
-                    <FileText className="h-5 w-5" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-xs font-bold text-gray-900 dark:text-white truncate max-w-xs">
-                      {selectedFile.name}
-                    </p>
-                    <p className="text-[11px] text-gray-500">
-                      {(selectedFile.size / 1024).toFixed(1)} KB • Click to change file
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  <UploadCloud className="mx-auto h-8 w-8 text-blue-500" />
-                  <p className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                    Drop your lesson materials here, or <span className="text-blue-600 underline">browse</span>
-                  </p>
-                  <p className="text-[11px] text-gray-400">
-                    Supports PDF, DOCX, PPTX, or TXT (up to 25MB)
-                  </p>
-                </div>
-              )}
+              <div className="space-y-1.5">
+                <UploadCloud className="mx-auto h-8 w-8 text-blue-500" />
+                <p className="text-xs font-bold text-gray-800 dark:text-gray-200">
+                  Drop your lesson materials here, or <span className="text-blue-600 underline">browse</span>
+                </p>
+                <p className="text-[11px] text-gray-400">
+                  Supports PDF, DOCX, PPTX, or TXT (up to 5 files, max 10MB each)
+                </p>
+              </div>
             </div>
+
+            {/* Selected Files List */}
+            {selectedFiles.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-[11px] font-bold text-gray-700 dark:text-gray-300">
+                  <span>Selected Files ({selectedFiles.length}/5):</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedFiles([])}
+                    className="text-gray-400 hover:text-rose-500 transition text-[10px]"
+                  >
+                    Clear All
+                  </button>
+                </div>
+                <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                  {selectedFiles.map((file, idx) => (
+                    <div
+                      key={`${file.name}-${idx}`}
+                      className="flex items-center justify-between gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs dark:border-gray-800 dark:bg-gray-800/60"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="h-4 w-4 shrink-0 text-blue-600" />
+                        <span className="truncate text-xs text-gray-900 dark:text-white font-medium">
+                          {file.name}
+                        </span>
+                        <span className="shrink-0 text-[10px] text-gray-400">
+                          ({(file.size / 1024).toFixed(1)} KB)
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFile(idx);
+                        }}
+                        className="rounded p-1 text-gray-400 hover:text-rose-600 hover:bg-gray-200 dark:hover:bg-gray-700"
+                        title="Remove file"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Optional Paste Area */}
             <div>
@@ -361,7 +529,7 @@ export function ExamGeneratorModal({
           <button
             type="button"
             onClick={handleStartGeneration}
-            disabled={isGenerating || (!selectedFile && !pastedText.trim())}
+            disabled={isGenerating || (selectedFiles.length === 0 && !pastedText.trim())}
             className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 transition"
           >
             {isGenerating ? (

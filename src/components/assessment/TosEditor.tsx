@@ -122,6 +122,9 @@ export function TosEditor({
   const [isGeneratorModalOpen, setIsGeneratorModalOpen] = useState(false);
   const [generatedQuestions, setGeneratedQuestions] = useState<ExamQuestion[]>([]);
   const [lessonTextState, setLessonTextState] = useState('');
+  const [examSource, setExamSource] = useState<string>('');
+  const [examMissingItems, setExamMissingItems] = useState<number[]>([]);
+  const [isSampleDemoExam, setIsSampleDemoExam] = useState<boolean>(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isDiscardModalOpen, setIsDiscardModalOpen] = useState(false);
 
@@ -156,6 +159,7 @@ export function TosEditor({
   const [currentTosId, setCurrentTosId] = useState<string | null>(tosDocId || null);
   const [linkedAssessmentId, setLinkedAssessmentId] = useState<string | null>(assessmentId || null);
   const [isLinkedWarningModalOpen, setIsLinkedWarningModalOpen] = useState(false);
+  const [isZeroItemsWarningModalOpen, setIsZeroItemsWarningModalOpen] = useState(false);
   const [gradingPeriods, setGradingPeriods] = useState<Array<{ id: string; name: string; code: string }>>([]);
 
   // 1. Fetch real TOS document from Supabase
@@ -387,7 +391,7 @@ export function TosEditor({
     };
   }, [rows, displayRows, targetItems]);
 
-  const handleSaveTos = async () => {
+  const handleSaveTos = async (confirmedWarning: boolean = false) => {
     if (rows.length > 4) {
       toast.error('A TOS can have up to 4 learning competencies. Please reduce competencies to 4 before saving.');
       return;
@@ -403,6 +407,12 @@ export function TosEditor({
     }
     if (totals.totalAllocatedItems !== targetItems) {
       toast.error(`Allocated items (${totals.totalAllocatedItems}) must match target items (${targetItems}).`);
+      return;
+    }
+
+    const hasWarnings = (tosCalc.warnings && tosCalc.warnings.length > 0) || (tosCalc.zeroItemCompetencies && tosCalc.zeroItemCompetencies.length > 0);
+    if (!confirmedWarning && hasWarnings) {
+      setIsZeroItemsWarningModalOpen(true);
       return;
     }
 
@@ -818,7 +828,7 @@ export function TosEditor({
           {isEditing ? (
             <div className="flex items-center gap-2">
               <button
-                onClick={handleSaveTos}
+                onClick={() => handleSaveTos(false)}
                 disabled={saving || isOverCompetencyLimit}
                 className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-xs transition flex items-center gap-1.5 shrink-0"
               >
@@ -1196,6 +1206,21 @@ export function TosEditor({
               )}
             </div>
           </div>
+
+          {/* Allocation Warning Banner (Item 8) */}
+          {tosCalc.warnings && tosCalc.warnings.length > 0 && (
+            <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 p-3 sm:p-4 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2.5">
+              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <span className="font-bold text-amber-900 dark:text-amber-300">Table of Specifications Warnings:</span>
+                <ul className="list-disc pl-4 space-y-0.5">
+                  {tosCalc.warnings.map((warn, i) => (
+                    <li key={i}>{warn}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
 
           {/* Worksheet Matrix Table */}
           <div className="overflow-x-auto -mx-4 sm:mx-0">
@@ -1803,6 +1828,9 @@ export function TosEditor({
           strand={strand}
           teacherName={teacher}
           lessonText={lessonTextState}
+          generationSource={examSource}
+          missingItemNumbers={examMissingItems}
+          isSampleDemo={isSampleDemoExam}
           onQuestionsSaved={(updated) => {
             setGeneratedQuestions(updated);
             toast.success('Exam questions saved.');
@@ -1823,9 +1851,12 @@ export function TosEditor({
         targetItems={targetItems}
         tosRows={rows}
         subjectTitle={subject}
-        onExamGenerated={(questions, text) => {
+        onExamGenerated={(questions, text, source, missingItems, isSampleDemo) => {
           setGeneratedQuestions(questions);
           setLessonTextState(text);
+          if (source) setExamSource(source);
+          if (missingItems) setExamMissingItems(missingItems);
+          if (isSampleDemo !== undefined) setIsSampleDemoExam(isSampleDemo);
           setViewMode('exam');
         }}
       />
@@ -1947,6 +1978,25 @@ export function TosEditor({
         actionType="neutral"
         confirmLabel="Proceed to Edit"
         cancelLabel="Keep Current TOS"
+      />
+
+      {/* Competency Zero-Items / Allocation Warning Modal (Item 8) */}
+      <ConfirmationModal
+        isOpen={isZeroItemsWarningModalOpen}
+        onClose={() => setIsZeroItemsWarningModalOpen(false)}
+        onConfirm={() => {
+          setIsZeroItemsWarningModalOpen(false);
+          handleSaveTos(true);
+        }}
+        title="Competency Allocation Warning"
+        description={
+          (tosCalc.warnings && tosCalc.warnings.length > 0
+            ? tosCalc.warnings.join(' ') + ' '
+            : '') + 'Do you want to proceed and save this Table of Specifications anyway?'
+        }
+        actionType="neutral"
+        confirmLabel="Save Anyway"
+        cancelLabel="Review & Fix"
       />
     </div>
   );

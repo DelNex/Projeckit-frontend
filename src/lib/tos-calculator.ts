@@ -67,6 +67,8 @@ export interface TosCalculationResult {
   targetItems: number;
   isValid: boolean;
   validationError?: string;
+  warnings?: string[];
+  zeroItemCompetencies?: string[];
 }
 
 /**
@@ -203,6 +205,8 @@ export function calculateTos(
       targetItems: totalItems,
       isValid: false,
       validationError: validation.error,
+      warnings: [],
+      zeroItemCompetencies: [],
     };
   }
 
@@ -216,6 +220,8 @@ export function calculateTos(
       targetItems: totalItems,
       isValid: false,
       validationError: 'Total days taught must be greater than 0.',
+      warnings: [],
+      zeroItemCompetencies: [],
     };
   }
 
@@ -323,6 +329,21 @@ export function calculateTos(
 
   const totalAllocatedItems = rows.reduce((sum, r) => sum + r.itemCount, 0);
 
+  const warnings: string[] = [];
+  const zeroItemCompetencies: string[] = [];
+
+  if (totalItems < competencies.length) {
+    warnings.push(`Total items (${totalItems}) is less than the number of competencies (${competencies.length}).`);
+  }
+
+  rows.forEach((r, idx) => {
+    if (r.itemCount === 0) {
+      const compLabel = r.code || r.description || `Competency ${idx + 1}`;
+      warnings.push(`Competency ${compLabel} has no items.`);
+      zeroItemCompetencies.push(compLabel);
+    }
+  });
+
   return {
     rows,
     totalDays,
@@ -330,5 +351,7 @@ export function calculateTos(
     totalAllocatedItems,
     targetItems: totalItems,
     isValid: totalAllocatedItems === totalItems,
+    warnings,
+    zeroItemCompetencies,
   };
 }

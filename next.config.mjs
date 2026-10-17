@@ -13,6 +13,20 @@ const nextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: '/grades',
+        destination: '/tos',
+        permanent: false,
+      },
+      {
+        source: '/grades/:path*',
+        destination: '/tos',
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

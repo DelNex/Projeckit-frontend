@@ -16,6 +16,7 @@ import {
   Save,
   Trash2,
   Sparkles,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface ExamDraftEditorProps {
@@ -31,6 +32,9 @@ interface ExamDraftEditorProps {
   strand?: string;
   teacherName?: string;
   lessonText?: string;
+  generationSource?: string;
+  missingItemNumbers?: number[];
+  isSampleDemo?: boolean;
   onQuestionsSaved?: (questions: ExamQuestion[]) => void;
   onApproveSuccess?: () => void;
 }
@@ -57,6 +61,9 @@ export function ExamDraftEditor({
   strand,
   teacherName,
   lessonText = '',
+  generationSource,
+  missingItemNumbers = [],
+  isSampleDemo = false,
   onQuestionsSaved,
   onApproveSuccess,
 }: ExamDraftEditorProps) {
@@ -66,6 +73,19 @@ export function ExamDraftEditor({
   const [saving, setSaving] = useState(false);
   const [regeneratingItem, setRegeneratingItem] = useState<number | null>(null);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+
+  const isDemo = Boolean(
+    isSampleDemo ||
+    questions.some((q) => q.question?.includes('[SAMPLE - NOT FOR REAL USE]'))
+  );
+
+  const handleOpenPrintModal = () => {
+    if (isDemo) {
+      toast.error('Printing is disabled for demo sample questions.');
+      return;
+    }
+    setIsPrintModalOpen(true);
+  };
 
   // Field change handlers
   const handleUpdateQuestion = (index: number, field: keyof ExamQuestion, value: any) => {
@@ -159,6 +179,10 @@ export function ExamDraftEditor({
 
   // Approve and Apply to Answer Key
   const handleApprove = async () => {
+    if (isDemo) {
+      toast.error('Cannot approve demo sample questions. Real AI generation or manual questions required.');
+      return;
+    }
     setSaving(true);
     try {
       // 1. Send update to save questions and status
@@ -219,6 +243,39 @@ export function ExamDraftEditor({
 
   return (
     <div className="space-y-6">
+      {/* AI Review Banner & Source Indicator (Requirement 3) */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 rounded-2xl border border-blue-200 bg-blue-50/70 p-3.5 text-xs text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+          <span className="font-bold">AI-generated draft: review every question before approving</span>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap text-[11px]">
+          {generationSource && (
+            <span className="rounded-md bg-blue-100 dark:bg-blue-900/50 px-2 py-0.5 font-medium text-blue-800 dark:text-blue-300">
+              Source: {generationSource}
+            </span>
+          )}
+          {missingItemNumbers && missingItemNumbers.length > 0 && (
+            <span className="rounded-md bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300 px-2 py-0.5 font-bold">
+              {missingItemNumbers.length} item(s) need regeneration ({missingItemNumbers.map((n) => `#${n}`).join(', ')})
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Demo Sample Mode Banner (Requirement 2) */}
+      {isDemo && (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold text-amber-900 dark:text-amber-200">SAMPLE DRAFT — NOT FOR REAL USE</p>
+            <p className="mt-0.5 text-amber-800 dark:text-amber-300">
+              These sample items were generated in demo mode. Approval and printing are disabled for demo drafts. Configure an AI API key or provider URL to generate real exams.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Top Action Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-xs">
         <div>
@@ -247,8 +304,10 @@ export function ExamDraftEditor({
 
           <button
             type="button"
-            onClick={() => setIsPrintModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 transition"
+            onClick={handleOpenPrintModal}
+            disabled={isDemo}
+            title={isDemo ? 'Printing is disabled for demo sample questions' : 'Print Question Paper'}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Printer className="h-3.5 w-3.5" />
             <span>Print Question Paper</span>
@@ -267,8 +326,9 @@ export function ExamDraftEditor({
           <button
             type="button"
             onClick={handleApprove}
-            disabled={saving}
-            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 shadow-sm transition disabled:opacity-50"
+            disabled={saving || isDemo}
+            title={isDemo ? 'Approval is disabled for demo sample questions' : 'Approve & Apply to Answer Key'}
+            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 shadow-sm transition disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <CheckCircle2 className="h-3.5 w-3.5" />
             <span>Approve & Apply to Answer Key</span>

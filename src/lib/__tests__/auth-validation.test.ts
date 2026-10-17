@@ -41,4 +41,16 @@ describe('DepEd Registration Email Domain Restriction', () => {
       'Registration is restricted to official DepEd email addresses ending in @deped.gov.ph.'
     );
   });
+
+  it('supports configurable allowed domains list and formats error message accordingly', () => {
+    const customList = ['deped.gov.ph', 'customschool.edu.ph'];
+    assert.strictEqual(isValidDepEdEmail('teacher@customschool.edu.ph', customList), true);
+    assert.strictEqual(isValidDepEdEmail('teacher@deped.gov.ph', customList), true);
+    assert.strictEqual(isValidDepEdEmail('teacher@other.com', customList), false);
+
+    const { getRegistrationErrorMessage } = require('../auth-validation');
+    const msg = getRegistrationErrorMessage(customList);
+    assert.ok(msg.includes('@deped.gov.ph'));
+    assert.ok(msg.includes('@customschool.edu.ph'));
+  });
 });

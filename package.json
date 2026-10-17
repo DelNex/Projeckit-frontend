@@ -16,8 +16,11 @@
     "@supabase/supabase-js": "^2.49.1",
     "@tanstack/react-table": "^9.2.4",
     "clsx": "^2.1.1",
+    "jszip": "3.10.1",
     "lucide-react": "^0.475.0",
+    "mammoth": "1.8.0",
     "next": "^15.1.7",
+    "pdf-parse": "1.1.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^3.0.1"
