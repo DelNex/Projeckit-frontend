@@ -8,6 +8,7 @@
  */
 
 import { CanonicalOmrGeometry } from '../geometry/geometry-types';
+import { generateCode39Svg } from './barcode';
 
 export function escapeXml(str: unknown): string {
   return String(str ?? '')
@@ -18,8 +19,61 @@ export function escapeXml(str: unknown): string {
     .replace(/'/g, '&apos;');
 }
 
-export function renderOmrMasterSvg(geometry: CanonicalOmrGeometry): string {
+export interface VisibleHeaderFields {
+  learnerName?: boolean;
+  lrn?: boolean;
+  section?: boolean;
+  examDate?: boolean;
+  subject?: boolean;
+  term?: boolean;
+  assessmentTitle?: boolean;
+  teacherName?: boolean;
+  schoolName?: boolean;
+}
+
+export interface PersonalizedSheetData {
+  learnerName?: string;
+  lrn?: string;
+  section?: string;
+  examDate?: string;
+  subject?: string;
+  term?: string;
+  assessmentTitle?: string;
+  teacherName?: string;
+  schoolName?: string;
+  studentId?: string; // Random internal learner UUID (never the LRN)
+  rollNumber?: number; // 1..classSize
+  visibleFields?: VisibleHeaderFields;
+}
+
+export function renderOmrMasterSvg(
+  geometry: CanonicalOmrGeometry,
+  personalized?: PersonalizedSheetData
+): string {
   const { page, regions, config } = geometry;
+  const vf = personalized?.visibleFields || {};
+
+  const showSchool = vf.schoolName !== false;
+  const showLearner = vf.learnerName !== false;
+  const showLrn = vf.lrn !== false;
+  const showDate = vf.examDate !== false;
+  const showTeacher = vf.teacherName !== false;
+  const showSec = vf.section !== false;
+  const showSubj = vf.subject !== false;
+  const showTerm = vf.term !== false;
+  const showTitle = vf.assessmentTitle !== false;
+
+  const schoolDisplay = showSchool && personalized?.schoolName
+    ? personalized.schoolName
+    : 'PROJECT KIT — OMR ANSWER SHEET';
+
+  const titleDisplay = showTitle && personalized?.assessmentTitle
+    ? personalized.assessmentTitle
+    : config.title;
+
+  const subjDisplay = showSubj && personalized?.subject ? personalized.subject : config.subject;
+  const secDisplay = showSec && personalized?.section ? personalized.section : config.section;
+  const termDisplay = showTerm && personalized?.term ? personalized.term : config.term;
 
   let svgElements = '';
 
@@ -41,18 +95,47 @@ export function renderOmrMasterSvg(geometry: CanonicalOmrGeometry): string {
     // Render region-specific content
     if (region.type === 'STUDENT_INFO') {
       svgElements += `  <!-- Student Info Content -->\n`;
-      svgElements += `  <text x="${bounds.x + 20}" y="${bounds.y + 24}" font-family="sans-serif" font-size="12" font-weight="900" fill="#111827">PROJECT KIT — OMR ANSWER SHEET</text>\n`;
-      svgElements += `  <text x="${bounds.x + 20}" y="${bounds.y + 42}" font-family="sans-serif" font-size="9" font-weight="bold" fill="#374151">EXAM: ${escapeXml(config.title)}</text>\n`;
-      svgElements += `  <text x="${bounds.x + 20}" y="${bounds.y + 58}" font-family="sans-serif" font-size="8.5" fill="#4B5563">SUBJ / SEC: ${escapeXml(config.subject)} | ${escapeXml(config.section)}</text>\n`;
-      svgElements += `  <text x="${bounds.x + 20}" y="${bounds.y + 74}" font-family="sans-serif" font-size="8.5" fill="#4B5563">TERM / SY: ${escapeXml(config.term)} | ${escapeXml(config.schoolYear)}</text>\n`;
-      svgElements += `  <text x="${bounds.x + 20}" y="${bounds.y + 90}" font-family="sans-serif" font-size="8.5" font-weight="bold" fill="#1F2937">TEMPLATE ID: <tspan font-family="monospace">${escapeXml(geometry.templateId)}</tspan></text>\n`;
+      svgElements += `  <text x="${bounds.x + 20}" y="${bounds.y + 24}" font-family="sans-serif" font-size="${schoolDisplay.length > 30 ? 9.5 : 11}" font-weight="900" fill="#111827">${escapeXml(schoolDisplay.toUpperCase())}</text>\n`;
+      svgElements += `  <text x="${bounds.x + 20}" y="${bounds.y + 40}" font-family="sans-serif" font-size="9" font-weight="bold" fill="#374151">EXAM: ${escapeXml(titleDisplay)}</text>\n`;
+      svgElements += `  <text x="${bounds.x + 20}" y="${bounds.y + 55}" font-family="sans-serif" font-size="8.5" fill="#4B5563">SUBJ / SEC: ${escapeXml(subjDisplay)} | ${escapeXml(secDisplay)}</text>\n`;
+      svgElements += `  <text x="${bounds.x + 20}" y="${bounds.y + 70}" font-family="sans-serif" font-size="8.5" fill="#4B5563">TERM / SY: ${escapeXml(termDisplay)} | ${escapeXml(config.schoolYear)}</text>\n`;
+
+      if (personalized?.teacherName && showTeacher) {
+        svgElements += `  <text x="${bounds.x + 20}" y="${bounds.y + 85}" font-family="sans-serif" font-size="8" fill="#4B5563">TEACHER: ${escapeXml(personalized.teacherName)}</text>\n`;
+      } else {
+        svgElements += `  <text x="${bounds.x + 20}" y="${bounds.y + 85}" font-family="sans-serif" font-size="8" font-weight="bold" fill="#1F2937">TEMPLATE ID: <tspan font-family="monospace">${escapeXml(geometry.templateId)}</tspan></text>\n`;
+      }
+
+      // Barcode / Machine-Readable Identifier (Clean zone on right of STUDENT_INFO)
+      if (personalized?.studentId) {
+        // Encode clean Code 39 token: A<shortAssessment>-S<shortStudent>
+        const cleanA = geometry.assessmentId.replace(/[^0-9A-Fa-f]/g, '').slice(0, 6).toUpperCase();
+        const cleanS = personalized.studentId.replace(/[^0-9A-Fa-f]/g, '').slice(0, 6).toUpperCase();
+        const barcodeCode = `K${cleanA}-${cleanS}`;
+        const barcodeSvg = generateCode39Svg(barcodeCode, {
+          x: bounds.x + 225,
+          y: bounds.y + 36,
+          height: 32,
+          narrowBarWidth: 0.7,
+          wideBarRatio: 2.3,
+          showText: true,
+        });
+        svgElements += barcodeSvg;
+      }
 
       // Student Name line
-      svgElements += `  <text x="${bounds.x + 20}" y="${bounds.y + 118}" font-family="sans-serif" font-size="8.5" font-weight="bold" fill="#111827">STUDENT NAME:</text>\n`;
-      svgElements += `  <line x1="${bounds.x + 100}" y1="${bounds.y + 120}" x2="${bounds.x + bounds.width - 25}" y2="${bounds.y + 120}" stroke="#000000" stroke-width="1"/>\n`;
+      if (personalized?.learnerName && showLearner) {
+        const lrnPart = personalized.lrn && showLrn ? ` (LRN: ${escapeXml(personalized.lrn)})` : '';
+        svgElements += `  <text x="${bounds.x + 20}" y="${bounds.y + 118}" font-family="sans-serif" font-size="8.5" font-weight="bold" fill="#111827">STUDENT: <tspan font-weight="900" fill="#1D4ED8">${escapeXml(personalized.learnerName.toUpperCase())}</tspan><tspan font-size="8" fill="#4B5563">${lrnPart}</tspan></text>\n`;
+        svgElements += `  <line x1="${bounds.x + 20}" y1="${bounds.y + 124}" x2="${bounds.x + bounds.width - 25}" y2="${bounds.y + 124}" stroke="#CBD5E1" stroke-width="0.75"/>\n`;
+      } else {
+        svgElements += `  <text x="${bounds.x + 20}" y="${bounds.y + 118}" font-family="sans-serif" font-size="8.5" font-weight="bold" fill="#111827">STUDENT NAME:</text>\n`;
+        svgElements += `  <line x1="${bounds.x + 100}" y1="${bounds.y + 120}" x2="${bounds.x + bounds.width - 25}" y2="${bounds.y + 120}" stroke="#000000" stroke-width="1"/>\n`;
+      }
 
       // Date / Score line
-      svgElements += `  <text x="${bounds.x + 20}" y="${bounds.y + 142}" font-family="sans-serif" font-size="8" fill="#4B5563">DATE: _______________</text>\n`;
+      const dateText = personalized?.examDate && showDate ? personalized.examDate : '_______________';
+      svgElements += `  <text x="${bounds.x + 20}" y="${bounds.y + 142}" font-family="sans-serif" font-size="8" fill="#4B5563">DATE: ${escapeXml(dateText)}</text>\n`;
       svgElements += `  <text x="${bounds.x + 180}" y="${bounds.y + 142}" font-family="sans-serif" font-size="8" font-weight="bold" fill="#111827">SCORE: ________ / ${config.itemCount}</text>\n`;
     } else if (region.type === 'ROLL_NUMBER') {
       svgElements += `  <!-- Roll Number Grid Header -->\n`;
@@ -77,8 +160,12 @@ export function renderOmrMasterSvg(geometry: CanonicalOmrGeometry): string {
       // Render valid Roll Number bubbles
       if (region.rollNumberTargets) {
         for (const target of region.rollNumberTargets) {
-          svgElements += `  <circle cx="${target.canonicalCenter.x}" cy="${target.canonicalCenter.y}" r="${target.radius}" fill="#FFFFFF" stroke="#000000" stroke-width="1"/>\n`;
-          svgElements += `  <text x="${target.canonicalCenter.x}" y="${target.canonicalCenter.y + 2.5}" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#374151">${target.col}</text>\n`;
+          const isPreShaded = personalized?.rollNumber != null && target.rollNumber === personalized.rollNumber;
+          const bubbleFill = isPreShaded ? '#000000' : '#FFFFFF';
+          const textFill = isPreShaded ? '#FFFFFF' : '#374151';
+
+          svgElements += `  <circle cx="${target.canonicalCenter.x}" cy="${target.canonicalCenter.y}" r="${target.radius}" fill="${bubbleFill}" stroke="#000000" stroke-width="1"/>\n`;
+          svgElements += `  <text x="${target.canonicalCenter.x}" y="${target.canonicalCenter.y + 2.5}" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="${textFill}">${target.col}</text>\n`;
         }
       }
     } else if (region.type === 'ANSWER_BLOCK') {
@@ -106,7 +193,11 @@ export function renderOmrMasterSvg(geometry: CanonicalOmrGeometry): string {
     }
   }
 
-  return `<svg width="${page.width}" height="${page.height}" viewBox="0 0 ${page.width} ${page.height}" fill="none" xmlns="http://www.w3.org/2000/svg" class="omr-master-svg">
+  const extraAttrs = personalized?.studentId
+    ? ` data-assessment-id="${escapeXml(geometry.assessmentId)}" data-student-id="${escapeXml(personalized.studentId)}"`
+    : '';
+
+  return `<svg width="${page.width}" height="${page.height}" viewBox="0 0 ${page.width} ${page.height}" fill="none" xmlns="http://www.w3.org/2000/svg" class="omr-master-svg"${extraAttrs}>
   <!-- Outer Page Surface -->
   <rect width="${page.width}" height="${page.height}" fill="#FFFFFF"/>
 
@@ -115,4 +206,3 @@ export function renderOmrMasterSvg(geometry: CanonicalOmrGeometry): string {
 
 ${svgElements}</svg>`;
 }
-

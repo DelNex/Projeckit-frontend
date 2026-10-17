@@ -7,7 +7,11 @@ import { friendlyError } from '@/lib/errors';
 import { createClient } from '@/lib/supabase/client';
 import {
     ArrowUpRight,
+    CheckCircle2,
+    ExternalLink,
+    FileSpreadsheet,
     Filter,
+    Link2,
     Loader2,
     Plus,
     RefreshCw,
@@ -15,7 +19,9 @@ import {
     X
 } from 'lucide-react';
 import Link from 'next/link';
-import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { getPhilippineSchoolYear } from '@/lib/academic-calendar';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
 
 interface AssessmentRecord {
   id: string;
@@ -29,8 +35,22 @@ interface AssessmentRecord {
   passing_mps: number;
   status: string;
   created_at: string;
+  tos_id?: string | null;
   subjects?: { id: string; code: string; title: string } | null;
   sections?: { id: string; name: string; grade: string } | null;
+}
+
+interface TosOptionItem {
+  id: string;
+  subject: string;
+  term: string;
+  school_year: string;
+  target_items: number;
+  status: string;
+  grade?: string;
+  strand?: string;
+  section?: string;
+  assessment_id?: string | null;
 }
 
 interface OptionItem {
@@ -38,8 +58,9 @@ interface OptionItem {
   name: string;
 }
 
-export default function AssessmentsPage() {
+function AssessmentsContent() {
   const { toast } = useToast();
+  const searchParams = useSearchParams();
   const [assessments, setAssessments] = useState<AssessmentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +71,21 @@ export default function AssessmentsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [subjectsList, setSubjectsList] = useState<OptionItem[]>([]);
   const [sectionsList, setSectionsList] = useState<OptionItem[]>([]);
+  const [availableTosList, setAvailableTosList] = useState<TosOptionItem[]>([]);
+  const [selectedTosId, setSelectedTosId] = useState<string>('');
+
+  // Link TOS Modal State for legacy assessments
+  const [linkTosModal, setLinkTosModal] = useState<{
+    isOpen: boolean;
+    assessment: AssessmentRecord | null;
+    selectedTosId: string;
+    saving: boolean;
+  }>({
+    isOpen: false,
+    assessment: null,
+    selectedTosId: '',
+    saving: false,
+  });
 
   // Form State
   const [newTitle, setNewTitle] = useState('');
@@ -57,8 +93,8 @@ export default function AssessmentsPage() {
   const [newSectionId, setNewSectionId] = useState('');
   const [newTargetItems, setNewTargetItems] = useState(50);
   const [newClassSize, setNewClassSize] = useState(50);
-  const [newTerm, setNewTerm] = useState('1st Quarter');
-  const [newSchoolYear, setNewSchoolYear] = useState('2025-2026');
+  const [newTerm, setNewTerm] = useState('1st Term');
+  const [newSchoolYear, setNewSchoolYear] = useState(() => getPhilippineSchoolYear());
   const [newPassingMps, setNewPassingMps] = useState(60.0);
   const [gradingPeriodsList, setGradingPeriodsList] = useState<
     Array<{ id: string; name: string; code: string; is_current: boolean }>
@@ -84,6 +120,7 @@ export default function AssessmentsPage() {
           passing_mps,
           status,
           created_at,
+          tos_id,
           subjects ( id, code, title ),
           sections ( id, name, grade )
         `)
@@ -99,9 +136,28 @@ export default function AssessmentsPage() {
     }
   };
 
+  const handleSelectTos = (tosId: string, currentSubjects = subjectsList, currentTosList = availableTosList) => {
+    setSelectedTosId(tosId);
+    const found = currentTosList.find((t) => t.id === tosId);
+    if (found) {
+      setNewTitle(`${found.subject} Examination`);
+      setNewTerm(found.term);
+      setNewSchoolYear(found.school_year);
+      setNewTargetItems(found.target_items);
+      const matchedSubj = currentSubjects.find(
+        (s) =>
+          s.name.toLowerCase().includes(found.subject.toLowerCase()) ||
+          found.subject.toLowerCase().includes(s.name.toLowerCase())
+      );
+      if (matchedSubj) {
+        setNewSubjectId(matchedSubj.id);
+      }
+    }
+  };
+
   const fetchDropdownOptions = async () => {
     try {
-      const [subjRes, secRes, gpRes] = await Promise.all([
+      const [subjRes, secRes, gpRes, tosRes] = await Promise.all([
         supabase.from('subjects').select('id, code, title'),
         supabase.from('sections').select('id, name'),
         (supabase as any)
@@ -109,17 +165,21 @@ export default function AssessmentsPage() {
           .select('id, name, code, is_current')
           .eq('is_archived', false)
           .order('position', { ascending: true }),
+        (supabase as any)
+          .from('tos_documents')
+          .select('id, subject, term, school_year, target_items, status, grade, strand, section, assessment_id')
+          .order('created_at', { ascending: false }),
       ]);
 
+      let formattedSubjects: OptionItem[] = [];
       if (subjRes.data) {
-        setSubjectsList(
-          subjRes.data.map((s) => ({
-            id: s.id,
-            name: `${s.code} - ${s.title}`,
-          }))
-        );
-        if (subjRes.data.length > 0 && !newSubjectId) {
-          setNewSubjectId(subjRes.data[0].id);
+        formattedSubjects = subjRes.data.map((s) => ({
+          id: s.id,
+          name: `${s.code} - ${s.title}`,
+        }));
+        setSubjectsList(formattedSubjects);
+        if (formattedSubjects.length > 0 && !newSubjectId) {
+          setNewSubjectId(formattedSubjects[0].id);
         }
       }
 
@@ -139,6 +199,17 @@ export default function AssessmentsPage() {
           setNewTerm(gpRes.data[0].name);
         }
       }
+
+      const fetchedTos = (tosRes?.data as TosOptionItem[]) || [];
+      setAvailableTosList(fetchedTos);
+
+      // Handle query param tos_id if present
+      const initialTosId = searchParams.get('tos_id');
+      if (initialTosId && fetchedTos.some((t) => t.id === initialTosId)) {
+        handleSelectTos(initialTosId, formattedSubjects, fetchedTos);
+      } else if (fetchedTos.length > 0 && !selectedTosId) {
+        handleSelectTos(fetchedTos[0].id, formattedSubjects, fetchedTos);
+      }
     } catch (e) {
       console.warn('Error fetching dropdown options:', e);
     }
@@ -149,9 +220,55 @@ export default function AssessmentsPage() {
     fetchDropdownOptions();
   }, []);
 
+  useEffect(() => {
+    if (searchParams.get('new') === 'true') {
+      setIsCreateModalOpen(true);
+      const tosParam = searchParams.get('tos_id');
+      if (tosParam) {
+        handleSelectTos(tosParam);
+      }
+    }
+  }, [searchParams, availableTosList]);
+
+  const handleConfirmLinkTos = async () => {
+    if (!linkTosModal.assessment || !linkTosModal.selectedTosId) return;
+    setLinkTosModal((prev) => ({ ...prev, saving: true }));
+    try {
+      const { error: updErr } = await (supabase as any)
+        .from('assessments')
+        .update({ tos_id: linkTosModal.selectedTosId })
+        .eq('id', linkTosModal.assessment.id);
+
+      if (updErr) throw updErr;
+
+      await (supabase as any)
+        .from('tos_documents')
+        .update({ assessment_id: linkTosModal.assessment.id })
+        .eq('id', linkTosModal.selectedTosId);
+
+      toast.success('Table of Specifications linked successfully!');
+      setLinkTosModal({ isOpen: false, assessment: null, selectedTosId: '', saving: false });
+      await fetchAssessments();
+    } catch (e: any) {
+      console.error('Failed to link TOS:', e);
+      toast.error(friendlyError(e, 'Failed to link Table of Specifications.'));
+      setLinkTosModal((prev) => ({ ...prev, saving: false }));
+    }
+  };
+
   const handleCreateAssessment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
+
+    if (availableTosList.length === 0) {
+      toast.error('A Table of Specifications is required before creating an assessment.');
+      return;
+    }
+
+    if (!selectedTosId) {
+      toast.error('Please select a Table of Specifications blueprint.');
+      return;
+    }
 
     if (gradingPeriodsList.length === 0) {
       toast.error('No active terms configured. Please configure grading periods in School Settings first.');
@@ -190,6 +307,7 @@ export default function AssessmentsPage() {
         .insert({
           tenant_id: tenantId,
           config_id: configId,
+          tos_id: selectedTosId || null,
           title: newTitle.trim(),
           subject_id: newSubjectId,
           section_id: newSectionId,
@@ -213,8 +331,16 @@ export default function AssessmentsPage() {
           tenant_id: tenantId,
           answers: {},
         });
+
+        // Link back to tos_documents if not already linked
+        await (supabase as any)
+          .from('tos_documents')
+          .update({ assessment_id: created.id })
+          .eq('id', selectedTosId)
+          .is('assessment_id', null);
       }
 
+      toast.success('Assessment created and anchored on TOS.');
       setIsCreateModalOpen(false);
       setNewTitle('');
       await fetchAssessments();
@@ -323,13 +449,47 @@ export default function AssessmentsPage() {
           const a = row.original;
           return (
             <div>
-              <Link
-                href={`/assessments/${a.id}`}
-                onClick={(e) => e.stopPropagation()}
-                className="font-bold text-gray-900 hover:text-blue-600 dark:text-white dark:hover:text-blue-400 transition"
-              >
-                {a.title}
-              </Link>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Link
+                  href={`/assessments/${a.id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="font-bold text-gray-900 hover:text-blue-600 dark:text-white dark:hover:text-blue-400 transition"
+                >
+                  {a.title}
+                </Link>
+                {a.tos_id ? (
+                  <Link
+                    href="/tos"
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 transition"
+                    title="Anchored on Table of Specifications"
+                  >
+                    <CheckCircle2 className="h-3 w-3" />
+                    <span>TOS Linked</span>
+                  </Link>
+                ) : (
+                  <div className="inline-flex items-center gap-1.5">
+                    <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                      No TOS linked
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLinkTosModal({
+                          isOpen: true,
+                          assessment: a,
+                          selectedTosId: availableTosList.length > 0 ? availableTosList[0].id : '',
+                          saving: false,
+                        });
+                      }}
+                      className="text-[10px] font-bold text-blue-600 hover:underline dark:text-blue-400"
+                    >
+                      Link TOS
+                    </button>
+                  </div>
+                )}
+              </div>
               <p className="text-[11px] text-gray-400 font-mono mt-0.5">
                 {a.school_year} • {a.term}
               </p>
@@ -431,8 +591,10 @@ export default function AssessmentsPage() {
         },
       },
     ],
-    []
+    [availableTosList]
   );
+
+  const selectedTos = availableTosList.find((t) => t.id === selectedTosId);
 
   return (
     <div className="space-y-6 min-w-0">
@@ -514,165 +676,284 @@ export default function AssessmentsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleCreateAssessment} className="space-y-4 pt-4 text-xs">
-              <div>
-                <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
-                  Assessment Title
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Midterm Examination in General Mathematics"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
-                    Subject
-                  </label>
-                  <select
-                    required
-                    value={newSubjectId}
-                    onChange={(e) => setNewSubjectId(e.target.value)}
-                    className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
+            {availableTosList.length === 0 ? (
+              <div className="text-center py-6 space-y-4">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                  <FileSpreadsheet className="h-6 w-6" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-white">
+                    Table of Specifications (TOS) Required
+                  </h4>
+                  <p className="text-xs text-gray-500 max-w-sm mx-auto">
+                    Every assessment requires a finished Table of Specifications first. Please define competencies and test blueprint in the TOS workspace before creating an assessment.
+                  </p>
+                </div>
+                <div className="pt-2">
+                  <Link
+                    href="/tos"
+                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700 transition"
                   >
-                    {subjectsList.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
-                    Section
-                  </label>
-                  <select
-                    required
-                    value={newSectionId}
-                    onChange={(e) => setNewSectionId(e.target.value)}
-                    className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
-                  >
-                    {sectionsList.map((sec) => (
-                      <option key={sec.id} value={sec.id}>{sec.name}</option>
-                    ))}
-                  </select>
+                    <Plus className="h-4 w-4" />
+                    <span>Create a Table of Specifications first</span>
+                  </Link>
                 </div>
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            ) : (
+              <form onSubmit={handleCreateAssessment} className="space-y-4 pt-4 text-xs">
                 <div>
-                  <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
-                    Target Items (10–90)
-                  </label>
-                  <input
-                    type="number"
-                    min={10}
-                    max={90}
-                    required
-                    value={newTargetItems}
-                    onChange={(e) => setNewTargetItems(Number(e.target.value))}
-                    className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
-                    Class Size / Roll (1–70)
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={70}
-                    required
-                    value={newClassSize}
-                    onChange={(e) => setNewClassSize(Number(e.target.value))}
-                    className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
-                    Term
-                  </label>
-                  {gradingPeriodsList.length > 0 ? (
-                    <select
-                      value={newTerm}
-                      onChange={(e) => setNewTerm(e.target.value)}
-                      className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-gray-700 dark:text-gray-300">
+                      Select Table of Specifications (TOS) <span className="text-red-500">*</span>
+                    </label>
+                    <Link
+                      href="/tos"
+                      className="text-[11px] font-semibold text-blue-600 hover:underline inline-flex items-center gap-0.5 dark:text-blue-400"
                     >
-                      {gradingPeriodsList.map((gp) => (
-                        <option key={gp.id} value={gp.name}>
-                          {gp.name} ({gp.code})
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-2.5 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300 flex items-center justify-between">
-                      <span>No active terms configured.</span>
-                      <Link
-                        href="/settings/school"
-                        className="font-bold underline text-blue-600 hover:text-blue-800 dark:text-blue-400"
-                      >
-                        Configure in School Settings &rarr;
-                      </Link>
-                    </div>
-                  )}
+                      <span>TOS Workspace</span>
+                      <ExternalLink className="h-3 w-3" />
+                    </Link>
+                  </div>
+                  <select
+                    required
+                    value={selectedTosId}
+                    onChange={(e) => handleSelectTos(e.target.value)}
+                    className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                  >
+                    <option value="">-- Choose an existing TOS blueprint --</option>
+                    {availableTosList.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.subject} ({t.term} · {t.school_year} · {t.target_items} items)
+                      </option>
+                    ))}
+                  </select>
                 </div>
+
+                {selectedTos && (
+                  <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50/80 p-2.5 text-xs text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                      <span>
+                        Linked to TOS: <strong className="font-semibold">{selectedTos.subject}</strong>
+                      </span>
+                    </div>
+                    <Link
+                      href="/tos"
+                      target="_blank"
+                      className="font-bold underline text-blue-600 hover:text-blue-800 dark:text-blue-400 inline-flex items-center gap-1"
+                    >
+                      <span>View TOS</span>
+                      <ExternalLink className="h-3 w-3" />
+                    </Link>
+                  </div>
+                )}
 
                 <div>
                   <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
-                    School Year
+                    Assessment Title <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     required
-                    value={newSchoolYear}
-                    onChange={(e) => setNewSchoolYear(e.target.value)}
+                    placeholder="e.g. Midterm Examination in General Mathematics"
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
                     className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
                   />
                 </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                      Subject (Inherited from TOS)
+                    </label>
+                    <input
+                      type="text"
+                      readOnly
+                      disabled
+                      value={selectedTos ? selectedTos.subject : (subjectsList.find((s) => s.id === newSubjectId)?.name || 'Select TOS first')}
+                      className="h-10 w-full rounded-xl border border-gray-200 bg-gray-100 px-3 text-xs text-gray-600 cursor-not-allowed dark:border-gray-800 dark:bg-gray-800/60 dark:text-gray-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                      Section <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      required
+                      value={newSectionId}
+                      onChange={(e) => setNewSectionId(e.target.value)}
+                      className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                    >
+                      {sectionsList.map((sec) => (
+                        <option key={sec.id} value={sec.id}>{sec.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                      Target Items (Inherited from TOS)
+                    </label>
+                    <input
+                      type="number"
+                      readOnly
+                      disabled
+                      value={newTargetItems}
+                      className="h-10 w-full rounded-xl border border-gray-200 bg-gray-100 px-3 text-xs text-gray-600 cursor-not-allowed dark:border-gray-800 dark:bg-gray-800/60 dark:text-gray-400 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                      Class Size / Roll (1–70)
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={70}
+                      required
+                      value={newClassSize}
+                      onChange={(e) => setNewClassSize(Number(e.target.value))}
+                      className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                      Term (Inherited from TOS)
+                    </label>
+                    <input
+                      type="text"
+                      readOnly
+                      disabled
+                      value={newTerm}
+                      className="h-10 w-full rounded-xl border border-gray-200 bg-gray-100 px-3 text-xs text-gray-600 cursor-not-allowed dark:border-gray-800 dark:bg-gray-800/60 dark:text-gray-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                      School Year (Inherited from TOS)
+                    </label>
+                    <input
+                      type="text"
+                      readOnly
+                      disabled
+                      value={newSchoolYear}
+                      className="h-10 w-full rounded-xl border border-gray-200 bg-gray-100 px-3 text-xs text-gray-600 cursor-not-allowed dark:border-gray-800 dark:bg-gray-800/60 dark:text-gray-400 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
+                      Passing MPS (%)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min={0}
+                      max={100}
+                      required
+                      value={newPassingMps}
+                      onChange={(e) => setNewPassingMps(Number(e.target.value))}
+                      className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-100 dark:border-gray-800">
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateModalOpen(false)}
+                    className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-gray-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting || !selectedTosId}
+                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                    <span>{submitting ? 'Creating...' : 'Save Assessment'}</span>
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Link TOS Modal Dialog for unlinked assessments */}
+      {linkTosModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-gray-900 space-y-4">
+            <div className="border-b border-gray-100 dark:border-gray-800 pb-3">
+              <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <Link2 className="h-5 w-5 text-blue-600" />
+                Link Table of Specifications
+              </h3>
+              <p className="text-xs text-gray-500 mt-1">
+                Attach a finished Table of Specifications to &quot;{linkTosModal.assessment?.title}&quot;.
+              </p>
+            </div>
+
+            {availableTosList.length === 0 ? (
+              <div className="text-center py-4 space-y-3">
+                <p className="text-xs text-gray-500">No available Table of Specifications documents found.</p>
+                <Link
+                  href="/tos"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-bold"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Create a TOS First</span>
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-4 text-xs">
                 <div>
                   <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
-                    Passing MPS (%)
+                    Select TOS Document
                   </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min={0}
-                    max={100}
-                    required
-                    value={newPassingMps}
-                    onChange={(e) => setNewPassingMps(Number(e.target.value))}
-                    className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
-                  />
+                  <select
+                    value={linkTosModal.selectedTosId}
+                    onChange={(e) => setLinkTosModal((prev) => ({ ...prev, selectedTosId: e.target.value }))}
+                    className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+                  >
+                    {availableTosList.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.subject} ({t.term} · {t.school_year} · {t.target_items} items)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+                  <button
+                    type="button"
+                    onClick={() => setLinkTosModal({ isOpen: false, assessment: null, selectedTosId: '', saving: false })}
+                    className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={linkTosModal.saving || !linkTosModal.selectedTosId}
+                    onClick={handleConfirmLinkTos}
+                    className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {linkTosModal.saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                    <span>{linkTosModal.saving ? 'Linking...' : 'Link TOS'}</span>
+                  </button>
                 </div>
               </div>
-
-              <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-100 dark:border-gray-800">
-                <button
-                  type="button"
-                  onClick={() => setIsCreateModalOpen(false)}
-                  className="rounded-xl border border-gray-200 px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:text-gray-300 dark:hover:bg-gray-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                  <span>{submitting ? 'Creating...' : 'Save Assessment'}</span>
-                </button>
-              </div>
-            </form>
+            )}
           </div>
         </div>
       )}
@@ -693,5 +974,20 @@ export default function AssessmentsPage() {
         isLoading={deleteModal.isLoading}
       />
     </div>
+  );
+}
+
+export default function AssessmentsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-2" />
+          <span className="text-xs">Loading assessments workspace...</span>
+        </div>
+      }
+    >
+      <AssessmentsContent />
+    </Suspense>
   );
 }

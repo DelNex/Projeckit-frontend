@@ -67,6 +67,50 @@ export function OmrCameraModal({
 
   if (!isOpen) return null;
 
+  const tryDetectBarcodeFromBlob = async (
+    blob: Blob
+  ): Promise<{ studentId?: string; assessmentId?: string } | null> => {
+    if (typeof window === 'undefined') return null;
+
+    // 1. Try native BarcodeDetector API if supported (Chrome 83+, Edge 83+, Android)
+    if ('BarcodeDetector' in window) {
+      try {
+        const BarcodeDetectorClass = (window as any).BarcodeDetector;
+        const detector = new BarcodeDetectorClass({ formats: ['code_39', 'code_128', 'qr_code'] });
+        const bitmap = await createImageBitmap(blob);
+        const detected = await detector.detect(bitmap);
+        if (detected && detected.length > 0) {
+          for (const item of detected) {
+            const raw = item.rawValue || '';
+            const m = raw.match(/K([0-9A-F]+)-([0-9A-F]+)/i) || raw.match(/KIT:([a-z0-9-]+):([a-z0-9-]+)/i);
+            if (m) {
+              return { assessmentId: m[1], studentId: m[2] };
+            }
+          }
+        }
+      } catch {}
+    }
+
+    // 2. SVG direct detection
+    if (blob.type === 'image/svg+xml' || (blob as any).name?.endsWith('.svg')) {
+      try {
+        const text = await blob.text();
+        const matchS = text.match(/data-student-id="([^"]+)"/);
+        const matchA = text.match(/data-assessment-id="([^"]+)"/);
+        const matchBarcode = text.match(/data-code="([^"]+)"/);
+        if (matchS) {
+          return { studentId: matchS[1], assessmentId: matchA?.[1] };
+        }
+        if (matchBarcode) {
+          const m = matchBarcode[1].match(/K([0-9A-F]+)-([0-9A-F]+)/i);
+          if (m) return { assessmentId: m[1], studentId: m[2] };
+        }
+      } catch {}
+    }
+
+    return null;
+  };
+
   const handleCapture = async () => {
     setIsProcessing(true);
     setErrorMessage(null);
@@ -79,9 +123,14 @@ export function OmrCameraModal({
       setCapturedBlob(blob);
       stopCamera();
 
-      const result = await processOmrScan(blob, template, {
-        assessmentId,
-      });
+      const [result, barcodeData] = await Promise.all([
+        processOmrScan(blob, template, { assessmentId }),
+        tryDetectBarcodeFromBlob(blob),
+      ]);
+
+      if (barcodeData?.studentId) {
+        result.detectedStudentId = barcodeData.studentId;
+      }
 
       setCurrentResult(result);
       if (onScanComplete) onScanComplete(result);
@@ -103,9 +152,14 @@ export function OmrCameraModal({
       setCapturedBlob(file);
       stopCamera();
 
-      const result = await processOmrScan(file, template, {
-        assessmentId,
-      });
+      const [result, barcodeData] = await Promise.all([
+        processOmrScan(file, template, { assessmentId }),
+        tryDetectBarcodeFromBlob(file),
+      ]);
+
+      if (barcodeData?.studentId) {
+        result.detectedStudentId = barcodeData.studentId;
+      }
 
       setCurrentResult(result);
       if (onScanComplete) onScanComplete(result);
@@ -233,12 +287,21 @@ export function OmrCameraModal({
               <div className="grid grid-cols-2 gap-2 sm:gap-3 text-xs">
                 {mode !== 'answer_key' && (
                   <div className="rounded-xl bg-gray-800/40 p-3 border border-gray-800">
-                    <span className="text-gray-400 text-[11px]">Student Roll No:</span>
+                    <span className="text-gray-400 text-[11px]">Learner Match:</span>
                     <p className="mt-0.5 font-mono font-bold text-white truncate">
-                      {currentResult.detectedRollNumber !== null
-                        ? `#${currentResult.detectedRollNumber}`
-                        : currentResult.detectedStudentLrn || 'Blank'}
+                      {currentResult.detectedStudentId ? (
+                        <span className="text-emerald-400">Barcode ID Matched</span>
+                      ) : currentResult.detectedRollNumber !== null ? (
+                        `Roll #${currentResult.detectedRollNumber}`
+                      ) : (
+                        currentResult.detectedStudentLrn || 'Unassigned'
+                      )}
                     </p>
+                    {currentResult.detectedStudentId && currentResult.detectedRollNumber !== null && (
+                      <p className="text-[10px] text-gray-400 font-mono mt-0.5">
+                        Roll: #{currentResult.detectedRollNumber}
+                      </p>
+                    )}
                   </div>
                 )}
                 <div className="rounded-xl bg-gray-800/40 p-3 border border-gray-800">

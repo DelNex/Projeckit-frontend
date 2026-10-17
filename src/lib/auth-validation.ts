@@ -1,20 +1,20 @@
 /**
  * Project KIT — DepEd Account & Email Domain Validation
- * Enforces strict registration restrictions: only @deped.com.ph addresses are permitted.
+ * Enforces strict registration restrictions: only @deped.gov.ph addresses are permitted.
  */
 
-export const ALLOWED_DEPED_DOMAIN = '@deped.com.ph';
+export const ALLOWED_DEPED_DOMAIN = '@deped.gov.ph';
 
 export const DEPED_REGISTRATION_ERROR_MESSAGE =
-  'Registration is restricted to official DepEd email addresses ending in @deped.com.ph.';
+  'Registration is restricted to official DepEd email addresses ending in @deped.gov.ph.';
 
 /**
- * Validates whether an email is an official DepEd email ending in @deped.com.ph.
+ * Validates whether an email is an official DepEd email ending in @deped.gov.ph.
  * 
  * Rules:
  * - Must be a non-empty string.
  * - Must have a valid local part (letters, numbers, dots, hyphens, plus, underscores).
- * - Domain must strictly be deped.com.ph (case-insensitive).
+ * - Domain must strictly be deped.gov.ph (case-insensitive).
  * 
  * @param email - The email address to validate.
  * @returns boolean - true if allowed, false otherwise.
@@ -26,8 +26,8 @@ export function isValidDepEdEmail(email?: string | null): boolean {
 
   const clean = email.trim().toLowerCase();
   
-  // Strict regex matching: [local-part]@deped.com.ph
-  const depedRegex = /^[a-zA-Z0-9._%+-]+@deped\.com\.ph$/i;
+  // Strict regex matching: [local-part]@deped.gov.ph
+  const depedRegex = /^[a-zA-Z0-9._%+-]+@deped\.gov\.ph$/i;
   
   return depedRegex.test(clean);
 }

@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'Project KIT — DepEd Academic Assessment System',
     short_name: 'Project KIT',
-    description: 'Automated DepEd Optical Mark Recognition (OMR), Table of Specifications (TOS), and E-Class Record grading system for Capas Senior High School.',
+    description: 'Automated DepEd Optical Mark Recognition (OMR), Table of Specifications (TOS), and academic assessment system.',
     start_url: '/',
     display: 'standalone',
     background_color: '#030712',

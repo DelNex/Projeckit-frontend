@@ -15,6 +15,13 @@ import {
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useTenant } from '@/context/TenantContext';
+import { friendlyError } from '@/lib/errors';
+import {
+  exportReportToPdf,
+  exportReportToExcel,
+  generateAssessmentReportData,
+} from '@/lib/reports-generator';
 
 type TabKey = 'sectional' | 'longitudinal' | 'cognitive' | 'item-analysis' | 'reports';
 
@@ -82,6 +89,7 @@ function getAssessmentPeriodPosition(termName: string, periods: GradingPeriodInf
 }
 
 function AnalyticsContent() {
+  const { tenantName } = useTenant();
   const supabase = createClient();
   const searchParams = useSearchParams();
   const initialTab = (searchParams?.get('tab') as TabKey) || 'sectional';
@@ -89,6 +97,9 @@ function AnalyticsContent() {
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   // Raw Database Entities
   const [sections, setSections] = useState<SectionItem[]>([]);
@@ -244,8 +255,10 @@ function AnalyticsContent() {
         }
       });
       setTosDocuments(tosMap);
+      setLastUpdated(new Date());
     } catch (err: any) {
       console.error('Failed to load analytics data:', err);
+      setError(friendlyError(err, 'Could not load academic analytics data.'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -710,6 +723,59 @@ function AnalyticsContent() {
     return consolidatedReportsData.some((r) => r.scannedStudents > 0);
   }, [consolidatedReportsData]);
 
+  const handleExportPdf = async () => {
+    try {
+      setExporting(true);
+      const targetId = selectedAssessmentId || (assessments.length > 0 ? assessments[0].id : null);
+      if (activeTab === 'reports' || !targetId) {
+        window.print();
+        return;
+      }
+      const report = await generateAssessmentReportData(targetId, { tenantName });
+      exportReportToPdf(report);
+    } catch (err: any) {
+      alert('Could not export PDF report: ' + (err.message || 'Unknown error'));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    try {
+      setExporting(true);
+      const targetId = selectedAssessmentId || (assessments.length > 0 ? assessments[0].id : null);
+      if (activeTab === 'reports' || !targetId) {
+        const rows: string[] = [];
+        rows.push(`"${tenantName || 'Department of Education'}"`);
+        rows.push('"CONSOLIDATED DEPED ACADEMIC MASTERY REPORT"');
+        rows.push(`"School Year: ${selectedSchoolYear === 'all' ? '2025–2026' : selectedSchoolYear}"`);
+        rows.push(`"Date: ${new Date().toLocaleDateString()}"`);
+        rows.push('');
+        rows.push('"Section Name","Enrolled Students","Scanned Students","Mean Score (X̄)","Standard Deviation (S)","Mean Percentage Score (MPS %)","Outstanding Count","Did Not Meet Count"');
+        consolidatedReportsData.forEach((r) => {
+          rows.push(`"${r.sectionName}",${r.enrolledStudents},${r.scannedStudents},${r.meanScore !== null ? r.meanScore.toFixed(1) : '—'},${r.standardDeviation !== null ? r.standardDeviation.toFixed(2) : '—'},${r.mps !== null ? r.mps.toFixed(1) + '%' : '—'},${r.outstandingCount},${r.didNotMeetCount}`);
+        });
+        const csvContent = '\uFEFF' + rows.join('\r\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Consolidated_Report_${selectedSchoolYear}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        return;
+      }
+      const report = await generateAssessmentReportData(targetId, { tenantName });
+      exportReportToExcel(report);
+    } catch (err: any) {
+      alert('Could not export Excel report: ' + (err.message || 'Unknown error'));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-96 flex flex-col items-center justify-center gap-3">
@@ -721,6 +787,18 @@ function AnalyticsContent() {
 
   return (
     <div className="space-y-4 pb-6 min-w-0">
+      {error && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300 flex items-center justify-between">
+          <span>{error}</span>
+          <button
+            onClick={loadData}
+            className="inline-flex items-center gap-1 font-bold underline hover:text-red-900"
+          >
+            <RefreshCw className="h-3.5 w-3.5" /> Retry
+          </button>
+        </div>
+      )}
+
       {/* Page Header & Scope Selector Bar (Matching Legacy Frontend) */}
       <div className="p-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-gray-100 dark:border-gray-800 pb-3">
@@ -730,7 +808,12 @@ function AnalyticsContent() {
               Compare achievement across classes and school years aligned with DepEd standards
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {lastUpdated && (
+              <span className="text-[11px] text-gray-500 dark:text-gray-400 font-mono hidden sm:inline mr-1">
+                Last updated: {lastUpdated.toLocaleTimeString()}
+              </span>
+            )}
             <button
               onClick={handleRefresh}
               disabled={refreshing}
@@ -739,15 +822,24 @@ function AnalyticsContent() {
               <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-blue-600' : ''}`} />
               Refresh
             </button>
-            {activeTab === 'reports' && (
-              <button
-                onClick={() => window.print()}
-                className="px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-xs transition flex items-center gap-1.5 print:hidden"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                Print Report
-              </button>
-            )}
+            <button
+              onClick={handleExportPdf}
+              disabled={exporting}
+              className="px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-xs transition flex items-center gap-1.5 print:hidden"
+              title="One-click PDF Export"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              Export PDF
+            </button>
+            <button
+              onClick={handleExportExcel}
+              disabled={exporting}
+              className="px-3.5 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/60 shadow-xs transition flex items-center gap-1.5 print:hidden"
+              title="One-click Excel / CSV Export"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              Export Excel
+            </button>
           </div>
         </div>
 
@@ -1319,16 +1411,16 @@ function AnalyticsContent() {
       {/* Tab 5: Consolidated DepEd Reports */}
       {activeTab === 'reports' && (
         <div className="space-y-4">
-          {/* Official Capas SHS DepEd Header Banner */}
+          {/* Official DepEd Header Banner */}
           <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 text-center space-y-2">
             <h2 className="text-[11px] font-bold tracking-widest text-gray-500 uppercase dark:text-gray-400">
-              Department of Education — Region III — Division of Tarlac Province
+              Department of Education — Republic of the Philippines
             </h2>
-            <h3 className="text-base font-black text-blue-600 dark:text-blue-400">
-              CAPAS SENIOR HIGH SCHOOL
+            <h3 className="text-base font-black uppercase text-blue-600 dark:text-blue-400">
+              {tenantName || 'OFFICIAL DEPED ACADEMIC REPORT'}
             </h3>
             <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-              Quarterly Knowledge Insight Tool (KIT) Consolidated Academic Performance Report
+              Knowledge Insight Tool (KIT) Consolidated Academic Performance Report
             </p>
             <div className="mt-3 flex flex-wrap items-center justify-center gap-6 border-t border-gray-100 pt-3 text-xs text-gray-500 dark:border-gray-800 dark:text-gray-400">
               <div><strong>School Year:</strong> {selectedSchoolYear === 'all' ? '2025–2026' : selectedSchoolYear}</div>

@@ -12,11 +12,11 @@
   <rect id="STUDENT_INFO.BL" x="40" y="181" width="14" height="14" fill="#000000"/>
   <rect id="STUDENT_INFO.BR" x="376" y="181" width="14" height="14" fill="#000000"/>
   <!-- Student Info Content -->
-  <text x="60" y="59" font-family="sans-serif" font-size="12" font-weight="900" fill="#111827">PROJECT KIT — OMR ANSWER SHEET</text>
-  <text x="60" y="77" font-family="sans-serif" font-size="9" font-weight="bold" fill="#374151">EXAM: Quarterly Assessment Examination</text>
-  <text x="60" y="93" font-family="sans-serif" font-size="8.5" fill="#4B5563">SUBJ / SEC: General Subject | General Section</text>
-  <text x="60" y="109" font-family="sans-serif" font-size="8.5" fill="#4B5563">TERM / SY: 1st Quarter | 2025–2026</text>
-  <text x="60" y="125" font-family="sans-serif" font-size="8.5" font-weight="bold" fill="#1F2937">TEMPLATE ID: <tspan font-family="monospace">tpl-test-multi-roll-20-60</tspan></text>
+  <text x="60" y="59" font-family="sans-serif" font-size="11" font-weight="900" fill="#111827">PROJECT KIT — OMR ANSWER SHEET</text>
+  <text x="60" y="75" font-family="sans-serif" font-size="9" font-weight="bold" fill="#374151">EXAM: Quarterly Assessment Examination</text>
+  <text x="60" y="90" font-family="sans-serif" font-size="8.5" fill="#4B5563">SUBJ / SEC: General Subject | General Section</text>
+  <text x="60" y="105" font-family="sans-serif" font-size="8.5" fill="#4B5563">TERM / SY: 1st Quarter | 2025–2026</text>
+  <text x="60" y="120" font-family="sans-serif" font-size="8" font-weight="bold" fill="#1F2937">TEMPLATE ID: <tspan font-family="monospace">tpl-test-multi-roll-20-60</tspan></text>
   <text x="60" y="153" font-family="sans-serif" font-size="8.5" font-weight="bold" fill="#111827">STUDENT NAME:</text>
   <line x1="140" y1="155" x2="365" y2="155" stroke="#000000" stroke-width="1"/>
   <text x="60" y="177" font-family="sans-serif" font-size="8" fill="#4B5563">DATE: _______________</text>

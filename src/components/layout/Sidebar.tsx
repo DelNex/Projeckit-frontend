@@ -22,6 +22,7 @@ import {
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 
+import { useTenant } from '@/context/TenantContext';
 import { useEffect, useState } from 'react';
 
 interface SidebarProps {
@@ -35,6 +36,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
   const searchParams = useSearchParams();
   const currentTab = searchParams ? searchParams.get('tab') : null;
   const supabase = createClient();
+  const { tenantName, isLoading: tenantLoading } = useTenant();
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
 
   useEffect(() => {
@@ -73,8 +75,8 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
     {
       group: 'ACADEMIC WORKFLOW',
       items: [
-        { name: 'Assessments Workspace', href: '/assessments', icon: BookOpen },
         { name: 'Table of Specifications', href: '/tos', icon: FileSpreadsheet },
+        { name: 'Assessments Workspace', href: '/assessments', icon: BookOpen },
         { name: 'Learners Roster', href: '/students', icon: Users },
       ],
     },
@@ -151,8 +153,8 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
               <span className="text-base font-bold text-gray-900 dark:text-white leading-tight">
                 {isAdminMode ? 'Admin Console' : 'Project KIT'}
               </span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                Capas Senior High
+              <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[150px]" title={tenantName || 'Academic Portal'}>
+                {tenantLoading ? 'Loading school...' : (tenantName || 'Academic Portal')}
               </span>
             </div>
           </Link>

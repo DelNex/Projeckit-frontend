@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { useTenant } from '@/context/TenantContext';
 
 interface AssessmentItem {
   id: string;
@@ -56,6 +57,7 @@ const TIER_CONFIG = [
 ];
 
 export default function DashboardPage() {
+  const { tenantName } = useTenant();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -417,8 +419,8 @@ export default function DashboardPage() {
             Academic Performance Dashboard
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            Quarterly performance, learning competencies, and psychometrics —{' '}
-            <span className="font-semibold text-gray-700 dark:text-gray-300">Capas Senior High School</span>
+            Academic performance, learning competencies, and psychometrics —{' '}
+            <span className="font-semibold text-gray-700 dark:text-gray-300">{tenantName || 'Academic Portal'}</span>
           </p>
         </div>
 
@@ -434,11 +436,11 @@ export default function DashboardPage() {
           </button>
 
           <Link
-            href="/assessments"
+            href="/tos"
             className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-sm transition"
           >
             <Plus className="w-4 h-4" />
-            <span>Create Assessment</span>
+            <span>Create TOS First</span>
           </Link>
         </div>
       </div>
@@ -901,7 +903,7 @@ export default function DashboardPage() {
               Recent Assessment Operations
             </h2>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Latest parsed gradebook scans and computational runs
+              Latest parsed answer sheet scans and computational runs
             </p>
           </div>
           <Link
@@ -923,14 +925,14 @@ export default function DashboardPage() {
             <BookOpen className="h-10 w-10 text-gray-300 dark:text-gray-600 mb-2" />
             <p className="text-sm font-bold text-gray-800 dark:text-gray-200">No assessments found</p>
             <p className="text-xs text-gray-400 max-w-sm mt-1 mb-4">
-              Get started by creating an assessment with customizable question counts and dynamic OMR answer sheets.
+              Get started by creating a Table of Specifications (TOS) first to define learning competencies and days taught before generating exams.
             </p>
             <Link
-              href="/assessments"
+              href="/tos"
               className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
             >
               <Plus className="h-4 w-4" />
-              <span>Create First Assessment</span>
+              <span>Create Table of Specifications First</span>
             </Link>
           </div>
         ) : (

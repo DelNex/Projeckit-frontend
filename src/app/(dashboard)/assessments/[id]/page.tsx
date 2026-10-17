@@ -1,7 +1,9 @@
 'use client';
 
-import { TermGradebook } from '@/components/assessment/TermGradebook';
 import { TosEditor } from '@/components/assessment/TosEditor';
+import { ConfirmationModal } from '@/components/ui/confirmation-modal';
+import { useToast } from '@/components/ui/toast';
+import { useTenant } from '@/context/TenantContext';
 import {
     createKitOmrTemplate,
     generateCanonicalGeometry,
@@ -9,14 +11,11 @@ import {
     OmrPrintModal,
     OmrScanResult,
 } from '@/features/omr';
-import { createClient } from '@/lib/supabase/client';
-import { ConfirmationModal } from '@/components/ui/confirmation-modal';
-import { useToast } from '@/components/ui/toast';
 import { friendlyError } from '@/lib/errors';
+import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import {
     ArrowLeft,
-    Award,
     BarChart3,
     Camera,
     CheckCircle2,
@@ -49,9 +48,12 @@ export default function AssessmentWorkspacePage({
   const router = useRouter();
   const { toast } = useToast();
 
-  const activeTab = searchParams.get('tab') || 'tos';
+  const rawTab = searchParams.get('tab') || 'tos';
+  const activeTab = rawTab === 'grades' ? 'tos' : rawTab;
   const assessmentId = resolvedParams.id;
 
+  const { tenantName } = useTenant();
+  const [currentTeacherName, setCurrentTeacherName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savingKey, setSavingKey] = useState(false);
@@ -219,7 +221,7 @@ export default function AssessmentWorkspacePage({
 
       if (tData) setTosDoc(tData);
 
-      // 5. Fetch Students Roster (for Roll number matching and Gradebook, excluding archived)
+      // 5. Fetch Students Roster (for Roll number matching, excluding archived)
       const { data: stdData, error: stdErr } = await (supabase as any)
         .from('students')
         .select('id, name, lrn, section_name, is_archived')
@@ -245,6 +247,16 @@ export default function AssessmentWorkspacePage({
 
       if (rData) setResponsesList(rData);
 
+      // 7. Fetch current teacher's name
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: prof } = await (supabase as any)
+          .from('profiles')
+          .select('display_name')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (prof?.display_name) setCurrentTeacherName(prof.display_name);
+      }
     } catch (err: any) {
       console.error('Failed to load assessment details:', err);
       setError(friendlyError(err, 'Failed to load assessment details'));
@@ -372,23 +384,55 @@ export default function AssessmentWorkspacePage({
         throw new Error('Your account is not linked to a school tenant.');
       }
       const tenantId = profile.tenant_id;
-
       const scanStatus = result.status;
 
-      // Match student from class roster by detected Roll Number or LRN
+      // Match student from class roster by detected Barcode ID (primary), Roll Number (fallback), or LRN
       const sectionStudents = studentsList.filter((s) =>
         assessment.section ? s.section_name?.toLowerCase() === assessment.section.toLowerCase() : true
       );
       const activeRoster = sectionStudents.length > 0 ? sectionStudents : studentsList;
 
-      let matchedStudent: any = null;
+      // 1. Identify student from barcode (primary)
+      let barcodeMatchedStudent: any = null;
+      if (result.detectedStudentId) {
+        barcodeMatchedStudent = activeRoster.find(
+          (s) =>
+            s.id === result.detectedStudentId ||
+            s.id.replace(/[^0-9A-Fa-f]/g, '').slice(0, 6).toUpperCase() ===
+              result.detectedStudentId?.toUpperCase()
+        );
+      }
+
+      // 2. Identify student from roll number (fallback)
+      let rollMatchedStudent: any = null;
       if (
         result.detectedRollNumber &&
         result.detectedRollNumber > 0 &&
         result.detectedRollNumber <= activeRoster.length
       ) {
-        matchedStudent = activeRoster[result.detectedRollNumber - 1];
-      } else if (result.detectedStudentLrn) {
+        rollMatchedStudent = activeRoster[result.detectedRollNumber - 1];
+      }
+
+      // 3. Conflict resolution & fallback
+      let matchedStudent: any = null;
+      let hasConflict = false;
+
+      if (barcodeMatchedStudent && rollMatchedStudent) {
+        if (barcodeMatchedStudent.id !== rollMatchedStudent.id) {
+          hasConflict = true;
+          console.warn(
+            `[OMR Conflict] Barcode matched ${barcodeMatchedStudent.name} (${barcodeMatchedStudent.id}) but Roll #${result.detectedRollNumber} matched ${rollMatchedStudent.name} (${rollMatchedStudent.id})`
+          );
+          toast.error(
+            `Conflict detected: Barcode says "${barcodeMatchedStudent.name}" but Roll #${result.detectedRollNumber} is "${rollMatchedStudent.name}". Please verify!`
+          );
+        }
+        matchedStudent = barcodeMatchedStudent;
+      } else {
+        matchedStudent = barcodeMatchedStudent || rollMatchedStudent;
+      }
+
+      if (!matchedStudent && result.detectedStudentLrn) {
         matchedStudent = activeRoster.find((s) => s.lrn === result.detectedStudentLrn);
       }
 
@@ -411,7 +455,7 @@ export default function AssessmentWorkspacePage({
           confidence: result.overallConfidence,
           raw_answers: result.rawAnswers,
           normalized_answers: result.normalizedAnswers,
-          status: scanStatus,
+          status: hasConflict ? 'VERIFICATION_REQUIRED' : scanStatus,
           detected_roll_number: result.detectedRollNumber,
         });
 
@@ -428,11 +472,13 @@ export default function AssessmentWorkspacePage({
           score,
           total_items: itemCount,
           percentage,
-          status: 'GRADED',
+          status: hasConflict ? 'VERIFICATION_REQUIRED' : 'GRADED',
           raw_response: result.normalizedAnswers,
           audit_trail: {
             studentName: matchedStudent?.name || (result.detectedRollNumber ? `Roll #${result.detectedRollNumber}` : 'Unassigned Learner'),
             detectedRoll: result.detectedRollNumber,
+            detectedBarcodeStudentId: result.detectedStudentId || null,
+            rollConflict: hasConflict,
             confidence: result.overallConfidence,
             term: assessment.term,
           },
@@ -771,6 +817,14 @@ export default function AssessmentWorkspacePage({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => handleTabChange('tos')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs shadow-xs transition"
+          >
+            <Sparkles className="h-3.5 w-3.5 text-blue-200" />
+            <span>Generate Exam</span>
+          </button>
           <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
             {assessment.status}
           </span>
@@ -807,7 +861,6 @@ export default function AssessmentWorkspacePage({
             { id: 'key', label: '2. Answer Key & Scoring', icon: KeyRound },
             { id: 'scan', label: '3. Attendance & OMR Scan', icon: Camera },
             { id: 'results', label: '4. Evaluation & Results', icon: BarChart3 },
-            { id: 'grades', label: '5. Term Gradebook', icon: Award },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -1513,21 +1566,6 @@ export default function AssessmentWorkspacePage({
               </div>
             </div>
           )}
-
-          {/* Tab 5: DepEd E-Class Record & Term Gradebook */}
-          {activeTab === 'grades' && (
-            <TermGradebook
-              assessmentId={assessmentId}
-              assessmentTitle={assessment.title}
-              subjectTitle={assessment.subject}
-              sectionName={assessment.section}
-              schoolYear={assessment.schoolYear}
-              initialTerm={assessment.term}
-              targetItems={itemCount}
-              scannedResponses={responsesList}
-              onScoresSaved={() => loadAssessmentData()}
-            />
-          )}
         </div>
       )}
 
@@ -1537,6 +1575,17 @@ export default function AssessmentWorkspacePage({
           isOpen={isPrintModalOpen}
           onClose={() => setIsPrintModalOpen(false)}
           geometry={canonicalGeometry}
+          students={studentsList}
+          assessment={{
+            id: assessmentId,
+            title: assessment.title,
+            subject: assessment.subject,
+            section: assessment.section,
+            term: assessment.term,
+            school_year: assessment.schoolYear,
+          }}
+          teacherName={currentTeacherName}
+          schoolName={tenantName}
         />
       )}
 

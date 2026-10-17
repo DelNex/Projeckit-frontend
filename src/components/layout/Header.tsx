@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { Suspense, useEffect, useState } from 'react';
+import { useTenant } from '@/context/TenantContext';
 import { ThemeToggle } from './ThemeToggle';
 
 interface HeaderProps {
@@ -23,32 +24,8 @@ interface HeaderProps {
 export function Header({ onToggleSidebar, title }: HeaderProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
-  const [userProfile, setUserProfile] = useState<{ displayName: string; role: string; email: string } | null>(null);
+  const { tenantName, userDisplayName, userRole, userEmail } = useTenant();
   const supabase = createClient();
-
-  useEffect(() => {
-    async function loadProfile() {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('display_name, role, email')
-            .eq('id', user.id)
-            .maybeSingle();
-
-          setUserProfile({
-            displayName: profile?.display_name || user.email?.split('@')[0] || 'User',
-            role: (profile?.role || 'teacher').toUpperCase(),
-            email: user.email || '',
-          });
-        }
-      } catch (err) {
-        // Fallback gracefully
-      }
-    }
-    loadProfile();
-  }, [supabase]);
 
   // Global keyboard shortcut: Ctrl+J or Cmd+J to toggle AI Copilot
   useEffect(() => {
@@ -67,7 +44,7 @@ export function Header({ onToggleSidebar, title }: HeaderProps) {
     window.location.href = '/login';
   };
 
-  const initial = userProfile?.displayName ? userProfile.displayName.charAt(0).toUpperCase() : 'U';
+  const initial = userDisplayName ? userDisplayName.charAt(0).toUpperCase() : 'U';
 
   return (
     <>
@@ -128,10 +105,10 @@ export function Header({ onToggleSidebar, title }: HeaderProps) {
               </div>
               <div className="hidden text-left sm:block">
                 <p className="truncate max-w-[120px] text-xs font-semibold text-gray-900 dark:text-white leading-tight">
-                  {userProfile?.displayName || 'Account'}
+                  {userDisplayName || 'Account'}
                 </p>
-                <p className="text-[11px] text-gray-400 leading-tight">
-                  {userProfile?.role || 'Teacher'}
+                <p className="text-[11px] text-gray-400 leading-tight truncate max-w-[120px]" title={tenantName}>
+                  {tenantName || (userRole ? userRole.toUpperCase() : 'Teacher')}
                 </p>
               </div>
               <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
@@ -147,10 +124,10 @@ export function Header({ onToggleSidebar, title }: HeaderProps) {
                 <div className="absolute right-0 mt-2 w-48 rounded-2xl border border-gray-200 bg-white p-1.5 shadow-xl dark:border-gray-800 dark:bg-gray-900 z-50">
                   <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-800 mb-1 sm:hidden">
                     <p className="text-xs font-bold text-gray-900 dark:text-white truncate">
-                      {userProfile?.displayName || 'Account'}
+                      {userDisplayName || 'Account'}
                     </p>
                     <p className="text-[10px] text-gray-400 truncate">
-                      {userProfile?.email}
+                      {userEmail}
                     </p>
                   </div>
                   <Link

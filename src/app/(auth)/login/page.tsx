@@ -123,7 +123,7 @@ export default function LoginPage() {
             Welcome to Project KIT
           </h2>
           <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-            Capas Senior High School Assessment &amp; Academic Analytics
+            Assessment &amp; Academic Analytics
           </p>
         </div>
 
@@ -163,7 +163,7 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="teacher@school.edu.ph"
+              placeholder="teacher@deped.gov.ph"
               className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-blue-600 focus:bg-white focus:ring-2 focus:ring-blue-600/20 dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:border-blue-500 dark:focus:bg-gray-800"
             />
           </div>

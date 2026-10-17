@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { NavigationProgress } from '@/components/layout/NavigationProgress';
 import { ToastProvider } from '@/components/ui/toast';
+import { TenantProvider } from '@/context/TenantContext';
 import { Suspense } from 'react';
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://projectkit.deped.gov.ph';
@@ -10,19 +11,17 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
     default: 'Project KIT — DepEd Academic Assessment & Automated OMR Grading System',
-    template: '%s | Project KIT — Capas Senior High School',
+    template: '%s | Project KIT — Assessment & Academic Analytics',
   },
   description:
-    'Project KIT is the official automated academic assessment and analytics platform for Capas Senior High School (DepEd Region III). Features high-precision camera OMR answer sheet scanning, automated item analysis, Table of Specifications (TOS) generator, and DepEd Order No. 8, s. 2015 compliant E-Class Record electronic grade computation.',
+    'Project KIT is the official automated academic assessment and analytics platform for Philippine DepEd institutions. Features high-precision camera OMR answer sheet scanning, automated item analysis, Table of Specifications (TOS) generator, and DepEd Order No. 8, s. 2015 compliant grading.',
   applicationName: 'Project KIT',
   authors: [
-    { name: 'Capas Senior High School' },
-    { name: 'Department of Education — Schools Division of Tarlac Province' },
+    { name: 'Department of Education — Republic of the Philippines' },
   ],
   generator: 'Next.js',
   keywords: [
     'Project KIT',
-    'Capas Senior High School',
     'DepEd',
     'Department of Education',
     'DepEd OMR',
@@ -39,10 +38,8 @@ export const metadata: Metadata = {
     'item analysis table',
     'deped grading calculator',
     'written works performance tasks quarterly assessment',
-    'Tarlac DepEd',
-    'Region III Central Luzon',
   ],
-  creator: 'Capas Senior High School ICT & Faculty',
+  creator: 'Project KIT ICT & Faculty',
   publisher: 'Department of Education — Republic of the Philippines',
   category: 'Education / Academic Assessment Software',
   classification: 'Educational Assessment & Grading Platform',
@@ -57,7 +54,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Project KIT — DepEd Academic Assessment & Automated OMR Grading System',
     description:
-      'Official academic assessment platform for Capas Senior High School. High-precision camera OMR scanning, automated item analysis, Table of Specifications (TOS), and DepEd E-Class Record grading.',
+      'Official academic assessment platform. High-precision camera OMR scanning, automated item analysis, Table of Specifications (TOS), and DepEd Order No. 8 compliant grading.',
     url: siteUrl,
     siteName: 'Project KIT',
     locale: 'en_PH',
@@ -67,7 +64,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Project KIT — DepEd Academic Assessment System',
     description:
-      'High-precision camera OMR scanning, TOS generator, and DepEd E-Class Record grading for Capas Senior High School.',
+      'High-precision camera OMR scanning, TOS generator, and DepEd academic analytics.',
   },
   robots: {
     index: true,
@@ -119,7 +116,7 @@ const jsonLdData = {
       '@id': `${siteUrl}/#website`,
       url: siteUrl,
       name: 'Project KIT',
-      description: 'DepEd Academic Assessment System & Automated OMR Grading Platform for Capas Senior High School',
+      description: 'DepEd Academic Assessment System & Automated OMR Grading Platform',
       publisher: {
         '@id': `${siteUrl}/#organization`,
       },
@@ -128,18 +125,12 @@ const jsonLdData = {
     {
       '@type': 'EducationalOrganization',
       '@id': `${siteUrl}/#organization`,
-      name: 'Capas Senior High School',
-      alternateName: 'Project KIT — Capas SHS',
+      name: 'Department of Education — Republic of the Philippines',
+      alternateName: 'Project KIT',
       url: siteUrl,
       department: {
         '@type': 'GovernmentOrganization',
         name: 'Department of Education — Republic of the Philippines',
-      },
-      address: {
-        '@type': 'PostalAddress',
-        addressLocality: 'Capas',
-        addressRegion: 'Tarlac',
-        addressCountry: 'PH',
       },
     },
     {
@@ -149,7 +140,7 @@ const jsonLdData = {
       operatingSystem: 'Web, Android, iOS, Windows, macOS, Linux',
       applicationCategory: 'EducationalApplication',
       description:
-        'Automated real-time OMR test sheet scanner, Table of Specifications (TOS) generator, psychometric item analysis, and DepEd Order No. 8, s. 2015 E-Class Record calculator.',
+        'Automated real-time OMR test sheet scanner, Table of Specifications (TOS) generator, psychometric item analysis, and DepEd Order No. 8, s. 2015 grading calculator.',
       offers: {
         '@type': 'Offer',
         price: '0',
@@ -194,7 +185,9 @@ export default function RootLayout({
         <Suspense fallback={null}>
           <NavigationProgress />
         </Suspense>
-        <ToastProvider>{children}</ToastProvider>
+        <ToastProvider>
+          <TenantProvider>{children}</TenantProvider>
+        </ToastProvider>
       </body>
     </html>
   );

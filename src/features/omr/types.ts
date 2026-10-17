@@ -21,6 +21,13 @@ export interface OmrScanResult {
   detectedForm: string; // e.g. "SINGLE" or template name
   detectedStudentLrn: string | null; // 12-digit Learner Reference Number (optional/legacy)
   detectedRollNumber: number | null; // 1..classSize Roll Number detected from 7x10 grid
+  detectedStudentId?: string | null; // Random internal learner ID detected from barcode
+  rollConflict?: boolean; // Flagged if barcode learner and roll number learner disagree
+  conflictDetails?: {
+    barcodeStudentId?: string | null;
+    rollStudentId?: string | null;
+    message?: string;
+  };
   detectedAssessmentId: string | null;
   overallConfidence: number; // 0.0 to 1.0
   fiducialDetected: boolean;

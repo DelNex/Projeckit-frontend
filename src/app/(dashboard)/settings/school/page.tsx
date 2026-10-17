@@ -40,6 +40,8 @@ import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { useToast } from '@/components/ui/toast';
 import { friendlyError } from '@/lib/errors';
 import { getTenantContext } from '@/lib/tenant-context';
+import { getPhilippineSchoolYear, isValidSchoolYear } from '@/lib/academic-calendar';
+import { useTenant } from '@/context/TenantContext';
 import React, { useEffect, useMemo, useState } from 'react';
 
 interface SectionItem {
@@ -78,11 +80,17 @@ export default function SchoolSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { refetch: refetchTenant } = useTenant();
   const [tenantId, setTenantId] = useState<string>('');
   const [configId, setConfigId] = useState<string>('');
   const [facultyId, setFacultyId] = useState<string | null>(null);
-  const [schoolYear, setSchoolYear] = useState('2025-2026');
-  const [term, setTerm] = useState('1st Quarter');
+  const [schoolYear, setSchoolYear] = useState(() => getPhilippineSchoolYear());
+  const [initialSavedSchoolYear, setInitialSavedSchoolYear] = useState('');
+  const [term, setTerm] = useState('1st Term');
+  const [schoolYearConfirmModal, setSchoolYearConfirmModal] = useState<{ isOpen: boolean; pendingSy: string }>({
+    isOpen: false,
+    pendingSy: '',
+  });
   const [facultyName, setFacultyName] = useState('');
   const [designation, setDesignation] = useState('Subject Teacher');
   const [approverName, setApproverName] = useState('');
@@ -890,7 +898,9 @@ export default function SchoolSettingsPage() {
 
         if (config) {
           setConfigId(config.id);
-          if (config.school_year) setSchoolYear(config.school_year);
+          const loadedSy = config.school_year || getPhilippineSchoolYear();
+          setSchoolYear(loadedSy);
+          setInitialSavedSchoolYear(loadedSy);
           if (config.term) setTerm(config.term);
 
           // 2. Fetch faculty record for this config
@@ -947,26 +957,30 @@ export default function SchoolSettingsPage() {
     );
   }, [weights]);
 
-  // Save Settings
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const executeSave = async () => {
     setSaving(true);
     setError(null);
     setSaved(false);
 
     try {
+      const cleanSy = schoolYear.trim();
+
       // 1. Update academic config
       if (configId) {
-        const { error: confErr } = await (supabase as any)
+        const { data: updatedRows, error: confErr } = await (supabase as any)
           .from('academic_configs')
           .update({
-            school_year: schoolYear.trim(),
+            school_year: cleanSy,
             term: term.trim(),
             updated_at: new Date().toISOString(),
           })
-          .eq('id', configId);
+          .eq('id', configId)
+          .select();
 
         if (confErr) throw confErr;
+        if (!updatedRows || updatedRows.length === 0) {
+          throw new Error('Failed to update academic configuration in database (no records changed).');
+        }
 
         if (tenantId && term) {
           await (supabase as any)
@@ -981,6 +995,21 @@ export default function SchoolSettingsPage() {
             .eq('tenant_id', tenantId)
             .eq('name', term.trim());
         }
+
+        // Verify update directly from database
+        const { data: verified, error: verifyErr } = await (supabase as any)
+          .from('academic_configs')
+          .select('id, school_year, term')
+          .eq('id', configId)
+          .maybeSingle();
+
+        if (verifyErr || !verified) {
+          throw new Error('Failed to verify updated school year from database.');
+        }
+
+        setSchoolYear(verified.school_year);
+        setInitialSavedSchoolYear(verified.school_year);
+        if (verified.term) setTerm(verified.term);
       }
 
       // 2. Update or insert faculty record
@@ -1011,17 +1040,43 @@ export default function SchoolSettingsPage() {
         if (newFac) setFacultyId(newFac.id);
       }
 
-      // 3. Persist default grading weights to school storage
-      saveGradingWeights(weights);
-
       setSaved(true);
+      toast.success('School settings saved successfully.');
+      await refetchTenant();
       setTimeout(() => setSaved(false), 4000);
     } catch (err: any) {
       console.error('Failed to save school settings:', err);
-      setError(err.message || 'Could not save configuration');
+      const friendly = friendlyError(err, 'Could not save configuration');
+      setError(friendly);
+      toast.error(friendly);
     } finally {
       setSaving(false);
+      setSchoolYearConfirmModal({ isOpen: false, pendingSy: '' });
     }
+  };
+
+  // Save Settings
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const cleanSy = schoolYear.trim();
+    if (!isValidSchoolYear(cleanSy)) {
+      const msg = 'School year must be in format YYYY-YYYY with consecutive years (e.g. 2026-2027).';
+      toast.error(msg);
+      setError(msg);
+      return;
+    }
+
+    // Changing the school year opens a ConfirmationModal that says it affects every teacher in the school
+    if (initialSavedSchoolYear && cleanSy !== initialSavedSchoolYear) {
+      setSchoolYearConfirmModal({
+        isOpen: true,
+        pendingSy: cleanSy,
+      });
+      return;
+    }
+
+    await executeSave();
   };
 
   // Add Section Handler
@@ -2241,112 +2296,7 @@ export default function SchoolSettingsPage() {
             )}
           </div>
 
-          {/* Card 4: DepEd Senior High School Component Weights */}
-          <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3 dark:border-gray-800">
-              <div className="flex items-center gap-3">
-                <Award className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0" />
-                <div>
-                  <h2 className="text-sm font-bold text-gray-900 dark:text-white">
-                    DepEd Senior High School Component Weights
-                  </h2>
-                  <p className="text-[11px] text-gray-400">
-                    Defines default weights for Written Works, Performance Tasks, and Quarterly Exams (DepEd Order No. 8, s. 2015).
-                  </p>
-                </div>
-              </div>
 
-              {/* Total Percentage Indicator Badge */}
-              <span
-                className={cn(
-                  'rounded-full px-3 py-1 text-xs font-bold font-mono self-start sm:self-auto',
-                  totalWeightsPercent === 100
-                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                    : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
-                )}
-              >
-                Total: {totalWeightsPercent}% {totalWeightsPercent === 100 ? '✓ Valid' : '⚠ Must be 100%'}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                  Track Preset
-                </label>
-                <select
-                  onChange={(e) => {
-                    const preset = TRACK_WEIGHT_PRESETS[e.target.value];
-                    if (preset) setWeights(preset.weights);
-                  }}
-                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
-                >
-                  {Object.entries(TRACK_WEIGHT_PRESETS).map(([key, val]) => (
-                    <option key={key} value={key} className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white">
-                      {val.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                  Written Works (Quizzes) %
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={Math.round(weights.writtenWorks * 100)}
-                  onChange={(e) =>
-                    setWeights({
-                      ...weights,
-                      writtenWorks: (parseFloat(e.target.value) || 0) / 100,
-                    })
-                  }
-                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                  Performance Tasks (Activities) %
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={Math.round(weights.performanceTasks * 100)}
-                  onChange={(e) =>
-                    setWeights({
-                      ...weights,
-                      performanceTasks: (parseFloat(e.target.value) || 0) / 100,
-                    })
-                  }
-                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                  Quarterly Exam (OMR Test) %
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={Math.round(weights.quarterlyAssessment * 100)}
-                  onChange={(e) =>
-                    setWeights({
-                      ...weights,
-                      quarterlyAssessment: (parseFloat(e.target.value) || 0) / 100,
-                    })
-                  }
-                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
-                />
-              </div>
-            </div>
-          </div>
 
           {/* Card 4: Faculty Profile & Signatories */}
           <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 space-y-4">
@@ -2880,7 +2830,7 @@ export default function SchoolSettingsPage() {
                   ? No assessments or TOS documents are recorded under this term.
                 </p>
                 <p className="text-[11px] text-gray-400">
-                  Remaining terms will be re-numbered 1..N to keep gradebook and analytics aligned.
+                  Remaining terms will be re-numbered 1..N to keep analytics and reports aligned.
                 </p>
 
                 <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
@@ -2977,7 +2927,7 @@ export default function SchoolSettingsPage() {
                     Option 2: Archive Instead
                   </span>
                   <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                    Hides &quot;{deleteModalState.period.name}&quot; from all dropdowns and gradebooks while keeping all records and historical scores completely intact.
+                    Hides &quot;{deleteModalState.period.name}&quot; from all dropdowns while keeping all records and historical scores completely intact.
                   </p>
                   <button
                     type="button"
@@ -3010,6 +2960,19 @@ export default function SchoolSettingsPage() {
           </div>
         </div>
       )}
+
+      {/* School Year Change Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={schoolYearConfirmModal.isOpen}
+        onClose={() => setSchoolYearConfirmModal({ isOpen: false, pendingSy: '' })}
+        onConfirm={executeSave}
+        title="Change School Year?"
+        description={`Changing the school year to ${schoolYearConfirmModal.pendingSy} affects every teacher in the school. All active assessments, grading periods, and student rosters will use this new academic year.`}
+        actionType="neutral"
+        confirmLabel="Apply to Entire School"
+        cancelLabel="Keep Current Year"
+        isLoading={saving}
+      />
     </div>
   );
 }

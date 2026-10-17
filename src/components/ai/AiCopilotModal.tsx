@@ -695,7 +695,7 @@ export function AiCopilotModal({
                     <div className="flex justify-between">
                       <span className="text-gray-500">School</span>
                       <span className="font-semibold text-gray-900 dark:text-white">
-                        {aiInfo?.session?.tenantName || 'Capas SHS'}
+                        {aiInfo?.session?.tenantName || 'School'}
                       </span>
                     </div>
                     <div className="flex justify-between">

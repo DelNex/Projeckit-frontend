@@ -17,7 +17,7 @@ export default function AdminConsolePage() {
     pendingTeachers: 0,
     activeTenants: 0,
     auditLogsCount: 0,
-    primaryTenantName: 'Capas Senior High School',
+    primaryTenantName: '',
   });
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
@@ -44,7 +44,7 @@ export default function AdminConsolePage() {
           .from('audit_logs')
           .select('*', { count: 'exact', head: true });
 
-        const firstTenant = tenantsData?.[0]?.name || 'Capas Senior High School';
+        const firstTenant = tenantsData?.[0]?.name || 'School';
 
         setStats({
           pendingTeachers: pendingCount || 0,
