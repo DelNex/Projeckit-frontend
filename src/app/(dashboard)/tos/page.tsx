@@ -93,8 +93,41 @@ export default function TosPage() {
     setFetchError(null);
 
     try {
-      const [tosRes, secRes, gpRes] = await Promise.all([
-        (supabase as any)
+      // 1. Fetch TOS documents with fallback for schema differences
+      let documents: TosDocument[] = [];
+      const tosRes = await (supabase as any)
+        .from('tos_documents')
+        .select(`
+          id,
+          assessment_id,
+          tenant_id,
+          subject,
+          term,
+          school_year,
+          grade,
+          strand,
+          section,
+          target_items,
+          total_days,
+          days_taught,
+          status,
+          rows,
+          teacher_name,
+          exam_type,
+          description,
+          sections,
+          generated_at,
+          created_at,
+          updated_at,
+          assessments ( id, title )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (!tosRes.error && tosRes.data) {
+        documents = tosRes.data as TosDocument[];
+      } else {
+        console.warn('Extended TOS query failed, falling back to base columns:', tosRes.error);
+        const fallbackTos = await (supabase as any)
           .from('tos_documents')
           .select(`
             id,
@@ -107,46 +140,68 @@ export default function TosPage() {
             strand,
             section,
             target_items,
-            total_days,
-            days_taught,
             status,
             rows,
-            teacher_name,
-            exam_type,
-            description,
-            sections,
-            generated_at,
             created_at,
-            updated_at,
-            assessments ( id, title )
+            updated_at
           `)
-          .order('created_at', { ascending: false }),
+          .order('created_at', { ascending: false });
 
-        (supabase as any)
+        if (fallbackTos.error) throw fallbackTos.error;
+        documents = (fallbackTos.data || []) as TosDocument[];
+      }
+      setTosList(documents);
+
+      // 2. Fetch Sections safely (sections table has id, name, grade, strand_code)
+      try {
+        const secRes = await (supabase as any)
           .from('sections')
-          .select('id, name, track, grade_level')
+          .select('id, name, grade, strand_code')
           .eq('is_archived', false)
-          .order('name', { ascending: true }),
+          .order('name', { ascending: true });
 
-        (supabase as any)
+        if (!secRes.error && secRes.data) {
+          setSections(
+            secRes.data.map((s: any) => ({
+              id: s.id,
+              name: s.name,
+              track: s.strand_code || s.grade || '',
+              grade_level: s.grade || '',
+            }))
+          );
+        } else {
+          const fbSec = await supabase.from('sections').select('id, name').order('name', { ascending: true });
+          if (fbSec.data) {
+            setSections(fbSec.data.map((s: any) => ({ id: s.id, name: s.name })));
+          }
+        }
+      } catch (secErr) {
+        console.warn('Sections query error, trying basic fallback:', secErr);
+        const fbSec = await supabase.from('sections').select('id, name').order('name', { ascending: true });
+        if (fbSec.data) {
+          setSections(fbSec.data.map((s: any) => ({ id: s.id, name: s.name })));
+        }
+      }
+
+      // 3. Fetch Grading Periods safely
+      try {
+        const gpRes = await (supabase as any)
           .from('grading_periods')
           .select('id, name, is_current')
           .eq('is_archived', false)
-          .order('position', { ascending: true }),
-      ]);
+          .order('position', { ascending: true });
 
-      if (tosRes.error) throw tosRes.error;
-      const documents: TosDocument[] = tosRes.data || [];
-      setTosList(documents);
-
-      if (secRes.data) {
-        setSections(secRes.data);
-      }
-
-      if (gpRes.data && gpRes.data.length > 0) {
-        setGradingPeriods(gpRes.data);
-      } else {
-        // Fallback standard grading periods
+        if (gpRes.data && gpRes.data.length > 0) {
+          setGradingPeriods(gpRes.data);
+        } else {
+          setGradingPeriods([
+            { id: 't1', name: 'Term 1', is_current: true },
+            { id: 't2', name: 'Term 2', is_current: false },
+            { id: 't3', name: 'Term 3', is_current: false },
+            { id: 't4', name: 'Term 4', is_current: false },
+          ]);
+        }
+      } catch {
         setGradingPeriods([
           { id: 't1', name: 'Term 1', is_current: true },
           { id: 't2', name: 'Term 2', is_current: false },
