@@ -126,7 +126,41 @@ function AssessmentsContent() {
         `)
         .order('created_at', { ascending: false });
 
-      if (err) throw err;
+      if (err) {
+        console.warn('Assessments query with tos_id/class_size failed, retrying fallback:', err);
+        // Fallback without tos_id in case migration 14 hasn't run yet
+        const { data: fallbackData, error: fallbackErr } = await supabase
+          .from('assessments')
+          .select(`
+            id,
+            title,
+            subject_id,
+            section_id,
+            term,
+            school_year,
+            target_items,
+            passing_mps,
+            status,
+            created_at,
+            subjects ( id, code, title ),
+            sections ( id, name, grade )
+          `)
+          .order('created_at', { ascending: false });
+
+        if (fallbackErr) {
+          console.warn('Fallback query with joins failed, selecting base columns:', fallbackErr);
+          const { data: baseData, error: baseErr } = await supabase
+            .from('assessments')
+            .select('*')
+            .order('created_at', { ascending: false });
+          if (baseErr) throw baseErr;
+          setAssessments((baseData as unknown as AssessmentRecord[]) || []);
+          return;
+        }
+
+        setAssessments((fallbackData as unknown as AssessmentRecord[]) || []);
+        return;
+      }
       setAssessments((data as unknown as AssessmentRecord[]) || []);
     } catch (err: any) {
       console.error('Failed to fetch assessments:', err);
