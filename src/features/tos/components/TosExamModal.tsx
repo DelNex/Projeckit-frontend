@@ -230,7 +230,10 @@ export function TosExamModal({
       toast.success(`Generated ${result.questions?.length || 0} exam questions with balanced options!`);
     } catch (err: any) {
       console.error('Exam generation error:', err);
-      toast.error(friendlyError(err, 'The AI service is not available right now. Please try again later.'));
+      const errorMessage = err instanceof Error && err.message
+        ? err.message
+        : friendlyError(err, 'The AI service is not available right now. Please try again later.');
+      toast.error(errorMessage);
     } finally {
       setIsGenerating(false);
       setGenerationProgress('');

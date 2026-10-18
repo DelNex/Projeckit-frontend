@@ -287,7 +287,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ helperJobId, status: statusData.status, progress: statusData.progress, source: generationSource }, { status: 202 });
       }
       if (statusData.status === 'failed') {
-        return NextResponse.json({ error: statusData.error || 'Gemini generation failed.' }, { status: 502 });
+        return NextResponse.json({ helperJobId, status: 'failed', error: statusData.error || 'Gemini generation failed.' }, { status: 502 });
       }
       rawQuestions = parseGeneratedQuestionJson(statusData.result?.text || '');
       if (rawQuestions.length === 0) {
