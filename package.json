@@ -8,7 +8,8 @@
     "start": "next start -p 3000",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test \"src/**/__tests__/*.test.ts\""
+    "build:consolidated": "node ../scripts/build-consolidated.mjs",
+    "test": "node scripts/check-schema-contract.mjs && tsx --test \"src/**/__tests__/*.test.ts\""
   },
   "dependencies": {
     "@armghan3071/omrchecker": "file:./packages/armghan3071-omrchecker-1.0.2.tgz",

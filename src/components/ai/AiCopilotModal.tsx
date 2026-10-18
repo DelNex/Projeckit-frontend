@@ -372,7 +372,7 @@ export function AiCopilotModal({
           {/* Modal Header */}
           <div className="flex h-16 items-center justify-between border-b border-gray-100 px-6 dark:border-gray-800">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-xs">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-700 text-white">
                 <Sparkles className="h-5 w-5" />
               </div>
               <div>

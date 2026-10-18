@@ -242,7 +242,7 @@ export default function SchoolSettingsPage() {
     const cfgId = targetConfigId || configId;
     if (!cfgId) return;
     try {
-      const { data: sData, error: sErr } = await (supabase as any)
+      const { data: sData, error: sErr } = await supabase
         .from('sections')
         .select('id, name, grade, strand_code, is_advisory, student_count, is_archived, archived_at')
         .eq('config_id', cfgId)
@@ -251,7 +251,7 @@ export default function SchoolSettingsPage() {
 
       if (sErr) {
         setNeedsMigration(true);
-        const { data: fallbackData } = await (supabase as any)
+        const { data: fallbackData } = await supabase
           .from('sections')
           .select('id, name, grade, strand_code, is_advisory, student_count')
           .eq('config_id', cfgId)
@@ -275,13 +275,13 @@ export default function SchoolSettingsPage() {
     try {
       setLoadingPeriods(true);
       const [activeRes, archRes] = await Promise.all([
-        (supabase as any)
+        supabase
           .from('grading_periods')
           .select('*')
           .eq('tenant_id', tid)
           .eq('is_archived', false)
           .order('position', { ascending: true }),
-        (supabase as any)
+        supabase
           .from('grading_periods')
           .select('*')
           .eq('tenant_id', tid)
@@ -328,11 +328,11 @@ export default function SchoolSettingsPage() {
 
     try {
       await Promise.all([
-        (supabase as any)
+        supabase
           .from('grading_periods')
           .update({ position: currentPeriod.position })
           .eq('id', targetPeriod.id),
-        (supabase as any)
+        supabase
           .from('grading_periods')
           .update({ position: targetPeriod.position })
           .eq('id', currentPeriod.id),
@@ -352,19 +352,19 @@ export default function SchoolSettingsPage() {
     setRowOperatingId(period.id);
     try {
       // 1. Try RPC first
-      const { error: rpcErr } = await (supabase as any).rpc('set_current_grading_period', {
+      const { error: rpcErr } = await supabase.rpc('set_current_grading_period', {
         p_period_id: period.id,
       });
 
       if (rpcErr) {
         console.warn('[GradingPeriods] RPC set_current_grading_period fallback:', rpcErr.message);
-        await (supabase as any)
+        await supabase
           .from('grading_periods')
           .update({ is_current: false })
           .eq('tenant_id', tenantId)
           .eq('is_current', true);
 
-        const { error: updErr } = await (supabase as any)
+        const { error: updErr } = await supabase
           .from('grading_periods')
           .update({ is_current: true })
           .eq('id', period.id);
@@ -372,7 +372,7 @@ export default function SchoolSettingsPage() {
         if (updErr) throw updErr;
 
         if (configId) {
-          await (supabase as any)
+          await supabase
             .from('academic_configs')
             .update({ term: period.name, updated_at: new Date().toISOString() })
             .eq('id', configId);
@@ -436,7 +436,7 @@ export default function SchoolSettingsPage() {
     }
 
     try {
-      const { count } = await (supabase as any)
+      const { count } = await supabase
         .from('assessments')
         .select('id', { count: 'exact', head: true })
         .eq('tenant_id', tenantId)
@@ -470,7 +470,7 @@ export default function SchoolSettingsPage() {
     setSavingPeriod(true);
     setRowOperatingId(periodId);
     try {
-      const { error: updErr } = await (supabase as any)
+      const { error: updErr } = await supabase
         .from('grading_periods')
         .update({ name: newName, code: newCode })
         .eq('id', periodId);
@@ -478,13 +478,13 @@ export default function SchoolSettingsPage() {
       if (updErr) throw updErr;
 
       if (oldName !== newName) {
-        await (supabase as any)
+        await supabase
           .from('assessments')
           .update({ term: newName })
           .eq('tenant_id', tenantId)
           .eq('term', oldName);
 
-        await (supabase as any)
+        await supabase
           .from('tos_documents')
           .update({ term: newName })
           .eq('tenant_id', tenantId)
@@ -494,7 +494,7 @@ export default function SchoolSettingsPage() {
         if (currentPeriod?.is_current) {
           setTerm(newName);
           if (configId) {
-            await (supabase as any)
+            await supabase
               .from('academic_configs')
               .update({ term: newName, updated_at: new Date().toISOString() })
               .eq('id', configId);
@@ -556,7 +556,7 @@ export default function SchoolSettingsPage() {
       }
 
       // 1. Try RPC function
-      const { data: rpcData, error: rpcErr } = await (supabase as any).rpc('add_grading_period', {
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('add_grading_period', {
         p_name: trimmedName,
         p_code: finalCode,
         p_type: newTermType,
@@ -566,7 +566,7 @@ export default function SchoolSettingsPage() {
         console.warn('[GradingPeriods] RPC add_grading_period fallback:', rpcErr.message);
 
         // Fallback: direct insert
-        const { error: insErr } = await (supabase as any)
+        const { error: insErr } = await supabase
           .from('grading_periods')
           .insert({
             tenant_id: tenantId,
@@ -621,7 +621,7 @@ export default function SchoolSettingsPage() {
 
     try {
       // 1. Try RPC get_grading_period_usage
-      const { data: usageData, error: usageErr } = await (supabase as any).rpc('get_grading_period_usage', {
+      const { data: usageData, error: usageErr } = await supabase.rpc('get_grading_period_usage', {
         p_period_id: period.id,
       });
 
@@ -636,12 +636,12 @@ export default function SchoolSettingsPage() {
       } else {
         // Fallback: client queries
         const [assRes, tosRes] = await Promise.all([
-          (supabase as any)
+          supabase
             .from('assessments')
             .select('id', { count: 'exact', head: true })
             .eq('tenant_id', tenantId)
             .eq('term', period.name),
-          (supabase as any)
+          supabase
             .from('tos_documents')
             .select('id', { count: 'exact', head: true })
             .eq('tenant_id', tenantId)
@@ -672,7 +672,7 @@ export default function SchoolSettingsPage() {
     setRowOperatingId(period.id);
 
     try {
-      const { error: rpcErr } = await (supabase as any).rpc('delete_or_archive_grading_period', {
+      const { error: rpcErr } = await supabase.rpc('delete_or_archive_grading_period', {
         p_period_id: period.id,
         p_action: action,
         p_target_period_id: action === 'move_and_delete' ? deleteModalState.targetPeriodId : null,
@@ -684,23 +684,23 @@ export default function SchoolSettingsPage() {
         if (action === 'move_and_delete') {
           const target = gradingPeriods.find((p) => p.id === deleteModalState.targetPeriodId);
           if (target) {
-            await (supabase as any)
+            await supabase
               .from('assessments')
               .update({ term: target.name })
               .eq('tenant_id', tenantId)
               .eq('term', period.name);
 
-            await (supabase as any)
+            await supabase
               .from('tos_documents')
               .update({ term: target.name })
               .eq('tenant_id', tenantId)
               .eq('term', period.name);
           }
-          await (supabase as any).from('grading_periods').delete().eq('id', period.id);
+          await supabase.from('grading_periods').delete().eq('id', period.id);
         } else if (action === 'delete') {
-          await (supabase as any).from('grading_periods').delete().eq('id', period.id);
+          await supabase.from('grading_periods').delete().eq('id', period.id);
         } else if (action === 'archive') {
-          await (supabase as any)
+          await supabase
             .from('grading_periods')
             .update({
               is_archived: true,
@@ -713,7 +713,7 @@ export default function SchoolSettingsPage() {
         // Renumber remaining active positions 1..N
         const remaining = gradingPeriods.filter((p) => p.id !== period.id);
         for (let i = 0; i < remaining.length; i++) {
-          await (supabase as any)
+          await supabase
             .from('grading_periods')
             .update({ position: i + 1 })
             .eq('id', remaining[i].id);
@@ -759,7 +759,7 @@ export default function SchoolSettingsPage() {
 
     setRowOperatingId(period.id);
     try {
-      const { error: rpcErr } = await (supabase as any).rpc('restore_grading_period', {
+      const { error: rpcErr } = await supabase.rpc('restore_grading_period', {
         p_period_id: period.id,
       });
 
@@ -767,7 +767,7 @@ export default function SchoolSettingsPage() {
         console.warn('[GradingPeriods] RPC restore_grading_period fallback:', rpcErr.message);
         const cleanCode = period.code.replace(/_arch_.*$/, '');
         const nextPos = gradingPeriods.length + 1;
-        await (supabase as any)
+        await supabase
           .from('grading_periods')
           .update({
             is_archived: false,
@@ -809,7 +809,7 @@ export default function SchoolSettingsPage() {
       console.log(`[GradingPeriods] Applying preset ${preset} for tenant: ${tenantId}`);
 
       // 1. Try atomic database RPC function first
-      const { data: rpcData, error: rpcErr } = await (supabase as any).rpc('apply_grading_period_preset', {
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('apply_grading_period_preset', {
         p_preset: preset,
       });
 
@@ -819,7 +819,7 @@ export default function SchoolSettingsPage() {
         console.warn('[GradingPeriods] RPC unavailable, executing client fallback with verification:', rpcErr.message);
 
         // Client-side fallback: archive existing active periods safely
-        const { error: archiveErr } = await (supabase as any)
+        const { error: archiveErr } = await supabase
           .from('grading_periods')
           .update({ is_archived: true, is_current: false })
           .eq('tenant_id', tenantId);
@@ -841,7 +841,7 @@ export default function SchoolSettingsPage() {
               { tenant_id: tenantId, name: '2nd Semester', code: 'S2', position: 2, is_current: false, is_archived: false },
             ];
 
-        const { data: insertedRows, error: insErr } = await (supabase as any)
+        const { data: insertedRows, error: insErr } = await supabase
           .from('grading_periods')
           .insert(standardRows)
           .select('*');
@@ -891,14 +891,14 @@ export default function SchoolSettingsPage() {
         setConfigId(currentConfigId);
 
         const { data: { user } } = await supabase.auth.getUser();
-        const { data: profile } = await (supabase as any)
+        const { data: profile } = await supabase
           .from('profiles')
           .select('display_name')
           .eq('id', user?.id || '')
           .maybeSingle();
 
         // 0. Fetch tenant details (Name, Region, Division, Logo)
-        const { data: tenantData } = await (supabase as any)
+        const { data: tenantData } = await supabase
           .from('tenants')
           .select('id, name, region, division, logo_data')
           .eq('id', currentTenantId)
@@ -912,7 +912,7 @@ export default function SchoolSettingsPage() {
         }
 
         // 1. Fetch active academic config deterministically
-        const { data: config } = await (supabase as any)
+        const { data: config } = await supabase
           .from('academic_configs')
           .select('id, school_year, term, region, division, logo_data')
           .eq('id', currentConfigId)
@@ -932,7 +932,7 @@ export default function SchoolSettingsPage() {
           if (!tenantData?.logo_data && config.logo_data) setLogoData(config.logo_data);
 
           // 2. Fetch faculty record for this config
-          const { data: fac } = await (supabase as any)
+          const { data: fac } = await supabase
             .from('faculty')
             .select('id, teacher_name, designation, approver_name')
             .eq('config_id', config.id)
@@ -953,7 +953,7 @@ export default function SchoolSettingsPage() {
           await refreshSections(config.id);
 
           // 4. Fetch subjects for this config
-          const { data: subData } = await (supabase as any)
+          const { data: subData } = await supabase
             .from('subjects')
             .select('id, code, title, grade, target_hours, target_items')
             .eq('config_id', config.id)
@@ -1017,7 +1017,7 @@ export default function SchoolSettingsPage() {
 
     setSavingSchoolHeader(true);
     try {
-      const { error: tErr } = await (supabase as any)
+      const { error: tErr } = await supabase
         .from('tenants')
         .update({
           region: region.trim() || null,
@@ -1030,7 +1030,7 @@ export default function SchoolSettingsPage() {
       if (tErr) throw tErr;
 
       if (configId) {
-        await (supabase as any)
+        await supabase
           .from('academic_configs')
           .update({
             region: region.trim() || null,
@@ -1066,10 +1066,13 @@ export default function SchoolSettingsPage() {
 
     try {
       const cleanSy = schoolYear.trim();
+      if (!tenantId || !configId) {
+        throw new Error('This account has no school academic configuration to save. Contact your school administrator.');
+      }
 
       // 1. Update academic config
       if (configId) {
-        const { data: updatedRows, error: confErr } = await (supabase as any)
+        const { data: updatedRows, error: confErr } = await supabase
           .from('academic_configs')
           .update({
             school_year: cleanSy,
@@ -1077,6 +1080,7 @@ export default function SchoolSettingsPage() {
             updated_at: new Date().toISOString(),
           })
           .eq('id', configId)
+          .eq('tenant_id', tenantId)
           .select();
 
         if (confErr) throw confErr;
@@ -1085,13 +1089,13 @@ export default function SchoolSettingsPage() {
         }
 
         if (tenantId && term) {
-          await (supabase as any)
+          await supabase
             .from('grading_periods')
             .update({ is_current: false })
             .eq('tenant_id', tenantId)
             .eq('is_current', true);
 
-          await (supabase as any)
+          await supabase
             .from('grading_periods')
             .update({ is_current: true })
             .eq('tenant_id', tenantId)
@@ -1099,7 +1103,7 @@ export default function SchoolSettingsPage() {
         }
 
         // Verify update directly from database
-        const { data: verified, error: verifyErr } = await (supabase as any)
+        const { data: verified, error: verifyErr } = await supabase
           .from('academic_configs')
           .select('id, school_year, term')
           .eq('id', configId)
@@ -1116,7 +1120,7 @@ export default function SchoolSettingsPage() {
 
       // 2. Update or insert faculty record
       if (facultyId) {
-        const { error: facErr } = await (supabase as any)
+        const { error: facErr } = await supabase
           .from('faculty')
           .update({
             teacher_name: facultyName.trim(),
@@ -1127,7 +1131,7 @@ export default function SchoolSettingsPage() {
 
         if (facErr) throw facErr;
       } else if (configId) {
-        const { data: newFac, error: insErr } = await (supabase as any)
+        const { data: newFac, error: insErr } = await supabase
           .from('faculty')
           .insert({
             config_id: configId,
@@ -1192,7 +1196,7 @@ export default function SchoolSettingsPage() {
         ? newSectionName.trim()
         : `Grade ${newSectionGrade} - ${newSectionName.trim()}`;
 
-      const { data: created, error: addErr } = await (supabase as any)
+      const { data: created, error: addErr } = await supabase
         .from('sections')
         .insert({
           config_id: configId,
@@ -1214,7 +1218,9 @@ export default function SchoolSettingsPage() {
       }
     } catch (err: any) {
       console.error('Failed to add section:', err);
-      setError(err.message || 'Failed to add section');
+      const friendly = friendlyError(err, 'Failed to add section.');
+      setError(friendly);
+      toast.error(friendly);
     } finally {
       setAddingSection(false);
     }
@@ -1227,7 +1233,7 @@ export default function SchoolSettingsPage() {
 
     setAddingSubject(true);
     try {
-      const { data: created, error: addErr } = await (supabase as any)
+      const { data: created, error: addErr } = await supabase
         .from('subjects')
         .insert({
           config_id: configId,
@@ -1262,7 +1268,7 @@ export default function SchoolSettingsPage() {
     if (!subjectToDelete) return;
     setDeletingSubject(true);
     try {
-      const { error: delErr } = await (supabase as any)
+      const { error: delErr } = await supabase
         .from('subjects')
         .delete()
         .eq('id', subjectToDelete.id);
@@ -1354,7 +1360,7 @@ export default function SchoolSettingsPage() {
     try {
       for (let i = 0; i < recordsToInsert.length; i += CHUNK_SIZE) {
         const chunk = recordsToInsert.slice(i, i + CHUNK_SIZE);
-        const { error: chunkErr } = await (supabase as any)
+        const { error: chunkErr } = await supabase
           .from('sections')
           .insert(chunk);
 
@@ -1363,7 +1369,7 @@ export default function SchoolSettingsPage() {
         } else {
           // Retry chunk row-by-row on failure so one bad row doesn't block the others
           for (const row of chunk) {
-            const { error: singleErr } = await (supabase as any)
+            const { error: singleErr } = await supabase
               .from('sections')
               .insert(row);
 

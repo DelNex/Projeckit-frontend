@@ -389,13 +389,22 @@ export default function StudentsPage() {
     try {
       const { tenantId, configId } = await getTenantContext(supabase);
 
+      const matchedSection = sectionsList.find(
+        (s: { id: string; name: string }) =>
+          s.id === formSection ||
+          s.name.trim().toLowerCase() === formSection.trim().toLowerCase()
+      );
+      const sectionId = matchedSection?.id || null;
+      const sectionName = matchedSection?.name || formSection.trim();
+
       if (editingStudent) {
         const { error: updErr } = await supabase
           .from('students')
           .update({
             lrn: trimmedLrn,
             name: formName.trim(),
-            section_name: formSection,
+            section_id: sectionId,
+            section_name: sectionName,
           })
           .eq('id', editingStudent.id)
           .eq('tenant_id', tenantId);
@@ -407,7 +416,8 @@ export default function StudentsPage() {
           config_id: configId,
           lrn: trimmedLrn,
           name: formName.trim(),
-          section_name: formSection,
+          section_id: sectionId,
+          section_name: sectionName,
         });
 
         if (insErr) throw insErr;

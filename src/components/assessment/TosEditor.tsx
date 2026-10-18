@@ -29,6 +29,7 @@ import { ExamGeneratorModal } from './ExamGeneratorModal';
 import { ExamDraftEditor } from './ExamDraftEditor';
 import {
   calculateTos,
+  BloomLevel,
   DEFAULT_COGNITIVE_DISTRIBUTION,
   CognitiveDistributionConfig,
   CognitiveDomains,
@@ -49,12 +50,13 @@ export interface TosCompetencyRow {
   code: string;
   description: string;
   daysTaught: number;
-  legacyHours?: number;
   domains: TosCompetencyDomain;
   itemTarget?: number;
   itemRange?: string;
   startItem?: number;
   endItem?: number;
+  domainItemNumbers?: Record<BloomLevel, number[]>;
+  domainDisplay?: Record<BloomLevel, string>;
 }
 
 export interface TosEditorProps {
@@ -168,21 +170,32 @@ export function TosEditor({
     async function loadTosDoc() {
       setLoading(true);
       try {
-        let tosQuery = (supabase as any).from('tos_documents').select('*');
+        let tosQuery = supabase.from('tos_documents').select('*');
         if (tosDocId) {
           tosQuery = tosQuery.eq('id', tosDocId);
         } else if (assessmentId) {
-          tosQuery = tosQuery.eq('assessment_id', assessmentId);
+          // Look up the TOS id from the assessment, then load by primary key
+          const { data: aRow } = await supabase
+            .from('assessments')
+            .select('tos_id')
+            .eq('id', assessmentId)
+            .single();
+          if (aRow?.tos_id) {
+            tosQuery = tosQuery.eq('id', aRow.tos_id);
+          } else {
+            // No linked TOS — skip the query, will start a blank editor
+            tosQuery = tosQuery.eq('id', '00000000-0000-0000-0000-000000000000');
+          }
         }
 
         const [tosRes, gpRes, acRes] = await Promise.all([
           tosQuery.maybeSingle(),
-          (supabase as any)
+          supabase
             .from('grading_periods')
             .select('id, name, code')
             .eq('is_archived', false)
             .order('position', { ascending: true }),
-          (supabase as any)
+          supabase
             .from('academic_configs')
             .select('cog_dist_lower, cog_dist_mid, cog_dist_higher')
             .order('created_at', { ascending: false })
@@ -208,17 +221,16 @@ export function TosEditor({
 
         if (data && Array.isArray(data.rows) && data.rows.length > 0) {
           const parsedRows: TosCompetencyRow[] = data.rows.map((r: any, idx: number) => {
-            const legacyHours = r.hours !== undefined ? Number(r.hours) : undefined;
-            const daysTaught = r.daysTaught !== undefined
+            const rawDays = r.daysTaught !== undefined
               ? Number(r.daysTaught)
-              : (r.days !== undefined ? Number(r.days) : (r.days_taught !== undefined ? Number(r.days_taught) : (legacyHours ? 0 : 4)));
+              : (r.days !== undefined ? Number(r.days) : Number(r.days_taught));
+            const daysTaught = Number.isFinite(rawDays) && rawDays > 0 ? rawDays : 1;
 
             return {
               id: r.id || String(idx + 1),
               code: r.code || `COMP-${idx + 1}`,
               description: r.competency || r.description || '',
               daysTaught,
-              legacyHours,
               domains: {
                 remembering: Number(r.domains?.remembering ?? 0),
                 understanding: Number(r.domains?.understanding ?? 0),
@@ -231,7 +243,7 @@ export function TosEditor({
           });
 
           if (data.id) setCurrentTosId(data.id);
-          if (data.assessment_id) setLinkedAssessmentId(data.assessment_id);
+          if (assessmentId) setLinkedAssessmentId(assessmentId);
           setRows(parsedRows);
           if (data.subject) setSubject(data.subject);
           if (data.term) setTerm(data.term);
@@ -244,7 +256,7 @@ export function TosEditor({
           if (data.teacher_name) {
             setTeacher(data.teacher_name);
           } else if (data.created_by) {
-            const { data: creator } = await (supabase as any)
+            const { data: creator } = await supabase
               .from('profiles')
               .select('display_name')
               .eq('id', data.created_by)
@@ -255,15 +267,15 @@ export function TosEditor({
           }
 
           if (data?.questions && Array.isArray(data.questions) && data.questions.length > 0) {
-            setGeneratedQuestions(data.questions);
+            setGeneratedQuestions(data.questions as unknown as ExamQuestion[]);
           } else if (assessmentId) {
-            const { data: assData } = await (supabase as any)
+            const { data: assData } = await supabase
               .from('assessments')
               .select('questions')
               .eq('id', assessmentId)
               .maybeSingle();
             if (assData?.questions && Array.isArray(assData.questions) && assData.questions.length > 0) {
-              setGeneratedQuestions(assData.questions);
+              setGeneratedQuestions(assData.questions as unknown as ExamQuestion[]);
             }
           }
         } else {
@@ -305,7 +317,6 @@ export function TosEditor({
       code: r.code,
       description: r.description,
       daysTaught: Number(r.daysTaught) || 0,
-      legacyHours: r.legacyHours,
     }));
     return calculateTos(inputs, targetItems, cogDist);
   }, [rows, targetItems, cogDist]);
@@ -330,6 +341,8 @@ export function TosEditor({
         percentage: rowPercentage,
         domains: activeDomains,
         domainRanges: calcRow?.domainRanges,
+        domainItemNumbers: calcRow?.domainItemNumbers,
+        domainDisplay: calcRow?.domainDisplay,
       };
     });
   }, [rows, tosCalc, isAdjustMode, adjustments]);
@@ -420,9 +433,9 @@ export function TosEditor({
     setSaveStatus('saving');
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile } = await (supabase as any)
+      const { data: profile } = await supabase
         .from('profiles')
-        .select('tenant_id')
+        .select('tenant_id, display_name')
         .eq('id', user?.id || '')
         .maybeSingle();
 
@@ -430,7 +443,12 @@ export function TosEditor({
         throw new Error('Your account is not linked to a school tenant.');
       }
       const tenantId = profile.tenant_id;
-      const finalTeacher = teacher.trim() || userDisplayName || 'Teacher';
+      const finalTeacher = teacher.trim()
+        || userDisplayName
+        || profile?.display_name
+        || String(user?.user_metadata?.display_name || '').trim()
+        || user?.email?.split('@')[0]
+        || '';
 
       const payload: any = {
         tenant_id: tenantId,
@@ -450,10 +468,11 @@ export function TosEditor({
           description: r.description,
           daysTaught: r.daysTaught,
           days: r.daysTaught,
-          legacyHours: r.legacyHours,
           itemCount: r.itemCount,
           itemRange: r.itemRange,
           domains: r.domains,
+          domainItemNumbers: r.domainItemNumbers,
+          domainDisplay: r.domainDisplay,
         })),
         teacher_name: finalTeacher,
         updated_at: new Date().toISOString(),
@@ -462,22 +481,28 @@ export function TosEditor({
       if (currentTosId) {
         payload.id = currentTosId;
       }
-      if (linkedAssessmentId || assessmentId) {
-        payload.assessment_id = linkedAssessmentId || assessmentId;
-      }
 
-      const { data: savedRow, error: upsertErr } = await (supabase as any)
+      const { data: savedRow, error: upsertErr } = await supabase
         .from('tos_documents')
-        .upsert(payload, currentTosId ? { onConflict: 'id' } : (assessmentId ? { onConflict: 'assessment_id' } : undefined))
+        .upsert(payload, currentTosId ? { onConflict: 'id' } : undefined)
         .select('id')
         .single();
 
       if (upsertErr) throw upsertErr;
-      if (savedRow?.id) setCurrentTosId(savedRow.id);
+      if (savedRow?.id) {
+        setCurrentTosId(savedRow.id);
+        const targetAssessmentId = linkedAssessmentId || assessmentId;
+        if (targetAssessmentId) {
+          await supabase
+            .from('assessments')
+            .update({ tos_id: savedRow.id })
+            .eq('id', targetAssessmentId);
+        }
+      }
 
       // Sync teacher_name to faculty table
       try {
-        const { data: ac } = await (supabase as any)
+        const { data: ac } = await supabase
           .from('academic_configs')
           .select('id')
           .eq('tenant_id', tenantId)
@@ -486,7 +511,7 @@ export function TosEditor({
           .maybeSingle();
 
         if (ac?.id) {
-          const { data: fac } = await (supabase as any)
+          const { data: fac } = await supabase
             .from('faculty')
             .select('id')
             .eq('config_id', ac.id)
@@ -494,12 +519,12 @@ export function TosEditor({
             .maybeSingle();
 
           if (fac?.id) {
-            await (supabase as any)
+            await supabase
               .from('faculty')
               .update({ teacher_name: finalTeacher })
               .eq('id', fac.id);
           } else {
-            await (supabase as any)
+            await supabase
               .from('faculty')
               .insert({ config_id: ac.id, teacher_name: finalTeacher });
           }
@@ -818,7 +843,7 @@ export function TosEditor({
           <button
             type="button"
             onClick={() => setIsGeneratorModalOpen(true)}
-            className="px-3.5 py-2 text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-xl shadow-xs transition flex items-center gap-1.5 shrink-0"
+            className="px-3.5 py-2 text-xs font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-lg transition flex items-center gap-1.5 shrink-0"
             title="Upload lesson notes to automatically generate exam questions matching this TOS"
           >
             <Sparkles className="h-3.5 w-3.5 text-blue-200" />
@@ -1345,15 +1370,10 @@ export function TosEditor({
                             className="w-full px-2 py-1 text-xs rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                           />
                         ) : (
-                          <div className="space-y-0.5">
+                          <div>
                             <span className="text-xs text-gray-800 dark:text-gray-200 font-medium">
                               {row.description}
                             </span>
-                            {row.legacyHours !== undefined && (
-                              <span className="inline-block ml-2 px-1.5 py-0.2 rounded bg-gray-100 dark:bg-gray-800 text-[10px] text-gray-500">
-                                Legacy: {row.legacyHours} hrs
-                              </span>
-                            )}
                           </div>
                         )}
                       </td>

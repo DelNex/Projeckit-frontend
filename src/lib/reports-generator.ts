@@ -13,6 +13,7 @@
  */
 
 import { createClient } from './supabase/client';
+import { getPhilippineSchoolYear } from './academic-calendar';
 
 export interface ScoreDistribution {
   outstanding: number; // 90–100%
@@ -132,7 +133,7 @@ export async function generateAssessmentReportData(
     throw new Error(aErr?.message || 'Assessment not found');
   }
 
-  const schoolName = options?.tenantName || assessment.tenants?.name || 'Department of Education';
+  const schoolName = options?.tenantName || assessment.tenants?.name || '';
   const targetItems = assessment.target_items || 50;
   const passingMps = assessment.passing_mps || 75;
 
@@ -438,10 +439,10 @@ export async function generateAssessmentReportData(
       schoolName,
       title: assessment.title || 'Assessment',
       subject: assessment.subjects?.title || assessment.subjects?.code || 'General Subject',
-      section: assessment.sections?.name || 'Class',
-      term: assessment.term || '1st Term',
-      schoolYear: assessment.school_year || '2025–2026',
-      teacherName: options?.teacherName || 'Faculty Teacher',
+      section: assessment.sections?.name || '',
+      term: assessment.term || '',
+      schoolYear: assessment.school_year || getPhilippineSchoolYear(),
+      teacherName: options?.teacherName || '',
       date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
       lastUpdatedAt: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       passingMps,

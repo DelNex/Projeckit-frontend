@@ -7,12 +7,13 @@
     --font-outfit: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     color-scheme: light;
     
-    /* Paint / Rendering Optimization Tokens */
-    --color-brand-50: #ecf3ff;
-    --color-brand-100: #dde9ff;
-    --color-brand-500: #465fff;
-    --color-brand-600: #3641f5;
-    --color-brand-700: #2a31d8;
+    --color-brand-50: #eff6ff;
+    --color-brand-100: #dbeafe;
+    --color-brand-500: #3b82f6;
+    --color-brand-600: #2563eb;
+    --color-brand-700: #1d4ed8;
+    --color-canvas: #f8fafc;
+    --color-ink: #0f172a;
   }
 
   :root.dark,
@@ -21,8 +22,8 @@
   }
 
   body {
-    background-color: #f9fafb;
-    color: #1d2939;
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
     font-family: var(--font-outfit);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -34,6 +35,32 @@
   body.dark {
     background-color: #0c111d;
     color: #f2f4f7;
+  }
+}
+
+@layer base {
+  :focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      scroll-behavior: auto !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
@@ -157,4 +184,3 @@
     font-size: 9px !important;
   }
 }
-

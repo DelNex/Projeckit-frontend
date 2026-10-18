@@ -32,10 +32,10 @@ export async function generateOfficialTosDocx(
   calcRows: CalculatedCompetencyRow[],
   options: TosWordExportOptions = {}
 ): Promise<Blob> {
-  const schoolName = (options.schoolName || 'Project KIT School').toUpperCase();
-  const region = options.region || 'National Capital Region';
-  const division = options.division || 'Schools Division Office';
-  const teacher = options.preparedBy || tos.teacher_name || 'Subject Teacher';
+  const schoolName = (options.schoolName || '').toUpperCase();
+  const region = options.region || '';
+  const division = options.division || '';
+  const teacher = options.preparedBy || tos.teacher_name || '';
   const checkedBy = options.checkedBy || 'Master Teacher / Head Teacher';
   const approvedBy = options.approvedBy || 'School Principal';
 
@@ -279,4 +279,3 @@ export function downloadBlob(blob: Blob, filename: string) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-

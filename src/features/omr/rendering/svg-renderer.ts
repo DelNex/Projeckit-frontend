@@ -162,7 +162,7 @@ export function renderOmrMasterSvg(
   svgElements += `  <line x1="${li.nameLineStartX}" y1="${li.row1Y + 3}" x2="${li.nameLineEndX}" y2="${li.row1Y + 3}" stroke="#1E293B" stroke-width="0.75"/>\n`;
   if (learnerNameDisplay) {
     const nameFontSize = learnerNameDisplay.length > 32 ? 6.5 : learnerNameDisplay.length > 22 ? 7.2 : 8;
-    svgElements += `  <text x="${li.nameLineStartX + 2}" y="${li.row1Y}" font-family="sans-serif" font-size="${nameFontSize}" font-weight="bold" fill="#1D4ED8">${escapeXml(learnerNameDisplay)}</text>\n`;
+    svgElements += `  <text x="${li.nameLineStartX + 2}" y="${li.row1Y}" font-family="sans-serif" font-size="${nameFontSize}" font-weight="bold" fill="#111827">${escapeXml(learnerNameDisplay)}</text>\n`;
   }
 
   svgElements += `  <text x="${li.dateLabelX}" y="${li.row1Y}" font-family="sans-serif" font-size="8" font-weight="bold" fill="#111827">DATE:</text>\n`;

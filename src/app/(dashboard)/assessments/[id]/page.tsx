@@ -12,8 +12,27 @@ import {
     OmrScanResult,
 } from '@/features/omr';
 import { friendlyError } from '@/lib/errors';
+import { getPhilippineSchoolYear } from '@/lib/academic-calendar';
+import { projectTosItems } from '@/lib/tos-item-projection';
 import { createClient } from '@/lib/supabase/client';
+import type { Database } from '@/types/database.types';
 import { cn } from '@/lib/utils';
+
+type ScanResultRow = Database['public']['Tables']['scan_results']['Row'];
+type TosDocRow = Database['public']['Tables']['tos_documents']['Row'] & {
+  rows?: Array<{
+    code?: string;
+    days?: number;
+    daysTaught?: number;
+    days_taught?: number;
+    domains?: Record<string, number>;
+    description?: string;
+    [key: string]: unknown;
+  }> | null;
+};
+type ResponseRow = Database['public']['Tables']['responses']['Row'] & {
+  audit_trail?: { studentName?: string; [key: string]: unknown } | null;
+};
 import {
     ArrowLeft,
     BarChart3,
@@ -52,7 +71,7 @@ export default function AssessmentWorkspacePage({
   const activeTab = rawTab === 'grades' ? 'tos' : rawTab;
   const assessmentId = resolvedParams.id;
 
-  const { tenantName, region, division, logoData } = useTenant();
+  const { tenantName, region, division, logoData, schoolYear: tenantSchoolYear, userDisplayName } = useTenant();
   const [currentTeacherName, setCurrentTeacherName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -109,11 +128,11 @@ export default function AssessmentWorkspacePage({
   }, [answers, savedAnswers, numChoices, savedNumChoices]);
 
   // Scans & Results State
-  const [scanResults, setScanResults] = useState<any[]>([]);
+  const [scanResults, setScanResults] = useState<ScanResultRow[]>([]);
   const [lastScanResult, setLastScanResult] = useState<OmrScanResult | null>(null);
 
   // Item Analysis & TOS State
-  const [tosDoc, setTosDoc] = useState<any | null>(null);
+  const [tosDoc, setTosDoc] = useState<TosDocRow | null>(null);
   const [isEditingIa, setIsEditingIa] = useState(false);
   const [customRi, setCustomRi] = useState<Record<number, number>>({});
   const [tempDraftRi, setTempDraftRi] = useState<Record<number, number>>({});
@@ -131,7 +150,7 @@ export default function AssessmentWorkspacePage({
 
   // Students Roster and Responses
   const [studentsList, setStudentsList] = useState<any[]>([]);
-  const [responsesList, setResponsesList] = useState<any[]>([]);
+  const [responsesList, setResponsesList] = useState<ResponseRow[]>([]);
 
   const supabase = createClient();
 
@@ -141,7 +160,7 @@ export default function AssessmentWorkspacePage({
     setError(null);
     try {
       // 1. Fetch assessment
-      const { data: aData, error: aErr } = await (supabase as any)
+      const { data: aData, error: aErr } = await supabase
         .from('assessments')
         .select(`
           id,
@@ -164,12 +183,15 @@ export default function AssessmentWorkspacePage({
       const itemsNum = aData.target_items || 50;
       const sizeNum = aData.class_size || 60;
 
+      const subj = Array.isArray(aData.subjects) ? aData.subjects[0] : aData.subjects;
+      const sec = Array.isArray(aData.sections) ? aData.sections[0] : aData.sections;
+
       setAssessment({
         id: aData.id,
         title: aData.title,
-        subject: aData.subjects?.title || aData.subjects?.code || 'Empowerment Technologies',
-        section: aData.sections?.name || 'Class',
-        schoolYear: aData.school_year || '2025-2026',
+        subject: subj?.title || subj?.code || '',
+        section: sec?.name || '',
+        schoolYear: aData.school_year || tenantSchoolYear || getPhilippineSchoolYear(),
         term: aData.term || '1st Quarter',
         targetItems: itemsNum,
         classSize: sizeNum,
@@ -182,7 +204,7 @@ export default function AssessmentWorkspacePage({
       setClassSize(sizeNum);
 
       // 2. Fetch answer key
-      const { data: kData } = await (supabase as any)
+      const { data: kData } = await supabase
         .from('answer_keys')
         .select('*')
         .eq('assessment_id', assessmentId)
@@ -204,7 +226,7 @@ export default function AssessmentWorkspacePage({
       }
 
       // 3. Fetch Scan Results
-      const { data: sData } = await (supabase as any)
+      const { data: sData } = await supabase
         .from('scan_results')
         .select('*')
         .eq('assessment_id', assessmentId)
@@ -213,7 +235,7 @@ export default function AssessmentWorkspacePage({
       if (sData) setScanResults(sData);
 
       // 4. Fetch TOS Document for Competency Mapping
-      const { data: tData } = await (supabase as any)
+      const { data: tData } = await supabase
         .from('tos_documents')
         .select('*')
         .eq('assessment_id', assessmentId)
@@ -222,24 +244,24 @@ export default function AssessmentWorkspacePage({
       if (tData) setTosDoc(tData);
 
       // 5. Fetch Students Roster (for Roll number matching, excluding archived)
-      const { data: stdData, error: stdErr } = await (supabase as any)
+      const { data: stdData, error: stdErr } = await supabase
         .from('students')
         .select('id, name, lrn, section_name, is_archived')
         .order('name', { ascending: true });
 
       if (stdErr) {
         // Fallback if is_archived column does not exist
-        const { data: fbStdData } = await (supabase as any)
+        const { data: fbStdData } = await supabase
           .from('students')
           .select('id, name, lrn, section_name')
           .order('name', { ascending: true });
         setStudentsList(fbStdData || []);
       } else if (stdData) {
-        setStudentsList(stdData.filter((s: any) => !s.is_archived));
+        setStudentsList(stdData.filter((s) => !s.is_archived));
       }
 
       // 6. Fetch Responses (Scores)
-      const { data: rData } = await (supabase as any)
+      const { data: rData } = await supabase
         .from('responses')
         .select('*')
         .eq('assessment_id', assessmentId)
@@ -250,12 +272,12 @@ export default function AssessmentWorkspacePage({
       // 7. Fetch current teacher's name
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data: prof } = await (supabase as any)
+        const { data: prof } = await supabase
           .from('profiles')
           .select('display_name')
           .eq('id', user.id)
           .maybeSingle();
-        if (prof?.display_name) setCurrentTeacherName(prof.display_name);
+        setCurrentTeacherName(prof?.display_name || userDisplayName || user.email?.split('@')[0] || '');
       }
     } catch (err: any) {
       console.error('Failed to load assessment details:', err);
@@ -335,7 +357,7 @@ export default function AssessmentWorkspacePage({
     setSaveSuccessMsg(null);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile } = await (supabase as any)
+      const { data: profile } = await supabase
         .from('profiles')
         .select('tenant_id')
         .eq('id', user?.id || '')
@@ -345,7 +367,7 @@ export default function AssessmentWorkspacePage({
       }
       const tenantId = profile.tenant_id;
 
-      const { error: keyErr } = await (supabase as any)
+      const { error: keyErr } = await supabase
         .from('answer_keys')
         .upsert({
           assessment_id: assessmentId,
@@ -375,7 +397,7 @@ export default function AssessmentWorkspacePage({
     setLastScanResult(result);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile } = await (supabase as any)
+      const { data: profile } = await supabase
         .from('profiles')
         .select('tenant_id')
         .eq('id', user?.id || '')
@@ -446,7 +468,7 @@ export default function AssessmentWorkspacePage({
       const percentage = Math.round((score / itemCount) * 1000) / 10;
 
       // Insert scan result record with student reference
-      const { error: scanErr } = await (supabase as any)
+      const { error: scanErr } = await supabase
         .from('scan_results')
         .insert({
           assessment_id: assessmentId,
@@ -462,7 +484,7 @@ export default function AssessmentWorkspacePage({
       if (scanErr) throw scanErr;
 
       // Upsert into responses
-      await (supabase as any).from('responses').upsert(
+      await supabase.from('responses').upsert(
         {
           assessment_id: assessmentId,
           tenant_id: tenantId,
@@ -487,7 +509,7 @@ export default function AssessmentWorkspacePage({
       );
 
       // Refetch scan results and responses
-      const { data: refreshedScans } = await (supabase as any)
+      const { data: refreshedScans } = await supabase
         .from('scan_results')
         .select('*')
         .eq('assessment_id', assessmentId)
@@ -495,7 +517,7 @@ export default function AssessmentWorkspacePage({
 
       if (refreshedScans) setScanResults(refreshedScans);
 
-      const { data: refreshedResponses } = await (supabase as any)
+      const { data: refreshedResponses } = await supabase
         .from('responses')
         .select('*')
         .eq('assessment_id', assessmentId)
@@ -544,49 +566,12 @@ export default function AssessmentWorkspacePage({
     let itemsList: { itemNumber: number; code: string; description: string; domain: string }[] = [];
     const competencies = tosDoc?.rows || [];
     if (competencies.length > 0) {
-      const totalHoursSum = competencies.reduce((sum: number, c: any) => sum + (Number(c.hours) || 0), 0);
-      const effectiveHours = totalHoursSum > 0 ? totalHoursSum : 40;
-      let currentItemNum = 1;
-
-      competencies.forEach((comp: any, compIdx: number) => {
-        const compItemCount = compIdx === competencies.length - 1
-          ? (itemCount - itemsList.length)
-          : Math.max(1, Math.round(((Number(comp.hours) || 0) / effectiveHours) * itemCount));
-
-        let dom = 'remembering';
-        if (comp.domains) {
-          const domEntries = Object.entries(comp.domains);
-          const topDom = domEntries.sort((a: any, b: any) => Number(b[1]) - Number(a[1]))[0];
-          if (topDom && Number(topDom[1]) > 0) dom = topDom[0];
-        }
-
-        for (let k = 0; k < compItemCount; k++) {
-          if (currentItemNum <= itemCount) {
-            itemsList.push({
-              itemNumber: currentItemNum,
-              code: comp.code || `COMP-${compIdx + 1}`,
-              description: comp.description || comp.competency || 'DepEd Competency',
-              domain: dom,
-            });
-            currentItemNum++;
-          }
-        }
-      });
-
-      while (itemsList.length < itemCount) {
-        const lastComp = competencies[competencies.length - 1] || { code: 'CS_GENERAL', description: 'General Assessment Item' };
-        itemsList.push({
-          itemNumber: itemsList.length + 1,
-          code: lastComp.code || 'CS_GENERAL',
-          description: lastComp.description || lastComp.competency || 'General Assessment Item',
-          domain: 'remembering',
-        });
-      }
+      itemsList = projectTosItems(competencies, itemCount);
     } else {
       const domainKeys = ['remembering', 'understanding', 'applying', 'analyzing', 'evaluating', 'creating'];
       itemsList = Array.from({ length: itemCount }, (_, idx) => ({
         itemNumber: idx + 1,
-        code: `CSHS-${idx < 15 ? 'KNOW' : idx < 35 ? 'PROC' : 'REAS'}-${String(idx + 1).padStart(2, '0')}`,
+        code: `ITEM-${String(idx + 1).padStart(3, '0')}`,
         description: `Assessment Item ${idx + 1} Aligned Competency`,
         domain: domainKeys[idx % domainKeys.length],
       }));
@@ -595,12 +580,14 @@ export default function AssessmentWorkspacePage({
     // 2. Parse scan results examinee responses
     const actualN = scanResults.length;
     const examinees = scanResults.map((scan) => {
-      let ansMap: Record<number, string | null> = {};
-      if (scan.raw_answers && typeof scan.raw_answers === 'object') {
-        ansMap = scan.raw_answers;
+      const ansMap: Record<number, string | null> = {};
+      if (scan.raw_answers && typeof scan.raw_answers === 'object' && !Array.isArray(scan.raw_answers)) {
+        Object.entries(scan.raw_answers).forEach(([k, v]) => {
+          ansMap[Number(k)] = typeof v === 'string' ? v : null;
+        });
       } else if (Array.isArray(scan.normalized_answers)) {
-        scan.normalized_answers.forEach((val: string | null, idx: number) => {
-          ansMap[idx + 1] = val;
+        scan.normalized_answers.forEach((val, idx) => {
+          ansMap[idx + 1] = typeof val === 'string' ? val : null;
         });
       }
       let score = 0;
@@ -820,7 +807,7 @@ export default function AssessmentWorkspacePage({
           <button
             type="button"
             onClick={() => handleTabChange('tos')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs shadow-xs transition"
+            className="inline-flex min-h-10 items-center gap-1.5 px-3 rounded-lg bg-blue-700 hover:bg-blue-800 text-white font-semibold text-xs transition"
           >
             <Sparkles className="h-3.5 w-3.5 text-blue-200" />
             <span>Generate Exam</span>

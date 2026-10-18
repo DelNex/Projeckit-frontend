@@ -16,6 +16,8 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useTenant } from '@/context/TenantContext';
+import { getPhilippineSchoolYear } from '@/lib/academic-calendar';
+import { projectTosItems } from '@/lib/tos-item-projection';
 import { friendlyError } from '@/lib/errors';
 import {
   exportReportToPdf,
@@ -89,7 +91,8 @@ function getAssessmentPeriodPosition(termName: string, periods: GradingPeriodInf
 }
 
 function AnalyticsContent() {
-  const { tenantName } = useTenant();
+  const { tenantName, userDisplayName, schoolYear } = useTenant();
+  const effectiveSchoolYear = schoolYear || getPhilippineSchoolYear();
   const supabase = createClient();
   const searchParams = useSearchParams();
   const initialTab = (searchParams?.get('tab') as TabKey) || 'sectional';
@@ -117,6 +120,10 @@ function AnalyticsContent() {
   const [selectedSection, setSelectedSection] = useState<string>('all');
   const [selectedQuarter, setSelectedQuarter] = useState<string>('all');
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
+  const schoolYears = useMemo(() => {
+    const years = new Set([effectiveSchoolYear, ...assessments.map((assessment) => assessment.schoolYear)].filter(Boolean));
+    return Array.from(years).sort((a, b) => b.localeCompare(a));
+  }, [assessments, effectiveSchoolYear]);
 
   // Selected Assessment for Item Analysis tab
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string>('');
@@ -192,7 +199,7 @@ function AnalyticsContent() {
         sectionName: a.sections?.name || 'Class',
         grade: a.sections?.grade || '',
         strand: a.sections?.strand_code || '',
-        schoolYear: a.school_year || '2025-2026',
+        schoolYear: a.school_year || effectiveSchoolYear,
         term: a.term || 'First Quarter',
         targetItems: a.target_items || 50,
         classSize: a.class_size || 40,
@@ -409,7 +416,7 @@ function AnalyticsContent() {
 
   // Longitudinal Growth Data (Real quarterly breakdown across school years)
   const longitudinalData = useMemo(() => {
-    const years = ['2024–2025', '2025–2026', '2026–2027'];
+    const years = schoolYears;
     const activePeriods =
       gradingPeriods.length > 0
         ? gradingPeriods
@@ -458,7 +465,7 @@ function AnalyticsContent() {
         quarterScores: yrSeries,
       };
     });
-  }, [assessments, scanResults, answerKeys, selectedSubject, selectedSection, gradingPeriods]);
+  }, [assessments, scanResults, answerKeys, selectedSubject, selectedSection, gradingPeriods, schoolYears]);
 
   const hasLongitudinalData = useMemo(() => {
     return longitudinalData.some((yr) => yr.quarterScores.some((s) => s !== null));
@@ -484,49 +491,12 @@ function AnalyticsContent() {
     let itemsStructure: { itemNumber: number; code: string; description: string; domain: string }[] = [];
 
     if (tos.length > 0) {
-      const totalHours = tos.reduce((sum, c) => sum + (Number(c.hours) || 0), 0);
-      const effectiveHours = totalHours > 0 ? totalHours : 40;
-      let currentItemNum = 1;
-
-      tos.forEach((comp, compIdx) => {
-        const count = compIdx === tos.length - 1
-          ? (targetItems - itemsStructure.length)
-          : Math.max(1, Math.round(((Number(comp.hours) || 0) / effectiveHours) * targetItems));
-
-        let dom = 'remembering';
-        if (comp.domains) {
-          const domEntries = Object.entries(comp.domains);
-          const topDom = domEntries.sort((a: any, b: any) => Number(b[1]) - Number(a[1]))[0];
-          if (topDom && Number(topDom[1]) > 0) dom = topDom[0];
-        }
-
-        for (let k = 0; k < count; k++) {
-          if (currentItemNum <= targetItems) {
-            itemsStructure.push({
-              itemNumber: currentItemNum,
-              code: comp.code || `COMP-${compIdx + 1}`,
-              description: comp.description || comp.competency || 'TOS Competency',
-              domain: dom,
-            });
-            currentItemNum++;
-          }
-        }
-      });
-
-      while (itemsStructure.length < targetItems) {
-        const lastComp = tos[tos.length - 1] || { code: 'CS_GENERAL', description: 'General Item' };
-        itemsStructure.push({
-          itemNumber: itemsStructure.length + 1,
-          code: lastComp.code || 'CS_GENERAL',
-          description: lastComp.description || lastComp.competency || 'General Item',
-          domain: 'remembering',
-        });
-      }
+      itemsStructure = projectTosItems(tos, targetItems);
     } else {
       const domainKeys = ['remembering', 'understanding', 'applying', 'analyzing', 'evaluating', 'creating'];
       itemsStructure = Array.from({ length: targetItems }, (_, i) => ({
         itemNumber: i + 1,
-        code: `CSHS-${i < 15 ? 'KNOW' : i < 35 ? 'PROC' : 'REAS'}-${String(i + 1).padStart(2, '0')}`,
+        code: `ITEM-${String(i + 1).padStart(3, '0')}`,
         description: `Assessment Item ${i + 1} Aligned Competency`,
         domain: domainKeys[i % domainKeys.length],
       }));
@@ -731,7 +701,7 @@ function AnalyticsContent() {
         window.print();
         return;
       }
-      const report = await generateAssessmentReportData(targetId, { tenantName });
+      const report = await generateAssessmentReportData(targetId, { tenantName, teacherName: userDisplayName });
       exportReportToPdf(report);
     } catch (err: any) {
       alert('Could not export PDF report: ' + (err.message || 'Unknown error'));
@@ -748,7 +718,7 @@ function AnalyticsContent() {
         const rows: string[] = [];
         rows.push(`"${tenantName || 'Department of Education'}"`);
         rows.push('"CONSOLIDATED DEPED ACADEMIC MASTERY REPORT"');
-        rows.push(`"School Year: ${selectedSchoolYear === 'all' ? '2025–2026' : selectedSchoolYear}"`);
+        rows.push(`"School Year: ${selectedSchoolYear === 'all' ? effectiveSchoolYear : selectedSchoolYear}"`);
         rows.push(`"Date: ${new Date().toLocaleDateString()}"`);
         rows.push('');
         rows.push('"Section Name","Enrolled Students","Scanned Students","Mean Score (X̄)","Standard Deviation (S)","Mean Percentage Score (MPS %)","Outstanding Count","Did Not Meet Count"');
@@ -767,7 +737,7 @@ function AnalyticsContent() {
         URL.revokeObjectURL(url);
         return;
       }
-      const report = await generateAssessmentReportData(targetId, { tenantName });
+      const report = await generateAssessmentReportData(targetId, { tenantName, teacherName: userDisplayName });
       exportReportToExcel(report);
     } catch (err: any) {
       alert('Could not export Excel report: ' + (err.message || 'Unknown error'));
@@ -852,9 +822,7 @@ function AnalyticsContent() {
               className="px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium"
             >
               <option value="all">All School Years</option>
-              <option value="2025–2026">2025–2026</option>
-              <option value="2026–2027">2026–2027</option>
-              <option value="2024–2025">2024–2025</option>
+              {schoolYears.map((year) => <option key={year} value={year}>{year.replace('-', '–')}</option>)}
             </select>
 
             <select
@@ -1423,7 +1391,7 @@ function AnalyticsContent() {
               Knowledge Insight Tool (KIT) Consolidated Academic Performance Report
             </p>
             <div className="mt-3 flex flex-wrap items-center justify-center gap-6 border-t border-gray-100 pt-3 text-xs text-gray-500 dark:border-gray-800 dark:text-gray-400">
-              <div><strong>School Year:</strong> {selectedSchoolYear === 'all' ? '2025–2026' : selectedSchoolYear}</div>
+              <div><strong>School Year:</strong> {(selectedSchoolYear === 'all' ? effectiveSchoolYear : selectedSchoolYear).replace('-', '–')}</div>
               <div><strong>Strand:</strong> {selectedStrand === 'all' ? 'All Strands' : selectedStrand}</div>
               <div>
                 <strong>Term:</strong>{' '}

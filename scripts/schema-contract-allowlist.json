@@ -1,0 +1,11 @@
+{
+  "description": "Allow-list for known false positives or computed virtual fields in schema contract check",
+  "allowedColumns": {
+    "assessments": ["count", "id"],
+    "sections": ["count", "id"],
+    "tos_documents": ["count", "id"],
+    "students": ["count", "id"],
+    "grading_periods": ["count", "id"]
+  }
+}
+

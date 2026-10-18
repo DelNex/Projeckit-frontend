@@ -127,6 +127,15 @@ export function BulkAddStudentsModal({
     return map;
   }, [sections]);
 
+  // Map of active section IDs for foreign key lookup
+  const sectionIdMap = useMemo(() => {
+    const map = new Map<string, string>();
+    sections.forEach((s) => {
+      map.set(s.name.trim().toLowerCase(), s.id);
+    });
+    return map;
+  }, [sections]);
+
   // Existing LRN sets
   const activeLrnSet = useMemo(() => {
     const set = new Set<string>();
@@ -378,6 +387,7 @@ function detectColumnMapping(firstRow: string[]): ColumnMapping {
         config_id: configId,
         lrn: r.rawLrn,
         name: r.rawName,
+        section_id: sectionIdMap.get(r.normalizedSection.trim().toLowerCase()) || null,
         section_name: r.normalizedSection,
       }));
 
