@@ -172,6 +172,14 @@ export function TosExamModal({
 
   // Generate Examination
   const handleGenerateExam = async () => {
+    const hasAnyLessonMaterial = Object.values(materials).some((material) =>
+      material.files.some((file) => file.text.trim().length > 0)
+    );
+    if (!hasAnyLessonMaterial) {
+      toast.error('Upload at least one lesson module before generating the exam.');
+      return;
+    }
+
     // Check if any competency has no files
     const missingCompetencies = (tos.rows || []).filter((r, idx) => {
       const id = r.id || String(idx + 1);
@@ -204,8 +212,7 @@ export function TosExamModal({
       });
 
       if (!combinedText.trim()) {
-        combinedText = `Generate a DepEd standardized assessment for ${tos.subject} (${tos.term}) based on competencies:\n` +
-          (tos.rows || []).map((r, i) => `${i + 1}. ${r.description}`).join('\n');
+        throw new Error('Upload at least one lesson module before generating the exam.');
       }
 
       setGenerationProgress('Generating questions in structured chunks...');

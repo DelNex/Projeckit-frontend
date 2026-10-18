@@ -1,7 +1,11 @@
 /**
  * Project KIT — Client Lesson Text Extractor Bridge
- * Delegates document extraction strictly to the secure server extraction endpoint.
+ * Uploads lesson files directly to private Supabase Storage, then asks the
+ * authenticated server endpoint to extract them without passing file bytes
+ * through the hosting platform's API request-size limit.
  */
+
+import { createClient } from '@/lib/supabase/client';
 
 export interface LessonExtractionClientResult {
   text: string;
@@ -34,8 +38,8 @@ export async function extractTextFromFiles(files: File[]): Promise<LessonExtract
   }
 
   for (const file of files) {
-    if (file.size > 10 * 1024 * 1024) {
-      throw new Error(`File '${file.name}' exceeds the 10 MB maximum limit.`);
+    if (file.size > 50 * 1024 * 1024) {
+      throw new Error(`File '${file.name}' exceeds the 50 MB maximum. Split the material into smaller files.`);
     }
   }
 
@@ -45,13 +49,31 @@ export async function extractTextFromFiles(files: File[]): Promise<LessonExtract
   // Parse and return one document at a time. This keeps long uploads bounded and
   // preserves document boundaries for the sequential Gemini helper.
   for (const file of files) {
-    const formData = new FormData();
-    formData.append('files', file);
-    const response = await fetch('/api/ai/extract-lesson-text', {
-      method: 'POST',
-      body: formData,
-    });
-    const data = await response.json().catch(() => ({}));
+    const supabase = createClient();
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) throw new Error('Sign in again before uploading lesson materials.');
+
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-180) || 'lesson-material';
+    const storagePath = `${authData.user.id}/lesson-imports/${crypto.randomUUID()}/${safeName}`;
+    const { error: uploadError } = await supabase.storage
+      .from('lesson-uploads')
+      .upload(storagePath, file, { contentType: file.type || 'application/octet-stream', upsert: false });
+    if (uploadError) throw new Error(`Could not upload '${file.name}': ${uploadError.message}`);
+
+    let response: Response;
+    try {
+      response = await fetch('/api/ai/extract-lesson-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storagePath, name: file.name }),
+      });
+    } catch (error) {
+      await supabase.storage.from('lesson-uploads').remove([storagePath]);
+      throw error;
+    }
+    const data = await response.json().catch(() => null);
+    await supabase.storage.from('lesson-uploads').remove([storagePath]);
+    if (!data) throw new Error(`The server returned an invalid extraction response for '${file.name}'.`);
     if (!response.ok) throw new Error(data.error || `Failed to extract text from ${file.name}.`);
 
     const extracted = Array.isArray(data.documents) ? data.documents : data.files;

@@ -33,7 +33,15 @@ export async function generateExamThroughApi(
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000),
       cache: 'no-store',
     });
-    const result = await response.json().catch(() => ({}));
+    const responseText = await response.text();
+    let result: ExamGenerationResult = {};
+    try {
+      result = JSON.parse(responseText) as ExamGenerationResult;
+    } catch {
+      throw new Error(response.status === 413
+        ? 'The server rejected this request as too large. Lesson files are uploaded separately; please retry or contact support if this continues.'
+        : 'The server returned an invalid response while generating the exam. Please try again or contact support if it continues.');
+    }
 
     if (response.status === 202 && result.helperJobId) {
       helperJobId = result.helperJobId;

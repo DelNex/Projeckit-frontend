@@ -200,8 +200,8 @@ export async function POST(request: Request) {
     if (lessonDocuments !== undefined && (!Array.isArray(lessonDocuments) || lessonDocuments.some((document) => !document || typeof document.name !== 'string' || typeof document.text !== 'string'))) {
       return NextResponse.json({ error: 'Lesson documents must include a file name and extracted text.' }, { status: 400 });
     }
-    if (!helperJobId && (!lessonText || !lessonText.trim()) && (!lessonDocuments || lessonDocuments.length === 0)) {
-      return NextResponse.json({ error: 'Please provide lesson materials or upload lesson notes.' }, { status: 400 });
+    if (!helperJobId && (!lessonText || !lessonText.trim()) && (!lessonDocuments || !lessonDocuments.some((document) => document.text.trim()))) {
+      return NextResponse.json({ error: 'Please upload a lesson module or provide lesson content before generating an exam.' }, { status: 400 });
     }
     const sourceDocuments = lessonDocuments?.length
       ? lessonDocuments
@@ -211,6 +211,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'These lessons contain more than 500,000 characters. Split them into smaller uploads so no lesson content is dropped.' }, { status: 413 });
     }
     const completeLessonText = sourceDocuments.map((document) => `--- ${document.name} ---\n${document.text}`).join('\n\n');
+    if (!helperJobId && !completeLessonText.trim()) {
+      return NextResponse.json({ error: 'Uploaded lesson materials contain no readable text. Please upload a readable PDF, Word document, or lesson content.' }, { status: 400 });
+    }
     const sanitizedLessonText = completeLessonText.slice(0, 40000).trim();
     const geminiLessonChunks = buildGeminiLessonChunks(sourceDocuments);
     if (geminiLessonChunks.length > 50) {
@@ -370,20 +373,26 @@ export async function POST(request: Request) {
 
     // 9. Persist to database if assessmentId / tosId provided
     if (assessmentId && finalQuestions.length > 0) {
-      await adminClient
+      const { data: updatedAssessment, error: assessmentSaveError } = await adminClient
         .from('assessments')
         .update({
           questions: finalQuestions,
           exam_status: 'DRAFT',
         })
-        .eq('id', assessmentId);
+        .eq('id', assessmentId)
+        .eq('tenant_id', tenantId)
+        .select('id')
+        .maybeSingle();
+      if (assessmentSaveError || !updatedAssessment) {
+        return NextResponse.json({ error: assessmentSaveError?.message || 'The generated questions could not be saved to this school assessment.' }, { status: 500 });
+      }
 
       const answersRecord: Record<number, string> = {};
       finalQuestions.forEach((q) => {
         answersRecord[q.item_number] = q.correct_answer;
       });
 
-      await adminClient.from('answer_keys').upsert(
+      const { error: answerKeySaveError } = await adminClient.from('answer_keys').upsert(
         {
           assessment_id: assessmentId,
           tenant_id: tenantId,
@@ -391,15 +400,24 @@ export async function POST(request: Request) {
         },
         { onConflict: 'assessment_id' }
       );
+      if (answerKeySaveError) {
+        return NextResponse.json({ error: `Questions were generated but the answer key could not be saved: ${answerKeySaveError.message}` }, { status: 500 });
+      }
     }
 
     if (tosId && finalQuestions.length > 0) {
-      await adminClient
+      const { data: updatedTos, error: tosSaveError } = await adminClient
         .from('tos_documents')
         .update({
           questions: finalQuestions,
         })
-        .eq('id', tosId);
+        .eq('id', tosId)
+        .eq('tenant_id', tenantId)
+        .select('id')
+        .maybeSingle();
+      if (tosSaveError || !updatedTos) {
+        return NextResponse.json({ error: tosSaveError?.message || 'The generated questions could not be saved to this school TOS.' }, { status: 500 });
+      }
     }
 
     // 10. Audit Log Entry (Requirement 6)

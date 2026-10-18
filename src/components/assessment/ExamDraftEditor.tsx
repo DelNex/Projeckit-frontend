@@ -155,18 +155,18 @@ export function ExamDraftEditor({
   const handleSaveDraft = async () => {
     setSaving(true);
     try {
-      const res = await fetch('/api/ai/generate-exam', {
+      const res = await fetch('/api/ai/save-exam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           assessmentId,
           tosId,
-          lessonText: lessonText || 'Saved draft questions',
-          targetItems: questions.length,
-          tosRows: [],
+          questions,
+          mode: 'draft',
         }),
       });
-      // In addition or alternatively, save directly to assessment questions column
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.error || 'Failed to save exam draft.');
       toast.success('Exam draft saved successfully.');
       onQuestionsSaved?.(questions);
     } catch (err: any) {
@@ -186,18 +186,18 @@ export function ExamDraftEditor({
     setSaving(true);
     try {
       // 1. Send update to save questions and status
-      const res = await fetch('/api/ai/generate-exam', {
+      const res = await fetch('/api/ai/save-exam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           assessmentId,
           tosId,
-          lessonText: 'Approved exam',
-          targetItems: questions.length,
-          tosRows: [],
+          questions,
+          mode: 'approve',
         }),
       });
-
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.error || 'Could not approve this exam.');
       toast.success('Exam approved! Questions and Answer Key are now synchronized.');
       onApproveSuccess?.();
     } catch (err: any) {
@@ -503,4 +503,3 @@ export function ExamDraftEditor({
     </div>
   );
 }
-

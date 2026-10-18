@@ -101,8 +101,8 @@ export function ExamGeneratorModal({
         return;
       }
 
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error(`'${file.name}' exceeds the 10 MB limit.`);
+      if (file.size > 50 * 1024 * 1024) {
+        toast.error(`'${file.name}' exceeds the 50 MB limit. Split the material into smaller files.`);
         return;
       }
 
@@ -380,7 +380,7 @@ export function ExamGeneratorModal({
                   Drop your lesson materials here, or <span className="text-blue-600 underline">browse</span>
                 </p>
                 <p className="text-[11px] text-gray-400">
-                  Supports PDF, DOCX, PPTX, or TXT (up to 5 files, max 10MB each)
+                  Supports PDF, DOCX, PPTX, or TXT (up to 5 files, max 50 MB each)
                 </p>
               </div>
             </div>
