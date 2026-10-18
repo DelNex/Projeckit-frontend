@@ -1,6 +1,6 @@
 'use client';
 
-import { createClient } from '@/lib/supabase/client';
+import { createClient, invalidateClientQueryCache } from '@/lib/supabase/client';
 import {
     BarChart3,
     CheckSquare,
@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTenant } from '@/context/TenantContext';
 import { getPhilippineSchoolYear } from '@/lib/academic-calendar';
 import { projectTosItems } from '@/lib/tos-item-projection';
@@ -77,6 +77,20 @@ interface GradingPeriodInfo {
   position: number;
 }
 
+interface AnalyticsSnapshot {
+  sections: SectionItem[];
+  subjects: SubjectItem[];
+  assessments: AssessmentItem[];
+  gradingPeriods: GradingPeriodInfo[];
+  scanResults: ScanRecord[];
+  answerKeys: Record<string, Record<number, string>>;
+  tosDocuments: Record<string, TosDocRecord>;
+  updatedAt: number;
+}
+
+const ANALYTICS_CACHE_TTL_MS = 60_000;
+const analyticsCache = new Map<string, AnalyticsSnapshot>();
+
 function getAssessmentPeriodPosition(termName: string, periods: GradingPeriodInfo[]): number {
   const clean = (termName || '').trim().toLowerCase();
   const match = periods.find((p) => p.name.trim().toLowerCase() === clean);
@@ -91,9 +105,9 @@ function getAssessmentPeriodPosition(termName: string, periods: GradingPeriodInf
 }
 
 function AnalyticsContent() {
-  const { tenantName, userDisplayName, schoolYear } = useTenant();
+  const { tenantId, tenantName, userDisplayName, userEmail, schoolYear, isLoading: tenantLoading } = useTenant();
   const effectiveSchoolYear = schoolYear || getPhilippineSchoolYear();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const searchParams = useSearchParams();
   const initialTab = (searchParams?.get('tab') as TabKey) || 'sectional';
 
@@ -112,6 +126,8 @@ function AnalyticsContent() {
   const [scanResults, setScanResults] = useState<ScanRecord[]>([]);
   const [answerKeys, setAnswerKeys] = useState<Record<string, Record<number, string>>>({});
   const [tosDocuments, setTosDocuments] = useState<Record<string, TosDocRecord>>({});
+  const loadRequestId = useRef(0);
+  const lastLoadedAt = useRef(0);
 
   // Academic Context Filter Picklists (Matching Legacy Frontend)
   const [selectedSchoolYear, setSelectedSchoolYear] = useState<string>('all');
@@ -128,15 +144,67 @@ function AnalyticsContent() {
   // Selected Assessment for Item Analysis tab
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string>('');
 
+  useEffect(() => {
+    const requestedTab = searchParams?.get('tab') as TabKey | null;
+    if (requestedTab && ['sectional', 'longitudinal', 'cognitive', 'item-analysis', 'reports'].includes(requestedTab)) {
+      setActiveTab(requestedTab);
+    }
+  }, [searchParams]);
+
   // 1. Fetch All Authentic Data from Supabase
-  const loadData = async () => {
-    setLoading(true);
+  const applySnapshot = useCallback((snapshot: AnalyticsSnapshot) => {
+    lastLoadedAt.current = snapshot.updatedAt;
+    setSections(snapshot.sections);
+    setSubjects(snapshot.subjects);
+    setAssessments(snapshot.assessments);
+    setGradingPeriods(snapshot.gradingPeriods);
+    setScanResults(snapshot.scanResults);
+    setAnswerKeys(snapshot.answerKeys);
+    setTosDocuments(snapshot.tosDocuments);
+    setLastUpdated(new Date(snapshot.updatedAt));
+    setSelectedAssessmentId((current) => current || snapshot.assessments[0]?.id || '');
+  }, []);
+
+  const loadData = useCallback(async (forceRefresh = false) => {
+    const requestId = ++loadRequestId.current;
+    if (forceRefresh) invalidateClientQueryCache();
+    if (!tenantId) {
+      if (!tenantLoading) setLoading(false);
+      return;
+    }
+    const cacheKey = `${tenantId}:${userEmail}`;
+    const cached = analyticsCache.get(cacheKey);
+    if (cached && !forceRefresh) {
+      applySnapshot(cached);
+      setLoading(false);
+      setError(null);
+      const isFresh = Date.now() - cached.updatedAt < ANALYTICS_CACHE_TTL_MS;
+      setRefreshing(!isFresh);
+    } else if (!cached) {
+      setLoading(true);
+    }
     try {
-      // 1. Sections
-      const { data: secData } = await (supabase as any)
-        .from('sections')
-        .select('id, name, grade, strand_code, student_count')
-        .order('name');
+      // Fetch independent report sources together instead of waiting for each network round-trip.
+      const [sectionsResult, subjectsResult, periodsResult, assessmentsResult, scansResult, keysResult, tosResult] = await Promise.all([
+        (supabase as any).from('sections').select('id, name, grade, strand_code, student_count').order('name'),
+        (supabase as any).from('subjects').select('id, code, title, target_items').order('title'),
+        (supabase as any).from('grading_periods').select('id, name, code, position').eq('is_archived', false).order('position', { ascending: true }),
+        (supabase as any).from('assessments').select('id, title, term, school_year, target_items, class_size, passing_mps, subjects ( title, code ), sections ( name, grade, strand_code )').order('created_at', { ascending: false }),
+        (supabase as any).from('scan_results').select('id, assessment_id, student_id, confidence, raw_answers, normalized_answers, status').order('created_at', { ascending: false }),
+        (supabase as any).from('answer_keys').select('assessment_id, answers'),
+        (supabase as any).from('tos_documents').select('assessment_id, rows'),
+      ]);
+      if (requestId !== loadRequestId.current) return;
+
+      const queryError = [sectionsResult, subjectsResult, periodsResult, assessmentsResult, scansResult, keysResult, tosResult].find((result) => result.error)?.error;
+      if (queryError) throw queryError;
+      const secData = sectionsResult.data;
+      const subData = subjectsResult.data;
+      const gpData = periodsResult.data;
+      const assData = assessmentsResult.data;
+      const scanData = scansResult.data;
+      const keyData = keysResult.data;
+      const tosData = tosResult.data;
 
       const parsedSections: SectionItem[] = (secData || []).map((s: any) => ({
         id: s.id,
@@ -145,53 +213,24 @@ function AnalyticsContent() {
         strand: s.strand_code || '',
         studentCount: s.student_count || 40,
       }));
-      setSections(parsedSections);
 
       // 2. Subjects
-      const { data: subData } = await (supabase as any)
-        .from('subjects')
-        .select('id, code, title, target_items')
-        .order('title');
-
       const parsedSubjects: SubjectItem[] = (subData || []).map((s: any) => ({
         id: s.id,
         code: s.code,
         title: s.title,
         targetItems: s.target_items || 50,
       }));
-      setSubjects(parsedSubjects);
 
       // 2b. Grading Periods
-      const { data: gpData } = await (supabase as any)
-        .from('grading_periods')
-        .select('id, name, code, position')
-        .eq('is_archived', false)
-        .order('position', { ascending: true });
-
       const parsedPeriods: GradingPeriodInfo[] = (gpData || []).map((g: any) => ({
         id: g.id,
         name: g.name,
         code: g.code,
         position: Number(g.position) || 1,
       }));
-      setGradingPeriods(parsedPeriods);
 
       // 3. Assessments
-      const { data: assData } = await (supabase as any)
-        .from('assessments')
-        .select(`
-          id,
-          title,
-          term,
-          school_year,
-          target_items,
-          class_size,
-          passing_mps,
-          subjects ( title, code ),
-          sections ( name, grade, strand_code )
-        `)
-        .order('created_at', { ascending: false });
-
       const parsedAssessments: AssessmentItem[] = (assData || []).map((a: any) => ({
         id: a.id,
         title: a.title,
@@ -205,18 +244,8 @@ function AnalyticsContent() {
         classSize: a.class_size || 40,
         passingMps: a.passing_mps || 60,
       }));
-      setAssessments(parsedAssessments);
-
-      if (parsedAssessments.length > 0 && !selectedAssessmentId) {
-        setSelectedAssessmentId(parsedAssessments[0].id);
-      }
 
       // 4. Scan Results
-      const { data: scanData } = await (supabase as any)
-        .from('scan_results')
-        .select('id, assessment_id, student_id, confidence, raw_answers, normalized_answers, status')
-        .order('created_at', { ascending: false });
-
       const parsedScans: ScanRecord[] = (scanData || []).map((s: any) => {
         let ansMap: Record<number, string | null> = {};
         if (s.raw_answers && typeof s.raw_answers === 'object') {
@@ -235,50 +264,82 @@ function AnalyticsContent() {
           normalizedAnswers: Array.isArray(s.normalized_answers) ? s.normalized_answers : [],
         };
       });
-      setScanResults(parsedScans);
 
       // 5. Answer Keys
-      const { data: keyData } = await (supabase as any)
-        .from('answer_keys')
-        .select('assessment_id, answers');
-
       const keysMap: Record<string, Record<number, string>> = {};
       (keyData || []).forEach((k: any) => {
         if (k.assessment_id && k.answers && typeof k.answers === 'object') {
           keysMap[k.assessment_id] = k.answers;
         }
       });
-      setAnswerKeys(keysMap);
 
       // 6. TOS Documents
-      const { data: tosData } = await (supabase as any)
-        .from('tos_documents')
-        .select('assessment_id, rows');
-
       const tosMap: Record<string, TosDocRecord> = {};
       (tosData || []).forEach((t: any) => {
         if (t.assessment_id && Array.isArray(t.rows)) {
           tosMap[t.assessment_id] = { assessmentId: t.assessment_id, rows: t.rows };
         }
       });
-      setTosDocuments(tosMap);
-      setLastUpdated(new Date());
+      const snapshot: AnalyticsSnapshot = {
+        sections: parsedSections,
+        subjects: parsedSubjects,
+        assessments: parsedAssessments,
+        gradingPeriods: parsedPeriods,
+        scanResults: parsedScans,
+        answerKeys: keysMap,
+        tosDocuments: tosMap,
+        updatedAt: Date.now(),
+      };
+      analyticsCache.set(cacheKey, snapshot);
+      applySnapshot(snapshot);
+      setError(null);
     } catch (err: any) {
+      if (requestId !== loadRequestId.current) return;
       console.error('Failed to load analytics data:', err);
       setError(friendlyError(err, 'Could not load academic analytics data.'));
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (requestId === loadRequestId.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  };
+  }, [tenantId, tenantLoading, userEmail, supabase, effectiveSchoolYear, applySnapshot]);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (!tenantLoading) void loadData();
+  }, [loadData, tenantLoading]);
+
+  useEffect(() => {
+    if (!tenantId) return;
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    const refreshSoon = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => void loadData(true), 350);
+    };
+    const refreshIfOld = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastLoadedAt.current >= ANALYTICS_CACHE_TTL_MS) {
+        refreshSoon();
+      }
+    };
+    const watchedTables = ['sections', 'subjects', 'grading_periods', 'assessments', 'scan_results', 'answer_keys', 'tos_documents'];
+    let channel = supabase.channel(`analytics-updates-${tenantId}`);
+    watchedTables.forEach((table) => {
+      channel = channel.on('postgres_changes', { event: '*', schema: 'public', table }, refreshSoon);
+    });
+    channel.subscribe();
+    window.addEventListener('focus', refreshIfOld);
+    document.addEventListener('visibilitychange', refreshIfOld);
+    return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      window.removeEventListener('focus', refreshIfOld);
+      document.removeEventListener('visibilitychange', refreshIfOld);
+      void supabase.removeChannel(channel);
+    };
+  }, [tenantId, supabase, loadData]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    await loadData(true);
   };
 
   // Filter sections dropdown dynamically based on selected strand & grade
@@ -329,6 +390,16 @@ function AnalyticsContent() {
     });
   }, [assessments, selectedSchoolYear, selectedQuarter, selectedSubject, selectedSection, selectedGrade, selectedStrand, gradingPeriods]);
 
+  const scansByAssessment = useMemo(() => {
+    const grouped = new Map<string, ScanRecord[]>();
+    scanResults.forEach((scan) => {
+      const group = grouped.get(scan.assessmentId);
+      if (group) group.push(scan);
+      else grouped.set(scan.assessmentId, [scan]);
+    });
+    return grouped;
+  }, [scanResults]);
+
   // Calculate live aggregate MPS and Mastery for the Summary Badges
   const aggregateMetrics = useMemo(() => {
     let totalCorrect = 0;
@@ -336,7 +407,7 @@ function AnalyticsContent() {
     let totalScans = 0;
 
     filteredAssessments.forEach((ass) => {
-      const assScans = scanResults.filter((s) => s.assessmentId === ass.id);
+      const assScans = scansByAssessment.get(ass.id) || [];
       const key = answerKeys[ass.id] || {};
       if (assScans.length === 0) return;
 
@@ -367,7 +438,7 @@ function AnalyticsContent() {
       mps: mps !== null ? Math.round(mps * 10) / 10 : null,
       mastery,
     };
-  }, [filteredAssessments, scanResults, answerKeys]);
+  }, [filteredAssessments, scansByAssessment, answerKeys]);
 
   // Sectional Achievement Data (Real calculations grouped by section)
   const sectionalData = useMemo(() => {
@@ -382,7 +453,7 @@ function AnalyticsContent() {
       let secScansCount = 0;
 
       secAssessments.forEach((ass) => {
-        const assScans = scanResults.filter((s) => s.assessmentId === ass.id);
+        const assScans = scansByAssessment.get(ass.id) || [];
         const key = answerKeys[ass.id] || {};
         secScansCount += assScans.length;
 
@@ -408,7 +479,7 @@ function AnalyticsContent() {
         mps,
       };
     });
-  }, [filteredSectionOptions, selectedSection, filteredAssessments, scanResults, answerKeys]);
+  }, [filteredSectionOptions, selectedSection, filteredAssessments, scansByAssessment, answerKeys]);
 
   const hasSectionalData = useMemo(() => {
     return sectionalData.some((s) => s.mps !== null);
@@ -442,7 +513,7 @@ function AnalyticsContent() {
         let totalPossible = 0;
 
         qtrAssessments.forEach((ass) => {
-          const assScans = scanResults.filter((s) => s.assessmentId === ass.id);
+          const assScans = scansByAssessment.get(ass.id) || [];
           const key = answerKeys[ass.id] || {};
           assScans.forEach((scan) => {
             for (let i = 1; i <= ass.targetItems; i++) {
@@ -465,7 +536,7 @@ function AnalyticsContent() {
         quarterScores: yrSeries,
       };
     });
-  }, [assessments, scanResults, answerKeys, selectedSubject, selectedSection, gradingPeriods, schoolYears]);
+  }, [assessments, scansByAssessment, answerKeys, selectedSubject, selectedSection, gradingPeriods, schoolYears]);
 
   const hasLongitudinalData = useMemo(() => {
     return longitudinalData.some((yr) => yr.quarterScores.some((s) => s !== null));
@@ -483,7 +554,7 @@ function AnalyticsContent() {
     const assId = activeAssessment.id;
     const targetItems = activeAssessment.targetItems;
     const key = answerKeys[assId] || {};
-    const assScans = scanResults.filter((s) => s.assessmentId === assId);
+    const assScans = scansByAssessment.get(assId) || [];
     const N = assScans.length;
 
     // Get TOS rows if available
@@ -588,7 +659,7 @@ function AnalyticsContent() {
         action,
       };
     });
-  }, [activeAssessment, answerKeys, scanResults, tosDocuments]);
+  }, [activeAssessment, answerKeys, scansByAssessment, tosDocuments]);
 
   // Cognitive Domain Summary
   const cognitiveData = useMemo(() => {
@@ -636,7 +707,7 @@ function AnalyticsContent() {
       let totalItemsAll = 0;
 
       secAssessments.forEach((ass) => {
-        const assScans = scanResults.filter((s) => s.assessmentId === ass.id);
+        const assScans = scansByAssessment.get(ass.id) || [];
         const key = answerKeys[ass.id] || {};
         totalItemsAll = ass.targetItems;
 
@@ -687,7 +758,7 @@ function AnalyticsContent() {
         didNotMeetCount: didNotMeet,
       };
     });
-  }, [filteredSectionOptions, selectedSection, filteredAssessments, scanResults, answerKeys]);
+  }, [filteredSectionOptions, selectedSection, filteredAssessments, scansByAssessment, answerKeys]);
 
   const hasReportsData = useMemo(() => {
     return consolidatedReportsData.some((r) => r.scannedStudents > 0);
@@ -748,9 +819,18 @@ function AnalyticsContent() {
 
   if (loading) {
     return (
-      <div className="h-96 flex flex-col items-center justify-center gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        <p className="text-xs font-semibold text-gray-400">Loading academic analytics...</p>
+      <div className="space-y-4 animate-pulse" aria-label="Loading performance and reports" aria-busy="true">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+          <div className="h-5 w-48 rounded bg-gray-200 dark:bg-gray-800" />
+          <div className="mt-2 h-3 w-72 max-w-full rounded bg-gray-100 dark:bg-gray-800" />
+          <div className="mt-5 flex flex-wrap gap-2">
+            {[96, 120, 88, 104].map((width, index) => <div key={index} className="h-9 rounded-lg bg-gray-100 dark:bg-gray-800" style={{ width }} />)}
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {[0, 1, 2].map((item) => <div key={item} className="h-32 rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900" />)}
+        </div>
+        <div className="h-72 rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900" />
       </div>
     );
   }
@@ -761,7 +841,7 @@ function AnalyticsContent() {
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300 flex items-center justify-between">
           <span>{error}</span>
           <button
-            onClick={loadData}
+            onClick={() => void loadData(true)}
             className="inline-flex items-center gap-1 font-bold underline hover:text-red-900"
           >
             <RefreshCw className="h-3.5 w-3.5" /> Retry

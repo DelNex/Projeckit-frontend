@@ -92,11 +92,23 @@ export async function POST(request: Request) {
     // 3. Rate limits & quotas check (Requirement 6)
     // Check when starting a new generation (chunkIndex === 0)
     if (chunkIndex === 0) {
-      const { data: tenantData } = await adminClient
-        .from('tenants')
-        .select('ai_hourly_user_limit, ai_daily_school_limit')
-        .eq('id', tenantId)
-        .maybeSingle();
+      const [tenantResult, userCountResult, schoolCountResult] = await Promise.all([
+        adminClient.from('tenants')
+          .select('ai_hourly_user_limit, ai_daily_school_limit')
+          .eq('id', tenantId)
+          .maybeSingle(),
+        adminClient.from('audit_logs')
+          .select('id', { count: 'exact', head: true })
+          .eq('action', 'AI_EXAM_GENERATION')
+          .eq('user_id', caller.id)
+          .gte('created_at', new Date(Date.now() - 60 * 60 * 1000).toISOString()),
+        adminClient.from('audit_logs')
+          .select('id', { count: 'exact', head: true })
+          .eq('action', 'AI_EXAM_GENERATION')
+          .eq('tenant_id', tenantId)
+          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
+      ]);
+      const tenantData = tenantResult.data;
 
       const userHourlyLimit =
         parseInt(process.env.AI_HOURLY_USER_LIMIT || '', 10) ||
@@ -108,13 +120,7 @@ export async function POST(request: Request) {
         tenantData?.ai_daily_school_limit ||
         100;
 
-      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-      const { count: userGenCount } = await adminClient
-        .from('audit_logs')
-        .select('id', { count: 'exact', head: true })
-        .eq('action', 'AI_EXAM_GENERATION')
-        .eq('user_id', caller.id)
-        .gte('created_at', oneHourAgo);
+      const userGenCount = userCountResult.count;
 
       if ((userGenCount ?? 0) >= userHourlyLimit) {
         return NextResponse.json(
@@ -127,13 +133,7 @@ export async function POST(request: Request) {
         );
       }
 
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const { count: schoolGenCount } = await adminClient
-        .from('audit_logs')
-        .select('id', { count: 'exact', head: true })
-        .eq('action', 'AI_EXAM_GENERATION')
-        .eq('tenant_id', tenantId)
-        .gte('created_at', oneDayAgo);
+      const schoolGenCount = schoolCountResult.count;
 
       if ((schoolGenCount ?? 0) >= schoolDailyLimit) {
         return NextResponse.json(
