@@ -410,6 +410,7 @@ export async function POST(request: Request) {
         .from('tos_documents')
         .update({
           questions: finalQuestions,
+          updated_at: new Date().toISOString(),
         })
         .eq('id', tosId)
         .eq('tenant_id', tenantId)
