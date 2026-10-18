@@ -32,6 +32,31 @@ export async function GET() {
       );
     }
 
+    // 2. Verify caller is an approved admin
+    const { data: callerProfile, error: profileErr } = await supabase
+      .from('profiles')
+      .select('role, status, archived_at, is_platform_admin')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (profileErr || !callerProfile) {
+      return NextResponse.json(
+        { error: 'Failed to verify administrator privileges.' },
+        { status: 403 }
+      );
+    }
+
+    if (
+      callerProfile.role !== 'admin' ||
+      callerProfile.status !== 'approved' ||
+      callerProfile.archived_at
+    ) {
+      return NextResponse.json(
+        { error: 'Forbidden: Only approved administrators can check schema health.' },
+        { status: 403 }
+      );
+    }
+
     const adminClient = createAdminClient();
 
     // Try RPC first if available (service-role only)
