@@ -32,7 +32,7 @@ describe('Project KIT — Seed Safety & Validation Tests (Task 5)', () => {
           ...process.env,
           SUPABASE_URL: 'https://testproject123.supabase.co',
           SUPABASE_SERVICE_ROLE_KEY: 'test-service-key',
-          ADMIN_EMAIL: 'admin@school.edu',
+          ADMIN_EMAIL: 'admin@deped.gov.ph',
           ADMIN_PASSWORD: '', // missing
           CONFIRM_PROJECT_REF: 'testproject123',
         },
@@ -57,7 +57,7 @@ describe('Project KIT — Seed Safety & Validation Tests (Task 5)', () => {
           ...process.env,
           SUPABASE_URL: 'https://testproject123.supabase.co',
           SUPABASE_SERVICE_ROLE_KEY: 'test-service-key',
-          ADMIN_EMAIL: 'admin@school.edu',
+          ADMIN_EMAIL: 'admin@deped.gov.ph',
           ADMIN_PASSWORD: 'short', // < 12 chars
           CONFIRM_PROJECT_REF: 'testproject123',
         },
@@ -82,7 +82,7 @@ describe('Project KIT — Seed Safety & Validation Tests (Task 5)', () => {
           ...process.env,
           SUPABASE_URL: 'https://testproject123.supabase.co',
           SUPABASE_SERVICE_ROLE_KEY: 'test-service-key',
-          ADMIN_EMAIL: 'admin@school.edu',
+          ADMIN_EMAIL: 'admin@deped.gov.ph',
           ADMIN_PASSWORD: 'SuperSecurePassword2026!',
           CONFIRM_PROJECT_REF: 'wrong-project-ref', // mismatch
         },
@@ -107,7 +107,7 @@ describe('Project KIT — Seed Safety & Validation Tests (Task 5)', () => {
           ...process.env,
           SUPABASE_URL: 'https://testproject123.supabase.co',
           SUPABASE_SERVICE_ROLE_KEY: 'test-service-key',
-          ADMIN_EMAIL: 'admin@school.edu',
+          ADMIN_EMAIL: 'admin@deped.gov.ph',
           ADMIN_PASSWORD: 'SuperSecurePassword2026!',
           CONFIRM_PROJECT_REF: 'testproject123',
         },
@@ -130,7 +130,7 @@ describe('Project KIT — Seed Safety & Validation Tests (Task 5)', () => {
           ...process.env,
           SUPABASE_URL: 'https://testproject123.supabase.co',
           SUPABASE_SERVICE_ROLE_KEY: 'test-service-key',
-          ADMIN_EMAIL: 'admin@school.edu',
+          ADMIN_EMAIL: 'admin@deped.gov.ph',
           ADMIN_PASSWORD: 'SuperSecurePassword2026!',
           CONFIRM_PROJECT_REF: 'testproject123',
           DEMO_TEACHER_PASSWORD: '', // missing
@@ -146,6 +146,23 @@ describe('Project KIT — Seed Safety & Validation Tests (Task 5)', () => {
     );
   });
 
+  it('rejects an ADMIN_EMAIL outside @deped.gov.ph', () => {
+    const res = spawnSync('npx', ['tsx', 'scripts/seed-supabase.ts', '--dry-run'], {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        SUPABASE_URL: 'https://testproject123.supabase.co',
+        SUPABASE_SERVICE_ROLE_KEY: 'test-service-key',
+        ADMIN_EMAIL: 'admin@example.com',
+        ADMIN_PASSWORD: 'SuperSecurePassword2026!',
+        CONFIRM_PROJECT_REF: 'testproject123',
+      },
+      encoding: 'utf8',
+    });
+    assert.strictEqual(res.status, 1, 'Should reject admin emails outside the enforced domain');
+    assert.match(`${res.stdout}${res.stderr}`, /@deped\.gov\.ph/);
+  });
+
   it('7. supabase/seed.sql contains DEV/LOCAL ONLY banner and includes section_id in student inserts', () => {
     const seedSqlPath = path.join(repoRoot, 'supabase', 'seed.sql');
     assert.ok(fs.existsSync(seedSqlPath), 'supabase/seed.sql must exist');
@@ -158,4 +175,3 @@ describe('Project KIT — Seed Safety & Validation Tests (Task 5)', () => {
     );
   });
 });
-
