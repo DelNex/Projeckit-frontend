@@ -1214,7 +1214,9 @@ export default function SchoolSettingsPage() {
       }
     } catch (err: any) {
       console.error('Failed to add section:', err);
-      setError(err.message || 'Failed to add section');
+      const friendly = friendlyError(err, 'Failed to add section.');
+      setError(friendly);
+      toast.error(friendly);
     } finally {
       setAddingSection(false);
     }

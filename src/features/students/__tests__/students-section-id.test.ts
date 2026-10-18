@@ -120,5 +120,35 @@ describe('Project KIT — Task 5: Sections & Students Consistency Tests', () => 
       'Science 10',
     ]);
   });
+
+  it('5. migration 27 defines conditional unique index on sections and safe relink', () => {
+    const migrationPath = path.join(
+      repoRoot,
+      'supabase',
+      'migrations',
+      '20260908000027_sections_unique.sql'
+    );
+    assert.ok(fs.existsSync(migrationPath), 'Migration 27 must exist');
+    const sql = fs.readFileSync(migrationPath, 'utf8');
+
+    assert.ok(
+      sql.includes('uq_sections_config_grade_name'),
+      'Must define uq_sections_config_grade_name index'
+    );
+    assert.ok(
+      sql.includes('lower(trim(name))'),
+      'Index must be on (config_id, grade, lower(trim(name)))'
+    );
+    assert.ok(
+      sql.includes('UPDATE public.students s') && sql.includes('SET section_id = sec.id'),
+      'Must safely relink students'
+    );
+    assert.ok(
+      sql.replace(/\s+/g, ' ').toLowerCase().includes(
+        'select count(*) from public.sections x where x.config_id = s.config_id and lower(trim(x.name)) = lower(trim(s.section_name))'
+      ) && sql.includes('= 1'),
+      'Must check exactly 1 matching section exists before relinking'
+    );
+  });
 });
 
