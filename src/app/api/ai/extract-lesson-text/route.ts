@@ -47,7 +47,7 @@ export async function POST(request: Request) {
 
     try {
       if (storedFile.size > MAX_FILE_SIZE_BYTES) {
-        return NextResponse.json({ error: `File '${name}' exceeds the 50 MB maximum limit.` }, { status: 400 });
+        return NextResponse.json({ error: `File '${name}' exceeds the 60 MB maximum limit.` }, { status: 400 });
       }
       const filePayload: LessonFileInput = {
         name,

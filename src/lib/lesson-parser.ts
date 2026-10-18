@@ -38,8 +38,8 @@ export async function extractTextFromFiles(files: File[]): Promise<LessonExtract
   }
 
   for (const file of files) {
-    if (file.size > 50 * 1024 * 1024) {
-      throw new Error(`File '${file.name}' exceeds the 50 MB maximum. Split the material into smaller files.`);
+    if (file.size > 60 * 1024 * 1024) {
+      throw new Error(`File '${file.name}' exceeds the 60 MB maximum. Split the material into smaller files.`);
     }
   }
 
