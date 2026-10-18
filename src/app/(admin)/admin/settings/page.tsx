@@ -24,7 +24,6 @@ export default function AdminSettingsPage() {
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
   const [defaultPassingMps, setDefaultPassingMps] = useState(60.0);
-  const [maxUploadMb, setMaxUploadMb] = useState(10);
   const [allowPublicRegistration, setAllowPublicRegistration] = useState(true);
 
   // Deletion code state
@@ -69,7 +68,6 @@ export default function AdminSettingsPage() {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed.defaultPassingMps) setDefaultPassingMps(Number(parsed.defaultPassingMps));
-        if (parsed.maxUploadMb) setMaxUploadMb(Number(parsed.maxUploadMb));
         if (typeof parsed.allowPublicRegistration === 'boolean') setAllowPublicRegistration(parsed.allowPublicRegistration);
       }
     } catch {
@@ -87,36 +85,45 @@ export default function AdminSettingsPage() {
     try {
       const settingsPayload = {
         defaultPassingMps,
-        maxUploadMb,
         allowPublicRegistration,
         updatedAt: new Date().toISOString(),
       };
 
-      // Save locally
-      localStorage.setItem('projectkit_admin_settings', JSON.stringify(settingsPayload));
-
       // Record administrative audit trail in Supabase
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile } = await (supabase as any)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error('Your session has expired. Please sign in again before saving settings.');
+        return;
+      }
+
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user?.id) {
+        toast.error('Your session could not be verified. Please sign in again before saving settings.');
+        return;
+      }
+
+      const { data: profile, error: profileError } = await (supabase as any)
         .from('profiles')
         .select('tenant_id')
-        .eq('id', user?.id || '')
+        .eq('id', user.id)
         .maybeSingle();
 
-      if (!user?.id) {
-        throw new Error('Not authenticated');
-      }
+      if (profileError) throw profileError;
       if (!profile?.tenant_id) {
         throw new Error('Your account is not linked to a school tenant.');
       }
       const tenantId = profile.tenant_id;
 
-      await (supabase as any).from('audit_logs').insert({
+      const { error: auditError } = await (supabase as any).from('audit_logs').insert({
         tenant_id: tenantId,
         user_id: user.id,
         action: 'SYSTEM_SETTINGS_UPDATED',
         details: settingsPayload,
       });
+      if (auditError) throw auditError;
+
+      // Save locally only after the authenticated audit write succeeds.
+      localStorage.setItem('projectkit_admin_settings', JSON.stringify(settingsPayload));
 
       setSaved(true);
       setTimeout(() => setSaved(false), 4000);
@@ -252,14 +259,14 @@ export default function AdminSettingsPage() {
           </label>
           <input
             type="number"
-            min="1"
-            max="50"
-            value={maxUploadMb}
-            onChange={(e) => setMaxUploadMb(Number(e.target.value))}
+            min="60"
+            max="60"
+            value={60}
+            readOnly
             className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
           />
           <span className="mt-1 block text-[11px] text-gray-400">
-            Enforced by browser preprocessor and Supabase Storage bucket policy.
+            Fixed at 60 MB per file by the upload services and storage bucket.
           </span>
         </div>
 
@@ -358,6 +365,7 @@ export default function AdminSettingsPage() {
                 value={currentCode}
                 onChange={(e) => setCurrentCode(e.target.value)}
                 placeholder="Enter current code to authorize change"
+                autoComplete="current-password"
                 className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
               />
             </div>
@@ -375,6 +383,7 @@ export default function AdminSettingsPage() {
                 placeholder="Minimum 8 characters"
                 minLength={8}
                 required
+                autoComplete="new-password"
                 className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
               />
             </div>
@@ -390,6 +399,7 @@ export default function AdminSettingsPage() {
                 placeholder="Re-enter to confirm"
                 minLength={8}
                 required
+                autoComplete="new-password"
                 className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
               />
             </div>
