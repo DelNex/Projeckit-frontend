@@ -16,7 +16,7 @@ import {
   UploadCloud,
   X,
 } from 'lucide-react';
-import { buildTosBlueprintSlots, TosBlueprintSlot } from '@/lib/exam-types';
+import { buildTosBlueprintSlots } from '@/lib/exam-types';
 
 interface ExamGeneratorModalProps {
   isOpen: boolean;
@@ -49,8 +49,8 @@ const STEP_LABELS: Record<GenerationStep, string> = {
   uploading: 'Uploading lesson file(s)...',
   extracting: 'Extracting text from document(s)...',
   analyzing: 'Analyzing lesson coverage against TOS...',
-  generating: 'Generating questions matching Bloom cognitive matrix...',
-  validating: 'Validating distribution and self-healing...',
+  generating: 'Writing questions from your lesson...',
+  validating: 'Checking question count and answers...',
   done: 'Exam generation complete!',
 };
 
@@ -147,7 +147,6 @@ export function ExamGeneratorModal({
       // Step 1: Uploading
       if (selectedFiles.length > 0) {
         setCurrentStep('uploading');
-        await new Promise((r) => setTimeout(r, 400));
 
         // Step 2: Extracting text on server
         setCurrentStep('extracting');
@@ -166,124 +165,63 @@ export function ExamGeneratorModal({
 
       // Step 3: Analyzing lesson coverage
       setCurrentStep('analyzing');
-      await new Promise((r) => setTimeout(r, 400));
 
-      // Step 4: Generating questions in chunks (one per competency / max 10 items) (Requirement 5)
+      // The server handles chunking and parallel model requests. One request avoids
+      // repeated authentication, database writes, and partial answer-key updates.
       setCurrentStep('generating');
 
       const allSlots = buildTosBlueprintSlots(tosRows, Number(targetItems) || 50);
-
-      // Group slots by competency, with at most 10 items per chunk
-      const compMap = new Map<string, TosBlueprintSlot[]>();
-      for (const slot of allSlots) {
-        const k = slot.competency_id || slot.competency_code || 'default';
-        if (!compMap.has(k)) compMap.set(k, []);
-        compMap.get(k)!.push(slot);
-      }
-
-      const chunks: TosBlueprintSlot[][] = [];
-      for (const group of compMap.values()) {
-        for (let i = 0; i < group.length; i += 10) {
-          chunks.push(group.slice(i, i + 10));
-        }
-      }
-
-      const totalChunks = chunks.length;
-      let completedChunks = 0;
       setChunkProgress({
         completed: 0,
-        total: totalChunks,
-        label: `0 of ${totalChunks} competencies done`,
+        total: allSlots.length,
+        label: `Preparing ${allSlots.length} questions`,
       });
-
-      const collectedQuestions: ExamQuestion[] = [];
-      let lastSource = 'AI Engine';
-      let isDemo = false;
-      const failedSlots: number[] = [];
-
-      // Concurrency: 2 to 3 workers
-      const concurrency = Math.min(3, Math.max(1, totalChunks));
-      let chunkIdx = 0;
-
-      const runWorker = async () => {
-        while (chunkIdx < totalChunks) {
-          const currentChunkIdx = chunkIdx++;
-          const chunk = chunks[currentChunkIdx];
-
-          let success = false;
-          // Retry failed chunks up to 2 times (3 attempts total)
-          for (let attempt = 0; attempt <= 2; attempt++) {
-            try {
-              const controller = new AbortController();
-              const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s per-chunk timeout
-
-              const res = await fetch('/api/ai/generate-exam', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  assessmentId,
-                  tosId,
-                  lessonText: extractedLessonText,
-                  targetItems: Number(targetItems) || 50,
-                  tosRows,
-                  slots: chunk,
-                  chunkIndex: currentChunkIdx,
-                  totalChunks,
-                }),
-                signal: controller.signal,
-              });
-
-              clearTimeout(timeoutId);
-
-              const data = await res.json();
-              if (res.ok && data.questions && Array.isArray(data.questions)) {
-                collectedQuestions.push(...data.questions);
-                if (data.source) lastSource = data.source;
-                if (data.isSampleDemo) isDemo = true;
-                success = true;
-                break;
-              } else if (res.status === 429) {
-                throw new Error(data.error || 'Rate limit exceeded');
-              }
-            } catch (chunkErr: any) {
-              if (chunkErr.message?.includes('Rate limit') || chunkErr.message?.includes('hourly limit')) {
-                throw chunkErr;
-              }
-            }
-          }
-
-          if (!success) {
-            chunk.forEach((s) => failedSlots.push(s.item_number));
-          }
-
-          completedChunks++;
-          setChunkProgress({
-            completed: completedChunks,
-            total: totalChunks,
-            label: `${completedChunks} of ${totalChunks} competencies done`,
-          });
-        }
-      };
-
-      const workers = Array.from({ length: concurrency }, () => runWorker());
-      await Promise.all(workers);
-
-      if (collectedQuestions.length === 0) {
-        throw new Error('The AI service is not available right now. Please try again later.');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 180000);
+      let res: Response;
+      try {
+        res = await fetch('/api/ai/generate-exam', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            assessmentId,
+            tosId,
+            lessonText: extractedLessonText,
+            targetItems: Number(targetItems) || 50,
+            tosRows,
+            slots: allSlots,
+          }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
       }
+      const data = await res.json();
+      if (!res.ok || !Array.isArray(data.questions)) {
+        throw new Error(data.error || 'The AI service could not generate this exam.');
+      }
+      const collectedQuestions: ExamQuestion[] = data.questions;
+      if (collectedQuestions.length === 0) {
+        throw new Error('The AI service could not generate any questions. Please try again.');
+      }
+      setChunkProgress({
+        completed: collectedQuestions.length,
+        total: allSlots.length,
+        label: `${collectedQuestions.length} of ${allSlots.length} questions ready`,
+      });
+      const lastSource = data.source || 'AI Engine';
+      const isDemo = Boolean(data.isSampleDemo);
 
       // Step 5: Validating distribution
       setCurrentStep('validating');
-      await new Promise((r) => setTimeout(r, 400));
 
       // Step 6: Done
       setCurrentStep('done');
       await new Promise((r) => setTimeout(r, 300));
 
-      const generatedSet = new Set(collectedQuestions.map((q) => q.item_number));
-      const missingNumbers = allSlots
-        .map((s) => s.item_number)
-        .filter((n) => !generatedSet.has(n));
+      const missingNumbers: number[] = Array.isArray(data.missingItemNumbers)
+        ? data.missingItemNumbers
+        : allSlots.map((slot) => slot.item_number).filter((number) => !collectedQuestions.some((question) => question.item_number === number));
 
       toast.success(
         `Generated ${collectedQuestions.length} questions matching the TOS blueprint.${
@@ -549,4 +487,3 @@ export function ExamGeneratorModal({
     </div>
   );
 }
-

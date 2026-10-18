@@ -4,7 +4,7 @@
  * Includes auth credentials, CSRF token handling, and graceful fallback support.
  */
 
-import { createClient } from '@/lib/supabase/client';
+import { createClient, invalidateClientQueryCache } from '@/lib/supabase/client';
 
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
@@ -74,6 +74,10 @@ export async function apiFetch<T = any>(
       errorData?.error ||
       `API Request Failed: ${response.status} ${response.statusText}`;
     throw new Error(Array.isArray(message) ? message.join(', ') : message);
+  }
+
+  if ((restOptions.method || 'GET').toUpperCase() !== 'GET') {
+    invalidateClientQueryCache();
   }
 
   return response.json();
@@ -277,4 +281,3 @@ export const api = {
     list: () => apiFetch<{ success: boolean; data: any[] }>('/api/recommendation'),
   },
 };
-
