@@ -182,7 +182,7 @@ export function ExamGeneratorModal({
         label: `Preparing ${allSlots.length} questions`,
       });
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60 * 60 * 1000);
+      const timeoutId = setTimeout(() => controller.abort(), 8 * 60 * 60 * 1000);
       let data;
       try {
         data = await generateExamThroughApi({
@@ -237,7 +237,7 @@ export function ExamGeneratorModal({
       console.error('Exam generation failed:', err);
       setErrorMsg(err.message || 'Generation failed.');
       setCurrentStep('idle');
-      toast.error(friendlyError(err, 'Could not complete exam generation.'));
+      toast.error(err instanceof Error && err.message ? err.message : friendlyError(err, 'Could not complete exam generation.'));
     }
   };
 
