@@ -5,7 +5,7 @@
  * Enforces:
  * - Max 10 MB per file
  * - Max 5 files
- * - Max 40,000 characters total after cleaning (with truncation notification)
+ * - Max 500,000 characters total after cleaning
  * - Minimum 300 readable characters per document
  * - Garbage and corrupted text rejection
  */
@@ -16,7 +16,7 @@ import JSZip from 'jszip';
 
 export const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 export const MAX_FILES_COUNT = 5;
-export const MAX_TOTAL_CHARS = 40000;
+export const MAX_TOTAL_CHARS = 500000;
 export const MIN_READABLE_CHARS = 300;
 
 export interface LessonFileInput {
@@ -27,6 +27,7 @@ export interface LessonFileInput {
 
 export interface ExtractedLessonResult {
   text: string;
+  documents: Array<{ name: string; text: string }>;
   charCount: number;
   filesProcessed: number;
   truncated: boolean;
@@ -184,7 +185,7 @@ export async function extractLessonFiles(files: LessonFileInput[]): Promise<Extr
     throw new Error(`Maximum ${MAX_FILES_COUNT} files allowed per upload.`);
   }
 
-  const extractedSections: string[] = [];
+  const documents: Array<{ name: string; text: string }> = [];
 
   for (const file of files) {
     const size = file.size ?? file.buffer.length;
@@ -209,24 +210,20 @@ export async function extractLessonFiles(files: LessonFileInput[]): Promise<Extr
       );
     }
 
-    extractedSections.push(text);
+    documents.push({ name: file.name, text });
   }
 
-  let combinedText = extractedSections.join('\n\n---\n\n');
-  let truncated = false;
-  let notice: string | undefined;
-
-  if (combinedText.length > MAX_TOTAL_CHARS) {
-    combinedText = combinedText.slice(0, MAX_TOTAL_CHARS).trim();
-    truncated = true;
-    notice = 'Lesson text was trimmed to the 40,000 character maximum limit.';
+  const totalDocumentChars = documents.reduce((total, document) => total + document.text.length, 0);
+  if (totalDocumentChars > MAX_TOTAL_CHARS) {
+    throw new Error(`These documents contain more than ${MAX_TOTAL_CHARS.toLocaleString()} characters. Split them into smaller uploads so no lesson content is dropped.`);
   }
+  const combinedText = documents.map((document) => `--- ${document.name} ---\n${document.text}`).join('\n\n');
 
   return {
     text: combinedText,
+    documents,
     charCount: combinedText.length,
     filesProcessed: files.length,
-    truncated,
-    notice,
+    truncated: false,
   };
 }

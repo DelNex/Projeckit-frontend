@@ -5,6 +5,7 @@
 
 export interface LessonExtractionClientResult {
   text: string;
+  documents: Array<{ name: string; text: string }>;
   charCount: number;
   filesProcessed: number;
   truncated: boolean;
@@ -38,25 +39,40 @@ export async function extractTextFromFiles(files: File[]): Promise<LessonExtract
     }
   }
 
-  const formData = new FormData();
-  files.forEach((f) => formData.append('files', f));
+  const documents: Array<{ name: string; text: string }> = [];
+  let totalCharacters = 0;
 
-  const response = await fetch('/api/ai/extract-lesson-text', {
-    method: 'POST',
-    body: formData,
-  });
+  // Parse and return one document at a time. This keeps long uploads bounded and
+  // preserves document boundaries for the sequential Gemini helper.
+  for (const file of files) {
+    const formData = new FormData();
+    formData.append('files', file);
+    const response = await fetch('/api/ai/extract-lesson-text', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `Failed to extract text from ${file.name}.`);
 
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(data.error || 'Failed to extract text from document.');
+    const extracted = Array.isArray(data.documents) ? data.documents : data.files;
+    const document = extracted?.[0];
+    if (!document || typeof document.text !== 'string') {
+      throw new Error(`The text extractor returned no readable content for ${file.name}.`);
+    }
+    totalCharacters += document.text.length;
+    if (totalCharacters > 500000) {
+      throw new Error('These documents contain more than 500,000 characters. Split them into smaller uploads so no lesson content is dropped.');
+    }
+    documents.push({ name: document.name || file.name, text: document.text });
   }
 
+  const text = documents.map((document) => `--- ${document.name} ---\n${document.text}`).join('\n\n');
+
   return {
-    text: data.text,
-    charCount: data.charCount,
-    filesProcessed: data.filesProcessed,
-    truncated: Boolean(data.truncated),
-    notice: data.notice,
+    text,
+    documents,
+    charCount: totalCharacters,
+    filesProcessed: documents.length,
+    truncated: false,
   };
 }

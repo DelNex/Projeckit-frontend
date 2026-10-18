@@ -22,6 +22,8 @@ import { generateExamDocx, downloadBlob } from '../exam-word-export';
 import { useToast } from '@/components/ui/toast';
 import { createClient } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
+import { generateExamThroughApi } from '@/lib/exam-generation-client';
+import { extractTextFromFiles } from '@/lib/lesson-parser';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { createExamFromTosRpc } from '../services/tos-exam-rpc';
 
@@ -125,25 +127,8 @@ export function TosExamModal({
     }));
 
     try {
-      const formData = new FormData();
-      for (let i = 0; i < filesList.length; i++) {
-        formData.append('files', filesList[i]);
-      }
-
-      const res = await fetch('/api/ai/extract-lesson-text', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to extract text from files');
-      }
-
-      const extractedFiles: Array<{ name: string; text: string }> = data.files.map((f: any) => ({
-        name: f.name,
-        text: f.text,
-      }));
+      const extraction = await extractTextFromFiles(Array.from(filesList));
+      const extractedFiles = extraction.documents;
 
       setMaterials((prev) => ({
         ...prev,
@@ -204,11 +189,16 @@ export function TosExamModal({
     try {
       // Gather all text per competency
       let combinedText = '';
+      const lessonDocuments: Array<{ name: string; text: string }> = [];
       (tos.rows || []).forEach((r, idx) => {
         const id = r.id || String(idx + 1);
         const compFiles = materials[id]?.files || [];
         const compText = compFiles.map((f) => f.text).join('\n\n');
         if (compText) {
+          compFiles.forEach((file) => lessonDocuments.push({
+            name: `Competency ${idx + 1}: ${r.description} — ${file.name}`,
+            text: file.text,
+          }));
           combinedText += `\n\n--- COMPETENCY ${idx + 1}: ${r.description} ---\n${compText}`;
         }
       });
@@ -220,21 +210,14 @@ export function TosExamModal({
 
       setGenerationProgress('Generating questions in structured chunks...');
 
-      const response = await fetch('/api/ai/generate-exam', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const result = await generateExamThroughApi({
           tosId: tos.id,
-          lessonText: combinedText,
+          ...(lessonDocuments.length ? { lessonDocuments } : { lessonText: combinedText }),
           targetItems: totalQuestions,
           tosRows: tos.rows,
-        }),
-      });
-
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to generate examination');
-      }
+        }, (status, progress) => setGenerationProgress(status === 'running'
+          ? (progress?.label || 'Gemini is working in your browser…')
+          : 'Waiting for your Gemini browser…'));
 
       setQuestions(result.questions || []);
       toast.success(`Generated ${result.questions?.length || 0} exam questions with balanced options!`);

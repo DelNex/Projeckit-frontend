@@ -75,6 +75,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       text: result.text,
+      documents: result.documents,
+      files: result.documents,
       charCount: result.charCount,
       filesProcessed: result.filesProcessed,
       truncated: result.truncated,
@@ -88,4 +90,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
