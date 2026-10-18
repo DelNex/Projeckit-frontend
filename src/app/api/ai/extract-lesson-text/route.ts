@@ -4,10 +4,10 @@ import {
   extractLessonFiles,
   LessonFileInput,
   MAX_FILE_SIZE_BYTES,
-  MAX_FILES_COUNT,
 } from '@/lib/server/lesson-parser';
+import { createAdminClient } from '@/lib/supabase/admin';
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   try {
@@ -26,62 +26,49 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Parse form-data
-    const formData = await request.formData();
-    const uploadedFiles = formData.getAll('files') as File[];
+    // File bytes go directly from the browser to private Storage, avoiding
+    // Vercel's API request-size limit. This route only receives a small path.
+    const body = await request.json().catch(() => null) as { storagePath?: unknown; name?: unknown } | null;
+    if (!body || typeof body.storagePath !== 'string' || typeof body.name !== 'string') {
+      return NextResponse.json({ error: 'Missing lesson upload reference.' }, { status: 400 });
+    }
 
-    if (!uploadedFiles || uploadedFiles.length === 0) {
-      // Also check single file fallback 'file'
-      const single = formData.get('file') as File | null;
-      if (single) {
-        uploadedFiles.push(single);
+    const storagePath = body.storagePath;
+    const name = body.name.slice(0, 240);
+    if (!storagePath.startsWith(`${caller.id}/lesson-imports/`) || storagePath.includes('..')) {
+      return NextResponse.json({ error: 'Invalid lesson upload reference.' }, { status: 403 });
+    }
+
+    const admin = createAdminClient();
+    const { data: storedFile, error: downloadError } = await admin.storage.from('lesson-uploads').download(storagePath);
+    if (downloadError || !storedFile) {
+      return NextResponse.json({ error: 'Could not read the uploaded lesson file. Please upload it again.' }, { status: 400 });
+    }
+
+    try {
+      if (storedFile.size > MAX_FILE_SIZE_BYTES) {
+        return NextResponse.json({ error: `File '${name}' exceeds the 50 MB maximum limit.` }, { status: 400 });
       }
-    }
+      const filePayload: LessonFileInput = {
+        name,
+        buffer: Buffer.from(await storedFile.arrayBuffer()),
+        size: storedFile.size,
+      };
+      const result = await extractLessonFiles([filePayload]);
 
-    if (uploadedFiles.length === 0) {
-      return NextResponse.json(
-        { error: 'No files uploaded. Please attach at least one lesson document.' },
-        { status: 400 }
-      );
-    }
-
-    if (uploadedFiles.length > MAX_FILES_COUNT) {
-      return NextResponse.json(
-        { error: `Maximum ${MAX_FILES_COUNT} files allowed per upload.` },
-        { status: 400 }
-      );
-    }
-
-    const filePayloads: LessonFileInput[] = [];
-
-    for (const f of uploadedFiles) {
-      if (f.size > MAX_FILE_SIZE_BYTES) {
-        return NextResponse.json(
-          { error: `File '${f.name}' exceeds the 10 MB maximum limit.` },
-          { status: 400 }
-        );
-      }
-
-      const arrayBuffer = await f.arrayBuffer();
-      filePayloads.push({
-        name: f.name,
-        buffer: Buffer.from(arrayBuffer),
-        size: f.size,
+      return NextResponse.json({
+        success: true,
+        text: result.text,
+        documents: result.documents,
+        files: result.documents,
+        charCount: result.charCount,
+        filesProcessed: result.filesProcessed,
+        truncated: result.truncated,
+        notice: result.notice,
       });
+    } finally {
+      await admin.storage.from('lesson-uploads').remove([storagePath]);
     }
-
-    const result = await extractLessonFiles(filePayloads);
-
-    return NextResponse.json({
-      success: true,
-      text: result.text,
-      documents: result.documents,
-      files: result.documents,
-      charCount: result.charCount,
-      filesProcessed: result.filesProcessed,
-      truncated: result.truncated,
-      notice: result.notice,
-    });
   } catch (err: any) {
     console.error('[ExtractLessonText] Extraction failed:', err);
     return NextResponse.json(

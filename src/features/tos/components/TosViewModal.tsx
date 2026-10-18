@@ -17,6 +17,7 @@ import {
   Users,
 } from 'lucide-react';
 import { TosDocument } from '@/types/tos';
+import * as mammoth from 'mammoth';
 import {
   calculateTos,
   BLOOM_LEVELS,
@@ -46,6 +47,7 @@ export function TosViewModal({
   onCreateExam,
 }: TosViewModalProps) {
   const [isExportingWord, setIsExportingWord] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [mobileCardView, setMobileCardView] = useState(false);
 
   // Compute live deterministic TOS allocation table
@@ -95,8 +97,54 @@ export function TosViewModal({
     }
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = async () => {
+    // Open synchronously from the click handler so browser popup blockers allow
+    // printing after the DOCX has been generated and converted for rendering.
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      console.error('Allow popups for this site to export the TOS as PDF.');
+      return;
+    }
+
+    setIsExportingPdf(true);
+    printWindow.document.write('<!doctype html><title>Preparing TOS…</title><p style="font:16px sans-serif;padding:24px">Preparing the Word document for printing…</p>');
+    printWindow.document.close();
+
+    try {
+      const docxBlob = await generateOfficialTosDocx(tos, rows, {
+        schoolName,
+        region,
+        division,
+        preparedBy: tos.teacher_name || 'Subject Teacher',
+      });
+      const arrayBuffer = await docxBlob.arrayBuffer();
+      const converted = await mammoth.convertToHtml({ arrayBuffer });
+      const cleanSubject = tos.subject.replace(/[^a-zA-Z0-9]/g, '_');
+      const title = `TOS_${cleanSubject}_${tos.school_year}`.replace(/[&<>"']/g, '');
+
+      printWindow.document.open();
+      printWindow.document.write(`<!doctype html>
+<html><head><meta charset="utf-8"><title>${title}</title>
+<style>
+  @page { size: A4 landscape; margin: 12mm; }
+  * { box-sizing: border-box; }
+  body { color: #111; background: #fff; font: 10pt Arial, sans-serif; line-height: 1.35; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 12px 0; }
+  th, td { border: 1px solid #333; padding: 5px 6px; vertical-align: middle; overflow-wrap: anywhere; }
+  th { font-weight: 700; text-align: center; }
+  p { margin: 4px 0; }
+  tr { break-inside: avoid; }
+  @media screen { body { max-width: 1100px; margin: 24px auto; padding: 24px; } }
+</style></head><body>${converted.value}</body></html>`);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.setTimeout(() => printWindow.print(), 500);
+    } catch (error) {
+      printWindow.close();
+      console.error('Failed to prepare the Word TOS for PDF printing:', error);
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
   const sectionsDisplay = Array.isArray(tos.sections) && tos.sections.length > 0
@@ -317,11 +365,12 @@ export function TosViewModal({
 
             <button
               onClick={handlePrint}
+              disabled={isExportingPdf}
               className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
               title="Print or Save as PDF"
             >
               <Printer className="h-4 w-4" />
-              <span className="hidden sm:inline">Print / PDF</span>
+              <span className="hidden sm:inline">{isExportingPdf ? 'Preparing PDF…' : 'Word to PDF'}</span>
             </button>
           </div>
 
@@ -340,4 +389,3 @@ export function TosViewModal({
     </div>
   );
 }
-
