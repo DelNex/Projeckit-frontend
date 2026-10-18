@@ -34,6 +34,7 @@ export default function TosPage() {
   const [sections, setSections] = useState<Array<{ id: string; name: string; track?: string; grade_level?: string }>>([]);
   const [gradingPeriods, setGradingPeriods] = useState<Array<{ id: string; name: string; is_current: boolean }>>([]);
   const [availableSchoolYears, setAvailableSchoolYears] = useState<string[]>([]);
+  const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
 
   // Page Controls & Filters
   const [selectedSchoolYear, setSelectedSchoolYear] = useState<string>('');
@@ -95,7 +96,7 @@ export default function TosPage() {
     try {
       // 1. Fetch TOS documents with fallback for schema differences
       let documents: TosDocument[] = [];
-      const tosRes = await (supabase as any)
+      const tosRes = await supabase
         .from('tos_documents')
         .select(`
           id,
@@ -124,10 +125,10 @@ export default function TosPage() {
         .order('created_at', { ascending: false });
 
       if (!tosRes.error && tosRes.data) {
-        documents = tosRes.data as TosDocument[];
+        documents = tosRes.data as unknown as TosDocument[];
       } else {
         console.warn('Extended TOS query failed, falling back to base columns:', tosRes.error);
-        const fallbackTos = await (supabase as any)
+        const fallbackTos = await supabase
           .from('tos_documents')
           .select(`
             id,
@@ -148,13 +149,13 @@ export default function TosPage() {
           .order('created_at', { ascending: false });
 
         if (fallbackTos.error) throw fallbackTos.error;
-        documents = (fallbackTos.data || []) as TosDocument[];
+        documents = (fallbackTos.data || []) as unknown as TosDocument[];
       }
       setTosList(documents);
 
-      // 2. Fetch Sections safely (sections table has id, name, grade, strand_code)
+      // 2. Fetch Sections safely (always filter is_archived = false; fallback only if column missing with admin banner)
       try {
-        const secRes = await (supabase as any)
+        const secRes = await supabase
           .from('sections')
           .select('id, name, grade, strand_code')
           .eq('is_archived', false)
@@ -162,7 +163,7 @@ export default function TosPage() {
 
         if (!secRes.error && secRes.data) {
           setSections(
-            secRes.data.map((s: any) => ({
+            secRes.data.map((s) => ({
               id: s.id,
               name: s.name,
               track: s.strand_code || s.grade || '',
@@ -170,22 +171,27 @@ export default function TosPage() {
             }))
           );
         } else {
+          console.warn('Archived sections filter failed, falling back to basic query:', secRes.error);
+          setSchemaHealthy(false);
+          setMissingColumns((prev) => Array.from(new Set([...prev, 'sections.is_archived'])));
           const fbSec = await supabase.from('sections').select('id, name').order('name', { ascending: true });
           if (fbSec.data) {
-            setSections(fbSec.data.map((s: any) => ({ id: s.id, name: s.name })));
+            setSections(fbSec.data.map((s) => ({ id: s.id, name: s.name })));
           }
         }
       } catch (secErr) {
         console.warn('Sections query error, trying basic fallback:', secErr);
+        setSchemaHealthy(false);
+        setMissingColumns((prev) => Array.from(new Set([...prev, 'sections.is_archived'])));
         const fbSec = await supabase.from('sections').select('id, name').order('name', { ascending: true });
         if (fbSec.data) {
-          setSections(fbSec.data.map((s: any) => ({ id: s.id, name: s.name })));
+          setSections(fbSec.data.map((s) => ({ id: s.id, name: s.name })));
         }
       }
 
       // 3. Fetch Grading Periods safely
       try {
-        const gpRes = await (supabase as any)
+        const gpRes = await supabase
           .from('grading_periods')
           .select('id, name, is_current')
           .eq('is_archived', false)
@@ -208,6 +214,19 @@ export default function TosPage() {
           { id: 't3', name: 'Term 3', is_current: false },
           { id: 't4', name: 'Term 4', is_current: false },
         ]);
+      }
+
+      // 4. Fetch Available Subjects from subjects table for suggestion list
+      try {
+        const subjRes = await supabase
+          .from('subjects')
+          .select('title')
+          .order('title', { ascending: true });
+        if (subjRes.data) {
+          setAvailableSubjects(subjRes.data.map((s) => s.title).filter(Boolean));
+        }
+      } catch (subjErr) {
+        console.warn('Could not fetch subjects suggestion list:', subjErr);
       }
 
       // Collect available school years
@@ -262,10 +281,15 @@ export default function TosPage() {
     });
   }, [tosList, selectedSchoolYear, filterTerm, filterExamType, searchTerm]);
 
-  // Unique list of subjects for autocomplete
+  // Unique list of subjects for autocomplete (combines subjects table + existing TOS subjects)
   const existingSubjects = useMemo(() => {
-    return Array.from(new Set(tosList.map((t) => t.subject).filter(Boolean))).sort();
-  }, [tosList]);
+    return Array.from(
+      new Set([
+        ...availableSubjects,
+        ...tosList.map((t) => t.subject).filter(Boolean),
+      ])
+    ).sort();
+  }, [availableSubjects, tosList]);
 
   // Create or Update Action
   const handleSaveTos = async (payload: any) => {
@@ -283,7 +307,7 @@ export default function TosPage() {
     };
 
     if (editingTos) {
-      const { data: updated, error } = await (supabase as any)
+      const { data: updated, error } = await supabase
         .from('tos_documents')
         .update(completePayload)
         .eq('id', editingTos.id)
@@ -293,10 +317,10 @@ export default function TosPage() {
       if (error) throw error;
       toast.success(`Table of Specification for "${updated.subject}" updated.`);
       await loadData();
-      setViewingTos(updated);
+      setViewingTos(updated as unknown as TosDocument);
       return updated;
     } else {
-      const { data: inserted, error } = await (supabase as any)
+      const { data: inserted, error } = await supabase
         .from('tos_documents')
         .insert(completePayload)
         .select()
@@ -305,7 +329,7 @@ export default function TosPage() {
       if (error) throw error;
       toast.success(`Table of Specification for "${inserted.subject}" created!`);
       await loadData();
-      setViewingTos(inserted);
+      setViewingTos(inserted as unknown as TosDocument);
       return inserted;
     }
   };
@@ -316,7 +340,7 @@ export default function TosPage() {
     setLinkedAssessmentsCount(0);
 
     try {
-      const { count } = await (supabase as any)
+      const { count } = await supabase
         .from('assessments')
         .select('id', { count: 'exact', head: true })
         .eq('tos_id', tos.id);
@@ -334,7 +358,7 @@ export default function TosPage() {
 
     setIsDeleting(true);
     try {
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('tos_documents')
         .delete()
         .eq('id', tosToDelete.id);

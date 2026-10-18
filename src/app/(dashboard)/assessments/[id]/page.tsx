@@ -141,7 +141,7 @@ export default function AssessmentWorkspacePage({
     setError(null);
     try {
       // 1. Fetch assessment
-      const { data: aData, error: aErr } = await (supabase as any)
+      const { data: aData, error: aErr } = await supabase
         .from('assessments')
         .select(`
           id,
@@ -164,11 +164,14 @@ export default function AssessmentWorkspacePage({
       const itemsNum = aData.target_items || 50;
       const sizeNum = aData.class_size || 60;
 
+      const subj = Array.isArray(aData.subjects) ? aData.subjects[0] : aData.subjects;
+      const sec = Array.isArray(aData.sections) ? aData.sections[0] : aData.sections;
+
       setAssessment({
         id: aData.id,
         title: aData.title,
-        subject: aData.subjects?.title || aData.subjects?.code || 'Empowerment Technologies',
-        section: aData.sections?.name || 'Class',
+        subject: subj?.title || subj?.code || 'Empowerment Technologies',
+        section: sec?.name || 'Class',
         schoolYear: aData.school_year || '2025-2026',
         term: aData.term || '1st Quarter',
         targetItems: itemsNum,
@@ -182,7 +185,7 @@ export default function AssessmentWorkspacePage({
       setClassSize(sizeNum);
 
       // 2. Fetch answer key
-      const { data: kData } = await (supabase as any)
+      const { data: kData } = await supabase
         .from('answer_keys')
         .select('*')
         .eq('assessment_id', assessmentId)
@@ -204,53 +207,53 @@ export default function AssessmentWorkspacePage({
       }
 
       // 3. Fetch Scan Results
-      const { data: sData } = await (supabase as any)
+      const { data: sData } = await supabase
         .from('scan_results')
         .select('*')
         .eq('assessment_id', assessmentId)
         .order('created_at', { ascending: false });
 
-      if (sData) setScanResults(sData);
+      if (sData) setScanResults(sData as any);
 
       // 4. Fetch TOS Document for Competency Mapping
-      const { data: tData } = await (supabase as any)
+      const { data: tData } = await supabase
         .from('tos_documents')
         .select('*')
         .eq('assessment_id', assessmentId)
         .maybeSingle();
 
-      if (tData) setTosDoc(tData);
+      if (tData) setTosDoc(tData as any);
 
       // 5. Fetch Students Roster (for Roll number matching, excluding archived)
-      const { data: stdData, error: stdErr } = await (supabase as any)
+      const { data: stdData, error: stdErr } = await supabase
         .from('students')
         .select('id, name, lrn, section_name, is_archived')
         .order('name', { ascending: true });
 
       if (stdErr) {
         // Fallback if is_archived column does not exist
-        const { data: fbStdData } = await (supabase as any)
+        const { data: fbStdData } = await supabase
           .from('students')
           .select('id, name, lrn, section_name')
           .order('name', { ascending: true });
         setStudentsList(fbStdData || []);
       } else if (stdData) {
-        setStudentsList(stdData.filter((s: any) => !s.is_archived));
+        setStudentsList(stdData.filter((s) => !s.is_archived));
       }
 
       // 6. Fetch Responses (Scores)
-      const { data: rData } = await (supabase as any)
+      const { data: rData } = await supabase
         .from('responses')
         .select('*')
         .eq('assessment_id', assessmentId)
         .order('scanned_at', { ascending: false });
 
-      if (rData) setResponsesList(rData);
+      if (rData) setResponsesList(rData as any);
 
       // 7. Fetch current teacher's name
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { data: prof } = await (supabase as any)
+        const { data: prof } = await supabase
           .from('profiles')
           .select('display_name')
           .eq('id', user.id)
@@ -335,7 +338,7 @@ export default function AssessmentWorkspacePage({
     setSaveSuccessMsg(null);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile } = await (supabase as any)
+      const { data: profile } = await supabase
         .from('profiles')
         .select('tenant_id')
         .eq('id', user?.id || '')
@@ -345,7 +348,7 @@ export default function AssessmentWorkspacePage({
       }
       const tenantId = profile.tenant_id;
 
-      const { error: keyErr } = await (supabase as any)
+      const { error: keyErr } = await supabase
         .from('answer_keys')
         .upsert({
           assessment_id: assessmentId,
@@ -375,7 +378,7 @@ export default function AssessmentWorkspacePage({
     setLastScanResult(result);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile } = await (supabase as any)
+      const { data: profile } = await supabase
         .from('profiles')
         .select('tenant_id')
         .eq('id', user?.id || '')
@@ -446,7 +449,7 @@ export default function AssessmentWorkspacePage({
       const percentage = Math.round((score / itemCount) * 1000) / 10;
 
       // Insert scan result record with student reference
-      const { error: scanErr } = await (supabase as any)
+      const { error: scanErr } = await supabase
         .from('scan_results')
         .insert({
           assessment_id: assessmentId,
@@ -462,7 +465,7 @@ export default function AssessmentWorkspacePage({
       if (scanErr) throw scanErr;
 
       // Upsert into responses
-      await (supabase as any).from('responses').upsert(
+      await supabase.from('responses').upsert(
         {
           assessment_id: assessmentId,
           tenant_id: tenantId,
@@ -487,21 +490,21 @@ export default function AssessmentWorkspacePage({
       );
 
       // Refetch scan results and responses
-      const { data: refreshedScans } = await (supabase as any)
+      const { data: refreshedScans } = await supabase
         .from('scan_results')
         .select('*')
         .eq('assessment_id', assessmentId)
         .order('created_at', { ascending: false });
 
-      if (refreshedScans) setScanResults(refreshedScans);
+      if (refreshedScans) setScanResults(refreshedScans as any);
 
-      const { data: refreshedResponses } = await (supabase as any)
+      const { data: refreshedResponses } = await supabase
         .from('responses')
         .select('*')
         .eq('assessment_id', assessmentId)
         .order('scanned_at', { ascending: false });
 
-      if (refreshedResponses) setResponsesList(refreshedResponses);
+      if (refreshedResponses) setResponsesList(refreshedResponses as any);
 
       setSaveSuccessMsg(
         matchedStudent

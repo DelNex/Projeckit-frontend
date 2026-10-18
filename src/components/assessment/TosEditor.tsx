@@ -168,7 +168,7 @@ export function TosEditor({
     async function loadTosDoc() {
       setLoading(true);
       try {
-        let tosQuery = (supabase as any).from('tos_documents').select('*');
+        let tosQuery = supabase.from('tos_documents').select('*');
         if (tosDocId) {
           tosQuery = tosQuery.eq('id', tosDocId);
         } else if (assessmentId) {
@@ -177,12 +177,12 @@ export function TosEditor({
 
         const [tosRes, gpRes, acRes] = await Promise.all([
           tosQuery.maybeSingle(),
-          (supabase as any)
+          supabase
             .from('grading_periods')
             .select('id, name, code')
             .eq('is_archived', false)
             .order('position', { ascending: true }),
-          (supabase as any)
+          supabase
             .from('academic_configs')
             .select('cog_dist_lower, cog_dist_mid, cog_dist_higher')
             .order('created_at', { ascending: false })
@@ -244,7 +244,7 @@ export function TosEditor({
           if (data.teacher_name) {
             setTeacher(data.teacher_name);
           } else if (data.created_by) {
-            const { data: creator } = await (supabase as any)
+            const { data: creator } = await supabase
               .from('profiles')
               .select('display_name')
               .eq('id', data.created_by)
@@ -255,15 +255,15 @@ export function TosEditor({
           }
 
           if (data?.questions && Array.isArray(data.questions) && data.questions.length > 0) {
-            setGeneratedQuestions(data.questions);
+            setGeneratedQuestions(data.questions as unknown as ExamQuestion[]);
           } else if (assessmentId) {
-            const { data: assData } = await (supabase as any)
+            const { data: assData } = await supabase
               .from('assessments')
               .select('questions')
               .eq('id', assessmentId)
               .maybeSingle();
             if (assData?.questions && Array.isArray(assData.questions) && assData.questions.length > 0) {
-              setGeneratedQuestions(assData.questions);
+              setGeneratedQuestions(assData.questions as unknown as ExamQuestion[]);
             }
           }
         } else {
@@ -420,7 +420,7 @@ export function TosEditor({
     setSaveStatus('saving');
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile } = await (supabase as any)
+      const { data: profile } = await supabase
         .from('profiles')
         .select('tenant_id')
         .eq('id', user?.id || '')
@@ -466,18 +466,26 @@ export function TosEditor({
         payload.assessment_id = linkedAssessmentId || assessmentId;
       }
 
-      const { data: savedRow, error: upsertErr } = await (supabase as any)
+      const { data: savedRow, error: upsertErr } = await supabase
         .from('tos_documents')
         .upsert(payload, currentTosId ? { onConflict: 'id' } : (assessmentId ? { onConflict: 'assessment_id' } : undefined))
         .select('id')
         .single();
 
       if (upsertErr) throw upsertErr;
-      if (savedRow?.id) setCurrentTosId(savedRow.id);
+      if (savedRow?.id) {
+        setCurrentTosId(savedRow.id);
+        if (assessmentId) {
+          await supabase
+            .from('assessments')
+            .update({ tos_id: savedRow.id })
+            .eq('id', assessmentId);
+        }
+      }
 
       // Sync teacher_name to faculty table
       try {
-        const { data: ac } = await (supabase as any)
+        const { data: ac } = await supabase
           .from('academic_configs')
           .select('id')
           .eq('tenant_id', tenantId)
@@ -486,7 +494,7 @@ export function TosEditor({
           .maybeSingle();
 
         if (ac?.id) {
-          const { data: fac } = await (supabase as any)
+          const { data: fac } = await supabase
             .from('faculty')
             .select('id')
             .eq('config_id', ac.id)
@@ -494,12 +502,12 @@ export function TosEditor({
             .maybeSingle();
 
           if (fac?.id) {
-            await (supabase as any)
+            await supabase
               .from('faculty')
               .update({ teacher_name: finalTeacher })
               .eq('id', fac.id);
           } else {
-            await (supabase as any)
+            await supabase
               .from('faculty')
               .insert({ config_id: ac.id, teacher_name: finalTeacher });
           }

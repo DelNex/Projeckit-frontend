@@ -238,6 +238,7 @@ export async function POST(request: Request) {
       const { error: moveErr } = await supabase
         .from('students')
         .update({
+          section_id: activeSection.id,
           section_name: activeSection.name,
         })
         .in('id', studentIds)

@@ -23,6 +23,7 @@ import { useToast } from '@/components/ui/toast';
 import { createClient } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
+import { createExamFromTosRpc } from '../services/tos-exam-rpc';
 
 interface TosExamModalProps {
   isOpen: boolean;
@@ -78,11 +79,19 @@ export function TosExamModal({
     // Check if there is an existing assessment linked
     const fetchExistingAssessment = async () => {
       try {
-        const { data: assess } = await (supabase as any)
+        const { data: assessList, error } = await supabase
           .from('assessments')
-          .select('id, exam_date, questions')
+          .select('id, exam_date, questions, section_id')
           .eq('tos_id', tos.id)
-          .maybeSingle();
+          .order('created_at', { ascending: true })
+          .limit(1);
+
+        if (error) {
+          console.error('Failed to load linked assessment data:', error);
+          return;
+        }
+
+        const assess = assessList?.[0];
 
         if (assess) {
           if (assess.exam_date) setExamDate(assess.exam_date);
@@ -248,43 +257,20 @@ export function TosExamModal({
 
     setIsSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-
-      // Upsert linked assessment
-      const payload = {
-        tos_id: tos.id,
-        tenant_id: tos.tenant_id,
-        title: tos.description || `${tos.exam_type || 'Examination'} in ${tos.subject}`,
-        subject: tos.subject,
-        term: tos.term,
-        school_year: tos.school_year,
-        exam_date: examDate,
-        total_items: totalQuestions,
-        questions: questions,
-        created_by: user?.id,
-        teacher_name: tos.teacher_name,
-        section: tos.section,
-      };
-
-      const { data: saved, error } = await (supabase as any)
-        .from('assessments')
-        .upsert(payload, { onConflict: 'tos_id' })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Also link to tos_documents
-      if (saved?.id) {
-        await (supabase as any)
-          .from('tos_documents')
-          .update({ assessment_id: saved.id })
-          .eq('id', tos.id);
-      }
+      await createExamFromTosRpc(supabase, {
+        p_tos_id: tos.id,
+        p_exam_date: examDate || null,
+        p_questions: questions,
+      });
 
       toast.success('Examination draft and linked assessment successfully saved!');
     } catch (err: any) {
-      console.error('Failed to save examination:', err);
+      console.error('Failed to save examination:', {
+        code: err?.code,
+        message: err?.message,
+        details: err?.details,
+        hint: err?.hint,
+      }, err);
       toast.error(friendlyError(err, 'Failed to save examination.'));
     } finally {
       setIsSaving(false);

@@ -194,12 +194,12 @@ function AssessmentsContent() {
       const [subjRes, secRes, gpRes, tosRes] = await Promise.all([
         supabase.from('subjects').select('id, code, title'),
         supabase.from('sections').select('id, name'),
-        (supabase as any)
+        supabase
           .from('grading_periods')
           .select('id, name, code, is_current')
           .eq('is_archived', false)
           .order('position', { ascending: true }),
-        (supabase as any)
+        supabase
           .from('tos_documents')
           .select('id, subject, term, school_year, target_items, status, grade, strand, section, assessment_id')
           .order('created_at', { ascending: false }),
@@ -268,17 +268,12 @@ function AssessmentsContent() {
     if (!linkTosModal.assessment || !linkTosModal.selectedTosId) return;
     setLinkTosModal((prev) => ({ ...prev, saving: true }));
     try {
-      const { error: updErr } = await (supabase as any)
+      const { error: updErr } = await supabase
         .from('assessments')
         .update({ tos_id: linkTosModal.selectedTosId })
         .eq('id', linkTosModal.assessment.id);
 
       if (updErr) throw updErr;
-
-      await (supabase as any)
-        .from('tos_documents')
-        .update({ assessment_id: linkTosModal.assessment.id })
-        .eq('id', linkTosModal.selectedTosId);
 
       toast.success('Table of Specifications linked successfully!');
       setLinkTosModal({ isOpen: false, assessment: null, selectedTosId: '', saving: false });
@@ -365,13 +360,6 @@ function AssessmentsContent() {
           tenant_id: tenantId,
           answers: {},
         });
-
-        // Link back to tos_documents if not already linked
-        await (supabase as any)
-          .from('tos_documents')
-          .update({ assessment_id: created.id })
-          .eq('id', selectedTosId)
-          .is('assessment_id', null);
       }
 
       toast.success('Assessment created and anchored on TOS.');
