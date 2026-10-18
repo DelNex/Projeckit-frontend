@@ -156,6 +156,7 @@ export default function AuditLogsPage() {
 
       {/* Unified DataTable Component */}
       <DataTable
+        tableLabel="Audit activity"
         columns={columns}
         data={logs}
         searchKey="action"

@@ -78,23 +78,23 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
     {
       group: 'MAIN',
       items: [
-        { name: 'Executive Dashboard', href: '/dashboard', icon: LayoutDashboard },
+        { name: 'Home', href: '/dashboard', icon: LayoutDashboard },
       ],
     },
     {
       group: 'ACADEMIC WORKFLOW',
       items: [
         { name: 'Table of Specifications', href: '/tos', icon: FileSpreadsheet },
-        { name: 'Assessments Workspace', href: '/assessments', icon: BookOpen },
-        { name: 'Learners Roster', href: '/students', icon: Users },
+        { name: 'Assessments', href: '/assessments', icon: BookOpen },
+        { name: 'Students', href: '/students', icon: Users },
       ],
     },
     {
       group: 'ANALYTICS & REPORTS',
       items: [
-        { name: 'Performance Analytics', href: '/analytics', icon: BarChart3 },
-        { name: 'Item Analysis Table', href: '/analytics?tab=item-analysis', icon: CheckSquare },
-        { name: 'Consolidated Reports', href: '/analytics?tab=reports', icon: FileSpreadsheet },
+        { name: 'Results', href: '/analytics', icon: BarChart3 },
+        { name: 'Question Analysis', href: '/analytics?tab=item-analysis', icon: CheckSquare },
+        { name: 'Reports', href: '/analytics?tab=reports', icon: FileSpreadsheet },
       ],
     },
     {
