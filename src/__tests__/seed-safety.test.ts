@@ -120,7 +120,7 @@ describe('Project KIT — Seed Safety & Validation Tests (Task 5)', () => {
     assert.ok(res.stdout.includes('No changes made to the database'), 'Output should indicate no DB writes');
   });
 
-  it('6. requires DEMO_TEACHER_PASSWORD (>=12 chars) when --demo is specified', () => {
+  it('6. --demo does not provision a teacher or require a teacher password', () => {
     const res = spawnSync(
       'npx',
       ['tsx', 'scripts/seed-supabase.ts', '--dry-run', '--demo'],
@@ -133,17 +133,16 @@ describe('Project KIT — Seed Safety & Validation Tests (Task 5)', () => {
           ADMIN_EMAIL: 'admin@deped.gov.ph',
           ADMIN_PASSWORD: 'SuperSecurePassword2026!',
           CONFIRM_PROJECT_REF: 'testproject123',
-          DEMO_TEACHER_PASSWORD: '', // missing
         },
         encoding: 'utf8',
       }
     );
 
-    assert.strictEqual(res.status, 1, 'Should exit with code 1 when demo password missing');
-    assert.ok(
-      res.stderr.includes('DEMO_TEACHER_PASSWORD') || res.stdout.includes('DEMO_TEACHER_PASSWORD'),
-      'Must print error about DEMO_TEACHER_PASSWORD'
-    );
+    assert.strictEqual(res.status, 0, `Demo dry-run should succeed without teacher credentials: ${res.stderr}`);
+    assert.match(res.stdout, /Seed demo academic data/);
+    assert.doesNotMatch(res.stdout, /teacher@|Provision demo teacher/i);
+    const seedSource = fs.readFileSync(seedScriptPath, 'utf8');
+    assert.doesNotMatch(seedSource, /DEMO_TEACHER_PASSWORD|supabase\.auth\.admin\.createUser\(\{\s*email: config\.demoTeacherEmail/s);
   });
 
   it('rejects an ADMIN_EMAIL outside @deped.gov.ph', () => {
@@ -169,6 +168,7 @@ describe('Project KIT — Seed Safety & Validation Tests (Task 5)', () => {
     const sql = fs.readFileSync(seedSqlPath, 'utf8');
 
     assert.ok(sql.includes('DEV / LOCAL ONLY'), 'Must include loud DEV / LOCAL ONLY banner');
+    assert.doesNotMatch(sql, /teacher@projectkit\.local|teacher_uid/);
     assert.ok(
       sql.includes('INSERT INTO public.students (id, tenant_id, config_id, section_id, lrn, name, section_name)'),
       'Student insert in seed.sql must include section_id'
