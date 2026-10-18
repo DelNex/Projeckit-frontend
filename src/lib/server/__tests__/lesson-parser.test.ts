@@ -1,7 +1,7 @@
 /**
  * Project KIT — Server-Side Lesson Text Extraction Unit Tests
  * Validates extraction from real compressed DOCX, compressed PDF, 3-slide PPTX, TXT,
- * scanned-image rejection, garbage detection, file limits, and 40,000 character capping.
+ * scanned-image rejection, garbage detection, file limits, and long-text preservation.
  */
 
 import assert from 'node:assert';
@@ -15,7 +15,6 @@ import {
   isGarbageText,
   MAX_FILE_SIZE_BYTES,
   MAX_FILES_COUNT,
-  MAX_TOTAL_CHARS,
   MIN_READABLE_CHARS,
 } from '../lesson-parser';
 
@@ -137,16 +136,14 @@ describe('Project KIT — Server-Side Lesson Text Extractor Tests', () => {
     );
   });
 
-  it('9. caps total extracted text at 40,000 characters and sets truncation notice', async () => {
+  it('9. preserves long extracted text and its source document without truncating it', async () => {
     const pdfBuf = fs.readFileSync(path.join(FIXTURES_DIR, 'compressed_lesson.pdf'));
     const result = await extractLessonFiles([{ name: 'large_document.pdf', buffer: pdfBuf }]);
 
-    assert.strictEqual(result.text.length, MAX_TOTAL_CHARS);
-    assert.strictEqual(result.truncated, true);
-    assert.strictEqual(
-      result.notice,
-      'Lesson text was trimmed to the 40,000 character maximum limit.'
-    );
+    assert.ok(result.documents[0].text.length > 40000);
+    assert.ok(result.text.includes(result.documents[0].text));
+    assert.strictEqual(result.documents[0].name, 'large_document.pdf');
+    assert.strictEqual(result.truncated, false);
+    assert.strictEqual(result.notice, undefined);
   });
 });
-

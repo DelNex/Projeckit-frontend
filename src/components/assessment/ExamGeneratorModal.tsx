@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { buildTosBlueprintSlots } from '@/lib/exam-types';
+import { generateExamThroughApi } from '@/lib/exam-generation-client';
 
 interface ExamGeneratorModalProps {
   isOpen: boolean;
@@ -142,6 +143,9 @@ export function ExamGeneratorModal({
     setErrorMsg(null);
     setTruncationNotice(null);
     let extractedLessonText = pastedText.trim();
+    let lessonDocuments: Array<{ name: string; text: string }> = pastedText.trim()
+      ? [{ name: 'Pasted lesson text', text: pastedText.trim() }]
+      : [];
 
     try {
       // Step 1: Uploading
@@ -151,6 +155,7 @@ export function ExamGeneratorModal({
         // Step 2: Extracting text on server
         setCurrentStep('extracting');
         const extractResult = await extractTextFromFiles(selectedFiles);
+        lessonDocuments = [...extractResult.documents, ...lessonDocuments];
         extractedLessonText = (extractResult.text + (extractedLessonText ? `\n\n${extractedLessonText}` : '')).trim();
 
         if (extractResult.notice) {
@@ -166,8 +171,8 @@ export function ExamGeneratorModal({
       // Step 3: Analyzing lesson coverage
       setCurrentStep('analyzing');
 
-      // The server handles chunking and parallel model requests. One request avoids
-      // repeated authentication, database writes, and partial answer-key updates.
+      // One generation request preserves the exam transaction; the helper reads
+      // each extracted lesson section sequentially before writing the exam.
       setCurrentStep('generating');
 
       const allSlots = buildTosBlueprintSlots(tosRows, Number(targetItems) || 50);
@@ -177,27 +182,25 @@ export function ExamGeneratorModal({
         label: `Preparing ${allSlots.length} questions`,
       });
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 180000);
-      let res: Response;
+      const timeoutId = setTimeout(() => controller.abort(), 60 * 60 * 1000);
+      let data;
       try {
-        res = await fetch('/api/ai/generate-exam', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        data = await generateExamThroughApi({
             assessmentId,
             tosId,
-            lessonText: extractedLessonText,
+            lessonDocuments,
             targetItems: Number(targetItems) || 50,
             tosRows,
             slots: allSlots,
-          }),
-          signal: controller.signal,
-        });
+          }, (status, progress) => setChunkProgress({
+            completed: 0,
+            total: allSlots.length,
+            label: status === 'running' ? (progress?.label || 'Gemini is working in your browser…') : 'Waiting for your Gemini browser…',
+          }), controller.signal);
       } finally {
         clearTimeout(timeoutId);
       }
-      const data = await res.json();
-      if (!res.ok || !Array.isArray(data.questions)) {
+      if (!Array.isArray(data.questions)) {
         throw new Error(data.error || 'The AI service could not generate this exam.');
       }
       const collectedQuestions: ExamQuestion[] = data.questions;
