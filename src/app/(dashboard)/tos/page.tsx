@@ -379,7 +379,7 @@ export default function TosPage() {
 
   const currentUser = {
     id: '',
-    displayName: tenant?.userDisplayName || 'Subject Teacher',
+    displayName: tenant?.userDisplayName || '',
     isAdmin: tenant?.userRole === 'admin' || tenant?.userRole === 'super_admin',
   };
 
@@ -588,7 +588,7 @@ export default function TosPage() {
         availableGradingPeriods={gradingPeriods}
         existingSubjects={existingSubjects}
         currentSchoolYear={selectedSchoolYear || defaultSchoolYear}
-        schoolName={tenant?.tenantName || 'Project KIT School'}
+        schoolName={tenant?.tenantName || ''}
         currentUser={currentUser}
         hasLinkedExam={Boolean(editingTos?.assessment_id)}
       />
@@ -598,7 +598,7 @@ export default function TosPage() {
         isOpen={Boolean(viewingTos)}
         onClose={() => setViewingTos(null)}
         tos={viewingTos}
-        schoolName={tenant?.tenantName || 'Project KIT School'}
+        schoolName={tenant?.tenantName || ''}
         region={tenant?.region}
         division={tenant?.division}
         onCreateExam={(target) => setExamModalTos(target)}
@@ -609,7 +609,7 @@ export default function TosPage() {
         isOpen={Boolean(examModalTos)}
         onClose={() => setExamModalTos(null)}
         tos={examModalTos}
-        schoolName={tenant?.tenantName || 'Project KIT School'}
+        schoolName={tenant?.tenantName || ''}
       />
 
       {/* 4. Delete Confirmation Modal with Linked Exam Warning */}

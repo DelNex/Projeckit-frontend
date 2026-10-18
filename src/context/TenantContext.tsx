@@ -45,6 +45,17 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     try {
       setIsLoading(true);
       setError(null);
+      // Clear the last school identity while resolving the current session so a
+      // previous tenant's name cannot flash or survive a failed tenant lookup.
+      setTenantId(null);
+      setTenantName('');
+      setTenantCode(null);
+      setRegion('');
+      setDivision('');
+      setLogoData('');
+      setConfigId(null);
+      setSchoolYear('');
+      setTerm('');
 
       const { data: { user }, error: authErr } = await supabase.auth.getUser();
       if (authErr || !user) {
@@ -208,4 +219,3 @@ export function useTenant(): TenantContextValue {
   }
   return ctx;
 }
-

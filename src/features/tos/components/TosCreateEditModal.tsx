@@ -83,13 +83,13 @@ export function TosCreateEditModal({
   >([
     {
       id: '1',
-      description: 'Implement column aliases using SQL',
+      description: '',
       daysTaught: 5,
     },
   ]);
 
   // Proponent Title Extension
-  const [teacherName, setTeacherName] = useState(currentUser.displayName || 'Subject Teacher');
+  const [teacherName, setTeacherName] = useState(currentUser.displayName || '');
   const [isEditingTeacher, setIsEditingTeacher] = useState(false);
 
   // Status & Errors
@@ -148,7 +148,7 @@ export function TosCreateEditModal({
         );
       }
 
-      setTeacherName(existingTos.teacher_name || currentUser.displayName || 'Subject Teacher');
+      setTeacherName(existingTos.teacher_name || currentUser.displayName || '');
     } else {
       // Default creation
       const currentPeriod = availableGradingPeriods.find((g) => g.is_current);
@@ -166,7 +166,7 @@ export function TosCreateEditModal({
           daysTaught: 5,
         },
       ]);
-      setTeacherName(currentUser.displayName || 'Subject Teacher');
+      setTeacherName(currentUser.displayName || '');
     }
 
     setFormError(null);

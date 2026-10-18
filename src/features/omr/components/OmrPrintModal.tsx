@@ -23,13 +23,14 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CanonicalOmrGeometry } from '../geometry/geometry-types';
 import {
   PersonalizedSheetData,
   renderOmrMasterSvg,
   VisibleHeaderFields,
 } from '../rendering/svg-renderer';
+import { A5_TWO_UP_PRINT_SIZE, buildA5TwoUpPages } from '../rendering/personalized-print-layout';
 
 export interface OmrPrintModalStudent {
   id: string;
@@ -73,7 +74,7 @@ export function OmrPrintModal({
   logoData,
   totalPoints,
 }: OmrPrintModalProps) {
-  const [printMode, setPrintMode] = useState<'blank' | 'personalized'>('blank');
+  const [printMode, setPrintMode] = useState<'blank' | 'personalized'>('personalized');
   const [currentPageIdx, setCurrentPageIdx] = useState(0);
   const [showConfigDrawer, setShowConfigDrawer] = useState(false);
 
@@ -111,6 +112,10 @@ export function OmrPrintModal({
   const totalPages = isHalfSheet
     ? Math.max(1, Math.ceil(activeLearners.length / 2))
     : Math.max(1, activeLearners.length);
+
+  useEffect(() => {
+    if (isOpen) setPrintMode(activeLearners.length > 0 ? 'personalized' : 'blank');
+  }, [isOpen, activeLearners.length]);
 
   // Build personalized config for a specific student
   const getStudentPersonalizedData = (
@@ -198,26 +203,10 @@ export function OmrPrintModal({
           return;
         }
 
-        const pairs: Array<[OmrPrintModalStudent, OmrPrintModalStudent | null]> = [];
-        for (let i = 0; i < activeLearners.length; i += 2) {
-          pairs.push([activeLearners[i], activeLearners[i + 1] || null]);
-        }
-
-        pagesHtml = pairs
-          .map(([s1, s2], pairIdx) => {
-            const svg1 = renderOmrMasterSvg(geometry, getStudentPersonalizedData(s1, pairIdx * 2));
-            const svg2 = s2
-              ? renderOmrMasterSvg(geometry, getStudentPersonalizedData(s2, pairIdx * 2 + 1))
-              : '';
-            return `
-              <div class="omr-print-page-landscape">
-                <div class="omr-sheet-half">${svg1}</div>
-                <div class="omr-cut-line"></div>
-                <div class="omr-sheet-half">${svg2}</div>
-              </div>
-            `;
-          })
-          .join('\n');
+        pagesHtml = buildA5TwoUpPages(activeLearners, (student, studentIndex) => {
+          const studentData = getStudentPersonalizedData(student, studentIndex);
+          return renderOmrMasterSvg(geometry, studentData);
+        });
       }
     } else {
       // Full sheet (A4 portrait, 794 x 1123)
@@ -264,8 +253,8 @@ export function OmrPrintModal({
         print-color-adjust: exact;
       }
       .omr-print-page-landscape {
-        width: 1123px;
-        height: 794px;
+        width: ${A5_TWO_UP_PRINT_SIZE.pageWidthMm}mm;
+        height: ${A5_TWO_UP_PRINT_SIZE.pageHeightMm}mm;
         display: flex;
         flex-direction: row;
         justify-content: space-between;
@@ -280,26 +269,26 @@ export function OmrPrintModal({
         break-after: auto;
       }
       .omr-sheet-half {
-        width: 559px;
-        height: 794px;
+        width: ${A5_TWO_UP_PRINT_SIZE.sheetWidthMm}mm;
+        height: ${A5_TWO_UP_PRINT_SIZE.sheetHeightMm}mm;
         flex-shrink: 0;
       }
       .omr-sheet-half svg {
-        width: 559px;
-        height: 794px;
+        width: 100%;
+        height: 100%;
         display: block;
       }
       .omr-cut-line {
         position: absolute;
-        left: 561px;
+        left: ${A5_TWO_UP_PRINT_SIZE.cutLineMm}mm;
         top: 0;
         bottom: 0;
         width: 0;
         border-left: 1px dashed #9CA3AF;
       }
       .omr-print-page-portrait {
-        width: 794px;
-        height: 1123px;
+        width: 210mm;
+        height: 297mm;
         display: flex;
         justify-content: center;
         align-items: flex-start;
@@ -313,8 +302,8 @@ export function OmrPrintModal({
       }
       .omr-print-page-portrait svg {
         display: block;
-        width: 794px;
-        height: 1123px;
+        width: 100%;
+        height: 100%;
       }
     </style>
   </head>
@@ -460,7 +449,6 @@ export function OmrPrintModal({
                 <span className="font-bold text-gray-400">Show on header:</span>
                 {(
                   [
-                    ['learnerName', 'Learner Name'],
                     ['lrn', 'LRN'],
                     ['section', 'Section'],
                     ['examDate', 'Exam Date'],

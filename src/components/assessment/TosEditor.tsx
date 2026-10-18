@@ -29,6 +29,7 @@ import { ExamGeneratorModal } from './ExamGeneratorModal';
 import { ExamDraftEditor } from './ExamDraftEditor';
 import {
   calculateTos,
+  BloomLevel,
   DEFAULT_COGNITIVE_DISTRIBUTION,
   CognitiveDistributionConfig,
   CognitiveDomains,
@@ -49,12 +50,13 @@ export interface TosCompetencyRow {
   code: string;
   description: string;
   daysTaught: number;
-  legacyHours?: number;
   domains: TosCompetencyDomain;
   itemTarget?: number;
   itemRange?: string;
   startItem?: number;
   endItem?: number;
+  domainItemNumbers?: Record<BloomLevel, number[]>;
+  domainDisplay?: Record<BloomLevel, string>;
 }
 
 export interface TosEditorProps {
@@ -219,17 +221,16 @@ export function TosEditor({
 
         if (data && Array.isArray(data.rows) && data.rows.length > 0) {
           const parsedRows: TosCompetencyRow[] = data.rows.map((r: any, idx: number) => {
-            const legacyHours = r.hours !== undefined ? Number(r.hours) : undefined;
-            const daysTaught = r.daysTaught !== undefined
+            const rawDays = r.daysTaught !== undefined
               ? Number(r.daysTaught)
-              : (r.days !== undefined ? Number(r.days) : (r.days_taught !== undefined ? Number(r.days_taught) : (legacyHours ? 0 : 4)));
+              : (r.days !== undefined ? Number(r.days) : Number(r.days_taught));
+            const daysTaught = Number.isFinite(rawDays) && rawDays > 0 ? rawDays : 1;
 
             return {
               id: r.id || String(idx + 1),
               code: r.code || `COMP-${idx + 1}`,
               description: r.competency || r.description || '',
               daysTaught,
-              legacyHours,
               domains: {
                 remembering: Number(r.domains?.remembering ?? 0),
                 understanding: Number(r.domains?.understanding ?? 0),
@@ -316,7 +317,6 @@ export function TosEditor({
       code: r.code,
       description: r.description,
       daysTaught: Number(r.daysTaught) || 0,
-      legacyHours: r.legacyHours,
     }));
     return calculateTos(inputs, targetItems, cogDist);
   }, [rows, targetItems, cogDist]);
@@ -341,6 +341,8 @@ export function TosEditor({
         percentage: rowPercentage,
         domains: activeDomains,
         domainRanges: calcRow?.domainRanges,
+        domainItemNumbers: calcRow?.domainItemNumbers,
+        domainDisplay: calcRow?.domainDisplay,
       };
     });
   }, [rows, tosCalc, isAdjustMode, adjustments]);
@@ -433,7 +435,7 @@ export function TosEditor({
       const { data: { user } } = await supabase.auth.getUser();
       const { data: profile } = await supabase
         .from('profiles')
-        .select('tenant_id')
+        .select('tenant_id, display_name')
         .eq('id', user?.id || '')
         .maybeSingle();
 
@@ -441,7 +443,12 @@ export function TosEditor({
         throw new Error('Your account is not linked to a school tenant.');
       }
       const tenantId = profile.tenant_id;
-      const finalTeacher = teacher.trim() || userDisplayName || 'Teacher';
+      const finalTeacher = teacher.trim()
+        || userDisplayName
+        || profile?.display_name
+        || String(user?.user_metadata?.display_name || '').trim()
+        || user?.email?.split('@')[0]
+        || '';
 
       const payload: any = {
         tenant_id: tenantId,
@@ -461,10 +468,11 @@ export function TosEditor({
           description: r.description,
           daysTaught: r.daysTaught,
           days: r.daysTaught,
-          legacyHours: r.legacyHours,
           itemCount: r.itemCount,
           itemRange: r.itemRange,
           domains: r.domains,
+          domainItemNumbers: r.domainItemNumbers,
+          domainDisplay: r.domainDisplay,
         })),
         teacher_name: finalTeacher,
         updated_at: new Date().toISOString(),
@@ -835,7 +843,7 @@ export function TosEditor({
           <button
             type="button"
             onClick={() => setIsGeneratorModalOpen(true)}
-            className="px-3.5 py-2 text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-xl shadow-xs transition flex items-center gap-1.5 shrink-0"
+            className="px-3.5 py-2 text-xs font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-lg transition flex items-center gap-1.5 shrink-0"
             title="Upload lesson notes to automatically generate exam questions matching this TOS"
           >
             <Sparkles className="h-3.5 w-3.5 text-blue-200" />
@@ -1362,15 +1370,10 @@ export function TosEditor({
                             className="w-full px-2 py-1 text-xs rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                           />
                         ) : (
-                          <div className="space-y-0.5">
+                          <div>
                             <span className="text-xs text-gray-800 dark:text-gray-200 font-medium">
                               {row.description}
                             </span>
-                            {row.legacyHours !== undefined && (
-                              <span className="inline-block ml-2 px-1.5 py-0.2 rounded bg-gray-100 dark:bg-gray-800 text-[10px] text-gray-500">
-                                Legacy: {row.legacyHours} hrs
-                              </span>
-                            )}
                           </div>
                         )}
                       </td>

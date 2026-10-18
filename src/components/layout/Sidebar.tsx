@@ -60,6 +60,15 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
     checkPlatformAdmin();
   }, [supabase]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [isOpen, onClose]);
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     window.location.href = '/login';
@@ -128,24 +137,28 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
       {isOpen && (
         <div
           onClick={onClose}
-          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs lg:hidden"
+          className="fixed inset-0 z-40 bg-slate-950/45 lg:hidden"
           aria-hidden="true"
         />
       )}
 
       {/* Sidebar Navigation Drawer */}
       <aside
+        id="app-sidebar"
+        role={isOpen ? 'dialog' : undefined}
+        aria-modal={isOpen ? true : undefined}
+        aria-label={isAdminMode ? 'Administration navigation' : 'School navigation'}
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900 lg:static lg:h-full lg:shrink-0 lg:translate-x-0 sidebar-transition',
+          'fixed inset-y-0 left-0 z-50 flex w-[min(84vw,18rem)] flex-col border-r border-slate-200 bg-white dark:border-gray-800 dark:bg-gray-900 lg:static lg:h-full lg:w-64 lg:shrink-0 lg:translate-x-0 sidebar-transition',
           isOpen ? 'translate-x-0 shadow-2xl lg:shadow-none' : '-translate-x-full'
         )}
       >
         {/* Sidebar Header */}
-        <div className="flex h-18 items-center justify-between border-b border-gray-100 px-6 dark:border-gray-800/80">
+        <div className="flex min-h-[76px] items-center justify-between border-b border-slate-200 px-5 dark:border-gray-800">
           <Link href={isAdminMode ? '/admin' : '/dashboard'} className="flex items-center gap-3">
             <div className={cn(
-              "flex h-10 w-10 items-center justify-center rounded-xl font-bold text-white shadow-xs",
-              isAdminMode ? "bg-gradient-to-br from-indigo-500 to-purple-600" : "bg-blue-600"
+              "flex h-10 w-10 items-center justify-center rounded-lg font-bold text-white",
+              isAdminMode ? "bg-slate-800" : "bg-blue-700"
             )}>
               {isAdminMode ? <Shield className="h-5 w-5" /> : 'KIT'}
             </div>
@@ -169,10 +182,10 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
         </div>
 
         {/* Navigation List */}
-        <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
+        <nav aria-label={isAdminMode ? 'Administration' : 'School navigation'} className="flex-1 overflow-y-auto px-3 py-5 space-y-6">
           {navGroups.map((group) => (
             <div key={group.group}>
-              <h3 className="mb-2 px-3 text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+              <h3 className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-gray-500">
                 {group.group}
               </h3>
               <ul className="space-y-1">
@@ -197,13 +210,13 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
                           if (window.innerWidth < 1024) onClose();
                         }}
                         className={cn(
-                          'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 active:scale-[0.98]',
+                          'flex min-h-11 items-center gap-3 rounded-lg border-l-2 px-3 text-sm font-medium transition-colors duration-150',
                           isActive
-                            ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 font-semibold shadow-2xs'
-                            : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800/60'
+                            ? 'border-blue-700 bg-blue-50 text-blue-800 dark:border-blue-400 dark:bg-blue-950/50 dark:text-blue-200 font-semibold'
+                            : 'border-transparent text-slate-700 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800'
                         )}
                       >
-                        <Icon className={cn('h-5 w-5 shrink-0', isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400')} />
+                        <Icon className={cn('h-[18px] w-[18px] shrink-0', isActive ? 'text-blue-700 dark:text-blue-300' : 'text-slate-500')} />
                         <span className="truncate">{item.name}</span>
                       </Link>
                     </li>
@@ -214,19 +227,19 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
           ))}
 
           {/* Help & Session Sign Out */}
-          <div className="pt-4 border-t border-gray-100 dark:border-gray-800/80">
-            <h3 className="mb-2 px-3 text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+          <div className="pt-4 border-t border-slate-200 dark:border-gray-800">
+            <h3 className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-gray-500">
               SESSION
             </h3>
             <button
               onClick={handleSignOut}
-              className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30 transition-colors"
+              className="w-full flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/30 transition-colors"
             >
               <LogOut className="h-5 w-5 text-red-500" />
               <span>Sign out</span>
             </button>
           </div>
-        </div>
+        </nav>
       </aside>
     </>
   );

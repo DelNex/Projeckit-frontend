@@ -20,6 +20,7 @@ import {
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useTenant } from '@/context/TenantContext';
+import { getPhilippineSchoolYear } from '@/lib/academic-calendar';
 
 interface AssessmentItem {
   id: string;
@@ -57,7 +58,8 @@ const TIER_CONFIG = [
 ];
 
 export default function DashboardPage() {
-  const { tenantName } = useTenant();
+  const { tenantName, schoolYear } = useTenant();
+  const effectiveSchoolYear = schoolYear || getPhilippineSchoolYear();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -210,7 +212,7 @@ export default function DashboardPage() {
 
         const termPeriod = periods.find((p: { name: string; position: number }) => p.name.trim().toLowerCase() === (ass?.term || '').trim().toLowerCase());
         const qKey = termPeriod ? (`Q${termPeriod.position}` as 'Q1' | 'Q2' | 'Q3' | 'Q4') : normalizeQuarter(ass?.term || 'First Quarter');
-        const sYear = ass?.school_year || '2025-2026';
+        const sYear = ass?.school_year || effectiveSchoolYear;
 
         computedScores.push({
           scanId: s.id,
@@ -243,7 +245,7 @@ export default function DashboardPage() {
           grade: a.sections?.grade || '',
           strand: a.sections?.strand_code || '',
           term: a.term || 'First Quarter',
-          schoolYear: a.school_year || '2025-2026',
+          schoolYear: a.school_year || effectiveSchoolYear,
           targetItems: a.target_items || 50,
           passingMps: a.passing_mps || 60,
           status: a.status || 'DRAFT',
@@ -616,13 +618,6 @@ export default function DashboardPage() {
                   viewBox={`0 0 ${trendSvgCoords.width} ${trendSvgCoords.height}`}
                   className="w-full h-auto max-h-72 select-none"
                 >
-                  <defs>
-                    <linearGradient id="dashboardMpsGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.3" />
-                      <stop offset="100%" stopColor="#3B82F6" stopOpacity="0.0" />
-                    </linearGradient>
-                  </defs>
-
                   {/* Horizontal Grid lines */}
                   {[0, 25, 50, 75, 100].map((val) => {
                     const y = trendSvgCoords.height - trendSvgCoords.paddingY - (val / 100) * (trendSvgCoords.height - trendSvgCoords.paddingY * 2);
@@ -663,7 +658,7 @@ export default function DashboardPage() {
 
                   {/* Area fill */}
                   {trendSvgCoords.areaD && (
-                    <path d={trendSvgCoords.areaD} fill="url(#dashboardMpsGradient)" />
+                    <path d={trendSvgCoords.areaD} fill="#dbeafe" fillOpacity="0.7" />
                   )}
 
                   {/* Trend Path line */}

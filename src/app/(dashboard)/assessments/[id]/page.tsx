@@ -12,6 +12,8 @@ import {
     OmrScanResult,
 } from '@/features/omr';
 import { friendlyError } from '@/lib/errors';
+import { getPhilippineSchoolYear } from '@/lib/academic-calendar';
+import { projectTosItems } from '@/lib/tos-item-projection';
 import { createClient } from '@/lib/supabase/client';
 import type { Database } from '@/types/database.types';
 import { cn } from '@/lib/utils';
@@ -20,9 +22,9 @@ type ScanResultRow = Database['public']['Tables']['scan_results']['Row'];
 type TosDocRow = Database['public']['Tables']['tos_documents']['Row'] & {
   rows?: Array<{
     code?: string;
-    hours?: number;
     days?: number;
     daysTaught?: number;
+    days_taught?: number;
     domains?: Record<string, number>;
     description?: string;
     [key: string]: unknown;
@@ -69,7 +71,7 @@ export default function AssessmentWorkspacePage({
   const activeTab = rawTab === 'grades' ? 'tos' : rawTab;
   const assessmentId = resolvedParams.id;
 
-  const { tenantName, region, division, logoData } = useTenant();
+  const { tenantName, region, division, logoData, schoolYear: tenantSchoolYear, userDisplayName } = useTenant();
   const [currentTeacherName, setCurrentTeacherName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -187,9 +189,9 @@ export default function AssessmentWorkspacePage({
       setAssessment({
         id: aData.id,
         title: aData.title,
-        subject: subj?.title || subj?.code || 'Empowerment Technologies',
-        section: sec?.name || 'Class',
-        schoolYear: aData.school_year || '2025-2026',
+        subject: subj?.title || subj?.code || '',
+        section: sec?.name || '',
+        schoolYear: aData.school_year || tenantSchoolYear || getPhilippineSchoolYear(),
         term: aData.term || '1st Quarter',
         targetItems: itemsNum,
         classSize: sizeNum,
@@ -275,7 +277,7 @@ export default function AssessmentWorkspacePage({
           .select('display_name')
           .eq('id', user.id)
           .maybeSingle();
-        if (prof?.display_name) setCurrentTeacherName(prof.display_name);
+        setCurrentTeacherName(prof?.display_name || userDisplayName || user.email?.split('@')[0] || '');
       }
     } catch (err: any) {
       console.error('Failed to load assessment details:', err);
@@ -564,49 +566,12 @@ export default function AssessmentWorkspacePage({
     let itemsList: { itemNumber: number; code: string; description: string; domain: string }[] = [];
     const competencies = tosDoc?.rows || [];
     if (competencies.length > 0) {
-      const totalHoursSum = competencies.reduce((sum: number, c: any) => sum + (Number(c.hours) || 0), 0);
-      const effectiveHours = totalHoursSum > 0 ? totalHoursSum : 40;
-      let currentItemNum = 1;
-
-      competencies.forEach((comp: any, compIdx: number) => {
-        const compItemCount = compIdx === competencies.length - 1
-          ? (itemCount - itemsList.length)
-          : Math.max(1, Math.round(((Number(comp.hours) || 0) / effectiveHours) * itemCount));
-
-        let dom = 'remembering';
-        if (comp.domains) {
-          const domEntries = Object.entries(comp.domains);
-          const topDom = domEntries.sort((a: any, b: any) => Number(b[1]) - Number(a[1]))[0];
-          if (topDom && Number(topDom[1]) > 0) dom = topDom[0];
-        }
-
-        for (let k = 0; k < compItemCount; k++) {
-          if (currentItemNum <= itemCount) {
-            itemsList.push({
-              itemNumber: currentItemNum,
-              code: comp.code || `COMP-${compIdx + 1}`,
-              description: comp.description || comp.competency || 'DepEd Competency',
-              domain: dom,
-            });
-            currentItemNum++;
-          }
-        }
-      });
-
-      while (itemsList.length < itemCount) {
-        const lastComp = competencies[competencies.length - 1] || { code: 'CS_GENERAL', description: 'General Assessment Item' };
-        itemsList.push({
-          itemNumber: itemsList.length + 1,
-          code: lastComp.code || 'CS_GENERAL',
-          description: String(lastComp.description || 'General Assessment Item'),
-          domain: 'remembering',
-        });
-      }
+      itemsList = projectTosItems(competencies, itemCount);
     } else {
       const domainKeys = ['remembering', 'understanding', 'applying', 'analyzing', 'evaluating', 'creating'];
       itemsList = Array.from({ length: itemCount }, (_, idx) => ({
         itemNumber: idx + 1,
-        code: `CSHS-${idx < 15 ? 'KNOW' : idx < 35 ? 'PROC' : 'REAS'}-${String(idx + 1).padStart(2, '0')}`,
+        code: `ITEM-${String(idx + 1).padStart(3, '0')}`,
         description: `Assessment Item ${idx + 1} Aligned Competency`,
         domain: domainKeys[idx % domainKeys.length],
       }));
@@ -842,7 +807,7 @@ export default function AssessmentWorkspacePage({
           <button
             type="button"
             onClick={() => handleTabChange('tos')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs shadow-xs transition"
+            className="inline-flex min-h-10 items-center gap-1.5 px-3 rounded-lg bg-blue-700 hover:bg-blue-800 text-white font-semibold text-xs transition"
           >
             <Sparkles className="h-3.5 w-3.5 text-blue-200" />
             <span>Generate Exam</span>

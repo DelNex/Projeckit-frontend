@@ -1066,6 +1066,9 @@ export default function SchoolSettingsPage() {
 
     try {
       const cleanSy = schoolYear.trim();
+      if (!tenantId || !configId) {
+        throw new Error('This account has no school academic configuration to save. Contact your school administrator.');
+      }
 
       // 1. Update academic config
       if (configId) {
@@ -1077,6 +1080,7 @@ export default function SchoolSettingsPage() {
             updated_at: new Date().toISOString(),
           })
           .eq('id', configId)
+          .eq('tenant_id', tenantId)
           .select();
 
         if (confErr) throw confErr;

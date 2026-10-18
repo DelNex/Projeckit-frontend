@@ -114,7 +114,7 @@ export function ExamPrintModal({
               Department of Education • Republic of the Philippines
             </p>
             <h2 className="text-base sm:text-lg font-black uppercase tracking-wide">
-              {tenantName || 'DepEd Senior High School'}
+              {tenantName}
             </h2>
             <h1 className="text-sm sm:text-base font-bold uppercase tracking-wider underline">
               {title || 'Quarterly Examination'}
@@ -216,11 +216,10 @@ export function ExamPrintModal({
 
           {/* Footer Note */}
           <div className="mt-8 pt-4 border-t border-gray-200 dark:border-gray-800 text-center font-sans text-[10px] text-gray-500 print:text-gray-600">
-            End of Examination • {tenantName || 'Department of Education'}
+            End of Examination{tenantName ? ` • ${tenantName}` : ''}
           </div>
         </div>
       </div>
     </div>
   );
 }
-

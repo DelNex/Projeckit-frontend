@@ -26,7 +26,7 @@ export async function generateExamDocx(
   questions: ExamQuestion[],
   options: ExamWordExportOptions = {}
 ): Promise<Blob> {
-  const schoolName = (options.schoolName || 'Project KIT School').toUpperCase();
+  const schoolName = (options.schoolName || '').toUpperCase();
   const examTitle = (tos.exam_type || 'EXAMINATION').toUpperCase();
   const subject = tos.subject.toUpperCase();
   const schoolYear = tos.school_year;
