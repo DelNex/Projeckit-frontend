@@ -555,7 +555,7 @@ function AssessmentsContent() {
       },
       {
         accessorKey: 'passing_mps',
-        header: 'Passing MPS',
+        header: 'Passing score (%)',
         cell: ({ row }) => (
           <span className="font-semibold text-blue-600 dark:text-blue-400 font-mono">
             {row.original.passing_mps}%
@@ -654,6 +654,7 @@ function AssessmentsContent() {
 
       {/* Unified DataTable Component */}
       <DataTable
+        tableLabel="Assessments"
         columns={columns}
         data={filteredAssessments}
         searchKey="title"

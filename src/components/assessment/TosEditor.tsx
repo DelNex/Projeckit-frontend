@@ -1248,7 +1248,8 @@ export function TosEditor({
           )}
 
           {/* Worksheet Matrix Table */}
-          <div className="overflow-x-auto -mx-4 sm:mx-0">
+          <div className="overflow-x-auto -mx-4 sm:mx-0 touch-pan-x focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" tabIndex={0} role="region" aria-label="Learning competency table. Swipe sideways to see more columns.">
+            <p className="px-4 pb-2 text-[11px] text-gray-500 sm:hidden" aria-hidden="true">Swipe sideways to see all columns</p>
             <table className="w-full text-left text-xs table-optimized min-w-[760px]">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/60 text-[11px] text-gray-500 dark:text-gray-400 uppercase tracking-wider font-bold">
@@ -1260,29 +1261,29 @@ export function TosEditor({
                       className="rounded border-gray-300 dark:border-gray-700 text-blue-600 focus:ring-blue-500"
                     />
                   </th>
-                  <th className="px-3 py-3 w-36 font-bold text-gray-700 dark:text-gray-300">Code</th>
-                  <th className="px-4 py-3 font-bold text-gray-700 dark:text-gray-300">Learning Competency Description</th>
-                  <th className="px-3 py-3 text-center w-16 font-bold text-gray-700 dark:text-gray-300">Days</th>
-                  <th className="px-3 py-3 text-center w-14 font-bold text-gray-700 dark:text-gray-300">%</th>
+                  <th className="px-3 py-3 w-36 font-bold text-gray-700 dark:text-gray-300">Competency code</th>
+                  <th className="px-4 py-3 font-bold text-gray-700 dark:text-gray-300">Learning competency</th>
+                  <th className="px-3 py-3 text-center w-20 font-bold text-gray-700 dark:text-gray-300">Days taught</th>
+                  <th className="px-3 py-3 text-center w-20 font-bold text-gray-700 dark:text-gray-300">Share (%)</th>
                   <th className="px-3 py-3 text-center w-14 font-bold text-blue-600 dark:text-blue-400">Items</th>
                   <th className="px-3 py-3 text-center w-20 font-bold text-gray-700 dark:text-gray-300">Range</th>
-                  <th className="px-2 py-3 text-center w-14 text-blue-600 dark:text-blue-400 font-bold">
-                    <span className="inline-block px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/50 text-[10px]" title="Remembering">REM</span>
+                  <th className="px-2 py-3 text-center w-20 text-blue-600 dark:text-blue-400 font-bold">
+                    <span className="inline-block px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/50 text-[10px]" title="Remembering">Remember</span>
                   </th>
-                  <th className="px-2 py-3 text-center w-14 text-indigo-600 dark:text-indigo-400 font-bold">
-                    <span className="inline-block px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/50 text-[10px]" title="Understanding">UND</span>
+                  <th className="px-2 py-3 text-center w-24 text-indigo-600 dark:text-indigo-400 font-bold">
+                    <span className="inline-block px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/50 text-[10px]" title="Understanding">Understand</span>
                   </th>
-                  <th className="px-2 py-3 text-center w-14 text-purple-600 dark:text-purple-400 font-bold">
-                    <span className="inline-block px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-950/50 text-[10px]" title="Applying">APP</span>
+                  <th className="px-2 py-3 text-center w-20 text-purple-600 dark:text-purple-400 font-bold">
+                    <span className="inline-block px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-950/50 text-[10px]" title="Applying">Apply</span>
                   </th>
-                  <th className="px-2 py-3 text-center w-14 text-amber-600 dark:text-amber-400 font-bold">
-                    <span className="inline-block px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/50 text-[10px]" title="Analyzing">ANA</span>
+                  <th className="px-2 py-3 text-center w-20 text-amber-600 dark:text-amber-400 font-bold">
+                    <span className="inline-block px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/50 text-[10px]" title="Analyzing">Analyze</span>
                   </th>
-                  <th className="px-2 py-3 text-center w-14 text-rose-600 dark:text-rose-400 font-bold">
-                    <span className="inline-block px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950/50 text-[10px]" title="Evaluating">EVA</span>
+                  <th className="px-2 py-3 text-center w-20 text-rose-600 dark:text-rose-400 font-bold">
+                    <span className="inline-block px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950/50 text-[10px]" title="Evaluating">Evaluate</span>
                   </th>
-                  <th className="px-2 py-3 text-center w-14 text-emerald-600 dark:text-emerald-400 font-bold">
-                    <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/50 text-[10px]" title="Creating">CRE</span>
+                  <th className="px-2 py-3 text-center w-20 text-emerald-600 dark:text-emerald-400 font-bold">
+                    <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/50 text-[10px]" title="Creating">Create</span>
                   </th>
                   <th className="px-3 py-3 text-center w-24 font-bold text-gray-700 dark:text-gray-300">Status</th>
                 </tr>
@@ -1742,12 +1743,12 @@ export function TosEditor({
                     <th className="border border-gray-900 p-2 w-12">%</th>
                     <th className="border border-gray-900 p-2 w-12">ITEMS</th>
                     <th className="border border-gray-900 p-2 w-16">RANGE</th>
-                    <th className="border border-gray-900 p-2 w-10">REM</th>
-                    <th className="border border-gray-900 p-2 w-10">UND</th>
-                    <th className="border border-gray-900 p-2 w-10">APP</th>
-                    <th className="border border-gray-900 p-2 w-10">ANA</th>
-                    <th className="border border-gray-900 p-2 w-10">EVA</th>
-                    <th className="border border-gray-900 p-2 w-10">CRE</th>
+                    <th className="border border-gray-900 p-2">Remember</th>
+                    <th className="border border-gray-900 p-2">Understand</th>
+                    <th className="border border-gray-900 p-2">Apply</th>
+                    <th className="border border-gray-900 p-2">Analyze</th>
+                    <th className="border border-gray-900 p-2">Evaluate</th>
+                    <th className="border border-gray-900 p-2">Create</th>
                   </tr>
                 </thead>
                 <tbody>

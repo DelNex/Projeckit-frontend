@@ -773,7 +773,7 @@ function AnalyticsContent() {
       <div className="p-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-gray-100 dark:border-gray-800 pb-3">
           <div>
-            <h1 className="text-lg font-bold text-gray-900 dark:text-white">Performance Analytics</h1>
+            <h1 className="text-lg font-bold text-gray-900 dark:text-white">Student results</h1>
             <p className="text-xs text-gray-500 dark:text-gray-400">
               Compare achievement across classes and school years aligned with DepEd standards
             </p>
@@ -903,7 +903,7 @@ function AnalyticsContent() {
               Class Scope: {selectedSection === 'all' ? 'All Sections' : selectedSection}
             </span>
             <span className="px-2.5 py-1 rounded-md bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-bold">
-              Mean MPS: {aggregateMetrics.mps !== null ? `${aggregateMetrics.mps}%` : 'N/A'}
+              Average score: {aggregateMetrics.mps !== null ? `${aggregateMetrics.mps}%` : 'N/A'}
             </span>
             <span
               className={`px-2.5 py-1 rounded-md font-bold ${

@@ -748,7 +748,7 @@ export default function StudentsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">
-            Learners Roster
+            Students
           </h1>
           <p className="text-xs text-gray-500 dark:text-gray-400">
             Authoritative student enrollment records, DepEd LRN registry, and archive management.
@@ -990,6 +990,7 @@ export default function StudentsPage() {
 
       {/* Unified DataTable Component */}
       <DataTable
+        tableLabel={activeTab === 'active' ? 'Student list' : 'Archived students'}
         columns={columns}
         data={displayedStudents}
         onVisibleRowsChange={setVisiblePageStudents}

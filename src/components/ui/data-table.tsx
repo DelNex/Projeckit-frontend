@@ -33,6 +33,7 @@ export interface DataTableProps<TData, TValue = any> {
   data: TData[];
   searchKey?: string | string[];
   searchPlaceholder?: string;
+  tableLabel?: string;
   loading?: boolean;
   emptyTitle?: string;
   emptyDescription?: string;
@@ -49,7 +50,8 @@ export function DataTable<TData, TValue = any>({
   columns,
   data,
   searchKey,
-  searchPlaceholder = 'Search records...',
+  searchPlaceholder = 'Search...',
+  tableLabel = 'Data table',
   loading = false,
   emptyTitle = 'No records found',
   emptyDescription = 'There are no records matching your current filter criteria.',
@@ -187,8 +189,11 @@ export function DataTable<TData, TValue = any>({
 
       {/* Main Table Container */}
       <div className="rounded-2xl sm:rounded-3xl border border-gray-200 bg-white shadow-2xs dark:border-gray-800 dark:bg-gray-900 overflow-hidden min-w-0">
-        <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left text-xs border-collapse">
+        <p className="px-4 pt-3 text-[11px] text-gray-500 sm:hidden" aria-hidden="true">
+          Swipe sideways to see all columns
+        </p>
+        <div className="overflow-x-auto custom-scrollbar touch-pan-x focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" tabIndex={0} role="region" aria-label={`${tableLabel}. Swipe sideways to see more columns.`}>
+          <table className="w-full text-left text-xs border-collapse" style={{ minWidth: `${Math.max(560, columns.length * 112)}px` }}>
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/70 dark:border-gray-800 dark:bg-gray-800/40 text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">
                 {columns.map((col, idx) => {
@@ -201,12 +206,11 @@ export function DataTable<TData, TValue = any>({
                       key={colKey}
                       className={cn(
                         'px-4 sm:px-6 py-4 select-none whitespace-nowrap',
-                        canSort &&
-                          'cursor-pointer hover:bg-gray-100/60 dark:hover:bg-gray-800/80 transition-colors'
+                        canSort && 'hover:bg-gray-100/60 dark:hover:bg-gray-800/80 transition-colors'
                       )}
-                      onClick={() => canSort && handleSort(col.accessorKey)}
                     >
                       <div className="flex items-center gap-1.5">
+                        {canSort ? <button type="button" onClick={() => handleSort(col.accessorKey)} className="inline-flex items-center gap-1.5 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-label={`Sort by ${typeof col.header === 'string' ? col.header : col.accessorKey}`}>
                         <span>
                           {typeof col.header === 'function'
                             ? col.header({})
@@ -223,6 +227,7 @@ export function DataTable<TData, TValue = any>({
                             )}
                           </span>
                         )}
+                        </button> : <span>{typeof col.header === 'function' ? col.header({}) : col.header}</span>}
                       </div>
                     </th>
                   );
@@ -368,4 +373,3 @@ export function DataTable<TData, TValue = any>({
     </div>
   );
 }
-
