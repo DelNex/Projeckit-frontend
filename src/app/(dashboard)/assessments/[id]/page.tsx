@@ -13,7 +13,24 @@ import {
 } from '@/features/omr';
 import { friendlyError } from '@/lib/errors';
 import { createClient } from '@/lib/supabase/client';
+import type { Database } from '@/types/database.types';
 import { cn } from '@/lib/utils';
+
+type ScanResultRow = Database['public']['Tables']['scan_results']['Row'];
+type TosDocRow = Database['public']['Tables']['tos_documents']['Row'] & {
+  rows?: Array<{
+    code?: string;
+    hours?: number;
+    days?: number;
+    daysTaught?: number;
+    domains?: Record<string, number>;
+    description?: string;
+    [key: string]: unknown;
+  }> | null;
+};
+type ResponseRow = Database['public']['Tables']['responses']['Row'] & {
+  audit_trail?: { studentName?: string; [key: string]: unknown } | null;
+};
 import {
     ArrowLeft,
     BarChart3,
@@ -109,11 +126,11 @@ export default function AssessmentWorkspacePage({
   }, [answers, savedAnswers, numChoices, savedNumChoices]);
 
   // Scans & Results State
-  const [scanResults, setScanResults] = useState<any[]>([]);
+  const [scanResults, setScanResults] = useState<ScanResultRow[]>([]);
   const [lastScanResult, setLastScanResult] = useState<OmrScanResult | null>(null);
 
   // Item Analysis & TOS State
-  const [tosDoc, setTosDoc] = useState<any | null>(null);
+  const [tosDoc, setTosDoc] = useState<TosDocRow | null>(null);
   const [isEditingIa, setIsEditingIa] = useState(false);
   const [customRi, setCustomRi] = useState<Record<number, number>>({});
   const [tempDraftRi, setTempDraftRi] = useState<Record<number, number>>({});
@@ -131,7 +148,7 @@ export default function AssessmentWorkspacePage({
 
   // Students Roster and Responses
   const [studentsList, setStudentsList] = useState<any[]>([]);
-  const [responsesList, setResponsesList] = useState<any[]>([]);
+  const [responsesList, setResponsesList] = useState<ResponseRow[]>([]);
 
   const supabase = createClient();
 
@@ -213,7 +230,7 @@ export default function AssessmentWorkspacePage({
         .eq('assessment_id', assessmentId)
         .order('created_at', { ascending: false });
 
-      if (sData) setScanResults(sData as any);
+      if (sData) setScanResults(sData);
 
       // 4. Fetch TOS Document for Competency Mapping
       const { data: tData } = await supabase
@@ -222,7 +239,7 @@ export default function AssessmentWorkspacePage({
         .eq('assessment_id', assessmentId)
         .maybeSingle();
 
-      if (tData) setTosDoc(tData as any);
+      if (tData) setTosDoc(tData);
 
       // 5. Fetch Students Roster (for Roll number matching, excluding archived)
       const { data: stdData, error: stdErr } = await supabase
@@ -248,7 +265,7 @@ export default function AssessmentWorkspacePage({
         .eq('assessment_id', assessmentId)
         .order('scanned_at', { ascending: false });
 
-      if (rData) setResponsesList(rData as any);
+      if (rData) setResponsesList(rData);
 
       // 7. Fetch current teacher's name
       const { data: { user } } = await supabase.auth.getUser();
@@ -496,7 +513,7 @@ export default function AssessmentWorkspacePage({
         .eq('assessment_id', assessmentId)
         .order('created_at', { ascending: false });
 
-      if (refreshedScans) setScanResults(refreshedScans as any);
+      if (refreshedScans) setScanResults(refreshedScans);
 
       const { data: refreshedResponses } = await supabase
         .from('responses')
@@ -504,7 +521,7 @@ export default function AssessmentWorkspacePage({
         .eq('assessment_id', assessmentId)
         .order('scanned_at', { ascending: false });
 
-      if (refreshedResponses) setResponsesList(refreshedResponses as any);
+      if (refreshedResponses) setResponsesList(refreshedResponses);
 
       setSaveSuccessMsg(
         matchedStudent
@@ -581,7 +598,7 @@ export default function AssessmentWorkspacePage({
         itemsList.push({
           itemNumber: itemsList.length + 1,
           code: lastComp.code || 'CS_GENERAL',
-          description: lastComp.description || lastComp.competency || 'General Assessment Item',
+          description: String(lastComp.description || 'General Assessment Item'),
           domain: 'remembering',
         });
       }
@@ -598,12 +615,14 @@ export default function AssessmentWorkspacePage({
     // 2. Parse scan results examinee responses
     const actualN = scanResults.length;
     const examinees = scanResults.map((scan) => {
-      let ansMap: Record<number, string | null> = {};
-      if (scan.raw_answers && typeof scan.raw_answers === 'object') {
-        ansMap = scan.raw_answers;
+      const ansMap: Record<number, string | null> = {};
+      if (scan.raw_answers && typeof scan.raw_answers === 'object' && !Array.isArray(scan.raw_answers)) {
+        Object.entries(scan.raw_answers).forEach(([k, v]) => {
+          ansMap[Number(k)] = typeof v === 'string' ? v : null;
+        });
       } else if (Array.isArray(scan.normalized_answers)) {
-        scan.normalized_answers.forEach((val: string | null, idx: number) => {
-          ansMap[idx + 1] = val;
+        scan.normalized_answers.forEach((val, idx) => {
+          ansMap[idx + 1] = typeof val === 'string' ? val : null;
         });
       }
       let score = 0;

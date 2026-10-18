@@ -172,7 +172,18 @@ export function TosEditor({
         if (tosDocId) {
           tosQuery = tosQuery.eq('id', tosDocId);
         } else if (assessmentId) {
-          tosQuery = tosQuery.eq('assessment_id', assessmentId);
+          // Look up the TOS id from the assessment, then load by primary key
+          const { data: aRow } = await supabase
+            .from('assessments')
+            .select('tos_id')
+            .eq('id', assessmentId)
+            .single();
+          if (aRow?.tos_id) {
+            tosQuery = tosQuery.eq('id', aRow.tos_id);
+          } else {
+            // No linked TOS — skip the query, will start a blank editor
+            tosQuery = tosQuery.eq('id', '00000000-0000-0000-0000-000000000000');
+          }
         }
 
         const [tosRes, gpRes, acRes] = await Promise.all([
@@ -231,7 +242,7 @@ export function TosEditor({
           });
 
           if (data.id) setCurrentTosId(data.id);
-          if (data.assessment_id) setLinkedAssessmentId(data.assessment_id);
+          if (assessmentId) setLinkedAssessmentId(assessmentId);
           setRows(parsedRows);
           if (data.subject) setSubject(data.subject);
           if (data.term) setTerm(data.term);
@@ -462,24 +473,22 @@ export function TosEditor({
       if (currentTosId) {
         payload.id = currentTosId;
       }
-      if (linkedAssessmentId || assessmentId) {
-        payload.assessment_id = linkedAssessmentId || assessmentId;
-      }
 
       const { data: savedRow, error: upsertErr } = await supabase
         .from('tos_documents')
-        .upsert(payload, currentTosId ? { onConflict: 'id' } : (assessmentId ? { onConflict: 'assessment_id' } : undefined))
+        .upsert(payload, currentTosId ? { onConflict: 'id' } : undefined)
         .select('id')
         .single();
 
       if (upsertErr) throw upsertErr;
       if (savedRow?.id) {
         setCurrentTosId(savedRow.id);
-        if (assessmentId) {
+        const targetAssessmentId = linkedAssessmentId || assessmentId;
+        if (targetAssessmentId) {
           await supabase
             .from('assessments')
             .update({ tos_id: savedRow.id })
-            .eq('id', assessmentId);
+            .eq('id', targetAssessmentId);
         }
       }
 

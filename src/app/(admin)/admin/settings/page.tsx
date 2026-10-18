@@ -103,6 +103,9 @@ export default function AdminSettingsPage() {
         .eq('id', user?.id || '')
         .maybeSingle();
 
+      if (!user?.id) {
+        throw new Error('Not authenticated');
+      }
       if (!profile?.tenant_id) {
         throw new Error('Your account is not linked to a school tenant.');
       }
@@ -110,7 +113,7 @@ export default function AdminSettingsPage() {
 
       await (supabase as any).from('audit_logs').insert({
         tenant_id: tenantId,
-        user_id: user?.id || null,
+        user_id: user.id,
         action: 'SYSTEM_SETTINGS_UPDATED',
         details: settingsPayload,
       });

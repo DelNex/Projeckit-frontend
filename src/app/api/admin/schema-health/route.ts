@@ -1,3 +1,4 @@
+import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextResponse } from 'next/server';
 
@@ -18,10 +19,23 @@ const REQUIRED_TOS_COLUMNS = [
 
 export async function GET() {
   try {
-    const supabase = createAdminClient();
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authErr,
+    } = await supabase.auth.getUser();
 
-    // Try RPC first if available
-    const { data: rpcData, error: rpcErr } = await (supabase as any).rpc('check_tos_schema_health');
+    if (authErr || !user) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Session required to check schema health.' },
+        { status: 401 }
+      );
+    }
+
+    const adminClient = createAdminClient();
+
+    // Try RPC first if available (service-role only)
+    const { data: rpcData, error: rpcErr } = await (adminClient as any).rpc('check_tos_schema_health');
     if (!rpcErr && rpcData) {
       return NextResponse.json({
         healthy: rpcData.healthy,
