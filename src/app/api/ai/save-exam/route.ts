@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 type SaveExamBody = {
   assessmentId?: string;
   tosId?: string;
+  examDate?: string | null;
   questions?: unknown[];
   mode?: 'draft' | 'approve';
 };
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
       // Use the signed-in user's JWT so the RPC applies its tenant checks.
       const { data, error } = await supabase.rpc('create_exam_from_tos', {
         p_tos_id: body.tosId,
-        p_exam_date: null,
+        p_exam_date: body.examDate || null,
         p_questions: body.questions,
       });
       if (error) return NextResponse.json({ error: error.message || 'Could not create the linked assessment.' }, { status: 400 });

@@ -25,7 +25,6 @@ import { friendlyError } from '@/lib/errors';
 import { generateExamThroughApi } from '@/lib/exam-generation-client';
 import { extractTextFromFiles } from '@/lib/lesson-parser';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
-import { createExamFromTosRpc } from '../services/tos-exam-rpc';
 
 interface TosExamModalProps {
   isOpen: boolean;
@@ -63,6 +62,8 @@ export function TosExamModal({
   // Initialize state
   useEffect(() => {
     if (!isOpen || !tos) return;
+    setQuestions([]);
+    setExamDate(new Date().toISOString().split('T')[0]);
 
     // Load any existing questions from tos_documents or assessments
     if (tos.rows) {
@@ -78,29 +79,40 @@ export function TosExamModal({
       setMaterials(initMats);
     }
 
-    // Check if there is an existing assessment linked
+    // Generated questions are first saved on the TOS. A separately saved exam
+    // is also stored on linked assessments. Read both and use the newest copy.
     const fetchExistingAssessment = async () => {
       try {
-        const { data: assessList, error } = await supabase
-          .from('assessments')
-          .select('id, exam_date, questions, section_id')
-          .eq('tos_id', tos.id)
-          .order('created_at', { ascending: true })
-          .limit(1);
+        const [tosResult, assessmentResult] = await Promise.all([
+          supabase
+            .from('tos_documents')
+            .select('questions, updated_at')
+            .eq('id', tos.id)
+            .maybeSingle(),
+          supabase
+            .from('assessments')
+            .select('id, exam_date, questions, section_id, updated_at, created_at')
+            .eq('tos_id', tos.id)
+            .order('updated_at', { ascending: false })
+            .order('created_at', { ascending: false })
+            .limit(1),
+        ]);
 
-        if (error) {
-          console.error('Failed to load linked assessment data:', error);
-          return;
-        }
+        if (tosResult.error) console.error('Failed to load saved TOS questions:', tosResult.error);
+        if (assessmentResult.error) console.error('Failed to load linked assessment data:', assessmentResult.error);
 
-        const assess = assessList?.[0];
+        const assess = assessmentResult.data?.[0];
+        if (assess?.exam_date) setExamDate(assess.exam_date);
 
-        if (assess) {
-          if (assess.exam_date) setExamDate(assess.exam_date);
-          if (Array.isArray(assess.questions) && assess.questions.length > 0) {
-            setQuestions(assess.questions);
-          }
-        }
+        const tosQuestions = Array.isArray(tosResult.data?.questions) ? tosResult.data.questions : [];
+        const assessmentQuestions = Array.isArray(assess?.questions) ? assess.questions : [];
+        const tosUpdatedAt = Date.parse(tosResult.data?.updated_at || '') || 0;
+        const assessmentUpdatedAt = Date.parse(assess?.updated_at || assess?.created_at || '') || 0;
+        const savedQuestions = tosQuestions.length > 0 && tosUpdatedAt > assessmentUpdatedAt
+          ? tosQuestions
+          : assessmentQuestions.length > 0 ? assessmentQuestions : tosQuestions;
+
+        if (savedQuestions.length > 0) setQuestions(savedQuestions as ExamQuestion[]);
       } catch (e) {
         console.error('Failed to load linked assessment data:', e);
       }
@@ -250,13 +262,15 @@ export function TosExamModal({
 
     setIsSaving(true);
     try {
-      await createExamFromTosRpc(supabase, {
-        p_tos_id: tos.id,
-        p_exam_date: examDate || null,
-        p_questions: questions,
+      const response = await fetch('/api/ai/save-exam', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tosId: tos.id, examDate: examDate || null, questions, mode: 'draft' }),
       });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Failed to save examination.');
 
-      toast.success('Examination draft and linked assessment successfully saved!');
+      toast.success('Exam questions and answer key saved for this TOS and its linked assessments.');
     } catch (err: any) {
       console.error('Failed to save examination:', {
         code: err?.code,
