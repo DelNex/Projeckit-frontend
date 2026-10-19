@@ -130,6 +130,11 @@ export default function TosPage() {
 
   // Load All TOS Data
   const loadData = useCallback(async () => {
+    const tenantId = tenant?.tenantId;
+    if (!tenantId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setFetchError(null);
 
@@ -234,6 +239,7 @@ export default function TosPage() {
         const gpRes = await supabase
           .from('grading_periods')
           .select('id, name, is_current')
+          .eq('tenant_id', tenantId)
           .eq('is_archived', false)
           .order('position', { ascending: true });
 
@@ -283,7 +289,7 @@ export default function TosPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase, defaultSchoolYear]);
+  }, [supabase, defaultSchoolYear, tenant?.tenantId]);
 
   useEffect(() => {
     loadData();
