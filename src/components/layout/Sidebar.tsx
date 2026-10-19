@@ -85,7 +85,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
       group: 'ACADEMIC WORKFLOW',
       items: [
         { name: 'Table of Specifications', href: '/tos', icon: FileSpreadsheet },
-        { name: 'Assessments', href: '/assessments', icon: BookOpen },
+        { name: 'Item Analysis', href: '/assessments', icon: BookOpen },
         { name: 'Students', href: '/students', icon: Users },
       ],
     },
@@ -94,7 +94,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
       items: [
         { name: 'Results', href: '/analytics', icon: BarChart3 },
         { name: 'Question Analysis', href: '/analytics?tab=item-analysis', icon: CheckSquare },
-        { name: 'Reports', href: '/analytics?tab=reports', icon: FileSpreadsheet },
+        { name: 'Print & Reports', href: '/reports', icon: FileSpreadsheet },
       ],
     },
     {
@@ -124,7 +124,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
       group: 'SWITCH CONTEXT',
       items: [
         { name: 'Teacher Dashboard', href: '/dashboard', icon: LayoutDashboard },
-        { name: 'Assessments', href: '/assessments', icon: BookOpen },
+        { name: 'Item Analysis', href: '/assessments', icon: BookOpen },
       ],
     },
   ];

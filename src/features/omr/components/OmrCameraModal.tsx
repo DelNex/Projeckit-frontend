@@ -35,7 +35,7 @@ export interface OmrCameraModalProps {
   assessmentId: string;
   template?: KitOmrTemplate;
   students?: OmrCameraModalStudent[];
-  onScanComplete?: (result: OmrScanResult) => void;
+  onScanComplete?: (result: OmrScanResult, studentId?: string, imageBlob?: Blob | File) => Promise<'saved' | 'duplicate' | void> | 'saved' | 'duplicate' | void;
   /** 'answer_key' mode skips Supabase save and calls onApplyAnswerKey instead */
   mode?: 'examinee' | 'answer_key';
   /** Optional header title override */
@@ -149,7 +149,6 @@ export function OmrCameraModal({
       }
 
       setCurrentResult(result);
-      if (onScanComplete) onScanComplete(result);
     } catch (err: any) {
       setErrorMessage(err.message || 'Failed to process camera scan.');
     } finally {
@@ -184,7 +183,6 @@ export function OmrCameraModal({
       }
 
       setCurrentResult(result);
-      if (onScanComplete) onScanComplete(result);
     } catch (err: any) {
       setErrorMessage(err.message || 'Failed to process uploaded image.');
     } finally {
@@ -202,19 +200,27 @@ export function OmrCameraModal({
     }
 
     setSaveStatus('SAVING');
-
-    const res = await persistOmrScan({
-      assessmentId,
-      studentId: effectiveStudentId,
-      scanResult: currentResult,
-      imageBlob: capturedBlob || undefined,
-    });
-
-    if (res.error) {
-      setErrorMessage(`Persistence notice: ${res.error}`);
-      setSaveStatus('ERROR');
-    } else {
+    try {
+      if (onScanComplete) {
+        const result = await onScanComplete(currentResult, effectiveStudentId, capturedBlob || undefined);
+        if (result === 'duplicate') {
+          setErrorMessage('This learner already has a saved scan for this assessment. Duplicate was skipped.');
+          setSaveStatus('IDLE');
+          return;
+        }
+      } else {
+        const res = await persistOmrScan({
+          assessmentId,
+          studentId: effectiveStudentId,
+          scanResult: currentResult,
+          imageBlob: capturedBlob || undefined,
+        });
+        if (res.error) throw new Error(res.error);
+      }
       setSaveStatus('SAVED');
+    } catch (error) {
+      setErrorMessage(`Could not save scan: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setSaveStatus('ERROR');
     }
   };
 
@@ -273,7 +279,11 @@ export function OmrCameraModal({
                     <FileCheck className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
-                    <h4 className="text-sm font-bold truncate">Scan Processed Successfully</h4>
+                    <h4 className="text-sm font-bold truncate">
+                      {currentResult.status === 'PROCESSED' && !currentResult.hasAmbiguity && !currentResult.hasMultipleMarks && currentResult.overallConfidence >= 0.75
+                        ? 'Review scan before saving'
+                        : 'Scan needs review'}
+                    </h4>
                     <p className="text-xs text-gray-400 truncate">
                       Engine:{' '}
                       <span className="font-mono text-blue-300">{currentResult.engineUsed}</span>
@@ -297,6 +307,13 @@ export function OmrCameraModal({
                   </p>
                 </div>
               </div>
+
+              {mode !== 'answer_key' && (currentResult.status !== 'PROCESSED' || currentResult.hasAmbiguity || currentResult.hasMultipleMarks || currentResult.overallConfidence < 0.75) && (
+                <div className="flex items-start gap-2 rounded-xl border border-amber-800 bg-amber-950/50 px-3.5 py-3 text-xs text-amber-200">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                  <p>Some marks may be uncertain. Check amber items and confirm the learner before saving; this scan will be labeled Needs review.</p>
+                </div>
+              )}
 
               {/* Diagnostic Alert if Region Marker Detection Failed */}
               {currentResult.failedRegion && (
@@ -400,7 +417,9 @@ export function OmrCameraModal({
                           ? mode === 'answer_key'
                             ? 'border-emerald-700 bg-emerald-950/40 text-emerald-200'
                             : 'border-blue-700 bg-blue-950/40 text-blue-200'
-                          : 'border-gray-800 bg-gray-800/20 text-gray-500'
+                          : item.state === 'AMBIGUOUS' || item.state === 'MULTIPLE_MARK'
+                            ? 'border-amber-700 bg-amber-950/40 text-amber-200'
+                            : 'border-gray-800 bg-gray-800/20 text-gray-500'
                       )}
                     >
                       <span className="text-[9px] text-gray-400">Q{item.itemNumber}</span>
@@ -565,4 +584,3 @@ export function OmrCameraModal({
     </div>
   );
 }
-

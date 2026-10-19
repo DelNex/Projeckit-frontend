@@ -51,7 +51,8 @@ export function Header({ onToggleSidebar, sidebarOpen = false, title }: HeaderPr
   const routeTitle = ({
     '/dashboard': 'School dashboard',
     '/tos': 'Table of Specifications',
-    '/assessments': 'Assessments',
+    '/assessments': 'Item Analysis',
+    '/reports': 'Print & Reports',
     '/students': 'Learners',
     '/analytics': 'Performance and reports',
     '/settings/school': 'School settings',

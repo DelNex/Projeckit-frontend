@@ -88,6 +88,13 @@ export default function TosPage() {
   const defaultSchoolYear = tenant?.schoolYear || getPhilippineSchoolYear();
 
   useEffect(() => {
+    const printId = new URLSearchParams(window.location.search).get('print');
+    if (!printId || !tosList.length) return;
+    const target = tosList.find((item) => item.id === printId);
+    if (target) setViewingTos(target);
+  }, [tosList]);
+
+  useEffect(() => {
     if (defaultSchoolYear && !selectedSchoolYear) {
       setSelectedSchoolYear(defaultSchoolYear);
     }

@@ -11,6 +11,7 @@ import {
     OmrPrintModal,
     OmrScanResult,
 } from '@/features/omr';
+import { uploadScanImage } from '@/features/omr/storage';
 import { friendlyError } from '@/lib/errors';
 import { getPhilippineSchoolYear } from '@/lib/academic-calendar';
 import { projectTosItems } from '@/lib/tos-item-projection';
@@ -43,7 +44,6 @@ import {
     FileSpreadsheet,
     KeyRound,
     Loader2,
-    Printer,
     RefreshCw,
     Save,
     Sparkles
@@ -67,8 +67,10 @@ export default function AssessmentWorkspacePage({
   const router = useRouter();
   const { toast } = useToast();
 
-  const rawTab = searchParams.get('tab') || 'tos';
+  const rawTab = searchParams.get('tab') || 'scan';
   const activeTab = rawTab === 'grades' ? 'tos' : rawTab;
+  const printSheetRequested = searchParams.get('print') === 'sheet';
+  const printReportRequested = searchParams.get('print') === 'report';
   const assessmentId = resolvedParams.id;
 
   const { tenantName, region, division, logoData, schoolYear: tenantSchoolYear, userDisplayName } = useTenant();
@@ -129,7 +131,7 @@ export default function AssessmentWorkspacePage({
 
   // Scans & Results State
   const [scanResults, setScanResults] = useState<ScanResultRow[]>([]);
-  const [lastScanResult, setLastScanResult] = useState<OmrScanResult | null>(null);
+  const [skippedScans, setSkippedScans] = useState(0);
 
   // Item Analysis & TOS State
   const [tosDoc, setTosDoc] = useState<TosDocRow | null>(null);
@@ -291,6 +293,21 @@ export default function AssessmentWorkspacePage({
     loadAssessmentData();
   }, [assessmentId]);
 
+  useEffect(() => {
+    if (loading || !printSheetRequested || activeTab !== 'scan') return;
+    setIsPrintModalOpen(true);
+    router.replace(`/assessments/${assessmentId}?tab=scan`, { scroll: false });
+  }, [loading, printSheetRequested, activeTab, assessmentId, router]);
+
+  useEffect(() => {
+    if (loading || !printReportRequested || activeTab !== 'results') return;
+    const timer = window.setTimeout(() => {
+      window.print();
+      router.replace(`/assessments/${assessmentId}?tab=results`, { scroll: false });
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [loading, printReportRequested, activeTab, assessmentId, router]);
+
   // Warn before leaving the page with unsaved answer key changes (Item 13)
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -393,9 +410,24 @@ export default function AssessmentWorkspacePage({
   };
 
   // Handle Scan Result Persistence
-  const handleScanCompleted = async (result: OmrScanResult) => {
-    setLastScanResult(result);
+  const handleScanCompleted = async (result: OmrScanResult, assignedStudentId?: string, imageBlob?: Blob | File): Promise<'saved' | 'duplicate'> => {
     try {
+      if (scanResults.some((scan) => scan.image_hash === result.imageHash)) {
+        setSkippedScans((count) => count + 1);
+        return 'duplicate';
+      }
+      const { data: existingImage, error: duplicateCheckError } = await supabase
+        .from('scan_results')
+        .select('id')
+        .eq('assessment_id', assessmentId)
+        .eq('image_hash', result.imageHash)
+        .limit(1)
+        .maybeSingle();
+      if (duplicateCheckError) throw duplicateCheckError;
+      if (existingImage) {
+        setSkippedScans((count) => count + 1);
+        return 'duplicate';
+      }
       const { data: { user } } = await supabase.auth.getUser();
       const { data: profile } = await supabase
         .from('profiles')
@@ -417,12 +449,13 @@ export default function AssessmentWorkspacePage({
       // 1. Identify student from barcode (primary)
       let barcodeMatchedStudent: any = null;
       if (result.detectedStudentId) {
-        barcodeMatchedStudent = activeRoster.find(
+        const barcodeMatches = activeRoster.filter(
           (s) =>
             s.id === result.detectedStudentId ||
             s.id.replace(/[^0-9A-Fa-f]/g, '').slice(0, 6).toUpperCase() ===
               result.detectedStudentId?.toUpperCase()
         );
+        if (barcodeMatches.length === 1) barcodeMatchedStudent = barcodeMatches[0];
       }
 
       // 2. Identify student from roll number (fallback)
@@ -436,8 +469,11 @@ export default function AssessmentWorkspacePage({
       }
 
       // 3. Conflict resolution & fallback
-      let matchedStudent: any = null;
-      let hasConflict = false;
+      let matchedStudent: any = assignedStudentId
+        ? activeRoster.find((student) => student.id === assignedStudentId) || null
+        : null;
+      let hasConflict = Boolean(matchedStudent && barcodeMatchedStudent && matchedStudent.id !== barcodeMatchedStudent.id);
+      if (matchedStudent && rollMatchedStudent && matchedStudent.id !== rollMatchedStudent.id) hasConflict = true;
 
       if (barcodeMatchedStudent && rollMatchedStudent) {
         if (barcodeMatchedStudent.id !== rollMatchedStudent.id) {
@@ -449,14 +485,31 @@ export default function AssessmentWorkspacePage({
             `Conflict detected: Barcode says "${barcodeMatchedStudent.name}" but Roll #${result.detectedRollNumber} is "${rollMatchedStudent.name}". Please verify!`
           );
         }
-        matchedStudent = barcodeMatchedStudent;
-      } else {
+        if (!matchedStudent) matchedStudent = barcodeMatchedStudent;
+      } else if (!matchedStudent) {
         matchedStudent = barcodeMatchedStudent || rollMatchedStudent;
       }
 
       if (!matchedStudent && result.detectedStudentLrn) {
         matchedStudent = activeRoster.find((s) => s.lrn === result.detectedStudentLrn);
       }
+      if (!matchedStudent) throw new Error('Learner could not be matched to this section roster. Select the correct learner and retry.');
+      if (responsesList.some((response) => response.student_id === matchedStudent.id)) {
+        setSkippedScans((count) => count + 1);
+        return 'duplicate';
+      }
+      const { data: existingResponse, error: responseCheckError } = await supabase
+        .from('responses')
+        .select('id')
+        .eq('assessment_id', assessmentId)
+        .eq('student_id', matchedStudent.id)
+        .maybeSingle();
+      if (responseCheckError) throw responseCheckError;
+      if (existingResponse) {
+        setSkippedScans((count) => count + 1);
+        return 'duplicate';
+      }
+      const needsReview = hasConflict || scanStatus !== 'PROCESSED' || result.hasAmbiguity || result.hasMultipleMarks || result.overallConfidence < 0.75;
 
       // Calculate score if answer key exists
       let score = 0;
@@ -466,25 +519,34 @@ export default function AssessmentWorkspacePage({
         }
       });
       const percentage = Math.round((score / itemCount) * 1000) / 10;
+      let imageStoragePath = result.storagePath || null;
+      if (imageBlob && !imageStoragePath) {
+        const upload = await uploadScanImage(imageBlob, tenantId, assessmentId, result.imageHash);
+        imageStoragePath = upload.path;
+        if (upload.error) console.warn('Could not archive scan image:', upload.error);
+      }
 
       // Insert scan result record with student reference
-      const { error: scanErr } = await supabase
+      const { data: savedScan, error: scanErr } = await supabase
         .from('scan_results')
         .insert({
           assessment_id: assessmentId,
           student_id: matchedStudent?.id || null,
+          image_storage_path: imageStoragePath,
           image_hash: result.imageHash,
           confidence: result.overallConfidence,
           raw_answers: result.rawAnswers,
           normalized_answers: result.normalizedAnswers,
-          status: hasConflict ? 'VERIFICATION_REQUIRED' : scanStatus,
+          status: needsReview ? 'VERIFICATION_REQUIRED' : scanStatus,
           detected_roll_number: result.detectedRollNumber,
-        });
+        })
+        .select('id')
+        .single();
 
       if (scanErr) throw scanErr;
 
       // Upsert into responses
-      await supabase.from('responses').upsert(
+      const { error: responseErr } = await supabase.from('responses').upsert(
         {
           assessment_id: assessmentId,
           tenant_id: tenantId,
@@ -494,7 +556,7 @@ export default function AssessmentWorkspacePage({
           score,
           total_items: itemCount,
           percentage,
-          status: hasConflict ? 'VERIFICATION_REQUIRED' : 'GRADED',
+          status: needsReview ? 'VERIFICATION_REQUIRED' : 'GRADED',
           raw_response: result.normalizedAnswers,
           audit_trail: {
             studentName: matchedStudent?.name || (result.detectedRollNumber ? `Roll #${result.detectedRollNumber}` : 'Unassigned Learner'),
@@ -507,6 +569,10 @@ export default function AssessmentWorkspacePage({
         },
         { onConflict: 'assessment_id,student_id' }
       );
+      if (responseErr) {
+        if (savedScan?.id) await supabase.from('scan_results').delete().eq('id', savedScan.id);
+        throw responseErr;
+      }
 
       // Refetch scan results and responses
       const { data: refreshedScans } = await supabase
@@ -526,14 +592,14 @@ export default function AssessmentWorkspacePage({
       if (refreshedResponses) setResponsesList(refreshedResponses);
 
       setSaveSuccessMsg(
-        matchedStudent
-          ? `Scored ${matchedStudent.name} (Roll #${result.detectedRollNumber}): ${score}/${itemCount} (${percentage}%)`
-          : `Scanned sheet recorded: ${score}/${itemCount} (${percentage}%)`
+        `${needsReview ? 'Saved for review' : 'Scored'} ${matchedStudent.name}${result.detectedRollNumber ? ` (Roll #${result.detectedRollNumber})` : ''}: ${score}/${itemCount} (${percentage}%)`
       );
       setTimeout(() => setSaveSuccessMsg(null), 5000);
+      return 'saved';
 
     } catch (e: any) {
       console.error('Failed to persist scan result:', e);
+      throw e;
     }
   };
 
@@ -778,6 +844,15 @@ export default function AssessmentWorkspacePage({
     }));
   };
 
+  const sectionRoster = studentsList.filter((student) =>
+    assessment.section ? student.section_name?.toLowerCase() === assessment.section.toLowerCase() : true
+  );
+  const rosterForProgress = sectionRoster.length ? sectionRoster : studentsList;
+  const scannedStudentIds = new Set(responsesList.map((response) => response.student_id).filter(Boolean));
+  const scannedCount = rosterForProgress.filter((student) => scannedStudentIds.has(student.id)).length;
+  const unscannedCount = Math.max(0, rosterForProgress.length - scannedCount);
+  const reviewCount = scanResults.filter((scan) => scan.status === 'VERIFICATION_REQUIRED').length;
+
   return (
     <div className="space-y-6 min-w-0 w-full overflow-hidden">
       {/* Top Header & Breadcrumb */}
@@ -804,14 +879,6 @@ export default function AssessmentWorkspacePage({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => handleTabChange('tos')}
-            className="inline-flex min-h-10 items-center gap-1.5 px-3 rounded-lg bg-blue-700 hover:bg-blue-800 text-white font-semibold text-xs transition"
-          >
-            <Sparkles className="h-3.5 w-3.5 text-blue-200" />
-            <span>Generate Exam</span>
-          </button>
           <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
             {assessment.status}
           </span>
@@ -844,10 +911,10 @@ export default function AssessmentWorkspacePage({
       <div className="border-b border-gray-200 dark:border-gray-800 min-w-0">
         <nav className="flex gap-1.5 sm:gap-4 overflow-x-auto no-scrollbar pb-1">
           {[
-            { id: 'tos', label: '1. Table of Specifications', icon: FileSpreadsheet },
-            { id: 'key', label: '2. Answer Key & Scoring', icon: KeyRound },
-            { id: 'scan', label: '3. Attendance & OMR Scan', icon: Camera },
-            { id: 'results', label: '4. Evaluation & Results', icon: BarChart3 },
+            { id: 'scan', label: '1. Scan Responses', icon: Camera },
+            { id: 'results', label: '2. Item Analysis', icon: BarChart3 },
+            { id: 'tos', label: 'TOS Setup', icon: FileSpreadsheet },
+            { id: 'key', label: 'Answer Key Setup', icon: KeyRound },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -1106,20 +1173,13 @@ export default function AssessmentWorkspacePage({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-gray-100 pb-4 dark:border-gray-800 min-w-0">
                 <div className="min-w-0">
                   <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white truncate">
-                    Learner Attendance &amp; Dynamic OMR Scanning
+                    Scan responses for item analysis
                   </h2>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    Print dynamic master sheets and capture responses via projective homography camera scanner.
+                    Scan the sheet code and roll number, read marked choices, then confirm learner matching and uncertain marks before saving.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => setIsPrintModalOpen(true)}
-                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 transition"
-                  >
-                    <Printer className="h-4 w-4 text-blue-500" />
-                    <span>Print Master Sheet</span>
-                  </button>
                   <button
                     onClick={() => setIsScannerOpen(true)}
                     className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition"
@@ -1130,35 +1190,26 @@ export default function AssessmentWorkspacePage({
                 </div>
               </div>
 
-              {/* Dynamic OMR Geometry Indicators */}
-              <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 dark:border-gray-800 dark:bg-gray-800/40 min-w-0">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div>
-                    <span className="text-xs font-bold text-gray-900 dark:text-white">
-                      Dynamic Sheet Configuration (Active: {itemCount} Items • {classSize} Roll Targets)
-                    </span>
-                    <p className="text-[11px] text-gray-400">
-                      Single canonical geometry engine dynamically generates matching quadrilateral reference markers and bubble centers.
-                    </p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {[
+                  { label: 'Sheets scanned', value: scannedCount, note: `${rosterForProgress.length} learners in section` },
+                  { label: 'Not scanned', value: unscannedCount, note: 'Based on the active roster' },
+                  { label: 'Needs review', value: reviewCount, note: 'Low confidence or uncertain marks' },
+                  { label: 'Skipped duplicates', value: skippedScans, note: 'Repeat sheets were not saved' },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-xl border border-gray-100 bg-gray-50/70 p-3 dark:border-gray-800 dark:bg-gray-800/40">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">{item.label}</p>
+                    <p className="mt-1 text-xl font-black text-gray-900 dark:text-white">{item.value}</p>
+                    <p className="text-[10px] text-gray-500">{item.note}</p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                    {[10, 20, 50, 60, 63, 70, 90].map((count) => (
-                      <button
-                        key={count}
-                        onClick={() => setItemCount(count)}
-                        className={cn(
-                          'px-2.5 py-1 rounded-lg font-bold text-[11px] transition',
-                          itemCount === count
-                            ? 'bg-blue-600 text-white shadow-2xs'
-                            : 'bg-white border border-gray-200 text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300'
-                        )}
-                      >
-                        {count}q
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                ))}
               </div>
+
+              <ol className="grid gap-2 rounded-xl border border-blue-100 bg-blue-50/60 p-3 text-[11px] text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-200 sm:grid-cols-3">
+                <li><strong>1. Identify:</strong> read the sheet barcode and shaded roll number.</li>
+                <li><strong>2. Read:</strong> detect each selected answer choice.</li>
+                <li><strong>3. Confirm:</strong> skip duplicate sheets and review uncertain scans before saving.</li>
+              </ol>
 
               {/* Scans History Table */}
               <div className="space-y-3 min-w-0">
@@ -1219,8 +1270,13 @@ export default function AssessmentWorkspacePage({
                                 {Math.round((s.confidence || 1.0) * 100)}%
                               </td>
                               <td className="px-4 py-3 text-center">
-                                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-                                  {s.status}
+                                <span className={cn(
+                                  'rounded-full px-2 py-0.5 text-[10px] font-bold',
+                                  s.status === 'VERIFICATION_REQUIRED'
+                                    ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
+                                    : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                                )}>
+                                  {s.status === 'VERIFICATION_REQUIRED' ? 'Needs review' : s.status}
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-right text-gray-400 text-[11px]">
@@ -1277,13 +1333,6 @@ export default function AssessmentWorkspacePage({
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                           Edit Item Analysis
-                        </button>
-                        <button
-                          onClick={() => window.print()}
-                          className="px-3.5 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition flex items-center gap-1.5 print:hidden"
-                        >
-                          <Printer className="w-3.5 h-3.5" />
-                          Print Report
                         </button>
                       </>
                     )}
@@ -1562,7 +1611,7 @@ export default function AssessmentWorkspacePage({
           isOpen={isPrintModalOpen}
           onClose={() => setIsPrintModalOpen(false)}
           geometry={canonicalGeometry}
-          students={studentsList}
+          students={rosterForProgress}
           assessment={{
             id: assessmentId,
             title: assessment.title,
@@ -1586,7 +1635,7 @@ export default function AssessmentWorkspacePage({
           onClose={() => setIsScannerOpen(false)}
           assessmentId={assessmentId}
           template={omrTemplate}
-          students={studentsList}
+          students={rosterForProgress}
           onScanComplete={handleScanCompleted}
         />
       )}

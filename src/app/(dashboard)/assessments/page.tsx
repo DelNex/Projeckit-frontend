@@ -632,10 +632,10 @@ function AssessmentsContent() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">
-            Assessments Workspace
+            Item Analysis
           </h1>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Create, administer, and evaluate Table of Specifications (TOS) examinations with OMR scanning.
+            Scan answer sheets, verify learner matches, and review item analysis. Print and download by section from Print &amp; Reports.
           </p>
         </div>
 
@@ -662,7 +662,7 @@ function AssessmentsContent() {
 
       {/* Unified DataTable Component */}
       <DataTable
-        tableLabel="Assessments"
+        tableLabel="Item Analysis Assessments"
         columns={columns}
         data={filteredAssessments}
         searchKey="title"
