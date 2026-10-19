@@ -4,17 +4,13 @@ import { useState, useEffect } from 'react';
 import {
   X,
   Sparkles,
-  Save,
   FileDown,
   Upload,
   FileText,
-  Trash2,
   AlertTriangle,
   CheckCircle2,
   Calendar,
   Loader2,
-  RefreshCw,
-  Edit3,
 } from 'lucide-react';
 import { TosDocument } from '@/types/tos';
 import { ExamQuestion } from '@/lib/exam-types';
@@ -22,9 +18,10 @@ import { generateExamDocx, downloadBlob } from '../exam-word-export';
 import { useToast } from '@/components/ui/toast';
 import { createClient } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
-import { generateExamThroughApi } from '@/lib/exam-generation-client';
+import { useExamGenerationJob } from '@/lib/exam-generation-client';
 import { extractTextFromFiles } from '@/lib/lesson-parser';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
+import { ExamDraftEditor } from '@/components/assessment/ExamDraftEditor';
 
 interface TosExamModalProps {
   isOpen: boolean;
@@ -48,27 +45,40 @@ export function TosExamModal({
 }: TosExamModalProps) {
   const { toast } = useToast();
   const supabase = createClient();
+  const generationJob = useExamGenerationJob(tos?.id);
 
   const [examDate, setExamDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [materials, setMaterials] = useState<Record<string, CompetencyMaterial>>({});
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<string>('');
-  const [isSaving, setIsSaving] = useState(false);
   const [showTeacherCopyModal, setShowTeacherCopyModal] = useState(false);
   const [sharedNotesConfirm, setSharedNotesConfirm] = useState(false);
-  const [editingQuestionIndex, setEditingQuestionIndex] = useState<number | null>(null);
+  const [examDraftDirty, setExamDraftDirty] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+
+  useEffect(() => {
+    if (generationJob.savedQuestions) setQuestions(generationJob.savedQuestions);
+    if (generationJob.job && ['queued', 'running', 'needs_attention'].includes(generationJob.job.status)) {
+      setIsGenerating(true);
+      setGenerationProgress(generationJob.job.progress?.label || (generationJob.job.status === 'queued' ? `Queued (position ${generationJob.job.queuePosition || 1}). Starts when the Gemini helper is available.` : 'Gemini is writing your exam.'));
+    } else if (generationJob.job && ['completed', 'partial', 'failed', 'cancelled'].includes(generationJob.job.status)) {
+      setIsGenerating(false);
+      setGenerationProgress('');
+      if (generationJob.job.status === 'failed') toast.error(generationJob.job.error || 'Exam generation failed. Try again.');
+    }
+  }, [generationJob.savedQuestions, generationJob.job?.id, generationJob.job?.status, generationJob.job?.progress?.label, generationJob.job?.queuePosition, generationJob.job?.error, toast]);
 
   // Initialize state
   useEffect(() => {
     if (!isOpen || !tos) return;
-    setQuestions([]);
+    const currentTos = tos;
     setExamDate(new Date().toISOString().split('T')[0]);
 
     // Load any existing questions from tos_documents or assessments
-    if (tos.rows) {
+    if (currentTos.rows) {
       const initMats: Record<string, CompetencyMaterial> = {};
-      tos.rows.forEach((r, idx) => {
+      currentTos.rows.forEach((r, idx) => {
         const id = r.id || String(idx + 1);
         initMats[id] = {
           competencyId: id,
@@ -87,12 +97,12 @@ export function TosExamModal({
           supabase
             .from('tos_documents')
             .select('questions, updated_at')
-            .eq('id', tos.id)
+            .eq('id', currentTos.id)
             .maybeSingle(),
           supabase
             .from('assessments')
             .select('id, exam_date, questions, section_id, updated_at, created_at')
-            .eq('tos_id', tos.id)
+            .eq('tos_id', currentTos.id)
             .order('updated_at', { ascending: false })
             .order('created_at', { ascending: false })
             .limit(1),
@@ -112,14 +122,14 @@ export function TosExamModal({
           ? tosQuestions
           : assessmentQuestions.length > 0 ? assessmentQuestions : tosQuestions;
 
-        if (savedQuestions.length > 0) setQuestions(savedQuestions as ExamQuestion[]);
+        setQuestions(savedQuestions as ExamQuestion[]);
       } catch (e) {
         console.error('Failed to load linked assessment data:', e);
       }
     };
 
     fetchExistingAssessment();
-  }, [isOpen, tos, supabase]);
+  }, [isOpen, tos?.id]);
 
   if (!isOpen || !tos) return null;
 
@@ -229,17 +239,8 @@ export function TosExamModal({
 
       setGenerationProgress('Generating questions in structured chunks...');
 
-      const result = await generateExamThroughApi({
-          tosId: tos.id,
-          ...(lessonDocuments.length ? { lessonDocuments } : { lessonText: combinedText }),
-          targetItems: totalQuestions,
-          tosRows: tos.rows,
-        }, (status, progress) => setGenerationProgress(status === 'running'
-          ? (progress?.label || 'Gemini is working in your browser…')
-          : 'Waiting for your Gemini browser…'));
-
-      setQuestions(result.questions || []);
-      toast.success(`Generated ${result.questions?.length || 0} exam questions with balanced options!`);
+      const queued = await generationJob.start(lessonDocuments.length ? { lessonDocuments } : { lessonText: combinedText });
+      setGenerationProgress(`Queued (position ${queued.queuePosition}). Starts when the Gemini helper is available.`);
     } catch (err: any) {
       console.error('Exam generation error:', err);
       const errorMessage = err instanceof Error && err.message
@@ -247,40 +248,7 @@ export function TosExamModal({
         : friendlyError(err, 'The AI service is not available right now. Please try again later.');
       toast.error(errorMessage);
     } finally {
-      setIsGenerating(false);
-      setGenerationProgress('');
       setSharedNotesConfirm(false);
-    }
-  };
-
-  // Save Examination and Linked Assessment
-  const handleSaveExam = async () => {
-    if (questions.length === 0) {
-      toast.error('No questions to save. Please generate or enter questions first.');
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      const response = await fetch('/api/ai/save-exam', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tosId: tos.id, examDate: examDate || null, questions, mode: 'draft' }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || 'Failed to save examination.');
-
-      toast.success('Exam questions and answer key saved for this TOS and its linked assessments.');
-    } catch (err: any) {
-      console.error('Failed to save examination:', {
-        code: err?.code,
-        message: err?.message,
-        details: err?.details,
-        hint: err?.hint,
-      }, err);
-      toast.error(friendlyError(err, 'Failed to save examination.'));
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -343,16 +311,9 @@ export function TosExamModal({
                 {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                 <span>{isGenerating ? 'Generating...' : 'Generate Exam'}</span>
               </button>
-
-              <button
-                onClick={handleSaveExam}
-                disabled={isSaving || questions.length === 0}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-all disabled:opacity-50"
-              >
-                {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                <span>Save Examination</span>
-              </button>
-
+              <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold ${generationJob.helperState === 'offline' ? 'border-slate-300 text-slate-600' : generationJob.helperState === 'needs_attention' ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-emerald-300 bg-emerald-50 text-emerald-800'}`}>
+                Helper {generationJob.helperState === 'needs_attention' ? 'needs attention' : generationJob.helperState}
+              </span>
               <button
                 onClick={() => setShowTeacherCopyModal(true)}
                 disabled={questions.length === 0}
@@ -363,7 +324,7 @@ export function TosExamModal({
               </button>
 
               <button
-                onClick={onClose}
+                onClick={() => examDraftDirty ? setConfirmClose(true) : onClose()}
                 className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                 aria-label="Close modal"
               >
@@ -378,7 +339,14 @@ export function TosExamModal({
             {isGenerating && (
               <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center gap-3 text-xs text-emerald-900 dark:text-emerald-100">
                 <Loader2 className="h-5 w-5 animate-spin text-emerald-600 shrink-0" />
-                <span className="font-semibold">{generationProgress}</span>
+                <span className="font-semibold">{generationJob.job?.status === 'needs_attention'
+                  ? 'The Gemini helper needs a person to sign in or confirm on the helper computer. Tell your administrator.'
+                  : generationJob.job?.status === 'running'
+                    ? `${generationJob.job.progress?.label || generationProgress} This is running in the background, you can leave this page.`
+                    : generationJob.job?.status === 'queued'
+                      ? `Queued (position ${generationJob.job.queuePosition || 1}). Starts when the Gemini helper is available. This is running in the background, you can leave this page.`
+                      : generationProgress}</span>
+                {['queued', 'running'].includes(generationJob.job?.status || '') && <button onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="ml-auto rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700">Cancel</button>}
               </div>
             )}
 
@@ -468,128 +436,23 @@ export function TosExamModal({
               </div>
             </div>
 
-            {/* 2. Generated Questions List */}
             {questions.length > 0 && (
-              <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider">
-                    Questions ({questions.length} Items)
-                  </h3>
-                  <span className="text-xs text-slate-500">Multiple Choice (A to D)</span>
-                </div>
-
-                <div className="space-y-3">
-                  {questions.map((q, qIdx) => {
-                    const itemNum = q.item_number || qIdx + 1;
-                    const optionsObj = q.options as Record<string, string>;
-                    const isEditing = editingQuestionIndex === qIdx;
-
-                    return (
-                      <div
-                        key={itemNum}
-                        className="p-4 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 space-y-3 shadow-sm"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-black bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200">
-                              Item {itemNum}
-                            </span>
-                            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                              {q.cognitive_level || 'Understanding'}
-                            </span>
-                            <span className="text-xs text-slate-400">• Multiple Choice</span>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => setEditingQuestionIndex(isEditing ? null : qIdx)}
-                            className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center gap-1 font-medium"
-                          >
-                            <Edit3 className="h-3.5 w-3.5" />
-                            <span>{isEditing ? 'Done' : 'Edit'}</span>
-                          </button>
-                        </div>
-
-                        {/* Stem */}
-                        {isEditing ? (
-                          <textarea
-                            value={q.question}
-                            onChange={(e) => {
-                              const next = [...questions];
-                              next[qIdx] = { ...next[qIdx], question: e.target.value };
-                              setQuestions(next);
-                            }}
-                            rows={2}
-                            className="w-full text-xs p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white"
-                          />
-                        ) : (
-                          <p className="text-xs font-medium text-slate-900 dark:text-white leading-relaxed">
-                            {q.question}
-                          </p>
-                        )}
-
-                        {/* Options A to D */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                          {(['A', 'B', 'C', 'D'] as const).map((letter) => {
-                            const isCorrect = q.correct_answer === letter;
-                            return (
-                              <div
-                                key={letter}
-                                onClick={() => {
-                                  if (isEditing) {
-                                    const next = [...questions];
-                                    next[qIdx] = { ...next[qIdx], correct_answer: letter };
-                                    setQuestions(next);
-                                  }
-                                }}
-                                className={`flex items-center gap-2 p-2.5 rounded-xl border transition-all ${
-                                  isCorrect
-                                    ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 font-semibold text-emerald-900 dark:text-emerald-200'
-                                    : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
-                                } ${isEditing ? 'cursor-pointer' : ''}`}
-                              >
-                                <span className="font-bold w-4">{letter}.</span>
-                                {isEditing ? (
-                                  <input
-                                    type="text"
-                                    value={optionsObj[letter] || ''}
-                                    onChange={(e) => {
-                                      const next = [...questions];
-                                      next[qIdx] = {
-                                        ...next[qIdx],
-                                        options: {
-                                          ...optionsObj,
-                                          [letter]: e.target.value,
-                                        } as { A: string; B: string; C: string; D: string },
-                                      };
-                                      setQuestions(next);
-                                    }}
-                                    className="flex-1 bg-transparent text-xs outline-none"
-                                  />
-                                ) : (
-                                  <span className="flex-1">{optionsObj[letter]}</span>
-                                )}
-                                {isCorrect && (
-                                  <span className="text-[10px] font-black uppercase text-emerald-600 shrink-0">
-                                    Correct
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Rationale */}
-                        {q.rationale && (
-                          <div className="text-[11px] text-slate-500 dark:text-slate-400 italic bg-slate-50 dark:bg-slate-900/40 p-2 rounded-lg">
-                            <strong>Rationale:</strong> {q.rationale}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <ExamDraftEditor
+                initialQuestions={questions}
+                tosId={tos.id}
+                targetItems={totalQuestions}
+                assessmentTitle={tos.description || tos.subject}
+                subjectTitle={tos.subject}
+                term={tos.term}
+                schoolYear={tos.school_year}
+                grade={tos.grade || undefined}
+                strand={tos.strand || undefined}
+                lessonText={Object.values(materials).flatMap((material) => material.files.map((file) => file.text)).join("\n\n")}
+                onQuestionsSaved={setQuestions}
+                onQuestionsChange={setQuestions}
+                onDraftDirtyChange={setExamDraftDirty}
+                onApproveSuccess={() => toast.success('Exam approved and answer key synchronized.')}
+              />
             )}
           </div>
         </div>
@@ -657,6 +520,11 @@ export function TosExamModal({
           </div>
         </div>
       )}
+      <ConfirmationModal isOpen={confirmClose} title="Discard unsaved exam changes?"
+        description="Your latest edits have not been saved yet. Close anyway and discard them?"
+        actionType="neutral" confirmLabel="Discard changes" cancelLabel="Keep editing"
+        onConfirm={() => { setConfirmClose(false); setExamDraftDirty(false); onClose(); }}
+        onClose={() => setConfirmClose(false)} />
     </>
   );
 }

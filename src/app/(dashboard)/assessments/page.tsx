@@ -252,6 +252,14 @@ function AssessmentsContent() {
   useEffect(() => {
     fetchAssessments();
     fetchDropdownOptions();
+    fetch('/api/admin/settings', { cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const result = await response.json();
+        const mps = Number(result.settings?.default_passing_mps);
+        if (Number.isFinite(mps) && mps >= 40 && mps <= 100) setNewPassingMps(mps);
+      })
+      .catch((error) => console.warn('Could not load the school passing-score default:', error));
   }, []);
 
   useEffect(() => {

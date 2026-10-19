@@ -176,7 +176,7 @@ export async function extractTextFromBuffer(buffer: Buffer, filename: string): P
 /**
  * Extracts and validates lesson text from one or more uploaded files with strict limits.
  */
-export async function extractLessonFiles(files: LessonFileInput[]): Promise<ExtractedLessonResult> {
+export async function extractLessonFiles(files: LessonFileInput[], maxFileSizeBytes = MAX_FILE_SIZE_BYTES): Promise<ExtractedLessonResult> {
   if (!files || files.length === 0) {
     throw new Error('No files provided for text extraction.');
   }
@@ -189,8 +189,8 @@ export async function extractLessonFiles(files: LessonFileInput[]): Promise<Extr
 
   for (const file of files) {
     const size = file.size ?? file.buffer.length;
-    if (size > MAX_FILE_SIZE_BYTES) {
-      throw new Error(`File '${file.name}' exceeds the 60 MB maximum limit.`);
+    if (size > maxFileSizeBytes) {
+      throw new Error(`This file is ${Math.ceil(size / (1024 * 1024))} MB. The limit for your school is ${Math.floor(maxFileSizeBytes / (1024 * 1024))} MB.`);
     }
 
     const text = await extractTextFromBuffer(file.buffer, file.name);

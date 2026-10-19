@@ -31,10 +31,33 @@ export default function TosPage() {
 
   // Primary Data
   const [tosList, setTosList] = useState<TosDocument[]>([]);
+  const [activeExamJobTos, setActiveExamJobTos] = useState<Set<string>>(new Set());
   const [sections, setSections] = useState<Array<{ id: string; name: string; track?: string; grade_level?: string }>>([]);
   const [gradingPeriods, setGradingPeriods] = useState<Array<{ id: string; name: string; is_current: boolean }>>([]);
   const [availableSchoolYears, setAvailableSchoolYears] = useState<string[]>([]);
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (tosList.length === 0) { setActiveExamJobTos(new Set()); return; }
+    let active = true;
+    const refresh = async () => {
+      try {
+        const ids = tosList.map((tos) => tos.id).filter(Boolean).join(',');
+        if (!ids) return;
+        const response = await fetch(`/api/ai/exam-jobs?tosIds=${encodeURIComponent(ids)}`, { cache: 'no-store' });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !active) return;
+        const next = new Set<string>();
+        for (const [tosId, job] of Object.entries(data.jobsByTosId || {}) as Array<[string, any]>) {
+          if (job && ['queued', 'running', 'needs_attention'].includes(job.status)) next.add(tosId);
+        }
+        setActiveExamJobTos(next);
+      } catch { /* Keep the page usable if status refresh is temporarily unavailable. */ }
+    };
+    void refresh();
+    const interval = setInterval(refresh, 8000);
+    return () => { active = false; clearInterval(interval); };
+  }, [tosList]);
 
   // Page Controls & Filters
   const [selectedSchoolYear, setSelectedSchoolYear] = useState<string>('');
@@ -560,6 +583,7 @@ export default function TosPage() {
             <TosCard
               key={tos.id}
               tos={tos}
+              isExamGenerating={activeExamJobTos.has(tos.id)}
               onView={(target) => setViewingTos(target)}
               onEdit={(target) => {
                 setEditingTos(target);

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { extractTextFromFiles } from '@/lib/lesson-parser';
 import { ExamQuestion } from '@/lib/exam-types';
 import { useToast } from '@/components/ui/toast';
@@ -17,7 +17,8 @@ import {
   X,
 } from 'lucide-react';
 import { buildTosBlueprintSlots } from '@/lib/exam-types';
-import { generateExamThroughApi } from '@/lib/exam-generation-client';
+import { useExamGenerationJob } from '@/lib/exam-generation-client';
+import { getClientUploadLimits } from '@/lib/upload-limits-client';
 
 interface ExamGeneratorModalProps {
   isOpen: boolean;
@@ -67,6 +68,13 @@ export function ExamGeneratorModal({
 }: ExamGeneratorModalProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const generatedTextRef = useRef('');
+  const handledJobRef = useRef<string | null>(null);
+  const onExamGeneratedRef = useRef(onExamGenerated);
+  const onCloseRef = useRef(onClose);
+  onExamGeneratedRef.current = onExamGenerated;
+  onCloseRef.current = onClose;
+  const generationJob = useExamGenerationJob(tosId);
 
   const [currentStep, setCurrentStep] = useState<GenerationStep>('idle');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -80,9 +88,25 @@ export function ExamGeneratorModal({
     label: string;
   } | null>(null);
 
+  useEffect(() => {
+    if (!generationJob.savedQuestions || !generationJob.job?.id || !['completed', 'partial'].includes(generationJob.job.status) || handledJobRef.current === generationJob.job.id) return;
+    handledJobRef.current = generationJob.job.id;
+    setCurrentStep('done');
+    setChunkProgress(null);
+    toast.success(`Loaded ${generationJob.savedQuestions.length} saved exam questions.`);
+    onExamGeneratedRef.current(generationJob.savedQuestions, generatedTextRef.current, 'Gemini helper queue', generationJob.job?.resultSummary?.missingItems || [], false);
+    onCloseRef.current();
+  }, [generationJob.savedQuestions, generationJob.job?.id, generationJob.job?.status, generationJob.job?.resultSummary?.missingItems, toast]);
+
+  useEffect(() => {
+    if (!generationJob.job || !['failed', 'cancelled'].includes(generationJob.job.status)) return;
+    setCurrentStep('idle');
+    if (generationJob.job.status === 'failed') setErrorMsg(generationJob.job.error || 'Exam generation failed. You can try again.');
+  }, [generationJob.job?.id, generationJob.job?.status, generationJob.job?.error]);
+
   if (!isOpen) return null;
 
-  const handleFilesSelect = (files: FileList | File[]) => {
+  const handleFilesSelect = async (files: FileList | File[]) => {
     const validExts = ['.pdf', '.docx', '.pptx', '.txt', '.md'];
     const incoming = Array.from(files);
 
@@ -92,6 +116,7 @@ export function ExamGeneratorModal({
     }
 
     const validFiles: File[] = [];
+    const limits = await getClientUploadLimits();
     for (const file of incoming) {
       const lowerName = file.name.toLowerCase();
       const isValid = validExts.some((ext) => lowerName.endsWith(ext));
@@ -101,8 +126,8 @@ export function ExamGeneratorModal({
         return;
       }
 
-      if (file.size > 60 * 1024 * 1024) {
-        toast.error(`'${file.name}' exceeds the 60 MB limit. Split the material into smaller files.`);
+      if (file.size > limits.maxModuleUploadMb * 1024 * 1024) {
+        toast.error(`This file is ${Math.ceil(file.size / (1024 * 1024))} MB. The limit for your school is ${limits.maxModuleUploadMb} MB.`);
         return;
       }
 
@@ -171,68 +196,12 @@ export function ExamGeneratorModal({
       // Step 3: Analyzing lesson coverage
       setCurrentStep('analyzing');
 
-      // One generation request preserves the exam transaction; the helper reads
-      // each extracted lesson section sequentially before writing the exam.
-      setCurrentStep('generating');
-
       const allSlots = buildTosBlueprintSlots(tosRows, Number(targetItems) || 50);
-      setChunkProgress({
-        completed: 0,
-        total: allSlots.length,
-        label: `Preparing ${allSlots.length} questions`,
-      });
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8 * 60 * 60 * 1000);
-      let data;
-      try {
-        data = await generateExamThroughApi({
-            assessmentId,
-            tosId,
-            lessonDocuments,
-            targetItems: Number(targetItems) || 50,
-            tosRows,
-            slots: allSlots,
-          }, (status, progress) => setChunkProgress({
-            completed: 0,
-            total: allSlots.length,
-            label: status === 'running' ? (progress?.label || 'Gemini is working in your browser…') : 'Waiting for your Gemini browser…',
-          }), controller.signal);
-      } finally {
-        clearTimeout(timeoutId);
-      }
-      if (!Array.isArray(data.questions)) {
-        throw new Error(data.error || 'The AI service could not generate this exam.');
-      }
-      const collectedQuestions: ExamQuestion[] = data.questions;
-      if (collectedQuestions.length === 0) {
-        throw new Error('The AI service could not generate any questions. Please try again.');
-      }
-      setChunkProgress({
-        completed: collectedQuestions.length,
-        total: allSlots.length,
-        label: `${collectedQuestions.length} of ${allSlots.length} questions ready`,
-      });
-      const lastSource = data.source || 'AI Engine';
-      const isDemo = Boolean(data.isSampleDemo);
-
-      // Step 5: Validating distribution
-      setCurrentStep('validating');
-
-      // Step 6: Done
-      setCurrentStep('done');
-      await new Promise((r) => setTimeout(r, 300));
-
-      const missingNumbers: number[] = Array.isArray(data.missingItemNumbers)
-        ? data.missingItemNumbers
-        : allSlots.map((slot) => slot.item_number).filter((number) => !collectedQuestions.some((question) => question.item_number === number));
-
-      toast.success(
-        `Generated ${collectedQuestions.length} questions matching the TOS blueprint.${
-          missingNumbers.length ? ` (${missingNumbers.length} items need regeneration)` : ''
-        }`
-      );
-      onExamGenerated(collectedQuestions, extractedLessonText, lastSource, missingNumbers, isDemo);
-      onClose();
+      if (!tosId) throw new Error('Save this Table of Specifications before generating an exam.');
+      generatedTextRef.current = extractedLessonText;
+      const queued = await generationJob.start({ lessonDocuments });
+      setChunkProgress({ completed: 0, total: allSlots.length, label: `Queued (position ${queued.queuePosition}). Starts when the Gemini helper is available.` });
+      setCurrentStep('generating');
     } catch (err: any) {
       console.error('Exam generation failed:', err);
       setErrorMsg(err.message || 'Generation failed.');
@@ -280,14 +249,9 @@ export function ExamGeneratorModal({
             </div>
           </div>
 
-          {!isGenerating && (
-            <button
-              onClick={onClose}
-              className="rounded-lg p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          )}
+          <button onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" aria-label="Close while generation continues">
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
         {/* Stepper Progress Indicator (Active when generating) */}
@@ -295,11 +259,22 @@ export function ExamGeneratorModal({
           <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4 dark:border-blue-900/40 dark:bg-blue-950/20 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-blue-900 dark:text-blue-300">
-                {currentStep === 'generating' && chunkProgress
-                  ? `Generating questions: ${chunkProgress.label}`
-                  : STEP_LABELS[currentStep]}
+                {generationJob.job?.status === 'needs_attention'
+                  ? 'The Gemini helper needs a person to sign in or confirm on the helper computer. Tell your administrator.'
+                  : generationJob.job?.status === 'queued'
+                    ? `Queued (position ${generationJob.job.queuePosition || 1}). Starts when the Gemini helper is available. This is running in the background, you can leave this page.`
+                    : generationJob.job?.status === 'running'
+                      ? `${generationJob.job.progress?.label || 'Gemini is writing your exam.'} This is running in the background, you can leave this page.`
+                      : generationJob.job?.status === 'failed'
+                        ? generationJob.job.error || 'Exam generation failed.'
+                        : currentStep === 'generating' && chunkProgress ? chunkProgress.label : STEP_LABELS[currentStep]}
               </span>
-              <Loader2 className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />
+              {generationJob.helperState === 'offline'
+                ? <span className="rounded-full border border-slate-300 px-2 py-1 text-[10px] text-slate-600">Helper offline · queued</span>
+                : <span className="rounded-full border border-emerald-300 px-2 py-1 text-[10px] text-emerald-700">Helper {generationJob.helperState.replace('_', ' ')}</span>}
+              {['queued', 'running'].includes(generationJob.job?.status || '')
+                ? <button type="button" onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="rounded-lg border border-rose-200 px-2 py-1 text-[10px] font-semibold text-rose-700">Cancel</button>
+                : <Loader2 className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />}
             </div>
 
             {/* Stepper Dots */}
@@ -380,7 +355,7 @@ export function ExamGeneratorModal({
                   Drop your lesson materials here, or <span className="text-blue-600 underline">browse</span>
                 </p>
                 <p className="text-[11px] text-gray-400">
-                  Supports PDF, DOCX, PPTX, or TXT (up to 5 files, max 60 MB each)
+                  Supports PDF, DOCX, PPTX, or TXT (up to 5 files; your school’s file limit is loaded when you select files)
                 </p>
               </div>
             </div>

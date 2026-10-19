@@ -6,6 +6,7 @@
  */
 
 import { createClient } from '@/lib/supabase/client';
+import { getClientUploadLimits } from '@/lib/upload-limits-client';
 
 export interface LessonExtractionClientResult {
   text: string;
@@ -37,9 +38,10 @@ export async function extractTextFromFiles(files: File[]): Promise<LessonExtract
     throw new Error('Maximum 5 files allowed per upload.');
   }
 
+  const limits = await getClientUploadLimits();
   for (const file of files) {
-    if (file.size > 60 * 1024 * 1024) {
-      throw new Error(`File '${file.name}' exceeds the 60 MB maximum. Split the material into smaller files.`);
+    if (file.size > limits.maxModuleUploadMb * 1024 * 1024) {
+      throw new Error(`This file is ${Math.ceil(file.size / (1024 * 1024))} MB. The limit for your school is ${limits.maxModuleUploadMb} MB.`);
     }
   }
 

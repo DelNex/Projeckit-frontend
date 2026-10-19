@@ -3,9 +3,9 @@ import { createClient } from '@/lib/supabase/server';
 import {
   extractLessonFiles,
   LessonFileInput,
-  MAX_FILE_SIZE_BYTES,
 } from '@/lib/server/lesson-parser';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { formatUploadLimitError, getUploadLimits, isUploadWithinLimit } from '@/lib/server/upload-limits';
 
 export const maxDuration = 60;
 
@@ -40,21 +40,28 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient();
+    const { data: profile, error: profileError } = await supabase.from('profiles')
+      .select('tenant_id, status, archived_at').eq('id', caller.id).maybeSingle();
+    if (profileError || !profile || profile.status !== 'approved' || profile.archived_at || !profile.tenant_id) {
+      return NextResponse.json({ error: 'Your account has no active school upload limits.' }, { status: 403 });
+    }
+    const limits = await getUploadLimits(admin, profile.tenant_id);
+    const maxFileSizeBytes = limits.maxModuleUploadMb * 1024 * 1024;
     const { data: storedFile, error: downloadError } = await admin.storage.from('lesson-uploads').download(storagePath);
     if (downloadError || !storedFile) {
       return NextResponse.json({ error: 'Could not read the uploaded lesson file. Please upload it again.' }, { status: 400 });
     }
 
     try {
-      if (storedFile.size > MAX_FILE_SIZE_BYTES) {
-        return NextResponse.json({ error: `File '${name}' exceeds the 60 MB maximum limit.` }, { status: 400 });
+      if (!isUploadWithinLimit(storedFile.size, limits.maxModuleUploadMb)) {
+        return NextResponse.json({ error: formatUploadLimitError(storedFile.size, limits.maxModuleUploadMb) }, { status: 400 });
       }
       const filePayload: LessonFileInput = {
         name,
         buffer: Buffer.from(await storedFile.arrayBuffer()),
         size: storedFile.size,
       };
-      const result = await extractLessonFiles([filePayload]);
+      const result = await extractLessonFiles([filePayload], maxFileSizeBytes);
 
       return NextResponse.json({
         success: true,

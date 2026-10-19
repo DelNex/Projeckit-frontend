@@ -104,7 +104,7 @@ describe('Project KIT — Server-Side Lesson Text Extractor Tests', () => {
     );
   });
 
-  it('7. enforces max 60 MB per file limit', async () => {
+  it('7. enforces the configured per-file limit with a school-specific message', async () => {
     const oversizedBuffer = Buffer.alloc(61 * 1024 * 1024); // 61 MB
 
     await assert.rejects(
@@ -113,7 +113,7 @@ describe('Project KIT — Server-Side Lesson Text Extractor Tests', () => {
           { name: 'huge_document.txt', buffer: oversizedBuffer, size: oversizedBuffer.length },
         ]);
       },
-      /exceeds the 60 MB maximum limit/
+      /This file is 61 MB\. The limit for your school is 60 MB\./
     );
   });
 

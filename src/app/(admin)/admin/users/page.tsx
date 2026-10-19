@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
+import { invalidateClientQueryCache } from '@/lib/supabase/client';
 import {
   Users,
   UserCheck,
@@ -363,6 +364,7 @@ export default function AllAccountsPage() {
       if (!res.ok) {
         throw new Error(data.error || 'Failed to archive accounts.');
       }
+      invalidateClientQueryCache();
 
       const count = data.archivedCount || 0;
       const archivedIds: string[] = data.archivedIds || [];
@@ -411,6 +413,7 @@ export default function AllAccountsPage() {
       if (!res.ok) {
         throw new Error(data.error || 'Failed to undo archive.');
       }
+      invalidateClientQueryCache();
 
       toast.success(`Restored ${data.restoredCount || userIds.length} account(s).`);
       await fetchUsers();
@@ -433,6 +436,7 @@ export default function AllAccountsPage() {
       if (!res.ok) {
         throw new Error(data.error || 'Failed to restore accounts.');
       }
+      invalidateClientQueryCache();
 
       const count = data.restoredCount || 0;
       toast.success(`Successfully restored ${count} account${count === 1 ? '' : 's'}.`);

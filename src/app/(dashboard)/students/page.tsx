@@ -6,7 +6,7 @@ import { BulkAddStudentsModal } from '@/components/students/BulkAddStudentsModal
 import { useToast } from '@/components/ui/toast';
 import { friendlyError } from '@/lib/errors';
 import { getTenantContext } from '@/lib/tenant-context';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, invalidateClientQueryCache } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import {
   Archive,
@@ -344,6 +344,7 @@ export default function StudentsPage() {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || 'Failed to restore learner');
       }
+      invalidateClientQueryCache();
       setIsAddModalOpen(false);
       setArchivedDuplicateId(null);
       setFormError(null);
@@ -586,6 +587,7 @@ export default function StudentsPage() {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || `Failed to ${action} learners`);
       }
+      invalidateClientQueryCache();
 
       // Success notification
       const count = targetIds.length;

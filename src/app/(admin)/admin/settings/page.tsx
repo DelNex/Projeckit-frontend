@@ -1,9 +1,9 @@
 'use client';
 
-import { createClient } from '@/lib/supabase/client';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { useToast } from '@/components/ui/toast';
 import { friendlyError } from '@/lib/errors';
+import { invalidateClientQueryCache } from '@/lib/supabase/client';
 import {
   CheckCircle2,
   KeyRound,
@@ -18,13 +18,22 @@ import { useEffect, useState } from 'react';
 
 export default function AdminSettingsPage() {
   const { toast } = useToast();
-  const supabase = createClient();
 
   // General settings state
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
   const [defaultPassingMps, setDefaultPassingMps] = useState(60.0);
   const [allowPublicRegistration, setAllowPublicRegistration] = useState(true);
+  const [maxModuleUploadMb, setMaxModuleUploadMb] = useState(60);
+  const [maxScanImageMb, setMaxScanImageMb] = useState(15);
+  const [platformCaps, setPlatformCaps] = useState({ module: 60, scan: 30 });
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [canEditSettings, setCanEditSettings] = useState(false);
+  const [savedSettingsJson, setSavedSettingsJson] = useState('');
+
+  const currentSettingsJson = JSON.stringify({ defaultPassingMps, allowPublicRegistration, maxModuleUploadMb, maxScanImageMb });
+  const hasUnsavedSettings = Boolean(savedSettingsJson) && currentSettingsJson !== savedSettingsJson;
 
   // Deletion code state
   const [codeLoading, setCodeLoading] = useState(true);
@@ -61,21 +70,51 @@ export default function AdminSettingsPage() {
     }
   };
 
-  useEffect(() => {
-    // Load persisted settings from localStorage or recent audit log
+  const loadSchoolSettings = async () => {
+    setSettingsLoading(true);
+    setSettingsError(null);
     try {
-      const stored = localStorage.getItem('projectkit_admin_settings');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed.defaultPassingMps) setDefaultPassingMps(Number(parsed.defaultPassingMps));
-        if (typeof parsed.allowPublicRegistration === 'boolean') setAllowPublicRegistration(parsed.allowPublicRegistration);
-      }
-    } catch {
-      // Fallback to defaults
+      const response = await fetch('/api/admin/settings', { cache: 'no-store' });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Could not load school settings.');
+      const settings = result.settings;
+      setDefaultPassingMps(Number(settings.default_passing_mps));
+      setAllowPublicRegistration(Boolean(settings.allow_public_registration));
+      setMaxModuleUploadMb(Number(settings.max_module_upload_mb));
+      setMaxScanImageMb(Number(settings.max_scan_image_mb));
+      setPlatformCaps({
+        module: Number(result.caps.max_module_upload_cap_mb),
+        scan: Number(result.caps.max_scan_image_cap_mb),
+      });
+      setCanEditSettings(Boolean(result.canEdit));
+      setSavedSettingsJson(JSON.stringify({
+        defaultPassingMps: Number(settings.default_passing_mps),
+        allowPublicRegistration: Boolean(settings.allow_public_registration),
+        maxModuleUploadMb: Number(settings.max_module_upload_mb),
+        maxScanImageMb: Number(settings.max_scan_image_mb),
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not load school settings.';
+      setSettingsError(message);
+    } finally {
+      setSettingsLoading(false);
     }
+  };
 
+  useEffect(() => {
+    void loadSchoolSettings();
     fetchDeletionCodeStatus();
   }, []);
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!hasUnsavedSettings) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedSettings]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,53 +122,26 @@ export default function AdminSettingsPage() {
     setSaved(false);
 
     try {
-      const settingsPayload = {
-        defaultPassingMps,
-        allowPublicRegistration,
-        updatedAt: new Date().toISOString(),
-      };
-
-      // Record administrative audit trail in Supabase
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        toast.error('Your session has expired. Please sign in again before saving settings.');
-        return;
-      }
-
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user?.id) {
-        toast.error('Your session could not be verified. Please sign in again before saving settings.');
-        return;
-      }
-
-      const { data: profile, error: profileError } = await (supabase as any)
-        .from('profiles')
-        .select('tenant_id')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (profileError) throw profileError;
-      if (!profile?.tenant_id) {
-        throw new Error('Your account is not linked to a school tenant.');
-      }
-      const tenantId = profile.tenant_id;
-
-      const { error: auditError } = await (supabase as any).from('audit_logs').insert({
-        tenant_id: tenantId,
-        user_id: user.id,
-        action: 'SYSTEM_SETTINGS_UPDATED',
-        details: settingsPayload,
+      const response = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          default_passing_mps: defaultPassingMps,
+          allow_public_registration: allowPublicRegistration,
+          max_module_upload_mb: maxModuleUploadMb,
+          max_scan_image_mb: maxScanImageMb,
+        }),
       });
-      if (auditError) throw auditError;
-
-      // Save locally only after the authenticated audit write succeeds.
-      localStorage.setItem('projectkit_admin_settings', JSON.stringify(settingsPayload));
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Failed to save school settings.');
+      invalidateClientQueryCache();
+      await loadSchoolSettings();
 
       setSaved(true);
       setTimeout(() => setSaved(false), 4000);
     } catch (err) {
-      console.error('Failed to log admin settings update:', err);
-      toast.error('Failed to save settings.');
+      console.error('Failed to save admin settings:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to save settings.');
     } finally {
       setLoading(false);
     }
@@ -229,12 +241,25 @@ export default function AdminSettingsPage() {
         </div>
       )}
 
+      {settingsLoading ? (
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 text-sm text-gray-500 dark:border-gray-800 dark:bg-gray-900">
+          <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> Loading school settings…
+        </div>
+      ) : settingsError ? (
+        <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">
+          {settingsError} <button type="button" onClick={() => void loadSchoolSettings()} className="ml-2 underline">Try again</button>
+        </div>
+      ) : null}
+
       {/* General Settings Card */}
       <form onSubmit={handleSave} className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 space-y-5">
         <h2 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
           <span>Application Parameters</span>
         </h2>
 
+        <fieldset disabled={settingsLoading || !canEditSettings} className="space-y-5 disabled:opacity-70">
+        {!canEditSettings && !settingsLoading && <p className="text-xs text-amber-700 dark:text-amber-300">Only an approved school administrator can change these settings.</p>}
+        {hasUnsavedSettings && <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">You have unsaved changes.</p>}
         <div>
           <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
             Default Minimum Passing Score (MPS %)
@@ -255,19 +280,26 @@ export default function AdminSettingsPage() {
 
         <div>
           <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
-            Maximum OMR &amp; Module Upload Size (MB)
+            Maximum module upload size (MB)
           </label>
           <input
             type="number"
-            min="60"
-            max="60"
-            value={60}
-            readOnly
+            min="1"
+            max={platformCaps.module}
+            value={maxModuleUploadMb}
+            onChange={(e) => setMaxModuleUploadMb(Number(e.target.value))}
+            required
             className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
           />
           <span className="mt-1 block text-[11px] text-gray-400">
-            Fixed at 60 MB per file by the upload services and storage bucket.
+            Allowed range: 1–{platformCaps.module} MB. Platform cap: {platformCaps.module} MB. Larger files also depend on your Supabase plan and hosting limits.
           </span>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">Maximum scan photo size (MB)</label>
+          <input type="number" min="1" max={platformCaps.scan} value={maxScanImageMb} onChange={(e) => setMaxScanImageMb(Number(e.target.value))} required className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800" />
+          <span className="mt-1 block text-[11px] text-gray-400">Allowed range: 1–{platformCaps.scan} MB. Platform cap: {platformCaps.scan} MB. Larger files also depend on your Supabase plan and hosting limits.</span>
         </div>
 
         <div className="flex items-center justify-between rounded-xl border border-gray-100 p-3.5 dark:border-gray-800">
@@ -290,13 +322,14 @@ export default function AdminSettingsPage() {
         <div className="pt-2 flex justify-end">
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || settingsLoading || !canEditSettings || !hasUnsavedSettings}
             className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-md hover:bg-blue-700 transition disabled:opacity-50"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             <span>Save System Settings</span>
           </button>
         </div>
+        </fieldset>
       </form>
 
       {/* Security: Deletion Code Card */}

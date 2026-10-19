@@ -19,6 +19,7 @@ interface TosCardProps {
   onCreateExam: (tos: TosDocument) => void;
   onDelete: (tos: TosDocument) => void;
   onPrintPdf?: (tos: TosDocument) => void;
+  isExamGenerating?: boolean;
 }
 
 export function TosCard({
@@ -28,6 +29,7 @@ export function TosCard({
   onCreateExam,
   onDelete,
   onPrintPdf,
+  isExamGenerating = false,
 }: TosCardProps) {
   const compCount = Array.isArray(tos.rows) ? tos.rows.length : 0;
   const totalDays = tos.total_days || tos.days_taught || (
@@ -66,6 +68,7 @@ export function TosCard({
             >
               {tos.subject}
             </span>
+            {isExamGenerating && <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300">Exam is being generated</span>}
           </div>
 
           {onPrintPdf && (
@@ -143,4 +146,3 @@ export function TosCard({
     </div>
   );
 }
-

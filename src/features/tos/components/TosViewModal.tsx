@@ -17,7 +17,7 @@ import {
   Users,
 } from 'lucide-react';
 import { TosDocument } from '@/types/tos';
-import * as mammoth from 'mammoth';
+import * as mammothModule from 'mammoth';
 import {
   calculateTos,
   BLOOM_LEVELS,
@@ -36,6 +36,10 @@ interface TosViewModalProps {
   division?: string;
   onCreateExam: (tos: TosDocument) => void;
 }
+
+const mammoth = mammothModule as unknown as {
+  convertToHtml(input: { arrayBuffer: ArrayBuffer }): Promise<{ value: string }>;
+};
 
 export function TosViewModal({
   isOpen,

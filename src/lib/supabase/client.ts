@@ -6,6 +6,13 @@ import { getValidatedFrontendEnv } from '@/lib/env';
 // unseen. Writes clear the cache because related tables may also be affected.
 const QUERY_CACHE_TTL_MS = 10_000;
 const QUERY_CACHE_MAX_ENTRIES = 200;
+const NO_CACHE_TABLES = new Set([
+  'tos_documents', 'assessments', 'answer_keys', 'exam_generation_jobs',
+  'school_settings', 'platform_settings', 'profiles',
+]);
+export function shouldCacheSupabaseRead(table: string, selectedColumns: string[] = []): boolean {
+  return !NO_CACHE_TABLES.has(table) && !selectedColumns.some((columns) => columns.trim() === '*' || /\b(questions|answers)\b/i.test(columns));
+}
 type QueryCacheEntry = { expiresAt: number; value?: any; pending?: Promise<any> };
 const queryCache = new Map<string, QueryCacheEntry>();
 let activeUserId: string | null = null;
@@ -95,7 +102,10 @@ function wrapQueryBuilder(builder: any, table: string, calls: string[], canCache
         if (isWrite) invalidateClientQueryCache();
         const nextCalls = [...calls, `${method}:${stableArgs(args)}`];
         const nextBuilder = Reflect.apply(value, target, args);
-        return wrapQueryBuilder(nextBuilder, table, nextCalls, canCache && !isWrite);
+        return wrapQueryBuilder(nextBuilder, table, nextCalls,
+          canCache && !isWrite && shouldCacheSupabaseRead(table,
+            method === 'select' ? (args.filter((arg): arg is string => typeof arg === 'string').length
+              ? args.filter((arg): arg is string => typeof arg === 'string') : ['*']) : []));
       };
     },
   });

@@ -1,10 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ExamQuestion, CognitiveDomain } from '@/lib/exam-types';
 import { useToast } from '@/components/ui/toast';
 import { friendlyError } from '@/lib/errors';
 import { ExamPrintModal } from './ExamPrintModal';
+import { useExamGenerationJob } from '@/lib/exam-generation-client';
+import { invalidateClientQueryCache } from '@/lib/supabase/client';
+import { useExamDraft } from '@/lib/use-exam-draft';
+import { ExamDraftDialogs, ExamDraftStatus } from './ExamDraftControls';
 import {
   CheckCircle2,
   Edit3,
@@ -36,6 +40,8 @@ interface ExamDraftEditorProps {
   missingItemNumbers?: number[];
   isSampleDemo?: boolean;
   onQuestionsSaved?: (questions: ExamQuestion[]) => void;
+  onQuestionsChange?: (questions: ExamQuestion[]) => void;
+  onDraftDirtyChange?: (dirty: boolean) => void;
   onApproveSuccess?: () => void;
 }
 
@@ -65,14 +71,30 @@ export function ExamDraftEditor({
   missingItemNumbers = [],
   isSampleDemo = false,
   onQuestionsSaved,
+  onQuestionsChange,
+  onDraftDirtyChange,
   onApproveSuccess,
 }: ExamDraftEditorProps) {
   const { toast } = useToast();
+  const generationJob = useExamGenerationJob(tosId);
   const [questions, setQuestions] = useState<ExamQuestion[]>(initialQuestions);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [regeneratingItem, setRegeneratingItem] = useState<number | null>(null);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const draft = useExamDraft(tosId, questions, setQuestions);
+
+  useEffect(() => { onDraftDirtyChange?.(draft.dirty); }, [draft.dirty, onDraftDirtyChange]);
+  useEffect(() => { onQuestionsChange?.(questions); }, [onQuestionsChange, questions]);
+
+  useEffect(() => {
+    if (generationJob.savedQuestions) draft.acceptServerQuestions(generationJob.savedQuestions);
+    if (generationJob.job && ['completed', 'partial', 'failed', 'cancelled'].includes(generationJob.job.status)) {
+      setRegeneratingItem(null);
+      if (generationJob.job.status === 'failed') toast.error(generationJob.job.error || 'Question regeneration failed.');
+      else if (generationJob.job.status === 'completed' && regeneratingItem !== null) toast.success(`Question ${regeneratingItem} regenerated and saved.`);
+    }
+  }, [generationJob.savedQuestions, generationJob.job?.id, generationJob.job?.status, generationJob.job?.error, regeneratingItem, toast, draft.acceptServerQuestions]);
 
   const isDemo = Boolean(
     isSampleDemo ||
@@ -89,6 +111,7 @@ export function ExamDraftEditor({
 
   // Field change handlers
   const handleUpdateQuestion = (index: number, field: keyof ExamQuestion, value: any) => {
+    draft.markDirty();
     setQuestions((prev) => {
       const copy = [...prev];
       copy[index] = { ...copy[index], [field]: value };
@@ -97,6 +120,7 @@ export function ExamDraftEditor({
   };
 
   const handleUpdateOption = (index: number, optionKey: 'A' | 'B' | 'C' | 'D', value: string) => {
+    draft.markDirty();
     setQuestions((prev) => {
       const copy = [...prev];
       copy[index] = {
@@ -112,42 +136,14 @@ export function ExamDraftEditor({
 
   // Regenerate single question using API
   const handleRegenerateQuestion = async (q: ExamQuestion, index: number) => {
+    if (!tosId) { toast.error('Save the TOS before regenerating a question.'); return; }
     setRegeneratingItem(q.item_number);
     try {
-      const res = await fetch('/api/ai/generate-exam', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          lessonText: lessonText || `${subjectTitle} ${q.competency_id}`,
-          targetItems: 1,
-          tosRows: [
-            {
-              id: q.competency_id,
-              code: q.competency_id,
-              description: `Competency for ${q.competency_id}`,
-              domains: { [q.cognitive_level]: 1 },
-            },
-          ],
-          regenerateSingleItemNumber: q.item_number,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to regenerate question');
-
-      if (data.question) {
-        setQuestions((prev) => {
-          const copy = [...prev];
-          copy[index] = { ...data.question, item_number: q.item_number };
-          return copy;
-        });
-        toast.success(`Question ${q.item_number} regenerated successfully.`);
-      }
+      await generationJob.start({ lessonText: lessonText || `${subjectTitle} ${q.competency_id}`, repairItemNumber: q.item_number });
+      toast.info(`Question ${q.item_number} was added to the Gemini helper queue.`);
     } catch (err: any) {
       console.error('Failed to regenerate single item:', err);
       toast.error(friendlyError(err, `Could not regenerate question ${q.item_number}.`));
-    } finally {
-      setRegeneratingItem(null);
     }
   };
 
@@ -167,6 +163,8 @@ export function ExamDraftEditor({
       });
       const result = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(result.error || 'Failed to save exam draft.');
+      invalidateClientQueryCache();
+      draft.acceptServerQuestions(questions);
       toast.success('Exam draft saved successfully.');
       onQuestionsSaved?.(questions);
     } catch (err: any) {
@@ -198,6 +196,7 @@ export function ExamDraftEditor({
       });
       const result = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(result.error || 'Could not approve this exam.');
+      invalidateClientQueryCache();
       toast.success('Exam approved! Questions and Answer Key are now synchronized.');
       onApproveSuccess?.();
     } catch (err: any) {
@@ -218,6 +217,7 @@ export function ExamDraftEditor({
     // Renumber items
     const renumbered = filtered.map((q, idx) => ({ ...q, item_number: idx + 1 }));
     setQuestions(renumbered);
+    draft.markDirty();
   };
 
   // Add question
@@ -238,6 +238,7 @@ export function ExamDraftEditor({
       rationale: 'Educational rationale for the correct answer.',
     };
     setQuestions([...questions, newItem]);
+    draft.markDirty();
     setEditingIndex(questions.length);
   };
 
@@ -290,6 +291,7 @@ export function ExamDraftEditor({
           <p className="text-xs text-gray-500 mt-0.5">
             Review questions, edit choices and rationales, regenerate specific items, or print the DepEd exam paper.
           </p>
+          <div className="mt-2"><ExamDraftStatus text={draft.statusText} /></div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -320,7 +322,7 @@ export function ExamDraftEditor({
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-bold dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300 transition disabled:opacity-50"
           >
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-            <span>Save Draft</span>
+            <span>Save Examination</span>
           </button>
 
           <button
@@ -500,6 +502,9 @@ export function ExamDraftEditor({
         teacherName={teacherName}
         questions={questions}
       />
+      <ExamDraftDialogs conflict={draft.conflict} confirmClose={draft.confirmClose}
+        loadNewerVersion={draft.loadNewerVersion} keepMyVersion={draft.keepMyVersion}
+        confirmDiscard={draft.confirmDiscard} cancelDiscard={draft.cancelDiscard} onClose={() => {}} />
     </div>
   );
 }

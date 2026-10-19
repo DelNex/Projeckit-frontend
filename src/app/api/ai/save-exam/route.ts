@@ -8,6 +8,9 @@ type SaveExamBody = {
   examDate?: string | null;
   questions?: unknown[];
   mode?: 'draft' | 'approve';
+  autosave?: boolean;
+  expectedUpdatedAt?: string | null;
+  overwrite?: boolean;
 };
 
 export async function POST(request: Request) {
@@ -36,10 +39,27 @@ export async function POST(request: Request) {
     const admin = createAdminClient();
     let assessmentIds: string[] = [];
 
+    if (body.autosave) {
+      if (mode !== 'draft' || !body.tosId) return NextResponse.json({ error: 'Autosave requires a saved TOS draft.' }, { status: 400 });
+      const { data, error } = await admin.rpc('save_exam_draft', {
+        p_tos_id: body.tosId,
+        p_tenant_id: profile.tenant_id,
+        p_questions: body.questions,
+        p_expected_updated_at: body.expectedUpdatedAt || null,
+        p_overwrite: body.overwrite === true,
+      });
+      if (error) {
+        const conflict = error.message?.includes('newer version') || error.message?.includes('scan results');
+        return NextResponse.json({ error: error.message }, { status: conflict ? 409 : 400 });
+      }
+      const saved = Array.isArray(data) ? data[0] : data;
+      return NextResponse.json({ success: true, assessmentIds: saved?.assessment_ids || [], mode, updatedAt: saved?.saved_updated_at });
+    }
+
     if (body.assessmentId) {
       const { data: assessment, error } = await admin
         .from('assessments')
-        .select('id, tenant_id, tos_id')
+        .select('id, tenant_id, tos_id, updated_at')
         .eq('id', body.assessmentId)
         .eq('tenant_id', profile.tenant_id)
         .maybeSingle();
@@ -71,9 +91,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No linked assessment was created. Check that the TOS has at least one valid section.' }, { status: 400 });
     }
 
+    const [responses, scans] = await Promise.all([
+      admin.from('responses').select('id', { count: 'exact', head: true }).in('assessment_id', assessmentIds),
+      admin.from('scan_results').select('id', { count: 'exact', head: true }).in('assessment_id', assessmentIds),
+    ]);
+    if ((responses.count || 0) > 0 || (scans.count || 0) > 0) {
+      return NextResponse.json({ error: 'This exam has scan results. Create a new exam version before changing its questions.' }, { status: 409 });
+    }
+
+    let updateValues: Record<string, unknown> = {
+      questions: body.questions,
+      exam_status: mode === 'approve' ? 'APPROVED' : 'DRAFT',
+      updated_at: new Date().toISOString(),
+    };
+    if (body.tosId && !body.assessmentId) {
+      const { data: schoolSettings, error: settingsError } = await admin.from('school_settings')
+        .select('default_passing_mps').eq('tenant_id', profile.tenant_id).maybeSingle();
+      if (settingsError) return NextResponse.json({ error: 'Could not load the school passing-score setting.' }, { status: 503 });
+      updateValues.passing_mps = schoolSettings?.default_passing_mps ?? 60;
+    }
+
     const { data: updatedAssessments, error: updateError } = await admin
       .from('assessments')
-      .update({ questions: body.questions, exam_status: mode === 'approve' ? 'APPROVED' : 'DRAFT', updated_at: new Date().toISOString() })
+      .update(updateValues)
       .eq('tenant_id', profile.tenant_id)
       .in('id', assessmentIds)
       .select('id');
@@ -95,13 +135,15 @@ export async function POST(request: Request) {
       answers,
       updated_at: new Date().toISOString(),
     }));
-    const { error: keyError } = await admin.from('answer_keys').upsert(keyRows, { onConflict: 'assessment_id' });
-    if (keyError) return NextResponse.json({ error: `Questions saved, but the answer key could not be synchronized: ${keyError.message}` }, { status: 500 });
+    if (mode === 'approve') {
+      const { error: keyError } = await admin.from('answer_keys').upsert(keyRows, { onConflict: 'assessment_id' });
+      if (keyError) return NextResponse.json({ error: `Questions saved, but the answer key could not be synchronized: ${keyError.message}` }, { status: 500 });
+    }
 
     if (body.tosId) {
       const { data: updatedTos, error: updateTosError } = await admin
         .from('tos_documents')
-        .update({ questions: body.questions, exam_status: mode === 'approve' ? 'APPROVED' : 'DRAFT', updated_at: new Date().toISOString() })
+        .update({ questions: body.questions, updated_at: new Date().toISOString() })
         .eq('id', body.tosId)
         .eq('tenant_id', profile.tenant_id)
         .select('id')
@@ -109,7 +151,7 @@ export async function POST(request: Request) {
       if (updateTosError || !updatedTos) return NextResponse.json({ error: `Questions saved, but the TOS could not be updated: ${updateTosError?.message || 'TOS not found in your school.'}` }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, assessmentIds, mode });
+    return NextResponse.json({ success: true, assessmentIds, mode, updatedAt: new Date().toISOString() });
   } catch (error: any) {
     console.error('[SaveExam] Failed to persist exam questions:', error);
     return NextResponse.json({ error: error?.message || 'Failed to save exam questions.' }, { status: 500 });
