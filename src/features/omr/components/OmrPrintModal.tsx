@@ -104,8 +104,7 @@ export function OmrPrintModal({
       return (s.section_name || '').toLowerCase().trim() === targetSection;
     });
 
-    const roster = filtered.length > 0 ? filtered : students.filter((s) => !s.is_archived);
-    return roster.slice(0, 70);
+    return filtered.slice(0, 70);
   }, [students, assessment?.section, geometry?.config?.section]);
 
   const isHalfSheet = geometry?.sheetFormat === 'HALF';

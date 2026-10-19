@@ -95,6 +95,16 @@ export default function TosPage() {
   }, [tosList]);
 
   useEffect(() => {
+    const editId = new URLSearchParams(window.location.search).get('edit');
+    if (!editId || !tosList.length) return;
+    const target = tosList.find((item) => item.id === editId);
+    if (target) {
+      setEditingTos(target);
+      setIsCreateEditOpen(true);
+    }
+  }, [tosList]);
+
+  useEffect(() => {
     if (defaultSchoolYear && !selectedSchoolYear) {
       setSelectedSchoolYear(defaultSchoolYear);
     }

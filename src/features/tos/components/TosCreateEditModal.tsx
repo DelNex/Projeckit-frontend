@@ -220,19 +220,15 @@ export function TosCreateEditModal({
   };
 
   const handleSelectAllSections = () => {
-    if (selectedSectionIds.length === availableSections.length) {
-      setSelectedSectionIds([]);
-    } else {
-      setSelectedSectionIds(availableSections.map((s) => s.id));
-    }
+    setSelectedSectionIds((current) => current.length === availableSections.length
+      ? []
+      : availableSections.map((section) => section.id));
   };
 
   const toggleSection = (id: string) => {
-    if (selectedSectionIds.includes(id)) {
-      setSelectedSectionIds(selectedSectionIds.filter((sid) => sid !== id));
-    } else {
-      setSelectedSectionIds([...selectedSectionIds, id]);
-    }
+    setSelectedSectionIds((current) => current.includes(id)
+      ? current.filter((sectionId) => sectionId !== id)
+      : [...current, id]);
   };
 
   const validateForm = () => {
@@ -561,7 +557,6 @@ export function TosCreateEditModal({
                     return (
                       <label
                         key={sec.id}
-                        onClick={() => toggleSection(sec.id)}
                         className={`flex items-start gap-2.5 p-2.5 rounded-xl border cursor-pointer select-none transition-all ${
                           isChecked
                             ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800'
@@ -571,7 +566,7 @@ export function TosCreateEditModal({
                         <input
                           type="checkbox"
                           checked={isChecked}
-                          onChange={() => {}} // handled by wrapper click
+                          onChange={() => toggleSection(sec.id)}
                           className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500"
                         />
                         <div className="min-w-0">

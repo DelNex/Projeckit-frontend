@@ -1,6 +1,5 @@
 'use client';
 
-import { TosEditor } from '@/components/assessment/TosEditor';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { useToast } from '@/components/ui/toast';
 import { useTenant } from '@/context/TenantContext';
@@ -86,6 +85,7 @@ export default function AssessmentWorkspacePage({
     title: string;
     subject: string;
     section: string;
+    sectionId: string;
     schoolYear: string;
     term: string;
     targetItems: number;
@@ -98,6 +98,7 @@ export default function AssessmentWorkspacePage({
     title: '',
     subject: '',
     section: '',
+    sectionId: '',
     schoolYear: '',
     term: '',
     targetItems: 50,
@@ -109,6 +110,8 @@ export default function AssessmentWorkspacePage({
 
   // Answer Key State
   const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [questionItems, setQuestionItems] = useState<Array<{ item_number: number; question: string; options: Record<string, string>; correct_answer: string }>>([]);
+  const [savedQuestionItems, setSavedQuestionItems] = useState<Array<{ item_number: number; question: string; options: Record<string, string>; correct_answer: string }>>([]);
   const [numChoices, setNumChoices] = useState<3 | 4 | 5>(4);
 
   // Track last-saved answer key for dirty checking (Item 13)
@@ -118,6 +121,7 @@ export default function AssessmentWorkspacePage({
 
   const isAnswerKeyDirty = useMemo(() => {
     if (numChoices !== savedNumChoices) return true;
+    if (JSON.stringify(questionItems) !== JSON.stringify(savedQuestionItems)) return true;
     const keys = new Set([
       ...Object.keys(answers),
       ...Object.keys(savedAnswers),
@@ -127,7 +131,7 @@ export default function AssessmentWorkspacePage({
       if ((answers[n] || '') !== (savedAnswers[n] || '')) return true;
     }
     return false;
-  }, [answers, savedAnswers, numChoices, savedNumChoices]);
+  }, [answers, savedAnswers, numChoices, savedNumChoices, questionItems, savedQuestionItems]);
 
   // Scans & Results State
   const [scanResults, setScanResults] = useState<ScanResultRow[]>([]);
@@ -174,15 +178,34 @@ export default function AssessmentWorkspacePage({
           passing_mps,
           status,
           version,
+          questions,
+          tos_id,
           subjects ( code, title ),
-          sections ( name )
+          sections ( id, name )
         `)
         .eq('id', assessmentId)
         .single();
 
       if (aErr) throw aErr;
-
       const itemsNum = aData.target_items || 50;
+
+      const storedQuestions = Array.isArray(aData.questions) ? aData.questions.map((item: any, index: number) => ({
+        item_number: Number(item?.item_number) || index + 1,
+        question: typeof item?.question === 'string' ? item.question : '',
+        options: Object.fromEntries(['A', 'B', 'C', 'D', 'E'].map((letter) => [letter, typeof item?.options?.[letter] === 'string' ? item.options[letter] : ''])),
+        correct_answer: typeof item?.correct_answer === 'string' ? item.correct_answer : '',
+      })) : [];
+      const loadedQuestions = Array.from({ length: itemsNum }, (_, index) => storedQuestions.find((item) => item.item_number === index + 1) || ({ item_number: index + 1, question: '', options: { A: '', B: '', C: '', D: '', E: '' }, correct_answer: '' }));
+      setQuestionItems(loadedQuestions);
+      setSavedQuestionItems(loadedQuestions);
+      if (loadedQuestions.length) {
+        setAnswers((prev) => {
+          const next = { ...prev };
+          loadedQuestions.forEach((item) => { if (item.correct_answer) next[item.item_number] = item.correct_answer; });
+          return next;
+        });
+      }
+
       const sizeNum = aData.class_size || 60;
 
       const subj = Array.isArray(aData.subjects) ? aData.subjects[0] : aData.subjects;
@@ -193,6 +216,7 @@ export default function AssessmentWorkspacePage({
         title: aData.title,
         subject: subj?.title || subj?.code || '',
         section: sec?.name || '',
+        sectionId: sec?.id || '',
         schoolYear: aData.school_year || tenantSchoolYear || getPhilippineSchoolYear(),
         term: aData.term || '1st Quarter',
         targetItems: itemsNum,
@@ -248,7 +272,7 @@ export default function AssessmentWorkspacePage({
       // 5. Fetch Students Roster (for Roll number matching, excluding archived)
       const { data: stdData, error: stdErr } = await supabase
         .from('students')
-        .select('id, name, lrn, section_name, is_archived')
+        .select('id, name, lrn, section_id, section_name, is_archived')
         .order('name', { ascending: true });
 
       if (stdErr) {
@@ -355,6 +379,10 @@ export default function AssessmentWorkspacePage({
     setAnswers(updated);
   };
 
+  const updateQuestionItem = (itemNumber: number, patch: Partial<{ question: string; options: Record<string, string> }>) => {
+    setQuestionItems((current) => current.map((item) => item.item_number === itemNumber ? { ...item, ...patch, options: patch.options ? { ...item.options, ...patch.options } : item.options } : item));
+  };
+
   // Apply OMR-detected answers as the answer key (user can override individual items after)
   const handleApplyDetectedAnswerKey = (detected: Record<number, string>) => {
     setOmrDetectedKey(detected);
@@ -384,6 +412,21 @@ export default function AssessmentWorkspacePage({
       }
       const tenantId = profile.tenant_id;
 
+      const hasQuestionContent = questionItems.some((item) => item.question.trim() || Object.values(item.options).some((option) => option.trim()));
+      if (hasQuestionContent) {
+        const questionPayload = questionItems.map((item) => ({
+          ...item,
+          correct_answer: answers[item.item_number] || item.correct_answer || '',
+        }));
+        const questionResponse = await fetch('/api/ai/save-exam', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assessmentId, tosId: tosDoc?.id || undefined, questions: questionPayload, mode: 'draft' }),
+        });
+        const questionResult = await questionResponse.json().catch(() => ({}));
+        if (!questionResponse.ok) throw new Error(questionResult.error || 'Could not save question text and choices.');
+      }
+
       const { error: keyErr } = await supabase
         .from('answer_keys')
         .upsert({
@@ -398,6 +441,7 @@ export default function AssessmentWorkspacePage({
 
       // Sync saved state so dirty flag resets (Item 13)
       setSavedAnswers({ ...answers });
+      setSavedQuestionItems(questionItems.map((item) => ({ ...item, options: { ...item.options } })));
       setSavedNumChoices(numChoices);
       setSaveSuccessMsg('Master Answer Key saved to Supabase successfully!');
       setTimeout(() => setSaveSuccessMsg(null), 3500);
@@ -441,10 +485,11 @@ export default function AssessmentWorkspacePage({
       const scanStatus = result.status;
 
       // Match student from class roster by detected Barcode ID (primary), Roll Number (fallback), or LRN
-      const sectionStudents = studentsList.filter((s) =>
-        assessment.section ? s.section_name?.toLowerCase() === assessment.section.toLowerCase() : true
-      );
-      const activeRoster = sectionStudents.length > 0 ? sectionStudents : studentsList;
+      const activeRoster = studentsList.filter((student) => {
+        if (assessment.sectionId && student.section_id) return student.section_id === assessment.sectionId;
+        return assessment.section ? student.section_name?.toLowerCase() === assessment.section.toLowerCase() : true;
+      });
+      if (activeRoster.length === 0) throw new Error(`No active learners are assigned to ${assessment.section || 'this assessment section'}.`);
 
       // 1. Identify student from barcode (primary)
       let barcodeMatchedStudent: any = null;
@@ -472,7 +517,8 @@ export default function AssessmentWorkspacePage({
       let matchedStudent: any = assignedStudentId
         ? activeRoster.find((student) => student.id === assignedStudentId) || null
         : null;
-      let hasConflict = Boolean(matchedStudent && barcodeMatchedStudent && matchedStudent.id !== barcodeMatchedStudent.id);
+      let hasConflict = Boolean(result.detectedStudentId && !barcodeMatchedStudent);
+      hasConflict ||= Boolean(matchedStudent && barcodeMatchedStudent && matchedStudent.id !== barcodeMatchedStudent.id);
       if (matchedStudent && rollMatchedStudent && matchedStudent.id !== rollMatchedStudent.id) hasConflict = true;
 
       if (barcodeMatchedStudent && rollMatchedStudent) {
@@ -552,7 +598,7 @@ export default function AssessmentWorkspacePage({
           tenant_id: tenantId,
           student_id: matchedStudent?.id || null,
           student_lrn: matchedStudent?.lrn || result.detectedStudentLrn || null,
-          section_name: assessment.section,
+          section_name: matchedStudent.section_name || assessment.section,
           score,
           total_items: itemCount,
           percentage,
@@ -644,8 +690,9 @@ export default function AssessmentWorkspacePage({
     }
 
     // 2. Parse scan results examinee responses
-    const actualN = scanResults.length;
-    const examinees = scanResults.map((scan) => {
+    const gradedScans = scanResults.filter((scan) => scan.status !== 'VERIFICATION_REQUIRED');
+    const actualN = gradedScans.length;
+    const examinees = gradedScans.map((scan) => {
       const ansMap: Record<number, string | null> = {};
       if (scan.raw_answers && typeof scan.raw_answers === 'object' && !Array.isArray(scan.raw_answers)) {
         Object.entries(scan.raw_answers).forEach(([k, v]) => {
@@ -844,10 +891,11 @@ export default function AssessmentWorkspacePage({
     }));
   };
 
-  const sectionRoster = studentsList.filter((student) =>
-    assessment.section ? student.section_name?.toLowerCase() === assessment.section.toLowerCase() : true
-  );
-  const rosterForProgress = sectionRoster.length ? sectionRoster : studentsList;
+  const sectionRoster = studentsList.filter((student) => {
+    if (assessment.sectionId && student.section_id) return student.section_id === assessment.sectionId;
+    return assessment.section ? student.section_name?.toLowerCase() === assessment.section.toLowerCase() : true;
+  });
+  const rosterForProgress = sectionRoster;
   const scannedStudentIds = new Set(responsesList.map((response) => response.student_id).filter(Boolean));
   const scannedCount = rosterForProgress.filter((student) => scannedStudentIds.has(student.id)).length;
   const unscannedCount = Math.max(0, rosterForProgress.length - scannedCount);
@@ -944,21 +992,21 @@ export default function AssessmentWorkspacePage({
         </div>
       ) : (
         <div className="min-w-0">
-          {/* Tab 1: Comprehensive Legacy TOS Component */}
+          {/* Table of Specifications setup lives in the shared TOS workspace. */}
           {activeTab === 'tos' && (
-            <TosEditor
-              assessmentId={assessmentId}
-              initialSubject={assessment.subject}
-              initialTerm={assessment.term}
-              initialSchoolYear={assessment.schoolYear}
-              initialSection={assessment.section}
-              initialTargetItems={itemCount}
-              initialStatus={assessment.status}
-              onSaveSuccess={() => {
-                setSaveSuccessMsg('TOS successfully synchronized with assessment!');
-                setTimeout(() => setSaveSuccessMsg(null), 3000);
-              }}
-            />
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900">
+              <div className="mx-auto max-w-2xl text-center">
+                <FileSpreadsheet className="mx-auto h-9 w-9 text-blue-600" />
+                <h2 className="mt-3 text-lg font-bold text-gray-900 dark:text-white">Table of Specifications</h2>
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Create and maintain the assessment blueprint in the shared TOS workspace. Linked sections and print reports stay together there.</p>
+                <div className="mt-5 flex flex-wrap justify-center gap-3">
+                  {tosDoc?.id && <Link href={`/tos?edit=${tosDoc.id}`} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Edit linked TOS</Link>}
+                  {tosDoc?.id && <Link href={`/tos?print=${tosDoc.id}`} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">View and print TOS</Link>}
+                  <Link href="/tos" className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">Open TOS workspace</Link>
+                </div>
+                {!tosDoc?.id && <p className="mt-4 text-xs text-amber-700">No TOS is linked to this assessment yet. Create one in the workspace and link it to this assessment.</p>}
+              </div>
+            </div>
           )}
 
           {/* Tab 2: Master Answer Key (Responsive Repair with Presets & Safe Touch Grid) */}
@@ -1122,7 +1170,7 @@ export default function AssessmentWorkspacePage({
                     <div
                       key={itemNum}
                       className={cn(
-                        'flex items-center justify-between px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-2xl border transition min-w-0 overflow-hidden w-full',
+                        'flex flex-col items-stretch gap-2 px-2.5 py-2 sm:px-3 sm:py-2 rounded-2xl border transition min-w-0 overflow-hidden w-full',
                         currentLetter
                           ? 'border-blue-500/40 bg-blue-500/10 dark:border-blue-600/40 dark:bg-blue-950/30'
                           : 'border-gray-200/90 bg-gray-50/80 hover:border-gray-300 dark:border-slate-800 dark:bg-slate-900/70 dark:hover:border-slate-700'
@@ -1160,6 +1208,21 @@ export default function AssessmentWorkspacePage({
                           );
                         })}
                       </div>
+                      <details className="w-full border-t border-gray-200/70 pt-2 dark:border-gray-700/70">
+                        <summary className="cursor-pointer text-[10px] font-semibold text-blue-700 dark:text-blue-300">{questionItems[itemNum - 1]?.question ? 'Edit question and choices' : 'Add question and choices'}</summary>
+                        <div className="mt-2 space-y-2">
+                          <label className="block text-[10px] font-bold uppercase tracking-wide text-gray-500">Question {itemNum}
+                            <textarea value={questionItems[itemNum - 1]?.question || ''} onChange={(event) => updateQuestionItem(itemNum, { question: event.target.value })} rows={3} placeholder="Enter the question text" className="mt-1 w-full rounded-lg border border-gray-200 bg-white p-2 text-xs font-normal normal-case tracking-normal text-gray-800 outline-none focus:border-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" />
+                          </label>
+                          {choicesList.map((letter) => (
+                            <label key={letter} className="flex items-center gap-2 text-[11px] font-bold text-gray-500">
+                              <span className="w-4">{letter}</span>
+                              <input value={questionItems[itemNum - 1]?.options[letter] || ''} onChange={(event) => updateQuestionItem(itemNum, { options: { [letter]: event.target.value } })} placeholder={`Choice ${letter}`} className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs font-normal text-gray-800 outline-none focus:border-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" />
+                            </label>
+                          ))}
+                          <p className="text-[10px] text-gray-400">Select the correct answer using the bubbles above. This key is used for scan scoring.</p>
+                        </div>
+                      </details>
                     </div>
                   );
                 })}
@@ -1306,6 +1369,7 @@ export default function AssessmentWorkspacePage({
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       Review item difficulty ($P_i$) and discrimination ($D_i$), aligned with DepEd TOS standards
                     </p>
+                    {reviewCount > 0 && <p className="mt-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">{reviewCount} scan{reviewCount === 1 ? '' : 's'} need verification and are excluded from these statistics until corrected.</p>}
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -1663,6 +1727,7 @@ export default function AssessmentWorkspacePage({
           if (pendingTab) {
             // Revert to saved state and navigate
             setAnswers({ ...savedAnswers });
+            setQuestionItems(savedQuestionItems.map((item) => ({ ...item, options: { ...item.options } })));
             setNumChoices(savedNumChoices);
             router.replace(`/assessments/${assessmentId}?tab=${pendingTab}`);
             setPendingTab(null);

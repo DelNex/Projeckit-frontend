@@ -51,6 +51,7 @@ interface TosOptionItem {
   strand?: string;
   section?: string;
   assessment_id?: string | null;
+  sections?: Array<{ id: string; name: string; track?: string }> | null;
 }
 
 interface OptionItem {
@@ -90,7 +91,7 @@ function AssessmentsContent() {
   // Form State
   const [newTitle, setNewTitle] = useState('');
   const [newSubjectId, setNewSubjectId] = useState('');
-  const [newSectionId, setNewSectionId] = useState('');
+  const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>([]);
   const [newTargetItems, setNewTargetItems] = useState(50);
   const [newClassSize, setNewClassSize] = useState(50);
   const [newTerm, setNewTerm] = useState('1st Term');
@@ -174,6 +175,8 @@ function AssessmentsContent() {
     setSelectedTosId(tosId);
     const found = currentTosList.find((t) => t.id === tosId);
     if (found) {
+      const sectionIds = (found.sections || []).map((section) => section.id);
+      setSelectedSectionIds(sectionIds);
       setNewTitle(`${found.subject} Examination`);
       setNewTerm(found.term);
       setNewSchoolYear(found.school_year);
@@ -201,7 +204,7 @@ function AssessmentsContent() {
           .order('position', { ascending: true }),
         supabase
           .from('tos_documents')
-          .select('id, subject, term, school_year, target_items, status, grade, strand, section, assessment_id')
+          .select('id, subject, term, school_year, target_items, status, grade, strand, section, sections, assessment_id')
           .order('created_at', { ascending: false }),
       ]);
 
@@ -219,9 +222,6 @@ function AssessmentsContent() {
 
       if (secRes.data) {
         setSectionsList(secRes.data.map((s) => ({ id: s.id, name: s.name })));
-        if (secRes.data.length > 0 && !newSectionId) {
-          setNewSectionId(secRes.data[0].id);
-        }
       }
 
       if (gpRes?.data && gpRes.data.length > 0) {
@@ -306,6 +306,10 @@ function AssessmentsContent() {
       toast.error('Please select a Table of Specifications blueprint.');
       return;
     }
+    if (selectedSectionIds.length === 0) {
+      toast.error('Select at least one section included in this TOS.');
+      return;
+    }
 
     if (gradingPeriodsList.length === 0) {
       toast.error('No active terms configured. Please configure grading periods in School Settings first.');
@@ -339,15 +343,25 @@ function AssessmentsContent() {
       }
       const configId = config.id;
 
-      const { data: created, error: insertError } = await supabase
+      const existing = await supabase
         .from('assessments')
-        .insert({
+        .select('section_id')
+        .eq('tos_id', selectedTosId)
+        .in('section_id', selectedSectionIds);
+      if (existing.error) throw existing.error;
+      const existingSections = new Set((existing.data || []).map((row) => row.section_id));
+      const duplicateNames = sectionsList.filter((section) => existingSections.has(section.id)).map((section) => section.name);
+      if (duplicateNames.length) throw new Error(`An assessment already exists for: ${duplicateNames.join(', ')}. Open the existing assessment instead.`);
+
+      const { data: createdRows, error: insertError } = await supabase
+        .from('assessments')
+        .insert(selectedSectionIds.map((sectionId) => ({
           tenant_id: tenantId,
           config_id: configId,
           tos_id: selectedTosId || null,
           title: newTitle.trim(),
           subject_id: newSubjectId,
-          section_id: newSectionId,
+          section_id: sectionId,
           term: newTerm,
           school_year: newSchoolYear,
           target_items: Number(newTargetItems),
@@ -355,22 +369,24 @@ function AssessmentsContent() {
           passing_mps: Number(newPassingMps),
           status: 'DRAFT',
           created_by: user?.id,
-        })
+        })))
         .select()
-        .single();
+        ;
 
       if (insertError) throw insertError;
 
-      // Auto-initialize empty answer key
-      if (created) {
-        await supabase.from('answer_keys').insert({
+      if (!createdRows?.length) throw new Error('No assessment was created for the selected sections.');
+      const { error: answerKeyError } = await supabase.from('answer_keys').insert(createdRows.map((created) => ({
           assessment_id: created.id,
           tenant_id: tenantId,
           answers: {},
-        });
+      })));
+      if (answerKeyError) {
+        await supabase.from('assessments').delete().in('id', createdRows.map((created) => created.id));
+        throw answerKeyError;
       }
 
-      toast.success('Assessment created and anchored on TOS.');
+      toast.success(`${createdRows.length} section assessment${createdRows.length === 1 ? '' : 's'} created and linked to the TOS.`);
       setIsCreateModalOpen(false);
       setNewTitle('');
       await fetchAssessments();
@@ -809,18 +825,20 @@ function AssessmentsContent() {
 
                   <div>
                     <label className="block font-bold text-gray-700 dark:text-gray-300 mb-1">
-                      Section <span className="text-red-500">*</span>
+                      Sections in this TOS <span className="text-red-500">*</span>
                     </label>
-                    <select
-                      required
-                      value={newSectionId}
-                      onChange={(e) => setNewSectionId(e.target.value)}
-                      className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
-                    >
-                      {sectionsList.map((sec) => (
-                        <option key={sec.id} value={sec.id}>{sec.name}</option>
+                    <div className="max-h-32 space-y-1 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-2 dark:border-gray-800 dark:bg-gray-800">
+                      {(selectedTos?.sections || []).map((section) => (
+                        <label key={section.id} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-gray-700 hover:bg-white dark:text-gray-200 dark:hover:bg-gray-700">
+                          <input type="checkbox" checked={selectedSectionIds.includes(section.id)} onChange={() => {
+                            setSelectedSectionIds((current) => current.includes(section.id) ? current.filter((id) => id !== section.id) : [...current, section.id]);
+                          }} />
+                          <span>{section.name}</span>
+                        </label>
                       ))}
-                    </select>
+                      {!selectedTos?.sections?.length && <p className="px-2 py-1 text-[11px] text-amber-700">This TOS has no saved sections. Edit the TOS and select its sections before creating an assessment.</p>}
+                    </div>
+                    <p className="mt-1 text-[10px] text-gray-500">One linked assessment will be created for each selected section.</p>
                   </div>
                 </div>
 
