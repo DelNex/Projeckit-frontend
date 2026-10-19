@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useCallback, useContext, useState } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -56,26 +56,25 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     [dismissToast]
   );
 
-  const toast = {
-    success: useCallback(
-      (message: string, options?: { duration?: number; action?: ToastAction }) => {
-        showToast({ message, type: 'success', duration: options?.duration ?? 4000, action: options?.action });
-      },
-      [showToast]
-    ),
-    error: useCallback(
-      (message: string, options?: { duration?: number; action?: ToastAction }) => {
-        showToast({ message, type: 'error', duration: options?.duration ?? 5000, action: options?.action });
-      },
-      [showToast]
-    ),
-    info: useCallback(
-      (message: string, options?: { duration?: number; action?: ToastAction }) => {
-        showToast({ message, type: 'info', duration: options?.duration ?? 4000, action: options?.action });
-      },
-      [showToast]
-    ),
-  };
+  const success = useCallback(
+    (message: string, options?: { duration?: number; action?: ToastAction }) => {
+      showToast({ message, type: 'success', duration: options?.duration ?? 4000, action: options?.action });
+    },
+    [showToast]
+  );
+  const error = useCallback(
+    (message: string, options?: { duration?: number; action?: ToastAction }) => {
+      showToast({ message, type: 'error', duration: options?.duration ?? 5000, action: options?.action });
+    },
+    [showToast]
+  );
+  const info = useCallback(
+    (message: string, options?: { duration?: number; action?: ToastAction }) => {
+      showToast({ message, type: 'info', duration: options?.duration ?? 4000, action: options?.action });
+    },
+    [showToast]
+  );
+  const toast = useMemo(() => ({ success, error, info }), [success, error, info]);
 
   return (
     <ToastContext.Provider value={{ toast, showToast, dismissToast }}>
