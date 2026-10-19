@@ -19,7 +19,7 @@ import {
 import React, { useEffect, useState } from 'react';
 import { processOmrScan } from '../adapter';
 import { persistOmrScan } from '../storage';
-import { KitOmrTemplate, OmrScanResult } from '../types';
+import { KitOmrTemplate, OmrScanResult, ProcessedItemResult } from '../types';
 import { useOmrCamera } from '../useOmrCamera';
 
 export interface OmrCameraModalStudent {
@@ -44,14 +44,371 @@ export interface OmrCameraModalProps {
   onApplyAnswerKey?: (detectedAnswers: Record<number, string>) => void;
 }
 
-export function OmrCameraModal({
+export function OmrCameraModal(props: OmrCameraModalProps) {
+  if (props.mode === 'answer_key') return <OmrAnswerKeyScanner {...props} />;
+  return <OmrExamineeScanSession {...props} />;
+}
+
+type BarcodeIdentity = { assessmentCode?: string; studentCode?: string };
+type CapturedItem = ProcessedItemResult & { pass: number; blankConfirmed: boolean; scannerReadChoice: string | null; scannerConfidence: number };
+
+function shortCode(value: string) {
+  return value.replace(/[^0-9a-f]/gi, '').slice(0, 6).toUpperCase();
+}
+
+async function readSheetBarcode(blob: Blob): Promise<BarcodeIdentity | null> {
+  if (typeof window !== 'undefined' && 'BarcodeDetector' in window) {
+    try {
+      const Detector = (window as any).BarcodeDetector;
+      const detector = new Detector({ formats: ['code_39', 'code_128', 'qr_code'] });
+      const bitmap = await createImageBitmap(blob);
+      const detected = await detector.detect(bitmap);
+      bitmap.close?.();
+      for (const item of detected || []) {
+        const value = String(item.rawValue || '');
+        const match = value.match(/K([0-9A-F]+)-([0-9A-F]+)/i) || value.match(/KIT:([a-z0-9-]+):([a-z0-9-]+)/i);
+        if (match) return { assessmentCode: match[1], studentCode: match[2] };
+      }
+    } catch { /* A manual learner selection remains available if browser barcode decoding is unsupported. */ }
+  }
+
+  if (blob.type === 'image/svg+xml' || (blob as File).name?.endsWith('.svg')) {
+    try {
+      const source = await blob.text();
+      const studentId = source.match(/data-student-id="([^"]+)"/)?.[1];
+      const assessmentId = source.match(/data-assessment-id="([^"]+)"/)?.[1];
+      const dataCode = source.match(/data-code="([^"]+)"/)?.[1];
+      if (studentId) return { assessmentCode: assessmentId, studentCode: studentId };
+      const match = dataCode?.match(/K([0-9A-F]+)-([0-9A-F]+)/i);
+      if (match) return { assessmentCode: match[1], studentCode: match[2] };
+    } catch { /* Invalid SVG is treated as an unreadable barcode. */ }
+  }
+  return null;
+}
+
+function OmrExamineeScanSession(props: OmrCameraModalProps) {
+  const { isOpen, onClose, assessmentId, template, students = [], onScanComplete } = props;
+  const itemCount = template?.targetItems || 50;
+  const choices = template?.choices || ['A', 'B', 'C', 'D'];
+  const [phase, setPhase] = useState<'identify' | 'capture' | 'review' | 'saved'>('identify');
+  const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [identityVerified, setIdentityVerified] = useState(false);
+  const [sessionItems, setSessionItems] = useState<Record<number, CapturedItem>>({});
+  const [rangeStart, setRangeStart] = useState(1);
+  const [passNumber, setPassNumber] = useState(0);
+  const [lastCapture, setLastCapture] = useState<OmrScanResult | null>(null);
+  const [lastCaptureBlob, setLastCaptureBlob] = useState<Blob | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const video = useOmrCamera({ onError: (error) => setErrorMessage(error.message) });
+  const rangeEnd = Math.min(itemCount, rangeStart + 4);
+  const selectedStudent = students.find((student) => student.id === selectedStudentId) || null;
+  const accountedCount = Object.values(sessionItems).filter((item) => item.blankConfirmed || (item.state === 'MARKED' && Boolean(item.selectedChoice) && item.confidence >= 0.65)).length;
+
+  useEffect(() => {
+    if (!isOpen) {
+      video.stopCamera();
+      return;
+    }
+    if (phase === 'capture' || phase === 'identify') void video.startCamera();
+    else video.stopCamera();
+    return () => video.stopCamera();
+  }, [isOpen, phase, video.startCamera, video.stopCamera]);
+
+  if (!isOpen) return null;
+
+  const verifyBarcode = async (blob: Blob) => {
+    setIsProcessing(true);
+    setErrorMessage(null);
+    setInfoMessage(null);
+    try {
+      const identity = await readSheetBarcode(blob);
+      if (!identity) {
+        setErrorMessage('Barcode not detected. Center the printed barcode in view and scan again, or assign the learner manually.');
+        return;
+      }
+      if (identity.assessmentCode && shortCode(assessmentId) !== shortCode(identity.assessmentCode)) {
+        setErrorMessage('This barcode belongs to a different assessment. Check the sheet before continuing.');
+        return;
+      }
+      if (identity.studentCode) {
+        const matches = students.filter((student) => shortCode(student.id) === shortCode(identity.studentCode || ''));
+        if (matches.length === 1) {
+          setSelectedStudentId(matches[0].id);
+          setIdentityVerified(true);
+          setPhase('capture');
+          setInfoMessage(`Barcode matched ${matches[0].name}. Now capture answer items 1–5.`);
+          return;
+        }
+        setErrorMessage(matches.length > 1 ? 'The barcode matches more than one learner. Assign the correct learner manually.' : 'The barcode learner is not in this section roster. Assign the correct learner manually.');
+        return;
+      }
+      setErrorMessage('The barcode identifies the assessment but not a learner. Assign the learner manually to continue.');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Could not read the sheet barcode.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleIdentifyCapture = async () => {
+    const blob = await video.captureFrame();
+    if (!blob) { setErrorMessage('Camera is not ready. Wait for the preview, then scan the barcode again.'); return; }
+    await verifyBarcode(blob);
+  };
+
+  const handleAnswerCapture = async () => {
+    setIsProcessing(true);
+    setErrorMessage(null);
+    setInfoMessage(null);
+    try {
+      const blob = await video.captureFrame();
+      if (!blob) throw new Error('Camera is not ready. Wait for the preview and try again.');
+      const result = await processOmrScan(blob, template, { assessmentId, includeMarkedImage: true });
+      if (result.status === 'REJECTED' || !result.items.length || !result.fiducialDetected) {
+        throw new Error('The answer grid was not recognized. Keep the full answer area and all printed corner markers in frame; close-up crops are not supported by this sheet layout.');
+      }
+      const rangeItems = result.items.filter((item) => item.itemNumber >= rangeStart && item.itemNumber <= rangeEnd);
+      if (!rangeItems.length) throw new Error(`No questions ${rangeStart}–${rangeEnd} were read. Reframe the full answer grid and try again.`);
+      const nextPass = passNumber + 1;
+      setPassNumber(nextPass);
+      setLastCapture(result);
+      setLastCaptureBlob(blob);
+      setSessionItems((current) => {
+        const next = { ...current };
+        for (const item of rangeItems) next[item.itemNumber] = { ...item, pass: nextPass, blankConfirmed: false, scannerReadChoice: item.selectedChoice, scannerConfidence: item.confidence };
+        return next;
+      });
+      const needsRetry = rangeItems.filter((item) => item.state !== 'MARKED' || !item.selectedChoice || item.confidence < 0.65);
+      setInfoMessage(needsRetry.length
+        ? `${rangeItems.length - needsRetry.length} read clearly. Retake or confirm the blank items in this range before continuing.`
+        : `Questions ${rangeStart}–${rangeEnd} captured clearly.`);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Could not scan this answer range.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const confirmBlank = (itemNumber: number) => {
+    setSessionItems((current) => {
+      const item = current[itemNumber];
+      if (!item) return current;
+      return { ...current, [itemNumber]: { ...item, state: 'BLANK', selectedChoice: null, blankConfirmed: true } };
+    });
+  };
+
+  const currentRangeComplete = Array.from({ length: rangeEnd - rangeStart + 1 }, (_, index) => rangeStart + index)
+    .every((itemNumber) => {
+      const item = sessionItems[itemNumber];
+      return Boolean(item && (item.blankConfirmed || (item.state === 'MARKED' && item.selectedChoice && item.confidence >= 0.65)));
+    });
+
+  const advanceRange = () => {
+    const firstUnaccounted = Array.from({ length: itemCount }, (_, index) => index + 1)
+      .find((itemNumber) => {
+        const item = sessionItems[itemNumber];
+        return !item || (!item.blankConfirmed && !(item.state === 'MARKED' && item.selectedChoice && item.confidence >= 0.65));
+      });
+    if (!firstUnaccounted) { setPhase('review'); return; }
+    setRangeStart(Math.floor((firstUnaccounted - 1) / 5) * 5 + 1);
+    setErrorMessage(null);
+    setInfoMessage(`Next capture: questions ${Math.floor((firstUnaccounted - 1) / 5) * 5 + 1}–${Math.min(itemCount, Math.floor((firstUnaccounted - 1) / 5) * 5 + 5)}.`);
+  };
+
+  const retakeItems = () => {
+    setRangeStart(1);
+    setPhase('capture');
+    setErrorMessage(null);
+    setInfoMessage('Retake from questions 1–5. Each pass replaces those answers and keeps the full answer grid in view.');
+  };
+
+  const updateReviewedAnswer = (itemNumber: number, value: string) => {
+    setSessionItems((current) => {
+      const item = current[itemNumber];
+      if (!item) return current;
+      const selectedChoice = value || null;
+      const scores = Object.fromEntries(choices.map((choice) => [choice, selectedChoice === choice ? 1 : 0]));
+      return { ...current, [itemNumber]: { ...item, selectedChoice, scores, state: selectedChoice ? 'MARKED' : 'BLANK', blankConfirmed: !selectedChoice, confidence: 1 } };
+    });
+  };
+
+  const finalizeSession = async () => {
+    if (!selectedStudent || !lastCapture || !lastCaptureBlob) return;
+    setIsSaving(true);
+    setErrorMessage(null);
+    try {
+      const items = Array.from({ length: itemCount }, (_, index) => {
+        const itemNumber = index + 1;
+        const item = sessionItems[itemNumber];
+        if (!item) throw new Error(`Question ${itemNumber} has not been scanned.`);
+        return { ...item, selectedChoice: item.selectedChoice, state: item.selectedChoice ? 'MARKED' as const : 'BLANK' as const, confidence: 1 };
+      });
+      const rawAnswers = Object.fromEntries(items.map((item) => [item.itemNumber, item.selectedChoice]));
+      const finalResult: OmrScanResult = {
+        ...lastCapture,
+        idempotencyKey: `session-${assessmentId}-${selectedStudent.id}-${Date.now()}`,
+        detectedAssessmentId: assessmentId,
+        detectedStudentId: selectedStudent.id,
+        overallConfidence: items.reduce((sum, item) => sum + item.confidence, 0) / itemCount,
+        items,
+        rawAnswers,
+        normalizedAnswers: items.map((item) => item.selectedChoice),
+        hasAmbiguity: false,
+        hasMultipleMarks: false,
+        status: 'PROCESSED',
+      };
+      if (onScanComplete) {
+        const saved = await onScanComplete(finalResult, selectedStudent.id, lastCaptureBlob);
+        if (saved === 'duplicate') throw new Error('This learner already has a saved scan for this assessment. The duplicate was skipped.');
+      } else {
+        const saved = await persistOmrScan({ assessmentId, studentId: selectedStudent.id, scanResult: finalResult, imageBlob: lastCaptureBlob });
+        if (saved.error) throw new Error(saved.error);
+      }
+      setPhase('saved');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Could not save the reviewed scan.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const resetSession = () => {
+    setPhase('identify');
+    setSelectedStudentId('');
+    setIdentityVerified(false);
+    setSessionItems({});
+    setRangeStart(1);
+    setPassNumber(0);
+    setLastCapture(null);
+    setLastCaptureBlob(null);
+    setErrorMessage(null);
+    setInfoMessage(null);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-0 sm:p-4">
+      <div className="relative flex h-full w-full flex-col overflow-hidden border-0 bg-gray-900 text-white shadow-2xl sm:h-auto sm:max-h-[94vh] sm:max-w-3xl sm:rounded-3xl sm:border sm:border-gray-800">
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-4 py-3 sm:px-6 sm:py-4">
+          <div className="min-w-0">
+            <h3 className="flex items-center gap-2 text-sm font-bold sm:text-base"><Camera className="h-5 w-5 text-blue-400" />{phase === 'identify' ? 'Step 1: Identify the student' : phase === 'capture' ? 'Step 2: Capture answer items' : phase === 'review' ? 'Step 3: Review answers' : 'Scan complete'}</h3>
+            <p className="mt-1 text-[10px] text-gray-400">{phase === 'identify' ? 'Scan the sheet barcode before reading any answers.' : selectedStudent ? `${selectedStudent.name} · ${selectedStudent.section_name || 'Current section'}` : 'Student not assigned'}</p>
+          </div>
+          <button type="button" onClick={() => { video.stopCamera(); onClose(); }} className="rounded-xl p-2 text-gray-400 hover:bg-gray-800 hover:text-white" aria-label="Close scanner"><X className="h-5 w-5" /></button>
+        </div>
+
+        <div className="flex-1 space-y-3 overflow-y-auto p-3 sm:space-y-4 sm:p-5">
+          <ol className="grid grid-cols-3 gap-2 text-[10px] sm:text-xs">
+            {[['1', 'Identify'], ['2', 'Capture'], ['3', 'Review & save']].map(([number, label], index) => {
+              const active = (phase === 'identify' && index === 0) || (phase === 'capture' && index === 1) || ((phase === 'review' || phase === 'saved') && index === 2);
+              const done = (phase !== 'identify' && index === 0) || ((phase === 'review' || phase === 'saved') && index < 2) || phase === 'saved';
+              return <li key={number} className={`rounded-lg px-2 py-2 text-center font-semibold ${active ? 'bg-blue-600 text-white' : done ? 'bg-emerald-950 text-emerald-300' : 'bg-gray-800 text-gray-500'}`}>{number}. {label}</li>;
+            })}
+          </ol>
+
+          {phase === 'capture' && (
+            <div className="space-y-2 rounded-xl border border-blue-900 bg-blue-950/30 p-3">
+              <div className="flex items-center justify-between text-xs"><strong>Questions {rangeStart}–{rangeEnd}</strong><span>{accountedCount}/{itemCount} confirmed</span></div>
+              <div className="h-2 overflow-hidden rounded-full bg-gray-800"><div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.round(accountedCount / itemCount * 100)}%` }} /></div>
+              <p className="text-[10px] leading-relaxed text-blue-100">Capture one range per pass. Keep the full answer area and its four printed corner markers in frame so the scanner can align the bubbles. The shutter only records this pass; it does not save the student yet.</p>
+            </div>
+          )}
+
+          {phase === 'review' && (
+            <div className="space-y-2 rounded-xl border border-emerald-900 bg-emerald-950/30 p-3 text-xs text-emerald-100">
+              <p className="font-bold">All {itemCount} items are accounted for. Review what the scanner read, then correct any answer before saving.</p>
+              <p className="text-[10px] text-emerald-200/80">Detected choice and confidence are shown beside each question. “Blank” means the teacher confirmed no answer was marked.</p>
+            </div>
+          )}
+
+          {errorMessage && <div className="flex items-start gap-2 rounded-xl border border-red-800 bg-red-950/60 px-3 py-2.5 text-xs text-red-200"><span>⚠</span><p>{errorMessage}</p></div>}
+          {infoMessage && <div className="rounded-xl border border-blue-900 bg-blue-950/40 px-3 py-2.5 text-xs text-blue-200">{infoMessage}</div>}
+
+          {phase === 'saved' ? (
+            <div className="flex min-h-48 flex-col items-center justify-center gap-3 text-center"><CheckCircle2 className="h-12 w-12 text-emerald-400" /><h4 className="text-lg font-bold">Reviewed scan saved</h4><p className="text-xs text-gray-400">Answers were scored and linked to {selectedStudent?.name}.</p><button type="button" onClick={onClose} className="rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold">Done</button></div>
+          ) : phase === 'review' ? (
+            <div className="overflow-hidden rounded-xl border border-gray-700">
+              <div className="grid grid-cols-[54px_1fr_100px_120px] gap-2 bg-gray-800 px-3 py-2 text-[10px] font-bold uppercase text-gray-400"><span>Item</span><span>Scanner read</span><span>Confidence</span><span>Teacher answer</span></div>
+              <div className="max-h-[48vh] divide-y divide-gray-800 overflow-y-auto">
+                {Array.from({ length: itemCount }, (_, index) => {
+                  const itemNumber = index + 1;
+                  const item = sessionItems[itemNumber];
+                  return <div key={itemNumber} className="grid grid-cols-[54px_1fr_100px_120px] items-center gap-2 px-3 py-2 text-xs">
+                    <strong>Q{itemNumber}</strong>
+                    <span className="text-gray-300">{item?.scannerReadChoice || 'Blank'} {item?.pass ? `· pass ${item.pass}` : ''}</span>
+                    <span className="text-gray-400">{item?.blankConfirmed ? 'Teacher confirmed' : `${Math.round((item?.scannerConfidence || 0) * 100)}%`}</span>
+                    <select value={item?.selectedChoice || ''} onChange={(event) => updateReviewedAnswer(itemNumber, event.target.value)} className="rounded-lg border border-gray-700 bg-gray-800 px-2 py-1.5 text-xs text-white"><option value="">Blank</option>{choices.map((choice) => <option key={choice} value={choice}>{choice}</option>)}</select>
+                  </div>;
+                })}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="relative aspect-video min-h-56 overflow-hidden rounded-2xl bg-black">
+                <video ref={video.videoRef} autoPlay playsInline muted className="h-full w-full object-contain" />
+                <div className="pointer-events-none absolute inset-3 rounded-xl border-2 border-dashed border-white/50" />
+                <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-black/80 px-3 py-1.5 text-center text-[10px] font-bold text-white">
+                  {phase === 'identify' ? 'Center the student barcode in frame' : `Capture questions ${rangeStart}–${rangeEnd} · keep all four answer-area markers visible`}
+                </div>
+                {phase === 'capture' && <div className="absolute bottom-3 left-3 rounded-lg bg-black/75 px-2 py-1 text-[10px] text-emerald-200">Student: {selectedStudent?.name}</div>}
+                <div className="absolute bottom-3 right-3 rounded-lg bg-black/75 px-2 py-1 text-[10px] text-gray-200">{video.cameraStatus.statusText}</div>
+              </div>
+
+              {phase === 'identify' ? (
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-bold uppercase text-gray-400">Manual assignment if barcode cannot be read</label>
+                  <div className="flex gap-2">
+                    <select value={selectedStudentId} onChange={(event) => setSelectedStudentId(event.target.value)} className="min-w-0 flex-1 rounded-xl border border-gray-700 bg-gray-800 px-3 py-2 text-xs text-white"><option value="">Choose learner from this section</option>{students.map((student) => <option key={student.id} value={student.id}>{student.name}{student.lrn ? ` · ${student.lrn}` : ''}</option>)}</select>
+                    <button type="button" disabled={!selectedStudentId} onClick={() => { setIdentityVerified(true); setPhase('capture'); setErrorMessage(null); setInfoMessage(`Learner ${students.find((student) => student.id === selectedStudentId)?.name} assigned. Now capture questions 1–5.`); }} className="rounded-xl bg-gray-700 px-3 text-[10px] font-bold disabled:opacity-40">Use learner</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-5 gap-1.5">
+                  {Array.from({ length: rangeEnd - rangeStart + 1 }, (_, index) => {
+                    const itemNumber = rangeStart + index;
+                    const item = sessionItems[itemNumber];
+                    const resolved = Boolean(item && (item.blankConfirmed || (item.state === 'MARKED' && item.selectedChoice && item.confidence >= 0.65)));
+                    return <div key={itemNumber} className={`rounded-lg border p-2 text-center ${resolved ? 'border-emerald-800 bg-emerald-950/40' : item ? 'border-amber-800 bg-amber-950/30' : 'border-gray-700 bg-gray-800/60'}`}><p className="text-[9px] text-gray-400">Q{itemNumber}</p><strong className="text-sm">{item?.blankConfirmed ? 'Blank ✓' : item?.selectedChoice || (item ? 'Unsure' : 'Not scanned')}</strong>{item?.state === 'BLANK' && !item.blankConfirmed && <button type="button" onClick={() => confirmBlank(itemNumber)} className="mt-1 block w-full text-[9px] font-bold text-amber-200 underline">Confirm blank</button>}</div>;
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {phase !== 'saved' && (
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-gray-800 p-3 sm:px-5">
+            <div className="flex gap-2">
+              {phase === 'capture' && <button type="button" onClick={resetSession} className="rounded-xl bg-gray-800 px-3 py-2 text-[10px] font-bold text-gray-300">Start over</button>}
+              {phase === 'review' && <button type="button" onClick={retakeItems} className="rounded-xl bg-gray-800 px-3 py-2 text-[10px] font-bold text-gray-300">Retake from Q1</button>}
+            </div>
+            {phase === 'identify' ? (
+              <button type="button" disabled={isProcessing || !video.cameraStatus.isStreaming} onClick={handleIdentifyCapture} className="rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold disabled:opacity-50">{isProcessing ? 'Reading barcode…' : 'Scan barcode first'}</button>
+            ) : phase === 'capture' ? (
+              <div className="flex gap-2">
+                <button type="button" disabled={isProcessing || !identityVerified} onClick={handleAnswerCapture} className="rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold disabled:opacity-50">{isProcessing ? 'Scanning answers…' : `Capture Q${rangeStart}–${rangeEnd}`}</button>
+                <button type="button" disabled={!currentRangeComplete} onClick={advanceRange} className="rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-40">{accountedCount === itemCount ? 'Review all answers' : 'Continue'}</button>
+              </div>
+            ) : (
+              <button type="button" disabled={isSaving} onClick={finalizeSession} className="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold disabled:opacity-50">{isSaving ? 'Saving reviewed scan…' : 'Confirm review & save'}</button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OmrAnswerKeyScanner({
   isOpen,
   onClose,
   assessmentId,
   template,
   students = [],
   onScanComplete,
-  mode = 'examinee',
+  mode = 'answer_key',
   title,
   onApplyAnswerKey,
 }: OmrCameraModalProps) {
