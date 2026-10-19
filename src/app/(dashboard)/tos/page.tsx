@@ -51,7 +51,10 @@ export default function TosPage() {
         for (const [tosId, job] of Object.entries(data.jobsByTosId || {}) as Array<[string, any]>) {
           if (job && ['queued', 'running', 'needs_attention'].includes(job.status)) next.add(tosId);
         }
-        setActiveExamJobTos(next);
+        setActiveExamJobTos((current) => {
+          if (current.size === next.size && [...current].every((id) => next.has(id))) return current;
+          return next;
+        });
       } catch { /* Keep the page usable if status refresh is temporarily unavailable. */ }
     };
     void refresh();
@@ -423,11 +426,11 @@ export default function TosPage() {
     }
   };
 
-  const currentUser = {
+  const currentUser = useMemo(() => ({
     id: '',
     displayName: tenant?.userDisplayName || '',
     isAdmin: tenant?.userRole === 'admin' || tenant?.userRole === 'super_admin',
-  };
+  }), [tenant?.userDisplayName, tenant?.userRole]);
 
   return (
     <div className="space-y-6 pb-12 max-w-7xl mx-auto px-4 sm:px-6">

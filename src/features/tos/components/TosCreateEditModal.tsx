@@ -192,31 +192,28 @@ export function TosCreateEditModal({
   if (!isOpen) return null;
 
   const handleAddCompetency = () => {
-    if (competencies.length >= 4) return;
-    setCompetencies([
-      ...competencies,
-      {
+    setCompetencies((current) => {
+      if (current.length >= 4) return current;
+      return [...current, {
         id: String(Date.now()),
         description: '',
         daysTaught: 5,
-      },
-    ]);
+      }];
+    });
   };
 
   const handleRemoveCompetency = (index: number) => {
-    if (competencies.length <= 1) return;
-    const next = [...competencies];
-    next.splice(index, 1);
-    setCompetencies(next);
+    setCompetencies((current) => {
+      if (current.length <= 1) return current;
+      return current.filter((_, itemIndex) => itemIndex !== index);
+    });
   };
 
   const handleCompetencyChange = (index: number, field: 'description' | 'daysTaught', value: any) => {
-    const next = [...competencies];
-    next[index] = {
-      ...next[index],
+    setCompetencies((current) => current.map((competency, itemIndex) => itemIndex === index ? {
+      ...competency,
       [field]: field === 'daysTaught' ? Math.max(1, Math.min(100, Number(value) || 1)) : value,
-    };
-    setCompetencies(next);
+    } : competency));
   };
 
   const handleSelectAllSections = () => {
