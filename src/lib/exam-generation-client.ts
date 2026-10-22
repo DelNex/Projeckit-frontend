@@ -102,6 +102,8 @@ export function useExamGenerationJob(tosId: string | undefined) {
 
   const start = useCallback(async (input: { lessonText?: string; lessonDocuments?: Array<{ name: string; text: string }>; repairItemNumber?: number }) => {
     if (!tosId) throw new Error('A TOS is required to start exam generation.');
+    if (job && ['queued', 'running', 'needs_attention'].includes(job.status)) throw new Error('This TOS already has an active generation job. Cancel or resolve it before starting another.');
+    if (helperState === 'offline' || helperState === 'needs_attention') throw new Error('The Gemini helper is unavailable. No job was created. Start the helper and try again.');
     setIsStarting(true); setSavedQuestions(null); setLoadError(null);
     try {
       const response = await fetch('/api/ai/exam-jobs', {
@@ -112,14 +114,14 @@ export function useExamGenerationJob(tosId: string | undefined) {
       if (!response.ok) throw new Error(data.error || 'Could not queue exam generation.');
       invalidateClientQueryCache();
       startedAt.current = Date.now();
-      setJob({ id: data.id, status: data.status, queuePosition: data.queuePosition });
+      setJob({ id: data.id, status: data.status, queuePosition: data.queuePosition || null });
       void refreshHelperStatus();
       return data as { id: string; status: ExamJobStatus; queuePosition: number };
     } finally { setIsStarting(false); }
-  }, [tosId, refreshHelperStatus]);
+  }, [tosId, job, helperState, refreshHelperStatus]);
 
   const cancel = useCallback(async () => {
-    if (!job || !['queued', 'running'].includes(job.status)) return;
+    if (!job || !['queued', 'running', 'needs_attention'].includes(job.status)) return;
     const response = await fetch(`/api/ai/exam-jobs/${encodeURIComponent(job.id)}`, { method: 'POST' });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || 'Could not cancel exam generation.');

@@ -99,9 +99,10 @@ export function ExamGeneratorModal({
   }, [generationJob.savedQuestions, generationJob.job?.id, generationJob.job?.status, generationJob.job?.resultSummary?.missingItems, toast]);
 
   useEffect(() => {
-    if (!generationJob.job || !['failed', 'cancelled'].includes(generationJob.job.status)) return;
+    if (!generationJob.job || !['failed', 'cancelled', 'needs_attention'].includes(generationJob.job.status)) return;
     setCurrentStep('idle');
     if (generationJob.job.status === 'failed') setErrorMsg(generationJob.job.error || 'Exam generation failed. You can try again.');
+    if (generationJob.job.status === 'needs_attention') setErrorMsg('The Gemini helper needs attention. Resolve the helper issue, clear this paused job, then retry.');
   }, [generationJob.job?.id, generationJob.job?.status, generationJob.job?.error]);
 
   if (!isOpen) return null;
@@ -200,7 +201,10 @@ export function ExamGeneratorModal({
       if (!tosId) throw new Error('Save this Table of Specifications before generating an exam.');
       generatedTextRef.current = extractedLessonText;
       const queued = await generationJob.start({ lessonDocuments });
-      setChunkProgress({ completed: 0, total: allSlots.length, label: `Queued (position ${queued.queuePosition}). Starts when the Gemini helper is available.` });
+      const label = queued.status === 'queued'
+        ? `Queued (position ${queued.queuePosition || 1}). Starts when the Gemini helper is available.`
+        : queued.status === 'running' ? 'Gemini is already generating questions for this TOS.' : 'This TOS already has a job that needs helper attention.';
+      setChunkProgress({ completed: 0, total: allSlots.length, label });
       setCurrentStep('generating');
     } catch (err: any) {
       console.error('Exam generation failed:', err);
@@ -228,7 +232,7 @@ export function ExamGeneratorModal({
     return 'pending';
   };
 
-  const isGenerating = currentStep !== 'idle' && currentStep !== 'done';
+  const isGenerating = (currentStep !== 'idle' && currentStep !== 'done') || ['queued', 'running'].includes(generationJob.job?.status || '');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
@@ -270,11 +274,11 @@ export function ExamGeneratorModal({
                         : currentStep === 'generating' && chunkProgress ? chunkProgress.label : STEP_LABELS[currentStep]}
               </span>
               {generationJob.helperState === 'offline'
-                ? <span className="rounded-full border border-slate-300 px-2 py-1 text-[10px] text-slate-600">Helper offline · queued</span>
+                ? <span className="rounded-full border border-slate-300 px-2 py-1 text-[10px] text-slate-600">Helper offline</span>
                 : <span className="rounded-full border border-emerald-300 px-2 py-1 text-[10px] text-emerald-700">Helper {generationJob.helperState.replace('_', ' ')}</span>}
-              {['queued', 'running'].includes(generationJob.job?.status || '')
+              {['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')
                 ? <button type="button" onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="rounded-lg border border-rose-200 px-2 py-1 text-[10px] font-semibold text-rose-700">Cancel</button>
-                : <Loader2 className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />}
+                : ['completed', 'partial', 'failed', 'cancelled'].includes(generationJob.job?.status || '') ? null : <Loader2 className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />}
             </div>
 
             {/* Stepper Dots */}
@@ -310,8 +314,12 @@ export function ExamGeneratorModal({
           <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-300 flex items-center gap-2">
             <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
             <span>{errorMsg}</span>
+            {generationJob.job?.status === 'needs_attention' && <button type="button" onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="ml-auto shrink-0 rounded-lg border border-rose-300 px-2 py-1 font-semibold">Clear job</button>}
           </div>
         )}
+
+        {generationJob.helperState === 'offline' && <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">Gemini helper is offline. Generation is disabled and no new job will be queued until it is available.</div>}
+        {generationJob.helperState === 'needs_attention' && generationJob.job?.status !== 'needs_attention' && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">Gemini helper needs attention. Resolve the prompt on the helper computer before starting another generation.</div>}
 
         {truncationNotice && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300 flex items-center gap-2">
@@ -445,7 +453,7 @@ export function ExamGeneratorModal({
           <button
             type="button"
             onClick={handleStartGeneration}
-            disabled={isGenerating || (selectedFiles.length === 0 && !pastedText.trim())}
+            disabled={isGenerating || generationJob.isStarting || generationJob.helperState === 'offline' || generationJob.helperState === 'needs_attention' || (selectedFiles.length === 0 && !pastedText.trim())}
             className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 transition"
           >
             {isGenerating ? (

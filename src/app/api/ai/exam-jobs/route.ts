@@ -27,6 +27,43 @@ export async function POST(request: Request) {
     if (!documents.length || documents.some((doc) => !doc || typeof doc.name !== 'string' || typeof doc.text !== 'string')) return NextResponse.json({ error: 'Upload or extract lesson text before generating an exam.' }, { status: 400 });
     if (documents.reduce((sum, doc) => sum + doc.text.length, 0) > 500_000) return NextResponse.json({ error: 'These lessons contain more than 500,000 characters. Split them into smaller uploads.' }, { status: 413 });
 
+    const { data: activeJob, error: activeJobError } = await caller.admin!.from('exam_generation_jobs')
+      .select('id,status,created_at')
+      .eq('tenant_id', caller.profile!.tenant_id)
+      .eq('tos_id', tos.id)
+      .is('parent_job_id', null)
+      .in('status', ['queued', 'running', 'needs_attention'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (activeJobError) throw activeJobError;
+    if (activeJob) {
+      const position = activeJob.status === 'queued'
+        ? await caller.admin!.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('status', 'queued').lte('created_at', activeJob.created_at)
+        : null;
+      return NextResponse.json({ id: activeJob.id, status: activeJob.status, reused: true, queuePosition: position?.count || null }, { status: 202, headers: { 'Cache-Control': 'no-store' } });
+    }
+
+    const retryAfter = new Date(Date.now() - 2 * 60_000).toISOString();
+    const { data: recentFailure, error: recentFailureError } = await caller.admin!.from('exam_generation_jobs')
+      .select('id,updated_at,error')
+      .eq('tenant_id', caller.profile!.tenant_id)
+      .eq('tos_id', tos.id)
+      .is('parent_job_id', null)
+      .eq('status', 'failed')
+      .ilike('error', '%Gemini did not return valid exam questions%')
+      .gte('updated_at', retryAfter)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (recentFailureError) throw recentFailureError;
+    if (recentFailure) return NextResponse.json({ error: 'The last generation for this TOS failed. Check the helper status and wait two minutes before retrying; the existing exam was not changed.' }, { status: 429 });
+
+    const { data: helper } = await caller.admin!.from('helper_status').select('state,last_seen_at').order('last_seen_at', { ascending: false }).limit(1).maybeSingle();
+    const helperAge = helper?.last_seen_at ? Math.max(0, Math.floor((Date.now() - Date.parse(helper.last_seen_at)) / 1000)) : null;
+    const helperAvailable = helperAge !== null && helperAge < 45 && ['idle', 'busy'].includes(helper?.state || '');
+    if (!helperAvailable) return NextResponse.json({ error: 'The Gemini helper is unavailable. No job was created. Start the helper and try again.' }, { status: 503 });
+
     const [tenant, hourly, daily] = await Promise.all([
       caller.admin!.from('tenants').select('ai_hourly_user_limit,ai_daily_school_limit').eq('id', caller.profile!.tenant_id).maybeSingle(),
       caller.admin!.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('created_by', caller.user!.id).neq('status', 'cancelled').gte('created_at', new Date(Date.now() - 3600000).toISOString()),
@@ -53,7 +90,7 @@ export async function POST(request: Request) {
     if (Buffer.byteLength(JSON.stringify(payload), 'utf8') > 1_572_864) return NextResponse.json({ error: 'The lesson text and exam blueprint exceed the 1.5 MB queue limit. Reduce the material and try again.' }, { status: 413 });
     const job = await getExamAiProvider().enqueue(caller.admin!, { tenantId: caller.profile!.tenant_id, tosId: tos.id, createdBy: caller.user!.id, payload, jobKind: Number.isInteger(body.repairItemNumber) ? 'repair' : 'full' });
     const { count } = await caller.admin!.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('status', 'queued').lte('created_at', job.createdAt);
-    return NextResponse.json({ id: job.id, status: 'queued', queuePosition: count || 1 }, { status: 202, headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ id: job.id, status: job.status, reused: job.reused, queuePosition: job.status === 'queued' ? count || 1 : null }, { status: 202, headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     if (error instanceof SyntaxError) return NextResponse.json({ error: 'The request must be valid JSON.' }, { status: 400 });
     console.error('[exam-jobs POST] Could not create a generation job.');
@@ -70,6 +107,7 @@ export async function GET(request: Request) {
     const tosIds = (params.get('tosIds') || '').split(',').filter(Boolean).slice(0, 100);
     if (!tosId && !tosIds.length) return NextResponse.json({ error: 'tosId or tosIds is required.' }, { status: 400 });
     const admin = caller.admin!;
+    await admin.rpc('expire_unserviceable_exam_jobs');
     await admin.rpc('cleanup_exam_job_payloads');
     let query = admin.from('exam_generation_jobs').select('id,tos_id,status,progress,error,result_summary,created_at,updated_at,finished_at,created_by,job_kind,parent_job_id').eq('tenant_id', caller.profile!.tenant_id).order('created_at', { ascending: false });
     if (tosId) query = query.eq('tos_id', tosId).limit(1);

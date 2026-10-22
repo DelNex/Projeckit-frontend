@@ -129,7 +129,7 @@ export async function finalizeExamJob(jobId: string, responseText: string, admin
   }
 
   if (!questions.length) {
-    const failureText = 'Gemini did not return valid exam questions.';
+    const failureText = 'Gemini did not return valid exam questions. Your existing TOS exam was kept; check the helper and try again later.';
     const { data: finishedRoot } = await admin.from('exam_generation_jobs').update({ status: 'failed', error: failureText, finished_at: new Date().toISOString(), updated_at: new Date().toISOString(), payload: {} }).eq('id', rootId).eq('status', 'running').select('id').maybeSingle();
     if (rootId !== jobId) await admin.from('exam_generation_jobs').update({ status: 'failed', error: failureText, finished_at: new Date().toISOString(), updated_at: new Date().toISOString(), payload: {} }).eq('id', jobId).eq('status', 'running');
     if (finishedRoot) await auditFinishedJob(admin, root, 'failed', 0);
