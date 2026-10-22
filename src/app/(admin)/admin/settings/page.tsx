@@ -41,6 +41,9 @@ export default function AdminSettingsPage() {
   const [isLocked, setIsLocked] = useState(false);
   const [minutesRemaining, setMinutesRemaining] = useState<number | undefined>(undefined);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  const [deletionCodeTenantId, setDeletionCodeTenantId] = useState('');
+  const [deletionCodeTenants, setDeletionCodeTenants] = useState<Array<{ id: string; name: string; code: string | null }>>([]);
+  const [deletionCodeStatusError, setDeletionCodeStatusError] = useState<string | null>(null);
   const [savingCode, setSavingCode] = useState(false);
 
   // Deletion code form state
@@ -53,18 +56,26 @@ export default function AdminSettingsPage() {
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const [resettingCode, setResettingCode] = useState(false);
 
-  const fetchDeletionCodeStatus = async () => {
+  const fetchDeletionCodeStatus = async (tenantId = deletionCodeTenantId) => {
+    setCodeLoading(true);
+    setDeletionCodeStatusError(null);
     try {
-      const res = await fetch('/api/admin/deletion-code');
-      if (res.ok) {
-        const data = await res.json();
-        setHasDeletionCode(Boolean(data.hasCode));
-        setIsLocked(Boolean(data.isLocked));
-        setMinutesRemaining(data.minutesRemaining);
-        setIsPlatformAdmin(Boolean(data.isPlatformAdmin));
-      }
+      const query = tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : '';
+      const res = await fetch(`/api/admin/deletion-code${query}`, { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to check deletion code status.');
+      setHasDeletionCode(Boolean(data.hasCode));
+      setIsLocked(Boolean(data.isLocked));
+      setMinutesRemaining(data.minutesRemaining);
+      setIsPlatformAdmin(Boolean(data.isPlatformAdmin));
+      setDeletionCodeTenants(data.tenants || []);
+      setDeletionCodeTenantId(data.tenantId || '');
+      return data as { hasCode: boolean };
     } catch (err) {
       console.error('Failed to load deletion code status:', err);
+      setHasDeletionCode(false);
+      setDeletionCodeStatusError(err instanceof Error ? err.message : 'Failed to check deletion code status.');
+      return null;
     } finally {
       setCodeLoading(false);
     }
@@ -175,6 +186,7 @@ export default function AdminSettingsPage() {
           currentCode: currentCode || undefined,
           newCode,
           confirmNewCode,
+          tenantId: isPlatformAdmin ? deletionCodeTenantId : undefined,
         }),
       });
 
@@ -184,13 +196,15 @@ export default function AdminSettingsPage() {
         return;
       }
 
+      const verifiedStatus = await fetchDeletionCodeStatus(deletionCodeTenantId);
+      if (!verifiedStatus?.hasCode) {
+        throw new Error('The server did not confirm that the deletion code is active for this school.');
+      }
       toast.success(data.message || 'Deletion code updated successfully.');
-      setCodeSuccessMsg('Deletion code set successfully! It is never displayed afterward.');
       setCurrentCode('');
       setNewCode('');
       setConfirmNewCode('');
-      setHasDeletionCode(true);
-      fetchDeletionCodeStatus();
+      setCodeSuccessMsg('Deletion code saved and verified for this school. It is never displayed afterward.');
     } catch (err: any) {
       toast.error(friendlyError(err, 'Failed to update deletion code.'));
     } finally {
@@ -204,6 +218,7 @@ export default function AdminSettingsPage() {
       const res = await fetch('/api/admin/deletion-code/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId: deletionCodeTenantId || undefined }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -215,7 +230,7 @@ export default function AdminSettingsPage() {
       toast.success('Deletion code has been reset. You can now configure a new code.');
       setResetModalOpen(false);
       setHasDeletionCode(false);
-      fetchDeletionCodeStatus();
+      await fetchDeletionCodeStatus(deletionCodeTenantId);
     } catch (err: any) {
       toast.error(friendlyError(err, 'Failed to reset deletion code.'));
     } finally {
@@ -351,6 +366,11 @@ export default function AdminSettingsPage() {
                 <Loader2 className="h-3 w-3 animate-spin" />
                 Checking...
               </span>
+            ) : deletionCodeStatusError ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1 text-[11px] font-bold text-rose-700 dark:bg-rose-950/40 dark:text-rose-400">
+                <ShieldAlert className="h-3.5 w-3.5" />
+                Unable to Verify
+              </span>
             ) : hasDeletionCode ? (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
                 <ShieldCheck className="h-3.5 w-3.5" />
@@ -364,6 +384,42 @@ export default function AdminSettingsPage() {
             )}
           </div>
         </div>
+
+        {isPlatformAdmin && deletionCodeTenants.length > 0 && (
+          <div>
+            <label htmlFor="deletion-code-tenant" className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
+              School this deletion code applies to
+            </label>
+            <select
+              id="deletion-code-tenant"
+              value={deletionCodeTenantId}
+              disabled={codeLoading || savingCode || resettingCode}
+              onChange={(event) => {
+                const tenantId = event.target.value;
+                setDeletionCodeTenantId(tenantId);
+                setCodeSuccessMsg(null);
+                setCurrentCode('');
+                setNewCode('');
+                setConfirmNewCode('');
+                void fetchDeletionCodeStatus(tenantId);
+              }}
+              className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none focus:border-blue-600 dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+            >
+              {deletionCodeTenants.map((tenant) => (
+                <option key={tenant.id} value={tenant.id}>{tenant.name}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+              Deletion codes are stored separately for each school. Choose the school whose archived accounts you need to delete.
+            </p>
+          </div>
+        )}
+
+        {deletionCodeStatusError && (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-300">
+            Could not verify this school&apos;s deletion code: {deletionCodeStatusError}
+          </div>
+        )}
 
         {isLocked && (
           <div className="flex items-center gap-2.5 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs font-semibold text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300">
@@ -381,7 +437,7 @@ export default function AdminSettingsPage() {
           </div>
         )}
 
-        {!hasDeletionCode && !codeLoading && (
+        {!hasDeletionCode && !codeLoading && !deletionCodeStatusError && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-3.5 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300">
             Permanent account deletion is currently disabled. Configure a deletion code below to enable this feature.
           </div>

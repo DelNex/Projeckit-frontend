@@ -489,7 +489,7 @@ export default function AllAccountsPage() {
       }
 
       // 2. Fetch deletion code status
-      const tenantQuery = isPlatformAdmin && targetTenantIds[0]
+      const tenantQuery = targetTenantIds[0]
         ? `?tenantId=${encodeURIComponent(targetTenantIds[0])}`
         : '';
       const codeRes = await fetch(`/api/admin/deletion-code${tenantQuery}`, { cache: 'no-store' });

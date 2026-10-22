@@ -38,8 +38,20 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url);
     const tenantParam = url.searchParams.get('tenantId');
-    const targetTenantId = callerProfile.is_platform_admin && tenantParam
-      ? tenantParam
+    const adminClient = createAdminClient();
+    let tenants: Array<{ id: string; name: string; code: string | null }> = [];
+
+    if (callerProfile.is_platform_admin) {
+      const { data: tenantRows, error: tenantError } = await adminClient
+        .from('tenants')
+        .select('id, name, code')
+        .order('name');
+      if (tenantError) throw tenantError;
+      tenants = tenantRows || [];
+    }
+
+    const targetTenantId = callerProfile.is_platform_admin
+      ? (tenantParam || callerProfile.tenant_id || tenants[0]?.id)
       : callerProfile.tenant_id;
 
     if (!targetTenantId) {
@@ -49,13 +61,14 @@ export async function GET(request: Request) {
       );
     }
 
-    const adminClient = createAdminClient();
     const status = await getTenantDeletionCodeStatus(adminClient, targetTenantId);
 
     return NextResponse.json({
       success: true,
       ...status,
       isPlatformAdmin: Boolean(callerProfile.is_platform_admin),
+      tenantId: targetTenantId,
+      tenants,
     });
   } catch (err: any) {
     console.error('[GET /api/admin/deletion-code] Error:', err);
@@ -126,11 +139,19 @@ export async function POST(request: Request) {
     const adminClient = createAdminClient();
 
     // Check if code is already set
-    const { data: existingCode } = await adminClient
+    const { data: existingCode, error: existingCodeError } = await adminClient
       .from('admin_delete_codes')
       .select('code_hash, locked_until')
       .eq('tenant_id', targetTenantId)
       .maybeSingle();
+
+    if (existingCodeError) {
+      console.error('[POST /api/admin/deletion-code] Existing code lookup failed:', existingCodeError);
+      return NextResponse.json(
+        { error: 'Could not check the current deletion code. Nothing was changed.' },
+        { status: 500 }
+      );
+    }
 
     const hasExistingCode = Boolean(existingCode?.code_hash);
 
@@ -174,6 +195,21 @@ export async function POST(request: Request) {
       );
     }
 
+    // Confirm the write before telling the UI that the code is configured.
+    const { data: savedCode, error: verifySaveError } = await adminClient
+      .from('admin_delete_codes')
+      .select('tenant_id, code_hash')
+      .eq('tenant_id', targetTenantId)
+      .maybeSingle();
+
+    if (verifySaveError || !savedCode?.code_hash || !verifyDeletionCode(newCode, savedCode.code_hash)) {
+      console.error('[POST /api/admin/deletion-code] Saved code verification failed:', verifySaveError);
+      return NextResponse.json(
+        { error: 'The deletion code could not be confirmed as saved. Please try again.' },
+        { status: 500 }
+      );
+    }
+
     // Write audit log entry
     await adminClient.from('audit_logs').insert({
       tenant_id: targetTenantId,
@@ -188,6 +224,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
+      hasCode: true,
+      tenantId: targetTenantId,
       message: hasExistingCode
         ? 'Deletion code changed successfully.'
         : 'Deletion code created successfully.',
@@ -200,4 +238,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

@@ -169,33 +169,43 @@ export interface Database {
 
       admin_delete_codes: {
         Row: {
-          id: string;
-          user_id: string;
-          hashed_code: string;
-          attempts: number;
+          tenant_id: string;
+          code_hash: string;
+          set_by: string | null;
+          failed_attempts: number;
           locked_until: string | null;
-          created_at: string;
           updated_at: string;
         };
         Insert: {
-          id?: string;
-          user_id: string;
-          hashed_code: string;
-          attempts?: number;
+          tenant_id: string;
+          code_hash: string;
+          set_by?: string | null;
+          failed_attempts?: number;
           locked_until?: string | null;
-          created_at?: string;
           updated_at?: string;
         };
         Update: {
-          id?: string;
-          user_id?: string;
-          hashed_code?: string;
-          attempts?: number;
+          tenant_id?: string;
+          code_hash?: string;
+          set_by?: string | null;
+          failed_attempts?: number;
           locked_until?: string | null;
-          created_at?: string;
           updated_at?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: 'admin_delete_codes_tenant_id_fkey';
+            columns: ['tenant_id'];
+            referencedRelation: 'tenants';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'admin_delete_codes_set_by_fkey';
+            columns: ['set_by'];
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
       };
 
       faculty: {
