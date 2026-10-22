@@ -471,6 +471,11 @@ export default function AllAccountsPage() {
     });
 
     try {
+      const targetTenantIds = Array.from(new Set(targetUsers.map((u) => u.tenant_id).filter(Boolean)));
+      if (targetTenantIds.length > 1) {
+        throw new Error('Select archived accounts from one school at a time so the correct deletion code can be verified.');
+      }
+
       // 1. Fetch deletion impact
       const impactRes = await fetch('/api/admin/users/delete/impact', {
         method: 'POST',
@@ -484,8 +489,14 @@ export default function AllAccountsPage() {
       }
 
       // 2. Fetch deletion code status
-      const codeRes = await fetch('/api/admin/deletion-code');
+      const tenantQuery = isPlatformAdmin && targetTenantIds[0]
+        ? `?tenantId=${encodeURIComponent(targetTenantIds[0])}`
+        : '';
+      const codeRes = await fetch(`/api/admin/deletion-code${tenantQuery}`, { cache: 'no-store' });
       const codeData = await codeRes.json().catch(() => ({}));
+      if (!codeRes.ok) {
+        throw new Error(codeData.error || 'Failed to check the deletion code for this school.');
+      }
 
       setDeleteModalState((prev) => ({
         ...prev,

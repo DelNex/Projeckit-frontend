@@ -110,6 +110,14 @@ export async function POST(request: Request) {
       );
     }
 
+    const targetTenantIds = new Set(targetProfiles.map((profile) => profile.tenant_id).filter(Boolean));
+    if (targetTenantIds.size > 1) {
+      return NextResponse.json(
+        { error: 'Permanently delete accounts from one school at a time so the correct deletion code can be verified.' },
+        { status: 400 }
+      );
+    }
+
     // Tenant check & Requirement 6e: A non-archived account can never be deleted
     const targetTenantId = targetProfiles[0].tenant_id || callerProfile.tenant_id;
     for (const p of targetProfiles) {
@@ -267,4 +275,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

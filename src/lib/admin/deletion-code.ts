@@ -59,7 +59,12 @@ export async function getTenantDeletionCodeStatus(
     .eq('tenant_id', tenantId)
     .maybeSingle();
 
-  if (error || !data) {
+  if (error) {
+    console.error('[getTenantDeletionCodeStatus] Failed to query deletion code:', error);
+    throw new Error('Unable to check the deletion code configuration.');
+  }
+
+  if (!data) {
     return {
       hasCode: false,
       isLocked: false,
@@ -104,7 +109,12 @@ export async function checkAndVerifyDeletionCode(
     .eq('tenant_id', tenantId)
     .maybeSingle();
 
-  if (error || !data || !data.code_hash) {
+  if (error) {
+    console.error('[checkAndVerifyDeletionCode] Failed to query deletion code:', error);
+    throw new Error('Unable to verify the deletion code right now. Please try again.');
+  }
+
+  if (!data || !data.code_hash) {
     return {
       success: false,
       error: 'Set a deletion code in Admin Settings first.',
@@ -182,4 +192,3 @@ export async function checkAndVerifyDeletionCode(
     error: `Incorrect deletion code. ${attemptsLeft} attempt${attemptsLeft === 1 ? '' : 's'} remaining before a 15-minute lockout.`,
   };
 }
-
