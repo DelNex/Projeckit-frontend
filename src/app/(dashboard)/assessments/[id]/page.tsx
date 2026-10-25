@@ -17,6 +17,7 @@ import { projectTosItems } from '@/lib/tos-item-projection';
 import { createClient } from '@/lib/supabase/client';
 import type { Database } from '@/types/database.types';
 import { cn } from '@/lib/utils';
+import { deduplicateItemScans, readScanAnswers } from '@/lib/item-response-analysis';
 
 type ScanResultRow = Database['public']['Tables']['scan_results']['Row'];
 type TosDocRow = Database['public']['Tables']['tos_documents']['Row'] & {
@@ -39,6 +40,7 @@ import {
     Camera,
     CheckCircle2,
     ChevronRight,
+    Download,
     Edit3,
     FileSpreadsheet,
     KeyRound,
@@ -142,6 +144,7 @@ export default function AssessmentWorkspacePage({
   const [isEditingIa, setIsEditingIa] = useState(false);
   const [customRi, setCustomRi] = useState<Record<number, number>>({});
   const [tempDraftRi, setTempDraftRi] = useState<Record<number, number>>({});
+  const [selectedAnswerGroup, setSelectedAnswerGroup] = useState<{ itemNumber: number; choice: string } | null>(null);
 
   // Dynamic OMR Configuration
   const [itemCount, setItemCount] = useState<number>(50);
@@ -690,19 +693,10 @@ export default function AssessmentWorkspacePage({
     }
 
     // 2. Parse scan results examinee responses
-    const gradedScans = scanResults.filter((scan) => scan.status !== 'VERIFICATION_REQUIRED');
+    const gradedScans = deduplicateItemScans(scanResults);
     const actualN = gradedScans.length;
     const examinees = gradedScans.map((scan) => {
-      const ansMap: Record<number, string | null> = {};
-      if (scan.raw_answers && typeof scan.raw_answers === 'object' && !Array.isArray(scan.raw_answers)) {
-        Object.entries(scan.raw_answers).forEach(([k, v]) => {
-          ansMap[Number(k)] = typeof v === 'string' ? v : null;
-        });
-      } else if (Array.isArray(scan.normalized_answers)) {
-        scan.normalized_answers.forEach((val, idx) => {
-          ansMap[idx + 1] = typeof val === 'string' ? val : null;
-        });
-      }
+      const ansMap = readScanAnswers(scan);
       let score = 0;
       for (let i = 1; i <= itemCount; i++) {
         const stAns = ansMap[i];
@@ -711,7 +705,13 @@ export default function AssessmentWorkspacePage({
           score++;
         }
       }
-      return { ansMap, score };
+      const student = studentsList.find((entry) => entry.id === scan.student_id);
+      return {
+        ansMap,
+        score,
+        studentId: scan.student_id,
+        name: student?.name || (scan.detected_roll_number ? `Roll #${scan.detected_roll_number}` : 'Unassigned learner'),
+      };
     });
 
     const activeRiStore = isEditingIa ? tempDraftRi : customRi;
@@ -781,6 +781,15 @@ export default function AssessmentWorkspacePage({
 
       sumDiscrimination += dIndex;
 
+      const choiceBreakdown = choicesList.map((choice) => ({
+        choice,
+        count: actualN ? examinees.filter((examinee) => examinee.ansMap[itemNum] === choice).length : 0,
+        correct: choice === String(answers[itemNum] || '').toUpperCase(),
+      }));
+      const unansweredCount = actualN
+        ? examinees.filter((examinee) => !choicesList.includes(examinee.ansMap[itemNum] || '')).length
+        : 0;
+
       let discriminationCategory = 'Retain';
       let action: 'Retain' | 'Revise' | 'Discard' = 'Retain';
 
@@ -814,6 +823,9 @@ export default function AssessmentWorkspacePage({
         dIndex,
         discriminationCategory,
         action,
+        choiceBreakdown,
+        unansweredCount,
+        hasScannedCases: actualN > 0,
       };
     });
 
@@ -863,7 +875,21 @@ export default function AssessmentWorkspacePage({
       avgD,
       domainBreakdown,
     };
-  }, [tosDoc, scanResults, answers, itemCount, assessment.classSize, isEditingIa, tempDraftRi, customRi]);
+  }, [tosDoc, scanResults, answers, itemCount, assessment.classSize, isEditingIa, tempDraftRi, customRi, choicesList, studentsList]);
+
+  const selectedAnswerLearners = useMemo(() => {
+    if (!selectedAnswerGroup) return [];
+    return deduplicateItemScans(scanResults).flatMap((scan) => {
+      const selected = readScanAnswers(scan)[selectedAnswerGroup.itemNumber] || 'Blank / unreadable';
+      if (selected !== selectedAnswerGroup.choice) return [];
+      const student = studentsList.find((entry) => entry.id === scan.student_id);
+      return [{
+        id: scan.student_id || scan.id,
+        name: student?.name || (scan.detected_roll_number ? `Roll #${scan.detected_roll_number}` : 'Unassigned learner'),
+        lrn: student?.lrn || '',
+      }];
+    });
+  }, [selectedAnswerGroup, scanResults, studentsList]);
 
   // Edit Item Analysis handlers
   const handleStartEditIa = () => {
@@ -1373,6 +1399,12 @@ export default function AssessmentWorkspacePage({
                   </div>
 
                   <div className="flex items-center gap-2">
+                    <a
+                      href={`/api/reports/docx?type=item-analysis&assessmentId=${encodeURIComponent(assessmentId)}`}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-3.5 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-300"
+                    >
+                      <Download className="h-3.5 w-3.5" /> Download DOCX
+                    </a>
                     {isEditingIa ? (
                       <>
                         <button
@@ -1582,8 +1614,33 @@ export default function AssessmentWorkspacePage({
                                 {row.code}
                               </span>
                               <span className="text-gray-500 dark:text-gray-400 font-normal text-[11px] truncate block max-w-sm">
-                                {row.description}
+                                {questionItems.find((question) => question.item_number === row.itemNumber)?.question || row.description}
                               </span>
+                              <div className="mt-1 flex flex-wrap gap-1" aria-label={`Answer choice counts for item ${row.itemNumber}`}>
+                                {row.choiceBreakdown.map((choice) => (
+                                  <button
+                                    key={choice.choice}
+                                    type="button"
+                                    onClick={() => setSelectedAnswerGroup({ itemNumber: row.itemNumber, choice: choice.choice })}
+                                    disabled={!row.hasScannedCases}
+                                    title={`${choice.choice} is ${choice.correct ? 'correct' : 'incorrect'}; ${choice.count} learners selected it. Click to see learners.`}
+                                    className={`rounded-md border px-1.5 py-0.5 text-[10px] font-bold disabled:cursor-not-allowed disabled:opacity-50 ${choice.correct
+                                      ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                      : 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300'}`}
+                                  >
+                                    {choice.choice} · {choice.count} {choice.correct ? '✓' : '×'}
+                                  </button>
+                                ))}
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedAnswerGroup({ itemNumber: row.itemNumber, choice: 'Blank / unreadable' })}
+                                  disabled={!row.hasScannedCases || row.unansweredCount === 0}
+                                  title={`${row.unansweredCount} unanswered or unreadable; click to see learners.`}
+                                  className="rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-bold text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                                >
+                                  Blank · {row.unansweredCount}
+                                </button>
+                              </div>
                             </td>
                             <td className="px-2 py-2 text-center">
                               <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-900/40 text-xs font-bold text-blue-600 dark:text-blue-400 font-mono">
@@ -1666,6 +1723,43 @@ export default function AssessmentWorkspacePage({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {selectedAnswerGroup && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedAnswerGroup(null); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="answer-choice-learners-title" className="flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-900">
+            <header className="flex items-start justify-between gap-4 border-b border-gray-100 p-5 dark:border-gray-800">
+              <div>
+                <h2 id="answer-choice-learners-title" className="text-base font-bold text-gray-900 dark:text-white">
+                  Item {selectedAnswerGroup.itemNumber} · {selectedAnswerGroup.choice}
+                </h2>
+                <p className="mt-1 text-xs text-gray-500">
+                  {selectedAnswerGroup.choice === String(answers[selectedAnswerGroup.itemNumber] || '').toUpperCase()
+                    ? 'Correct answer selected by these learners'
+                    : 'Incorrect or blank answer selected by these learners'}
+                </p>
+              </div>
+              <button type="button" onClick={() => setSelectedAnswerGroup(null)} className="rounded-lg px-2 py-1 text-sm font-semibold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800">Close</button>
+            </header>
+            <div className="overflow-y-auto p-5">
+              <p className="mb-3 text-xs font-semibold text-gray-600 dark:text-gray-300">
+                {selectedAnswerLearners.length} learner{selectedAnswerLearners.length === 1 ? '' : 's'} · Answer key: {answers[selectedAnswerGroup.itemNumber] || 'not set'}
+              </p>
+              {selectedAnswerLearners.length ? (
+                <ul className="divide-y divide-gray-100 rounded-xl border border-gray-100 dark:divide-gray-800 dark:border-gray-800">
+                  {selectedAnswerLearners.map((learner) => (
+                    <li key={learner.id} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
+                      <span className="font-medium text-gray-800 dark:text-gray-200">{learner.name}</span>
+                      {learner.lrn && <span className="font-mono text-xs text-gray-500">{learner.lrn}</span>}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500 dark:bg-gray-800">No identified learner scans selected this answer.</p>
+              )}
+            </div>
+          </section>
         </div>
       )}
 

@@ -6,10 +6,10 @@ import {
     CheckSquare,
     ChevronRight,
     FileSpreadsheet,
+    FileDown,
     Layers,
     LineChart,
     Loader2,
-    Printer,
     RefreshCw
 } from 'lucide-react';
 import Link from 'next/link';
@@ -20,10 +20,10 @@ import { getPhilippineSchoolYear } from '@/lib/academic-calendar';
 import { projectTosItems } from '@/lib/tos-item-projection';
 import { friendlyError } from '@/lib/errors';
 import {
-  exportReportToPdf,
   exportReportToExcel,
   generateAssessmentReportData,
 } from '@/lib/reports-generator';
+import { downloadAnalyticsReportDocx, downloadConsolidatedReportDocx } from '@/lib/analytics-docx-export';
 
 type TabKey = 'sectional' | 'longitudinal' | 'cognitive' | 'item-analysis' | 'reports';
 
@@ -764,18 +764,23 @@ function AnalyticsContent() {
     return consolidatedReportsData.some((r) => r.scannedStudents > 0);
   }, [consolidatedReportsData]);
 
-  const handleExportPdf = async () => {
+  const handleExportDocx = async () => {
     try {
       setExporting(true);
       const targetId = selectedAssessmentId || (assessments.length > 0 ? assessments[0].id : null);
-      if (activeTab === 'reports' || !targetId) {
-        window.print();
+      if (activeTab === 'reports') {
+        await downloadConsolidatedReportDocx({
+          schoolName: tenantName || 'Department of Education',
+          schoolYear: selectedSchoolYear === 'all' ? effectiveSchoolYear : selectedSchoolYear,
+          rows: consolidatedReportsData,
+        });
         return;
       }
+      if (!targetId) throw new Error('Select an assessment with saved results first.');
       const report = await generateAssessmentReportData(targetId, { tenantName, teacherName: userDisplayName });
-      exportReportToPdf(report);
+      await downloadAnalyticsReportDocx(report);
     } catch (err: any) {
-      alert('Could not export PDF report: ' + (err.message || 'Unknown error'));
+      alert('Could not export Word report: ' + (err.message || 'Unknown error'));
     } finally {
       setExporting(false);
     }
@@ -873,13 +878,13 @@ function AnalyticsContent() {
               Refresh
             </button>
             <button
-              onClick={handleExportPdf}
+              onClick={handleExportDocx}
               disabled={exporting}
               className="px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-xs transition flex items-center gap-1.5 print:hidden"
-              title="One-click PDF Export"
+              title="Download the current report as a Word document"
             >
-              <Printer className="w-3.5 h-3.5" />
-              Export PDF
+              <FileDown className="w-3.5 h-3.5" />
+              Export DOCX
             </button>
             <button
               onClick={handleExportExcel}

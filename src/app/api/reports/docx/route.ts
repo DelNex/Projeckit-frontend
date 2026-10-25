@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import type { TosDocument } from '@/types/tos';
 import {
   createMostLeastLearnedDocx,
+  createItemAnalysisDocx,
   createTermResultsDocx,
   createTosDocx,
   getExportableTosRows,
@@ -16,10 +17,11 @@ import {
   readSelectedOption,
   type SavedAssessmentResponse,
 } from '@/lib/server/term-report-metrics';
+import { calculateItemChoiceDistributions, type ItemResponseScan } from '@/lib/item-response-analysis';
 
 export const runtime = 'nodejs';
 
-type ReportType = 'tos' | 'test-results' | 'most-least-learned';
+type ReportType = 'tos' | 'test-results' | 'most-least-learned' | 'item-analysis';
 
 function getRelatedName(value: unknown): string {
   if (Array.isArray(value)) return String((value[0] as any)?.name || (value[0] as any)?.title || '');
@@ -53,11 +55,52 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const type = url.searchParams.get('type') as ReportType | null;
     const tosId = url.searchParams.get('tosId');
+    const assessmentId = url.searchParams.get('assessmentId');
     const requestedTenantId = url.searchParams.get('tenantId');
     const tenantId = profile.is_platform_admin && requestedTenantId ? requestedTenantId : profile.tenant_id;
     if (!tenantId) return NextResponse.json({ error: 'Select a school before exporting.', code: 'TENANT_REQUIRED' }, { status: 400 });
-    if (!type || !['tos', 'test-results', 'most-least-learned'].includes(type)) {
+    if (!type || !['tos', 'test-results', 'most-least-learned', 'item-analysis'].includes(type)) {
       return NextResponse.json({ error: 'Choose a supported DOCX report type.', code: 'INVALID_REPORT_TYPE' }, { status: 400 });
+    }
+    if (type === 'item-analysis') {
+      if (!assessmentId) return NextResponse.json({ error: 'Choose an examination to export.', code: 'ASSESSMENT_REQUIRED' }, { status: 400 });
+      const { data: assessmentRow, error: assessmentError } = await createAdminClient()
+        .from('assessments')
+        .select('id, title, term, school_year, target_items, tenant_id, subjects(title, code), sections(name)')
+        .eq('id', assessmentId)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+      if (assessmentError || !assessmentRow) return NextResponse.json({ error: 'Examination was not found in this school.', code: 'ASSESSMENT_NOT_FOUND' }, { status: 404 });
+      const admin = createAdminClient();
+      const [{ data: school, error: schoolError }, { data: answerKey, error: keyError }, { data: scans, error: scansError }] = await Promise.all([
+        admin.from('tenants').select('id, name, region, division').eq('id', tenantId).maybeSingle(),
+        admin.from('answer_keys').select('answers').eq('assessment_id', assessmentId).maybeSingle(),
+        admin.from('scan_results').select('id, student_id, detected_roll_number, status, created_at, normalized_answers, raw_answers').eq('assessment_id', assessmentId).order('created_at', { ascending: false }),
+      ]);
+      if (schoolError || !school) return NextResponse.json({ error: 'School was not found.', code: 'SCHOOL_NOT_FOUND' }, { status: 404 });
+      if (keyError) throw new Error(`Could not load answer key: ${keyError.message}`);
+      if (scansError) throw new Error(`Could not load scan results: ${scansError.message}`);
+      const answers = (answerKey?.answers && typeof answerKey.answers === 'object' && !Array.isArray(answerKey.answers))
+        ? answerKey.answers as Record<string, unknown>
+        : {};
+      if (!Object.keys(answers).length) return NextResponse.json({ error: 'Save an answer key before exporting item analysis.', code: 'ANSWER_KEY_REQUIRED' }, { status: 422 });
+      const count = Number(assessmentRow.target_items) || 0;
+      const choices = ['A', 'B', 'C', 'D', ...(Object.values(answers).some((answer) => String(answer).toUpperCase() === 'E') ? ['E'] : [])];
+      const distributions = calculateItemChoiceDistributions((scans || []) as ItemResponseScan[], answers, count, choices);
+      const subject = Array.isArray(assessmentRow.subjects) ? assessmentRow.subjects[0] : assessmentRow.subjects;
+      const section = Array.isArray(assessmentRow.sections) ? assessmentRow.sections[0] : assessmentRow.sections;
+      const buffer = await createItemAnalysisDocx({
+        schoolName: school.name || '',
+        region: school.region || '',
+        division: school.division || '',
+        subject: subject?.title || subject?.code || '',
+        term: assessmentRow.term || '',
+        schoolYear: assessmentRow.school_year || '',
+        assessmentTitle: `${assessmentRow.title}${section?.name ? ` · ${section.name}` : ''}`,
+        preparedBy: profile.display_name || '',
+      }, distributions);
+      const safeName = `${school.name || 'School'}_${assessmentRow.title || 'Item_Analysis'}`.normalize('NFKD').replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '');
+      return new NextResponse(new Uint8Array(buffer), { headers: responseHeaders(`Item_Analysis_${safeName}.docx`) });
     }
     if (!tosId) return NextResponse.json({ error: 'A TOS is required to build this report.', code: 'TOS_REQUIRED' }, { status: 400 });
 

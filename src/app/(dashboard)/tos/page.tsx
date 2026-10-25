@@ -617,7 +617,7 @@ export default function TosPage() {
               }}
               onCreateExam={(target) => setExamModalTos(target)}
               onDelete={(target) => handleRequestDelete(target)}
-              onPrintPdf={(target) => setViewingTos(target)}
+              onDownloadWord={(target) => setViewingTos(target)}
             />
           ))}
         </div>

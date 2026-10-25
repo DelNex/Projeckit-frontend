@@ -6,7 +6,7 @@ import {
   Edit2,
   Sparkles,
   Trash2,
-  FileText,
+  FileDown,
   Users,
   Calendar,
   Layers,
@@ -18,7 +18,7 @@ interface TosCardProps {
   onEdit: (tos: TosDocument) => void;
   onCreateExam: (tos: TosDocument) => void;
   onDelete: (tos: TosDocument) => void;
-  onPrintPdf?: (tos: TosDocument) => void;
+  onDownloadWord?: (tos: TosDocument) => void;
   isExamGenerating?: boolean;
 }
 
@@ -28,7 +28,7 @@ export function TosCard({
   onEdit,
   onCreateExam,
   onDelete,
-  onPrintPdf,
+  onDownloadWord,
   isExamGenerating = false,
 }: TosCardProps) {
   const compCount = Array.isArray(tos.rows) ? tos.rows.length : 0;
@@ -56,7 +56,7 @@ export function TosCard({
   return (
     <div className="flex flex-col justify-between bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all group">
       <div className="space-y-3">
-        {/* Top Badges & PDF Icon */}
+        {/* Top Badges & Word download */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 flex-wrap min-w-0">
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
@@ -71,14 +71,14 @@ export function TosCard({
             {isExamGenerating && <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300">Exam is being generated</span>}
           </div>
 
-          {onPrintPdf && (
+          {onDownloadWord && (
             <button
-              onClick={() => onPrintPdf(tos)}
-              className="p-1.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors shrink-0"
-              title="Print / Save as PDF"
-              aria-label="Print or save TOS as PDF"
+              onClick={() => onDownloadWord(tos)}
+              className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg transition-colors shrink-0"
+              title="Download TOS as a Word document"
+              aria-label="Download TOS as a Word document"
             >
-              <FileText className="h-4 w-4" />
+              <FileDown className="h-4 w-4" />
             </button>
           )}
         </div>

@@ -15,6 +15,7 @@ import { BLOOM_LEVELS, calculateTos, type BloomLevel, type CalculatedCompetencyR
 import { generateOfficialTosDocx } from '@/features/tos/word-export';
 import type { TosDocument } from '@/types/tos';
 import type { SectionTermMetrics } from './term-report-metrics';
+import type { ItemChoiceDistribution } from '../item-response-analysis';
 
 export interface SchoolReportHeader {
   schoolName: string;
@@ -261,6 +262,29 @@ export async function createMostLeastLearnedDocx(header: SchoolReportHeader, ran
       children: [new TextRun({ text: 'Ranking basis: percentage of scored cases answering each item correctly. Unanswered items count as incorrect.', italics: true, font: 'Arial', size: 16 })],
     }),
   ], PageOrientation.LANDSCAPE);
+}
+
+export async function createItemAnalysisDocx(header: SchoolReportHeader, distributions: ItemChoiceDistribution[]): Promise<Buffer> {
+  const rows = distributions.flatMap((item) => [
+    ...item.choices.map((choice) => [
+      String(item.itemNumber),
+      item.correctAnswer || '—',
+      choice.choice,
+      choice.correct ? 'Correct' : 'Incorrect',
+      String(choice.count),
+      item.cases ? `${((choice.count / item.cases) * 100).toFixed(1)}%` : '—',
+    ]),
+    [String(item.itemNumber), item.correctAnswer || '—', 'Blank / unreadable', 'Incorrect', String(item.unanswered), item.cases ? `${((item.unanswered / item.cases) * 100).toFixed(1)}%` : '—'],
+  ]);
+  return makeDocument([
+    ...headerParagraphs(header),
+    titleParagraph('ITEM ANALYSIS — ANSWER CHOICE DISTRIBUTION'),
+    contextParagraph(header),
+    new Paragraph({ spacing: { after: 120 }, children: [new TextRun({ text: `Cases: ${distributions[0]?.cases || 0}. Each item lists the answer key and the number and percentage of learners selecting each answer.`, font: 'Arial', size: 18 })] }),
+    dataTable(['Item', 'Key', 'Selected answer', 'Result', 'Learners', 'Percent'], rows, [9, 9, 34, 16, 14, 18]),
+    new Paragraph({ text: '', spacing: { after: 220 } }),
+    signatureTable(header.preparedBy),
+  ]);
 }
 
 export async function createTosDocx(tos: TosDocument, school: { name: string; region?: string | null; division?: string | null }): Promise<Buffer> {
