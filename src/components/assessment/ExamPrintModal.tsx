@@ -3,7 +3,8 @@
 import React, { useState } from 'react';
 import { useTenant } from '@/context/TenantContext';
 import { ExamQuestion } from '@/lib/exam-types';
-import { Columns2, FileText, Printer, X, CheckCircle, ShieldCheck } from 'lucide-react';
+import { createExamPaperDocx } from '@/lib/exam-paper-docx';
+import { Columns2, FileDown, FileText, X, ShieldCheck } from 'lucide-react';
 
 interface ExamPrintModalProps {
   isOpen: boolean;
@@ -35,11 +36,43 @@ export function ExamPrintModal({
   const { tenantName } = useTenant();
   const [isTwoColumn, setIsTwoColumn] = useState(true);
   const [isTeacherCopy, setIsTeacherCopy] = useState(false);
+  const [paperSize, setPaperSize] = useState<'A4' | 'A5'>('A4');
+  const [isExportingWord, setIsExportingWord] = useState(false);
 
   if (!isOpen) return null;
 
-  const handlePrint = () => {
-    window.print();
+  const handleDownloadWord = async () => {
+    setIsExportingWord(true);
+    try {
+      const blob = await createExamPaperDocx({
+        tenantName,
+        title,
+        subject,
+        grade,
+        strand,
+        term,
+        schoolYear,
+        teacherName,
+        generalDirections,
+        questions,
+        isTeacherCopy,
+        isTwoColumn,
+        paperSize,
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = window.document.createElement('a');
+      anchor.href = url;
+      anchor.download = `${title || 'Question_Paper'}_${isTeacherCopy ? 'Teacher_Copy' : 'Student_Copy'}.docx`.replace(/[^a-zA-Z0-9_.-]+/g, '_');
+      window.document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      console.error('Could not create the Word question paper:', error);
+      window.alert('Could not create the Word question paper. Please try again.');
+    } finally {
+      setIsExportingWord(false);
+    }
   };
 
   return (
@@ -50,7 +83,7 @@ export function ExamPrintModal({
           <div className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-blue-600" />
             <h3 className="text-sm font-bold text-gray-900 dark:text-white">
-              Print Question Paper — DepEd Standard
+              Question Paper — DepEd Standard
             </h3>
           </div>
 
@@ -85,14 +118,23 @@ export function ExamPrintModal({
               <span>{isTeacherCopy ? 'Teacher Copy (with Key)' : 'Student Copy'}</span>
             </button>
 
-            {/* Print Button */}
+            <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-700 dark:border-gray-700 dark:text-gray-300">
+              Paper
+              <select value={paperSize} onChange={(event) => setPaperSize(event.target.value as 'A4' | 'A5')} className="bg-transparent font-bold outline-none">
+                <option value="A4">A4</option>
+                <option value="A5">A5</option>
+              </select>
+            </label>
+
+            {/* Download Word Button */}
             <button
               type="button"
-              onClick={handlePrint}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 shadow-sm transition"
+              onClick={() => void handleDownloadWord()}
+              disabled={isExportingWord}
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 shadow-sm transition disabled:opacity-60"
             >
-              <Printer className="h-4 w-4" />
-              <span>Print / Save PDF</span>
+              <FileDown className="h-4 w-4" />
+              <span>{isExportingWord ? 'Preparing DOCX…' : `Download ${paperSize} DOCX`}</span>
             </button>
 
             {/* Close Button */}

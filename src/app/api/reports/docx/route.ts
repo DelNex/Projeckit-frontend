@@ -18,10 +18,33 @@ import {
   type SavedAssessmentResponse,
 } from '@/lib/server/term-report-metrics';
 import { calculateItemChoiceDistributions, type ItemResponseScan } from '@/lib/item-response-analysis';
+import type { ExamQuestion } from '@/lib/exam-types';
+import { createExamPaperDocxBuffer } from '@/lib/server/exam-paper-export';
 
 export const runtime = 'nodejs';
 
-type ReportType = 'tos' | 'test-results' | 'most-least-learned' | 'item-analysis';
+type ReportType = 'tos' | 'test-results' | 'most-least-learned' | 'item-analysis' | 'question-paper';
+
+function normalizeQuestions(value: unknown): ExamQuestion[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry: any, index): ExamQuestion => {
+    const answer = String(entry?.correct_answer ?? entry?.correctAnswer ?? entry?.answer ?? '').trim().toUpperCase();
+    return {
+      item_number: Number(entry?.item_number ?? entry?.question_number ?? entry?.number) || index + 1,
+      competency_id: String(entry?.competency_id ?? entry?.competency ?? ''),
+      cognitive_level: String(entry?.cognitive_level ?? entry?.domain ?? 'remembering').toLowerCase() as ExamQuestion['cognitive_level'],
+      question: String(entry?.question ?? entry?.prompt ?? ''),
+      options: {
+        A: String(entry?.options?.A ?? entry?.options?.a ?? ''),
+        B: String(entry?.options?.B ?? entry?.options?.b ?? ''),
+        C: String(entry?.options?.C ?? entry?.options?.c ?? ''),
+        D: String(entry?.options?.D ?? entry?.options?.d ?? ''),
+      },
+      correct_answer: (['A', 'B', 'C', 'D'].includes(answer) ? answer : 'A') as ExamQuestion['correct_answer'],
+      rationale: String(entry?.rationale ?? ''),
+    };
+  }).filter((question) => question.question.trim() && Object.values(question.options).some((option) => option.trim()));
+}
 
 function getRelatedName(value: unknown): string {
   if (Array.isArray(value)) return String((value[0] as any)?.name || (value[0] as any)?.title || '');
@@ -59,8 +82,69 @@ export async function GET(request: Request) {
     const requestedTenantId = url.searchParams.get('tenantId');
     const tenantId = profile.is_platform_admin && requestedTenantId ? requestedTenantId : profile.tenant_id;
     if (!tenantId) return NextResponse.json({ error: 'Select a school before exporting.', code: 'TENANT_REQUIRED' }, { status: 400 });
-    if (!type || !['tos', 'test-results', 'most-least-learned', 'item-analysis'].includes(type)) {
+    if (!type || !['tos', 'test-results', 'most-least-learned', 'item-analysis', 'question-paper'].includes(type)) {
       return NextResponse.json({ error: 'Choose a supported DOCX report type.', code: 'INVALID_REPORT_TYPE' }, { status: 400 });
+    }
+    if (type === 'question-paper') {
+      if (!assessmentId) return NextResponse.json({ error: 'Choose an examination to export.', code: 'ASSESSMENT_REQUIRED' }, { status: 400 });
+      const admin = createAdminClient();
+      const { data: assessmentRow, error: assessmentError } = await admin
+        .from('assessments')
+        .select('id, title, term, school_year, questions, tos_id, created_by, subjects(title, code), sections(name, grade, track, strand_code)')
+        .eq('id', assessmentId)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+      if (assessmentError || !assessmentRow) return NextResponse.json({ error: 'Examination was not found in this school.', code: 'ASSESSMENT_NOT_FOUND' }, { status: 404 });
+      const [{ data: school, error: schoolError }, { data: answerKey }, { data: tos }] = await Promise.all([
+        admin.from('tenants').select('id, name').eq('id', tenantId).maybeSingle(),
+        admin.from('answer_keys').select('answers').eq('assessment_id', assessmentId).maybeSingle(),
+        assessmentRow.tos_id
+          ? admin.from('tos_documents').select('questions, teacher_name, grade, strand').eq('id', assessmentRow.tos_id).eq('tenant_id', tenantId).maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]);
+      if (schoolError || !school) return NextResponse.json({ error: 'School was not found.', code: 'SCHOOL_NOT_FOUND' }, { status: 404 });
+      const section = Array.isArray(assessmentRow.sections) ? assessmentRow.sections[0] : assessmentRow.sections;
+      const subject = Array.isArray(assessmentRow.subjects) ? assessmentRow.subjects[0] : assessmentRow.subjects;
+      let questions = normalizeQuestions(assessmentRow.questions);
+      if (!questions.length) questions = normalizeQuestions(tos?.questions);
+      if (!questions.length) return NextResponse.json({ error: 'This examination has no saved generated questions yet.', code: 'QUESTIONS_NOT_FOUND' }, { status: 422 });
+      const savedAnswers = answerKey?.answers && typeof answerKey.answers === 'object' && !Array.isArray(answerKey.answers)
+        ? answerKey.answers as Record<string, unknown>
+        : {};
+      const teacherCopy = url.searchParams.get('teacherCopy') === '1';
+      const sourceQuestions = Array.isArray(assessmentRow.questions) && assessmentRow.questions.length
+        ? assessmentRow.questions
+        : (Array.isArray(tos?.questions) ? tos.questions : []);
+      if (teacherCopy && questions.some((question) => {
+        const rawQuestion = (sourceQuestions as any[]).find((item) => Number(item?.item_number ?? item?.question_number ?? item?.number) === question.item_number);
+        const key = String(savedAnswers[String(question.item_number)] ?? rawQuestion?.correct_answer ?? rawQuestion?.correctAnswer ?? rawQuestion?.answer ?? '').trim().toUpperCase();
+        return !['A', 'B', 'C', 'D'].includes(key);
+      })) {
+        return NextResponse.json({ error: 'The teacher copy needs a saved correct answer for every question.', code: 'ANSWER_KEY_INCOMPLETE' }, { status: 422 });
+      }
+      questions = questions.map((question) => ({
+        ...question,
+        correct_answer: String(savedAnswers[String(question.item_number)] ?? question.correct_answer).trim().toUpperCase() as ExamQuestion['correct_answer'],
+      }));
+      const teacher = assessmentRow.created_by
+        ? await admin.from('profiles').select('display_name').eq('id', assessmentRow.created_by).maybeSingle()
+        : { data: null };
+      const buffer = await createExamPaperDocxBuffer({
+        tenantName: school.name || '',
+        title: assessmentRow.title || 'Quarterly Examination',
+        subject: subject?.title || subject?.code || '',
+        grade: section?.grade || tos?.grade || '',
+        strand: section?.track || section?.strand_code || tos?.strand || '',
+        term: assessmentRow.term || '',
+        schoolYear: assessmentRow.school_year || '',
+        teacherName: teacher.data?.display_name || tos?.teacher_name || '',
+        questions,
+        teacherCopy,
+        twoColumn: url.searchParams.get('layout') !== 'single',
+        paperSize: url.searchParams.get('paperSize') === 'A5' ? 'A5' : 'A4',
+      });
+      const safeName = `${assessmentRow.title || 'Question_Paper'}_${teacherCopy ? 'Teacher_Copy' : 'Student_Copy'}`.normalize('NFKD').replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '');
+      return new NextResponse(new Uint8Array(buffer), { headers: responseHeaders(`${safeName}.docx`) });
     }
     if (type === 'item-analysis') {
       if (!assessmentId) return NextResponse.json({ error: 'Choose an examination to export.', code: 'ASSESSMENT_REQUIRED' }, { status: 400 });

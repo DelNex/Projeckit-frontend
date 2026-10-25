@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowDownToLine, BookOpenCheck, FileSpreadsheet, Loader2, Printer, RefreshCw } from 'lucide-react';
+import { ArrowDownToLine, BookOpenCheck, FileSpreadsheet, Loader2, Printer, RefreshCw, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 interface SectionRow { id: string; name: string; grade?: string | null }
@@ -21,6 +21,10 @@ export default function ReportsPage() {
   const [selectedSection, setSelectedSection] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [questionPaperAssessment, setQuestionPaperAssessment] = useState<AssessmentRow | null>(null);
+  const [paperSize, setPaperSize] = useState<'A4' | 'A5'>('A4');
+  const [twoColumn, setTwoColumn] = useState(true);
+  const [teacherCopy, setTeacherCopy] = useState(false);
 
   const loadReports = async () => {
     setLoading(true);
@@ -65,7 +69,7 @@ export default function ReportsPage() {
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-blue-600">Print center</p>
           <h1 className="mt-1 text-2xl font-black text-gray-900 dark:text-white">Section reports</h1>
-          <p className="mt-1 max-w-2xl text-sm text-gray-500">Choose a class section to see its linked TOS, exam workspaces, and item analysis reports.</p>
+          <p className="mt-1 max-w-2xl text-sm text-gray-500">Choose a section to download question papers, teacher copies, TOS and analysis DOCX files, or print its OMR sheets.</p>
         </div>
         <button onClick={() => void loadReports()} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-gray-200 px-3 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
           <RefreshCw className="h-4 w-4" /> Refresh
@@ -146,6 +150,9 @@ export default function ReportsPage() {
                       <a href={`/api/reports/docx?type=item-analysis&assessmentId=${encodeURIComponent(assessment.id)}`} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-violet-200 px-3 text-xs font-bold text-violet-700 hover:bg-violet-50 dark:border-violet-900 dark:text-violet-300">
                         <ArrowDownToLine className="h-4 w-4" /> Item analysis DOCX
                       </a>
+                      <button type="button" onClick={() => { setQuestionPaperAssessment(assessment); setTeacherCopy(false); }} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-blue-200 px-3 text-xs font-bold text-blue-700 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-300">
+                        <Printer className="h-4 w-4" /> Print / Download Question Paper
+                      </button>
                       <Link href={`/assessments/${assessment.id}?tab=scan&print=sheet`} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-gray-200 px-3 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
                         <Printer className="h-4 w-4" /> Print OMR sheets
                       </Link>
@@ -156,6 +163,23 @@ export default function ReportsPage() {
             )}
           </section>
         </>
+      )}
+
+      {questionPaperAssessment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setQuestionPaperAssessment(null); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="paper-options-title" className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl dark:border-gray-700 dark:bg-gray-900">
+            <header className="flex items-start justify-between gap-3">
+              <div><h2 id="paper-options-title" className="text-lg font-bold text-gray-900 dark:text-white">Question paper print options</h2><p className="mt-1 text-sm text-gray-500">{questionPaperAssessment.title}. Download a Word document that can be printed on your selected paper.</p></div>
+              <button type="button" aria-label="Close" onClick={() => setQuestionPaperAssessment(null)} className="rounded-lg p-1 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"><X className="h-5 w-5" /></button>
+            </header>
+            <div className="mt-5 space-y-4">
+              <fieldset><legend className="mb-2 text-sm font-semibold text-gray-800 dark:text-gray-200">Paper size</legend><div className="grid grid-cols-2 gap-2">{(['A4', 'A5'] as const).map((size) => <button key={size} type="button" aria-pressed={paperSize === size} onClick={() => setPaperSize(size)} className={`rounded-xl border px-4 py-3 text-sm font-bold ${paperSize === size ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200' : 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-300'}`}>{size}<span className="mt-1 block text-xs font-normal opacity-75">{size === 'A4' ? '210 × 297 mm' : '148 × 210 mm'}</span></button>)}</div></fieldset>
+              <fieldset><legend className="mb-2 text-sm font-semibold text-gray-800 dark:text-gray-200">Question layout</legend><div className="grid grid-cols-2 gap-2"><button type="button" aria-pressed={twoColumn} onClick={() => setTwoColumn(true)} className={`rounded-xl border px-3 py-3 text-left text-sm font-semibold ${twoColumn ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200' : 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-300'}`}>Double column<span className="mt-1 block text-xs font-normal opacity-75">Fits more questions per page</span></button><button type="button" aria-pressed={!twoColumn} onClick={() => setTwoColumn(false)} className={`rounded-xl border px-3 py-3 text-left text-sm font-semibold ${!twoColumn ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200' : 'border-gray-200 text-gray-600 dark:border-gray-700 dark:text-gray-300'}`}>Single column<span className="mt-1 block text-xs font-normal opacity-75">More room for each question</span></button></div></fieldset>
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300"><input type="checkbox" checked={teacherCopy} onChange={(event) => setTeacherCopy(event.target.checked)} /> Include answer key and rationales (teacher copy)</label>
+            </div>
+            <footer className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setQuestionPaperAssessment(null)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 dark:border-gray-700 dark:text-gray-300">Cancel</button><a onClick={() => setQuestionPaperAssessment(null)} href={`/api/reports/docx?type=question-paper&assessmentId=${encodeURIComponent(questionPaperAssessment.id)}&paperSize=${paperSize}&layout=${twoColumn ? 'double' : 'single'}${teacherCopy ? '&teacherCopy=1' : ''}`} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"><Printer className="h-4 w-4" /> Download printable DOCX</a></footer>
+          </section>
+        </div>
       )}
     </main>
   );

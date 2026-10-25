@@ -45,6 +45,7 @@ import {
     FileSpreadsheet,
     KeyRound,
     Loader2,
+    Printer,
     RefreshCw,
     Save,
     Sparkles
@@ -193,21 +194,17 @@ export default function AssessmentWorkspacePage({
       const itemsNum = aData.target_items || 50;
 
       const storedQuestions = Array.isArray(aData.questions) ? aData.questions.map((item: any, index: number) => ({
-        item_number: Number(item?.item_number) || index + 1,
+        item_number: Number(item?.item_number ?? item?.question_number ?? item?.number) || index + 1,
         question: typeof item?.question === 'string' ? item.question : '',
         options: Object.fromEntries(['A', 'B', 'C', 'D', 'E'].map((letter) => [letter, typeof item?.options?.[letter] === 'string' ? item.options[letter] : ''])),
-        correct_answer: typeof item?.correct_answer === 'string' ? item.correct_answer : '',
+        correct_answer: String(item?.correct_answer ?? item?.correctAnswer ?? item?.answer ?? '').trim().toUpperCase(),
       })) : [];
       const loadedQuestions = Array.from({ length: itemsNum }, (_, index) => storedQuestions.find((item) => item.item_number === index + 1) || ({ item_number: index + 1, question: '', options: { A: '', B: '', C: '', D: '', E: '' }, correct_answer: '' }));
       setQuestionItems(loadedQuestions);
       setSavedQuestionItems(loadedQuestions);
-      if (loadedQuestions.length) {
-        setAnswers((prev) => {
-          const next = { ...prev };
-          loadedQuestions.forEach((item) => { if (item.correct_answer) next[item.item_number] = item.correct_answer; });
-          return next;
-        });
-      }
+      const generatedAnswers: Record<number, string> = Object.fromEntries(
+        loadedQuestions.filter((item) => item.correct_answer).map((item) => [item.item_number, item.correct_answer])
+      );
 
       const sizeNum = aData.class_size || 60;
 
@@ -239,19 +236,20 @@ export default function AssessmentWorkspacePage({
         .eq('assessment_id', assessmentId)
         .maybeSingle();
 
-      if (kData && kData.answers && typeof kData.answers === 'object') {
-        const loadedAnswers = kData.answers as Record<number, string>;
-        setAnswers(loadedAnswers);
-        setSavedAnswers(loadedAnswers);
-        // Check if any answers contain 'E' to set 5 choices
-        const hasChoiceE = Object.values(kData.answers).some((val) => val === 'E');
-        if (hasChoiceE) {
-          setNumChoices(5);
-          setSavedNumChoices(5);
-        }
-      } else {
-        setAnswers({});
-        setSavedAnswers({});
+      const persistedAnswers = kData?.answers && typeof kData.answers === 'object' && !Array.isArray(kData.answers)
+        ? Object.fromEntries(Object.entries(kData.answers as Record<string, unknown>)
+          .map(([itemNumber, answer]) => [Number(itemNumber), String(answer ?? '').trim().toUpperCase()])
+          .filter(([itemNumber, answer]) => Number.isInteger(itemNumber) && Boolean(answer)))
+        : {};
+      // An empty answer_keys row is created when the assessment is created. Keep
+      // the generated exam's embedded key as the fallback, then apply saved edits.
+      const loadedAnswers = { ...generatedAnswers, ...persistedAnswers } as Record<number, string>;
+      setAnswers(loadedAnswers);
+      setSavedAnswers(loadedAnswers);
+      const hasChoiceE = Object.values(loadedAnswers).some((val) => val === 'E');
+      if (hasChoiceE) {
+        setNumChoices(5);
+        setSavedNumChoices(5);
       }
 
       // 3. Fetch Scan Results
@@ -1269,6 +1267,13 @@ export default function AssessmentWorkspacePage({
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => setIsPrintModalOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-bold text-gray-700 shadow-xs hover:bg-gray-50 transition dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                  >
+                    <Printer className="h-4 w-4" />
+                    <span>Print OMR Sheets</span>
+                  </button>
                   <button
                     onClick={() => setIsScannerOpen(true)}
                     className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition"

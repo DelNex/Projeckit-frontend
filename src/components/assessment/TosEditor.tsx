@@ -15,7 +15,6 @@ import {
     Info,
     Loader2,
     Plus,
-    Printer,
     Save,
     Sliders,
     Sparkles,
@@ -23,6 +22,7 @@ import {
     X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useTenant } from '@/context/TenantContext';
 import { ExamQuestion } from '@/lib/exam-types';
 import { ExamGeneratorModal } from './ExamGeneratorModal';
@@ -620,116 +620,6 @@ export function TosEditor({
     setSelectedIds(new Set());
     setIsDeleteModalOpen(false);
     setRowsToDelete([]);
-  };
-
-  const handlePrint = () => {
-    const source = document.getElementById('official-tos-card');
-
-    if (!source) {
-      window.print();
-      return;
-    }
-
-    const printableCard = source.cloneNode(true) as HTMLElement;
-    printableCard.querySelectorAll('button').forEach((button) => button.remove());
-
-    const printWindow = window.open('', '_blank', 'noopener,noreferrer');
-    if (!printWindow) {
-      window.print();
-      return;
-    }
-
-    const printHtml = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="UTF-8" />
-          <title>Table of Specifications</title>
-          <style>
-            @page {
-              size: auto;
-              margin: 10mm 8mm;
-            }
-
-            html, body {
-              margin: 0;
-              padding: 0;
-              background: #ffffff;
-              color: #111827;
-              font-family: Georgia, "Times New Roman", serif;
-            }
-
-            body {
-              display: flex;
-              justify-content: center;
-              align-items: flex-start;
-              min-height: 100vh;
-              padding: 0;
-            }
-
-            .print-sheet {
-              width: 100%;
-              max-width: 100%;
-              box-sizing: border-box;
-            }
-
-            #official-tos-card {
-              width: 100%;
-              max-width: 100%;
-              margin: 0;
-              border: 1px solid #e5e7eb;
-              border-radius: 18px;
-              background: #ffffff;
-              color: #111827;
-              box-sizing: border-box;
-              box-shadow: none;
-              padding: 1.5rem;
-              font-family: Georgia, "Times New Roman", serif;
-            }
-
-            table {
-              width: 100%;
-              border-collapse: collapse;
-            }
-
-            th, td {
-              border: 1px solid #111827;
-              padding: 6px;
-              font-size: 11px;
-            }
-
-            th {
-              background: #f3f4f6 !important;
-              color: #111827 !important;
-            }
-
-            .print\\:hidden, button {
-              display: none !important;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="print-sheet">
-            ${printableCard.outerHTML}
-          </div>
-        </body>
-      </html>
-    `;
-
-    printWindow.document.open();
-    printWindow.document.write(printHtml);
-    printWindow.document.close();
-
-    const triggerPrint = () => {
-      printWindow.focus();
-      printWindow.print();
-    };
-
-    if (printWindow.document.readyState === 'complete') {
-      setTimeout(triggerPrint, 300);
-    } else {
-      printWindow.onload = () => setTimeout(triggerPrint, 300);
-    }
   };
 
   if (loading) {
@@ -1820,15 +1710,15 @@ export function TosEditor({
               </div>
             </div>
 
-            {/* Print Action Button */}
+            {/* Centralized Print & Reports link */}
             <div className="text-center pt-4 print:hidden">
-              <button
-                onClick={handlePrint}
+              <Link
+                href="/reports"
                 className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs inline-flex items-center gap-2 transition"
               >
-                <Printer className="h-4 w-4" />
-                <span>Print Official DepEd TOS</span>
-              </button>
+                <FileSpreadsheet className="h-4 w-4" />
+                <span>Open Print &amp; Reports</span>
+              </Link>
             </div>
           </div>
         </div>

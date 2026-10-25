@@ -12,10 +12,10 @@ import { ExamDraftDialogs, ExamDraftStatus } from './ExamDraftControls';
 import {
   CheckCircle2,
   Edit3,
+  FileDown,
   FileText,
   Loader2,
   Plus,
-  Printer,
   RefreshCw,
   Save,
   Trash2,
@@ -289,7 +289,7 @@ export function ExamDraftEditor({
             </span>
           </div>
           <p className="text-xs text-gray-500 mt-0.5">
-            Review questions, edit choices and rationales, regenerate specific items, or print the DepEd exam paper.
+            Review questions, edit choices and rationales, regenerate specific items, or export the DepEd exam paper as Word.
           </p>
           <div className="mt-2"><ExamDraftStatus text={draft.statusText} /></div>
         </div>
@@ -308,11 +308,11 @@ export function ExamDraftEditor({
             type="button"
             onClick={handleOpenPrintModal}
             disabled={isDemo}
-            title={isDemo ? 'Printing is disabled for demo sample questions' : 'Print Question Paper'}
+            title={isDemo ? 'Export is disabled for demo sample questions' : 'Download the question paper as DOCX'}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 transition disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <Printer className="h-3.5 w-3.5" />
-            <span>Print Question Paper</span>
+            <FileDown className="h-3.5 w-3.5" />
+            <span>Export Question Paper</span>
           </button>
 
           <button
