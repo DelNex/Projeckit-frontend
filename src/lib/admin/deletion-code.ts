@@ -102,6 +102,7 @@ export async function checkAndVerifyDeletionCode(
   success: boolean;
   error?: string;
   isLocked?: boolean;
+  code?: 'DELETION_CODE_NOT_CONFIGURED' | 'DELETION_CODE_LOCKED' | 'DELETION_CODE_INVALID';
 }> {
   const { data, error } = await adminClient
     .from('admin_delete_codes')
@@ -118,6 +119,7 @@ export async function checkAndVerifyDeletionCode(
     return {
       success: false,
       error: 'Set a deletion code in Admin Settings first.',
+      code: 'DELETION_CODE_NOT_CONFIGURED',
     };
   }
 
@@ -129,6 +131,7 @@ export async function checkAndVerifyDeletionCode(
       return {
         success: false,
         isLocked: true,
+        code: 'DELETION_CODE_LOCKED',
         error: `Action locked due to too many failed attempts. Please try again in ${minutesRemaining} minute${minutesRemaining === 1 ? '' : 's'}.`,
       };
     }
@@ -182,6 +185,7 @@ export async function checkAndVerifyDeletionCode(
     return {
       success: false,
       isLocked: true,
+      code: 'DELETION_CODE_LOCKED',
       error: `Too many failed attempts. This action is locked for ${LOCKOUT_MINUTES} minutes.`,
     };
   }
@@ -189,6 +193,7 @@ export async function checkAndVerifyDeletionCode(
   const attemptsLeft = MAX_FAILED_ATTEMPTS - newFailedAttempts;
   return {
     success: false,
+    code: 'DELETION_CODE_INVALID',
     error: `Incorrect deletion code. ${attemptsLeft} attempt${attemptsLeft === 1 ? '' : 's'} remaining before a 15-minute lockout.`,
   };
 }

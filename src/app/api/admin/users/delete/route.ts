@@ -57,14 +57,14 @@ export async function POST(request: Request) {
     // Validate confirmation phrase
     if (confirmationPhrase !== 'DELETE') {
       return NextResponse.json(
-        { error: 'You must type DELETE to confirm permanent deletion.' },
+        { error: 'You must type DELETE to confirm permanent deletion.', code: 'CONFIRMATION_REQUIRED' },
         { status: 400 }
       );
     }
 
     if (!Array.isArray(rawUserIds) || rawUserIds.length === 0) {
       return NextResponse.json(
-        { error: 'Please select at least one account to delete.' },
+        { error: 'Please select at least one account to delete.', code: 'USERS_REQUIRED' },
         { status: 400 }
       );
     }
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
     // Safeguard: Admin cannot delete themselves
     if (userIds.includes(caller.id)) {
       return NextResponse.json(
-        { error: 'You cannot delete your own administrator account.' },
+        { error: 'You cannot delete your own administrator account.', code: 'SELF_DELETE_BLOCKED' },
         { status: 400 }
       );
     }
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     // Validate choice
     if (choice !== 'reassign' && choice !== 'delete') {
       return NextResponse.json(
-        { error: 'A content handling choice is required: either reassign or delete content.' },
+        { error: 'A content handling choice is required: either reassign or delete content.', code: 'CONTENT_CHOICE_REQUIRED' },
         { status: 400 }
       );
     }
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
     const targetTenantIds = new Set(targetProfiles.map((profile) => profile.tenant_id).filter(Boolean));
     if (targetTenantIds.size > 1) {
       return NextResponse.json(
-        { error: 'Permanently delete accounts from one school at a time so the correct deletion code can be verified.' },
+        { error: 'Permanently delete accounts from one school at a time so the correct deletion code can be verified.', code: 'MIXED_TENANTS' },
         { status: 400 }
       );
     }
@@ -132,6 +132,7 @@ export async function POST(request: Request) {
         return NextResponse.json(
           {
             error: `Account ${p.display_name || p.email} is active. Only archived accounts can be permanently deleted. Archive the account first.`,
+            code: 'ACCOUNT_NOT_ARCHIVED',
           },
           { status: 400 }
         );
@@ -140,7 +141,7 @@ export async function POST(request: Request) {
 
     if (!targetTenantId) {
       return NextResponse.json(
-        { error: 'Your account is not linked to a school tenant.' },
+        { error: 'Your account is not linked to a school tenant.', code: 'TENANT_REQUIRED' },
         { status: 400 }
       );
     }
@@ -148,7 +149,7 @@ export async function POST(request: Request) {
     // Verify deletion code against tenant
     if (!code || typeof code !== 'string') {
       return NextResponse.json(
-        { error: 'A deletion code is required.' },
+        { error: 'A deletion code is required.', code: 'DELETION_CODE_REQUIRED' },
         { status: 400 }
       );
     }
@@ -162,7 +163,7 @@ export async function POST(request: Request) {
 
     if (!codeCheck.success) {
       return NextResponse.json(
-        { error: codeCheck.error || 'Invalid deletion code.', isLocked: codeCheck.isLocked },
+        { error: codeCheck.error || 'Invalid deletion code.', isLocked: codeCheck.isLocked, code: codeCheck.code || 'DELETION_CODE_INVALID' },
         { status: 400 }
       );
     }
@@ -171,14 +172,14 @@ export async function POST(request: Request) {
     if (choice === 'reassign') {
       if (!reassignToUserId || typeof reassignToUserId !== 'string') {
         return NextResponse.json(
-          { error: 'Please select a teacher to reassign content to.' },
+          { error: 'Please select a teacher to reassign content to.', code: 'REASSIGNMENT_TARGET_REQUIRED' },
           { status: 400 }
         );
       }
 
       if (userIds.includes(reassignToUserId)) {
         return NextResponse.json(
-          { error: 'Content cannot be reassigned to an account that is being deleted.' },
+          { error: 'Content cannot be reassigned to an account that is being deleted.', code: 'REASSIGNMENT_TARGET_DELETED' },
           { status: 400 }
         );
       }
@@ -196,7 +197,7 @@ export async function POST(request: Request) {
         (!isPlatformAdmin && recipientProfile.tenant_id !== targetTenantId)
       ) {
         return NextResponse.json(
-          { error: 'The selected reassignment teacher must be an active, approved account in the same school.' },
+          { error: 'The selected reassignment teacher must be an active, approved account in the same school.', code: 'REASSIGNMENT_TARGET_INVALID' },
           { status: 400 }
         );
       }
@@ -216,7 +217,7 @@ export async function POST(request: Request) {
     if (rpcErr) {
       console.error('[POST /api/admin/users/delete] RPC error:', rpcErr);
       return NextResponse.json(
-        { error: `Failed to delete accounts: ${rpcErr.message}` },
+        { error: 'The deletion transaction failed. No accounts were removed; contact support with the request timestamp.', code: 'DELETION_TRANSACTION_FAILED' },
         { status: 500 }
       );
     }

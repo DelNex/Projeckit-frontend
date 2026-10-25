@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowUpRight, BookOpenCheck, FileSpreadsheet, Loader2, Printer, RefreshCw } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpRight, BookOpenCheck, FileSpreadsheet, Loader2, Printer, RefreshCw } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 interface SectionRow { id: string; name: string; grade?: string | null }
@@ -57,7 +57,7 @@ export default function ReportsPage() {
   });
 
   const reportCount = sectionTos.length + sectionAssessments.length;
-  const linkedAssessmentForTos = (tos: TosRow) => sectionAssessments.find((item) => item.id === tos.assessment_id);
+  const linkedAssessmentForTos = (tos: TosRow) => sectionAssessments.find((item) => item.id === tos.assessment_id || item.tos_id === tos.id);
 
   return (
     <main className="mx-auto w-full max-w-6xl space-y-6 px-4 py-6 sm:px-6">
@@ -118,9 +118,24 @@ export default function ReportsPage() {
                         <div className="flex items-center gap-2"><FileSpreadsheet className="h-4 w-4 shrink-0 text-emerald-600" /><h3 className="truncate font-semibold text-gray-900 dark:text-white">{doc.subject} · Table of Specifications</h3></div>
                         <p className="mt-1 pl-6 text-xs text-gray-500">{doc.term} · {doc.school_year} · {doc.target_items} items · {linkedAssessment ? `Linked to ${linkedAssessment.title}` : `TOS ${doc.status}`}</p>
                       </div>
-                      <Link href={`/tos?print=${encodeURIComponent(doc.id)}`} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-emerald-200 px-3 text-xs font-bold text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900 dark:text-emerald-300 dark:hover:bg-emerald-950/30">
-                        <Printer className="h-4 w-4" /> Print or download TOS <ArrowUpRight className="h-3.5 w-3.5" />
-                      </Link>
+                      <div className="flex flex-wrap gap-2">
+                        <Link href={`/tos?print=${encodeURIComponent(doc.id)}`} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-emerald-200 px-3 text-xs font-bold text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900 dark:text-emerald-300 dark:hover:bg-emerald-950/30">
+                          <Printer className="h-4 w-4" /> Print TOS <ArrowUpRight className="h-3.5 w-3.5" />
+                        </Link>
+                        <a href={`/api/reports/docx?type=tos&tosId=${encodeURIComponent(doc.id)}`} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-emerald-200 px-3 text-xs font-bold text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900 dark:text-emerald-300 dark:hover:bg-emerald-950/30">
+                          <ArrowDownToLine className="h-4 w-4" /> Download TOS DOCX
+                        </a>
+                        {linkedAssessment && (
+                          <>
+                            <a href={`/api/reports/docx?type=test-results&tosId=${encodeURIComponent(doc.id)}`} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-blue-200 px-3 text-xs font-bold text-blue-700 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-300 dark:hover:bg-blue-950/30">
+                              <ArrowDownToLine className="h-4 w-4" /> Test results DOCX
+                            </a>
+                            <a href={`/api/reports/docx?type=most-least-learned&tosId=${encodeURIComponent(doc.id)}`} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-violet-200 px-3 text-xs font-bold text-violet-700 hover:bg-violet-50 dark:border-violet-900 dark:text-violet-300 dark:hover:bg-violet-950/30">
+                              <ArrowDownToLine className="h-4 w-4" /> Most/least learned DOCX
+                            </a>
+                          </>
+                        )}
+                      </div>
                     </article>
                   );
                 })}
