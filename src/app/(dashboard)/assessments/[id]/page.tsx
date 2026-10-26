@@ -585,7 +585,11 @@ export default function AssessmentWorkspacePage({
           image_hash: result.imageHash,
           confidence: result.overallConfidence,
           raw_answers: result.itemStates
-            ? { ...result.rawAnswers, _itemStates: result.itemStates }
+            ? {
+              ...result.rawAnswers,
+              _itemStates: result.itemStates,
+              ...(result.reviewAudit ? { _omrAudit: result.reviewAudit } : {}),
+            }
             : result.rawAnswers,
           normalized_answers: result.normalizedAnswers,
           status: needsReview ? 'VERIFICATION_REQUIRED' : scanStatus,

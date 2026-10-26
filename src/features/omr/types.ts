@@ -13,6 +13,32 @@ export interface ProcessedItemResult {
   scores: Record<string, number>; // Darkness score per choice (e.g. { A: 0.82, B: 0.05, ... })
 }
 
+export interface OmrDecisionAuditItem {
+  machineChoice: string | null;
+  machineState: OmrItemState;
+  machineConfidence: number;
+  machineScores: Record<string, number>;
+  reasonFlags: string[];
+  teacherConfirmed: boolean;
+  teacherChoice: string | null;
+  teacherChanged: boolean;
+  finalChoice: string | null;
+  finalState: OmrItemState;
+}
+
+export interface OmrReviewAudit {
+  reviewedAt: string;
+  engineUsed: string;
+  thresholdProfileVersion: string;
+  openCv: {
+    status: 'used' | 'unavailable' | 'not_loaded';
+    workerReadyMs?: number;
+    analysisMs?: number;
+    failureReason?: string;
+  };
+  items: Record<number, OmrDecisionAuditItem>;
+}
+
 export type OmrScanStatus = 'PROCESSED' | 'VERIFICATION_REQUIRED' | 'REJECTED' | 'DUPLICATE';
 
 export interface OmrScanResult {
@@ -35,6 +61,8 @@ export interface OmrScanResult {
   items: ProcessedItemResult[];
   /** Item classifications retained separately so invalid marks remain distinct from blanks. */
   itemStates?: Record<number, OmrItemState>;
+  /** Machine interpretation and teacher-confirmed final values, kept separately for audit. */
+  reviewAudit?: OmrReviewAudit;
   rawAnswers: Record<number, string | null>;
   normalizedAnswers: (string | null)[];
   hasAmbiguity: boolean;
@@ -53,6 +81,13 @@ export interface OmrScanResult {
   markedImageBase64?: string; // Optional marked debug/audit visualization
   storagePath?: string; // Supabase Storage path in 'omr-scans' bucket
   engineUsed: '@armghan3071/omrchecker' | 'kit-optical-native' | 'kit-opencv.js';
+  openCvDiagnostics?: {
+    status: 'used' | 'unavailable' | 'not_loaded';
+    workerReadyMs?: number;
+    analysisMs?: number;
+    failureReason?: string;
+  };
+  thresholdProfileVersion?: string;
 }
 
 export interface OmrPreprocessResult {

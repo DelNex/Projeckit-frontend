@@ -9,8 +9,14 @@ export interface BubbleMeasurement {
   contrast: number;
 }
 
+export interface OpenCvAnalysisResult {
+  measurements: BubbleMeasurement[];
+  workerReadyMs: number;
+  analysisMs: number;
+}
+
 type PendingAnalysis = {
-  resolve: (value: BubbleMeasurement[]) => void;
+  resolve: (value: OpenCvAnalysisResult) => void;
   reject: (reason: Error) => void;
 };
 
@@ -21,12 +27,24 @@ const pending = new Map<number, PendingAnalysis>();
 function getWorker(): Worker {
   if (worker) return worker;
   worker = new Worker(new URL('./opencv-bubble.worker.ts', import.meta.url), { type: 'module', name: 'kit-opencv-bubble-analysis' });
-  worker.onmessage = (event: MessageEvent<{ id: number; measurements?: BubbleMeasurement[]; error?: string }>) => {
+  worker.onmessage = (event: MessageEvent<{ id: number; measurements?: BubbleMeasurement[]; error?: string; workerReadyMs?: number; analysisMs?: number }>) => {
     const job = pending.get(event.data.id);
     if (!job) return;
     pending.delete(event.data.id);
-    if (event.data.error) job.reject(new Error(event.data.error));
-    else job.resolve(event.data.measurements || []);
+    if (event.data.error) {
+      const failure = new Error(event.data.error);
+      job.reject(failure);
+      for (const other of pending.values()) other.reject(failure);
+      pending.clear();
+      worker?.terminate();
+      worker = null;
+    } else {
+      job.resolve({
+        measurements: event.data.measurements || [],
+        workerReadyMs: event.data.workerReadyMs || 0,
+        analysisMs: event.data.analysisMs || 0,
+      });
+    }
   };
   worker.onerror = (event) => {
     const failure = new Error(event.message || 'OpenCV.js worker failed.');
@@ -43,7 +61,7 @@ export function analyzeBubbleSamples(
   width: number,
   height: number,
   circles: BubbleSample[],
-): Promise<BubbleMeasurement[]> {
+): Promise<OpenCvAnalysisResult> {
   if (typeof window === 'undefined' || typeof Worker === 'undefined') {
     return Promise.reject(new Error('OpenCV.js bubble analysis requires a browser worker.'));
   }

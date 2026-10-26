@@ -19,6 +19,7 @@ import {
 import React, { useEffect, useState } from 'react';
 import { processOmrScan } from '../adapter';
 import { persistOmrScan } from '../storage';
+import { OMR_THRESHOLD_PROFILE_VERSION } from '../thresholds';
 import { KitOmrTemplate, OmrScanResult, ProcessedItemResult } from '../types';
 import { useOmrCamera } from '../useOmrCamera';
 
@@ -50,7 +51,16 @@ export function OmrCameraModal(props: OmrCameraModalProps) {
 }
 
 type BarcodeIdentity = { assessmentCode?: string; studentCode?: string };
-type CapturedItem = ProcessedItemResult & { pass: number; blankConfirmed: boolean; scannerReadChoice: string | null; scannerConfidence: number };
+type CapturedItem = ProcessedItemResult & {
+  pass: number;
+  blankConfirmed: boolean;
+  scannerReadChoice: string | null;
+  scannerConfidence: number;
+  scannerReadState: ProcessedItemResult['state'];
+  scannerScores: Record<string, number>;
+  scannerEngine: string;
+  scannerOpenCv: NonNullable<OmrScanResult['openCvDiagnostics']>;
+};
 
 function shortCode(value: string) {
   return value.replace(/[^0-9a-f]/gi, '').slice(0, 6).toUpperCase();
@@ -184,7 +194,17 @@ function OmrExamineeScanSession(props: OmrCameraModalProps) {
       setLastCaptureBlob(blob);
       setSessionItems((current) => {
         const next = { ...current };
-        for (const item of rangeItems) next[item.itemNumber] = { ...item, pass: nextPass, blankConfirmed: false, scannerReadChoice: item.selectedChoice, scannerConfidence: item.confidence };
+        for (const item of rangeItems) next[item.itemNumber] = {
+          ...item,
+          pass: nextPass,
+          blankConfirmed: false,
+          scannerReadChoice: item.selectedChoice,
+          scannerConfidence: item.confidence,
+          scannerReadState: item.state,
+          scannerScores: { ...item.scores },
+          scannerEngine: result.engineUsed,
+          scannerOpenCv: result.openCvDiagnostics || { status: 'not_loaded' },
+        };
         return next;
       });
       const needsRetry = rangeItems.filter((item) => !(
@@ -259,6 +279,34 @@ function OmrExamineeScanSession(props: OmrCameraModalProps) {
       });
       const rawAnswers = Object.fromEntries(items.map((item) => [item.itemNumber, item.selectedChoice]));
       const itemStates = Object.fromEntries(items.map((item) => [item.itemNumber, item.state]));
+      const auditItems = Object.fromEntries(items.map((item) => {
+        const machineState = item.scannerReadState;
+        const reasonFlags = [
+          ...(machineState === 'AMBIGUOUS' ? ['ambiguous_mark'] : []),
+          ...(machineState === 'MULTIPLE_MARK' ? ['multiple_marks'] : []),
+          ...(machineState === 'ERASED_MARK' ? ['erased_or_residual_ink'] : []),
+          ...(machineState === 'BLANK' ? ['no_mark_detected'] : []),
+          ...(item.scannerConfidence < 0.65 ? ['low_confidence'] : []),
+          ...(item.scannerOpenCv.status === 'unavailable' ? ['opencv_unavailable_pixel_fallback_requires_review'] : []),
+        ];
+        return [item.itemNumber, {
+          machineChoice: item.scannerReadChoice,
+          machineState,
+          machineConfidence: item.scannerConfidence,
+          machineScores: item.scannerScores,
+          reasonFlags,
+          teacherConfirmed: true,
+          teacherChoice: item.selectedChoice,
+          teacherChanged: item.selectedChoice !== item.scannerReadChoice || item.state !== machineState,
+          finalChoice: item.selectedChoice,
+          finalState: item.state,
+        }];
+      }));
+      const cvRecords = [...new Map(items.map((item) => [item.pass, item.scannerOpenCv])).values()];
+      const unavailableCv = cvRecords.find((item) => item.status === 'unavailable');
+      const cvUsed = cvRecords.some((item) => item.status === 'used');
+      const cvReadyTimes = cvRecords.map((item) => item.workerReadyMs).filter((value): value is number => typeof value === 'number');
+      const cvAnalysisTimes = cvRecords.map((item) => item.analysisMs).filter((value): value is number => typeof value === 'number');
       const finalResult: OmrScanResult = {
         ...lastCapture,
         idempotencyKey: `session-${assessmentId}-${selectedStudent.id}-${Date.now()}`,
@@ -269,6 +317,18 @@ function OmrExamineeScanSession(props: OmrCameraModalProps) {
         overallConfidence: 1,
         items,
         itemStates,
+        reviewAudit: {
+          reviewedAt: new Date().toISOString(),
+          engineUsed: [...new Set(items.map((item) => item.scannerEngine))].join(', '),
+          thresholdProfileVersion: lastCapture.thresholdProfileVersion || OMR_THRESHOLD_PROFILE_VERSION,
+          openCv: {
+            status: unavailableCv ? 'unavailable' : cvUsed ? 'used' : 'not_loaded',
+            ...(cvReadyTimes.length ? { workerReadyMs: Math.max(...cvReadyTimes) } : {}),
+            ...(cvAnalysisTimes.length ? { analysisMs: cvAnalysisTimes.reduce((sum, value) => sum + value, 0) } : {}),
+            ...(unavailableCv?.failureReason ? { failureReason: unavailableCv.failureReason } : {}),
+          },
+          items: auditItems,
+        },
         rawAnswers,
         normalizedAnswers: items.map((item) => item.selectedChoice),
         hasAmbiguity: items.some((item) => item.state === 'AMBIGUOUS' || item.state === 'ERASED_MARK'),
@@ -353,7 +413,7 @@ function OmrExamineeScanSession(props: OmrCameraModalProps) {
                   const item = sessionItems[itemNumber];
                   return <div key={itemNumber} className="grid grid-cols-[54px_1fr_100px_120px] items-center gap-2 px-3 py-2 text-xs">
                     <strong>Q{itemNumber}</strong>
-                    <span className={item?.state === 'MULTIPLE_MARK' || item?.state === 'ERASED_MARK' ? 'text-red-300' : 'text-gray-300'}>{item?.state === 'MULTIPLE_MARK' ? 'Multiple marks · wrong' : item?.state === 'ERASED_MARK' ? 'Erased/partial mark · wrong' : item?.scannerReadChoice || 'Blank'} {item?.pass ? `· pass ${item.pass}` : ''}</span>
+                    <span className={item?.scannerReadState === 'MULTIPLE_MARK' || item?.scannerReadState === 'ERASED_MARK' ? 'text-red-300' : 'text-gray-300'}>{item?.scannerReadState === 'MULTIPLE_MARK' ? 'Multiple marks · wrong' : item?.scannerReadState === 'ERASED_MARK' ? 'Erased/partial mark · wrong' : item?.scannerReadState === 'AMBIGUOUS' ? 'Unsure' : item?.scannerReadChoice || 'Blank'} {item?.pass ? `· pass ${item.pass}` : ''}</span>
                     <span className="text-gray-400">{item?.blankConfirmed ? 'Teacher confirmed' : `${Math.round((item?.scannerConfidence || 0) * 100)}%`}</span>
                     <select value={item?.selectedChoice || ''} onChange={(event) => updateReviewedAnswer(itemNumber, event.target.value)} className="rounded-lg border border-gray-700 bg-gray-800 px-2 py-1.5 text-xs text-white"><option value="">Blank</option>{choices.map((choice) => <option key={choice} value={choice}>{choice}</option>)}</select>
                   </div>;

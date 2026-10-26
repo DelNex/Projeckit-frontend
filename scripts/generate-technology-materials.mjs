@@ -149,6 +149,9 @@ const sourceRows = [
   ['Gemini helper', 'helper/package.json', 'ES module Node.js worker; Playwright is its declared runtime dependency.'],
   ['Database', 'supabase/migrations/*.sql', 'PostgreSQL schema, row-level security policies, RPCs, storage, and application migrations.'],
   ['Implementation evidence', 'frontend/src/features/omr/**; backend/src/**; helper/src/server.mjs', 'Confirms how declared tools are used in the source code.'],
+  ['SBOM inventory', 'frontend/scripts/generate-sboms.mjs; frontend/docs/research/sbom/*.cdx.json', 'CycloneDX inventories generated from exact lockfile entries, including transitive, development, and optional packages.'],
+  ['OMR calibration record', 'frontend/docs/research/omr-validation.md; omr-validation-dataset-template.csv', 'Versioned thresholds, dataset protocol, evaluation metrics, and pending-baseline status.'],
+  ['OpenCV asset measurement', 'frontend/scripts/report-opencv-bundle.mjs; frontend/docs/research/opencv-asset-size.json', 'Recorded raw and gzip size of the OpenCV.js runtime artifact.'],
 ];
 
 const overview = [
@@ -219,6 +222,7 @@ const body = [
   paragraph('The helper manifest requires Node.js >=20.6.0. Its README documents a dedicated visible Chromium profile, a shared server-side token, queue polling, status recovery, and a person-in-the-loop flow when Gemini requires sign-in or another verification step.'),
   heading('Client-side OMR research material'),
   paragraph('The current scanner uses a bundled OpenCV.js runtime through @techstark/opencv-js 4.12.0-release.1. The frontend adapter routes scan analysis through the Project KIT optical engine. That engine batches pixel samples to a module Web Worker, which converts RGBA pixels to grayscale, applies adaptive Gaussian thresholding, and measures bubble fill ratio and local contrast. OpenCV matrix allocations are released after each analysis pass.'),
+  paragraph('The scanner worker is instantiated only when analysis is requested. Worker initialization and per-capture analysis durations are returned as diagnostics. A worker error, timeout, or incomplete response fails the OpenCV pass, terminates the failed worker, and leaves the scan in the review-required path; a later attempt can create a fresh worker.'),
   table(['Stage', 'Current implementation evidence', 'Interpretation'], [
     ['Image preparation', 'src/features/omr/engines/native-optical-engine.ts', 'The scanner aligns the sheet/coordinates and builds circle samples for the roll grid and answer bubbles.'],
     ['Pixel analysis', 'src/features/omr/engines/opencv-bubble.worker.ts', 'OpenCV.js measures thresholded dark-pixel fill and contrast per sampled bubble.'],
@@ -236,12 +240,12 @@ const body = [
     ['Backend', 'NestJS, Supabase client, authentication/security, Redis, validation and serialization', 'Direct and dev dependency lists are enumerated above from backend/package.json.'],
     ['Helper', 'Playwright', 'Automated browser control in helper/package.json.'],
   ], [22, 39, 39]),
-  heading('Research notes and improvement opportunities'),
-  bullet('Maintain a dependency/software bill of materials (SBOM) from each lockfile for exact transitive package versions; this document intentionally catalogs direct declarations only.'),
-  bullet('Treat the backend README as a scaffold-era source: it mentions Prisma workflows that are not reflected in the current backend package scripts or dependency manifest. Confirm the live database workflow from migrations and current code before relying on that README.'),
-  bullet('Record OMR validation datasets and operating thresholds with each release. Include clean marks, faint marks, erased marks, multiple marks, rotated/cropped sheets, glare, and low-resolution captures.'),
-  bullet('Keep OCR/OMR review outcomes auditable: retain the machine interpretation, confidence/reason flags, teacher correction, and final saved answer as separate data.'),
-  bullet('Track the OpenCV.js asset size and worker initialization time; lazy-load the scanner path and ensure worker failures lead to a reviewable fallback rather than silent answer acceptance.'),
+  heading('Research maintenance and validation status'),
+  bullet('Run `npm run sbom` from the frontend workspace to regenerate CycloneDX SBOMs from the frontend, backend, and helper package lockfiles. The generator includes exact locked transitive, development, and optional package entries.'),
+  bullet('The backend README contains scaffold-era Prisma instructions that do not match the current manifest/scripts. For the current database workflow, inspect the Supabase SQL migrations and source rather than relying on those stale instructions.'),
+  bullet('The versioned OMR profile and release data-collection/evaluation protocol are in docs/research/omr-validation.md. A labeled photographic dataset has not yet been collected, so accuracy and error rates are explicitly pending measurement.'),
+  bullet('Staged scan reviews retain machine choice/state/scores/confidence/reason flags, teacher choice/change, final choice/state, engine, OpenCV diagnostics, and threshold-profile version in the existing JSONB scan record.'),
+  bullet('Run `npm run report:opencv-bundle` to measure the source runtime size or pass the emitted runtime asset path. Measurements append to docs/research/opencv-asset-size.json for release history. Worker readiness and analysis duration are recorded at runtime. The OpenCV runtime is isolated behind the scanner worker bridge.'),
   heading('References'),
   paragraph('Repository evidence (primary): frontend/package.json and package-lock.json; backend/package.json and package-lock.json; helper/package.json; root package.json; Supabase SQL migration files; implementation files cited in the report. Repository snapshot reviewed 26 October 2026.'),
   paragraph('Official / primary technical documentation:'),

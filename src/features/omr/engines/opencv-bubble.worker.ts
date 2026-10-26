@@ -6,15 +6,23 @@ type CircleMeasurement = { fillRatio: number; contrast: number };
 
 const cv: any = (cvModule as any).default || cvModule;
 let cvReady: Promise<void> | null = null;
+const workerStartedAt = performance.now();
+let workerReadyMs: number | null = null;
 
 function ensureOpenCv(): Promise<void> {
-  if (cv.Mat) return Promise.resolve();
+  if (cv.Mat) {
+    workerReadyMs ??= performance.now() - workerStartedAt;
+    return Promise.resolve();
+  }
   if (cvReady) return cvReady;
   cvReady = new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error('OpenCV.js initialization timed out.')), 45000);
-    cv.onRuntimeInitialized = () => { clearTimeout(timeout); resolve(); };
+    cv.onRuntimeInitialized = () => { clearTimeout(timeout); workerReadyMs = performance.now() - workerStartedAt; resolve(); };
     cv.onAbort = (reason: unknown) => { clearTimeout(timeout); reject(new Error(String(reason || 'OpenCV.js failed to initialize.'))); };
-    if (typeof cv.then === 'function') cv.then(() => { clearTimeout(timeout); resolve(); }, reject);
+    if (typeof cv.then === 'function') cv.then(
+      () => { clearTimeout(timeout); workerReadyMs = performance.now() - workerStartedAt; resolve(); },
+      (error: unknown) => { clearTimeout(timeout); reject(error); },
+    );
   });
   return cvReady;
 }
@@ -81,8 +89,10 @@ async function analyze(request: AnalyzeRequest): Promise<CircleMeasurement[]> {
 self.onmessage = (event: MessageEvent<AnalyzeRequest>) => {
   const request = event.data;
   const workerScope = self as unknown as { postMessage: (message: unknown) => void };
-  void analyze(request).then((measurements) => {
-    workerScope.postMessage({ id: request.id, measurements });
+  void ensureOpenCv().then(async () => {
+    const analysisStartedAt = performance.now();
+    const measurements = await analyze(request);
+    workerScope.postMessage({ id: request.id, measurements, workerReadyMs: workerReadyMs || 0, analysisMs: performance.now() - analysisStartedAt });
   }).catch((error: unknown) => {
     workerScope.postMessage({ id: request.id, error: error instanceof Error ? error.message : String(error) });
   });

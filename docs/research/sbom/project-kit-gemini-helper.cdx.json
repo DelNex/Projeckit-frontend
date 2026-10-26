@@ -1,0 +1,142 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.5.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "serialNumber": "urn:uuid:31ad8ed6-3893-4caf-a5c8-0734d8d8fedd",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-10-26T10:56:36.882Z",
+    "lifecycles": [
+      {
+        "phase": "pre-build"
+      }
+    ],
+    "tools": {
+      "components": [
+        {
+          "type": "application",
+          "name": "Project KIT lockfile SBOM generator",
+          "version": "1.0.0"
+        }
+      ]
+    },
+    "component": {
+      "type": "application",
+      "name": "project-kit-gemini-helper",
+      "version": "1.0.0",
+      "bom-ref": "pkg:npm/project-kit-gemini-helper@1.0.0",
+      "properties": [
+        {
+          "name": "projectkit:sourceLockfile",
+          "value": "helper/package-lock.json"
+        }
+      ]
+    },
+    "properties": [
+      {
+        "name": "projectkit:sourceLockfile",
+        "value": "helper/package-lock.json"
+      },
+      {
+        "name": "projectkit:scope",
+        "value": "all package-lock entries with exact versions, including development and optional packages"
+      }
+    ]
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "playwright",
+      "version": "1.64.1",
+      "bom-ref": "pkg:npm/playwright@1.64.1?package_path=14fe0a403315",
+      "purl": "pkg:npm/playwright@1.64.1",
+      "properties": [
+        {
+          "name": "projectkit:lockfilePath",
+          "value": "node_modules/playwright"
+        },
+        {
+          "name": "projectkit:dev",
+          "value": "false"
+        },
+        {
+          "name": "projectkit:optional",
+          "value": "false"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Apache-2.0"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA512",
+          "content": "HCrVhHr5QQuwYoswEUGTb7gGp522yflbv/ST8nF4sFWGuLjQCt17Q/EubpGGSNKYn1tsTCPZxqHhHCfVURu7UA=="
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/playwright/-/playwright-1.64.1.tgz"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "playwright-core",
+      "version": "1.64.1",
+      "bom-ref": "pkg:npm/playwright-core@1.64.1?package_path=cd980de1aaac",
+      "purl": "pkg:npm/playwright-core@1.64.1",
+      "properties": [
+        {
+          "name": "projectkit:lockfilePath",
+          "value": "node_modules/playwright-core"
+        },
+        {
+          "name": "projectkit:dev",
+          "value": "false"
+        },
+        {
+          "name": "projectkit:optional",
+          "value": "false"
+        }
+      ],
+      "licenses": [
+        {
+          "expression": "Apache-2.0"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA512",
+          "content": "BC4s8y6SEVA6Q1rSxZTto8hI1KUI3xXlHGZgvGqP4IqPdI/a6FX9H29IDNz7vKo9l21b6LfYosScPL6M3xxyDQ=="
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/playwright-core/-/playwright-core-1.64.1.tgz"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "pkg:npm/playwright@1.64.1?package_path=14fe0a403315",
+      "dependsOn": [
+        "pkg:npm/playwright-core@1.64.1?package_path=cd980de1aaac"
+      ]
+    },
+    {
+      "ref": "pkg:npm/playwright-core@1.64.1?package_path=cd980de1aaac",
+      "dependsOn": []
+    },
+    {
+      "ref": "pkg:npm/project-kit-gemini-helper@1.0.0",
+      "dependsOn": [
+        "pkg:npm/playwright@1.64.1?package_path=14fe0a403315"
+      ]
+    }
+  ]
+}

@@ -9,6 +9,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "research:materials": "node scripts/generate-technology-materials.mjs",
+    "sbom": "node scripts/generate-sboms.mjs",
+    "report:opencv-bundle": "node scripts/report-opencv-bundle.mjs",
     "build:consolidated": "node ../scripts/build-consolidated.mjs",
     "test": "node scripts/check-schema-contract.mjs && tsx --test \"src/**/__tests__/*.test.ts\""
   },

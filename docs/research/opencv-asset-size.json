@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "records": [
+    {
+      "asset": ".next/static/chunks/fc51dc41.ee2fbfcb4ae83cd6.js",
+      "rawBytes": 10789093,
+      "rawMiB": 10.29,
+      "gzipBytes": 3509363,
+      "gzipMiB": 3.35,
+      "measuredAt": "2026-10-26T10:59:22.095Z"
+    },
+    {
+      "asset": "node_modules/@techstark/opencv-js/dist/opencv.js",
+      "rawBytes": 10872779,
+      "rawMiB": 10.37,
+      "gzipBytes": 3521844,
+      "gzipMiB": 3.36,
+      "measuredAt": "2026-10-26T11:01:07.979Z"
+    },
+    {
+      "asset": ".next/static/chunks/fc51dc41.ee2fbfcb4ae83cd6.js",
+      "rawBytes": 10789093,
+      "rawMiB": 10.29,
+      "gzipBytes": 3509363,
+      "gzipMiB": 3.35,
+      "measuredAt": "2026-10-26T11:03:32.674Z"
+    }
+  ]
+}

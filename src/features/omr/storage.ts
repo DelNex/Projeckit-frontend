@@ -83,7 +83,11 @@ export async function persistOmrScan(payload: SaveScanPayload): Promise<SaveScan
         image_hash: payload.scanResult.imageHash,
         confidence: payload.scanResult.overallConfidence,
         raw_answers: payload.scanResult.itemStates
-          ? { ...payload.scanResult.rawAnswers, _itemStates: payload.scanResult.itemStates }
+          ? {
+            ...payload.scanResult.rawAnswers,
+            _itemStates: payload.scanResult.itemStates,
+            ...(payload.scanResult.reviewAudit ? { _omrAudit: payload.scanResult.reviewAudit } : {}),
+          }
           : payload.scanResult.rawAnswers,
         normalized_answers: payload.scanResult.normalizedAnswers,
         status: payload.scanResult.status,

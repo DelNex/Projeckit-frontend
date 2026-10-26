@@ -24,6 +24,7 @@ import {
 } from '../types';
 import { MarkerDetector } from './marker-detector';
 import { analyzeBubbleSamples, BubbleMeasurement, BubbleSample } from './opencv-bubble-analysis';
+import { OMR_THRESHOLDS, OMR_THRESHOLD_PROFILE_VERSION } from '../thresholds';
 
 export interface DecodedImage {
   pixels: Uint8Array | Uint8ClampedArray;
@@ -61,7 +62,9 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
 
     const avgLuminance = pixelCount > 0 ? totalLuminance / pixelCount : 128;
     const contrastRatio = maxLum > 0 ? (maxLum - minLum) / maxLum : 0;
-    const isLightingAcceptable = avgLuminance >= 35 && avgLuminance <= 250 && contrastRatio >= 0.35;
+    const isLightingAcceptable = avgLuminance >= OMR_THRESHOLDS.imageQuality.minimumAverageLuminance &&
+      avgLuminance <= OMR_THRESHOLDS.imageQuality.maximumAverageLuminance &&
+      contrastRatio >= OMR_THRESHOLDS.imageQuality.minimumContrastRatio;
 
     // Outer corner marker detection in 4 quadrants (12% bounding zones)
     const cornerSize = Math.floor(Math.min(width, height) * 0.12);
@@ -298,12 +301,19 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
     }
 
     let cvMeasurements: BubbleMeasurement[] | null = null;
+    let openCvDiagnostics: NonNullable<OmrScanResult['openCvDiagnostics']> = { status: 'not_loaded' };
     if (circleSamples.length > 0) {
       try {
-        cvMeasurements = await analyzeBubbleSamples(pixels, width, height, circleSamples);
-        if (cvMeasurements.length !== circleSamples.length) throw new Error('OpenCV.js returned an incomplete bubble analysis.');
+        const analysis = await analyzeBubbleSamples(pixels, width, height, circleSamples);
+        if (analysis.measurements.length !== circleSamples.length) throw new Error('OpenCV.js returned an incomplete bubble analysis.');
+        cvMeasurements = analysis.measurements;
+        openCvDiagnostics = { status: 'used', workerReadyMs: analysis.workerReadyMs, analysisMs: analysis.analysisMs };
       } catch (error) {
         console.warn('[OMR] OpenCV.js bubble analysis unavailable; this scan will require review.', error);
+        openCvDiagnostics = {
+          status: 'unavailable',
+          failureReason: error instanceof Error ? error.message : String(error),
+        };
       }
     }
     const getMeasurement = (index: number, sample: BubbleSample): BubbleMeasurement => {
@@ -312,10 +322,11 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
       return { fillRatio: legacyDarkness, contrast: legacyDarkness };
     };
     const isClearMark = (measurement: BubbleMeasurement) => cvMeasurements
-      ? (measurement.fillRatio >= 0.20 && measurement.contrast >= 0.14) || measurement.fillRatio >= 0.37 || measurement.contrast >= 0.32
+      ? (measurement.fillRatio >= OMR_THRESHOLDS.openCv.clearMark.fillAndContrast.fillRatio && measurement.contrast >= OMR_THRESHOLDS.openCv.clearMark.fillAndContrast.contrast) ||
+        measurement.fillRatio >= OMR_THRESHOLDS.openCv.clearMark.fillOnly || measurement.contrast >= OMR_THRESHOLDS.openCv.clearMark.contrastOnly
       : measurement.fillRatio >= markMinFill;
     const isResidualMark = (measurement: BubbleMeasurement) => cvMeasurements
-      ? measurement.fillRatio >= 0.035 || measurement.contrast >= 0.075
+      ? measurement.fillRatio >= OMR_THRESHOLDS.openCv.residualInk.fillRatio || measurement.contrast >= OMR_THRESHOLDS.openCv.residualInk.contrast
       : false;
 
     // STEP 3: DYNAMIC ROLL NUMBER DECODING
@@ -462,6 +473,8 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
       hasAmbiguity: hasAmbiguity || rollAmbiguity,
       hasMultipleMarks: hasMultipleMarks || rollMultipleMarks,
       hasErasedMarks,
+      openCvDiagnostics,
+      thresholdProfileVersion: OMR_THRESHOLD_PROFILE_VERSION,
       status: !cvMeasurements || hasErasedMarks || hasAmbiguity || hasMultipleMarks || rollMultipleMarks || rollAmbiguity ? 'VERIFICATION_REQUIRED' : status,
       engineUsed: cvMeasurements ? 'kit-opencv.js' : 'kit-optical-native',
     };
