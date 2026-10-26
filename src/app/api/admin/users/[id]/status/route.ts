@@ -41,7 +41,7 @@ export async function POST(
     // 2. Verify caller is an approved admin
     const { data: callerProfile, error: profileErr } = await supabase
       .from('profiles')
-      .select('id, role, status, tenant_id, is_platform_admin')
+      .select('id, role, status, tenant_id, is_platform_admin, archived_at')
       .eq('id', caller.id)
       .maybeSingle();
 
@@ -52,7 +52,7 @@ export async function POST(
       );
     }
 
-    if (callerProfile.role !== 'admin' || callerProfile.status !== 'approved') {
+    if (callerProfile.role !== 'admin' || callerProfile.status !== 'approved' || callerProfile.archived_at) {
       return NextResponse.json(
         { error: 'Forbidden: Only approved administrators can manage user account status.' },
         { status: 403 }
@@ -217,4 +217,3 @@ export async function POST(
     );
   }
 }
-

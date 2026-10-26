@@ -25,11 +25,11 @@ export async function GET(request: Request) {
 
     const { data: callerProfile } = await supabase
       .from('profiles')
-      .select('id, role, status, tenant_id, is_platform_admin')
+      .select('id, role, status, tenant_id, is_platform_admin, archived_at')
       .eq('id', caller.id)
       .maybeSingle();
 
-    if (!callerProfile || callerProfile.role !== 'admin' || callerProfile.status !== 'approved') {
+    if (!callerProfile || callerProfile.role !== 'admin' || callerProfile.status !== 'approved' || callerProfile.archived_at) {
       return NextResponse.json(
         { error: 'Forbidden: Only approved administrators can access deletion code settings.' },
         { status: 403 }
@@ -97,11 +97,11 @@ export async function POST(request: Request) {
 
     const { data: callerProfile } = await supabase
       .from('profiles')
-      .select('id, role, status, tenant_id, is_platform_admin')
+      .select('id, role, status, tenant_id, is_platform_admin, archived_at')
       .eq('id', caller.id)
       .maybeSingle();
 
-    if (!callerProfile || callerProfile.role !== 'admin' || callerProfile.status !== 'approved') {
+    if (!callerProfile || callerProfile.role !== 'admin' || callerProfile.status !== 'approved' || callerProfile.archived_at) {
       return NextResponse.json(
         { error: 'Forbidden: Only approved administrators can manage deletion codes.' },
         { status: 403 }

@@ -22,7 +22,7 @@ export async function GET() {
     // 2. Admin verification
     const { data: callerProfile, error: profileErr } = await supabase
       .from('profiles')
-      .select('role, status')
+      .select('role, status, archived_at')
       .eq('id', caller.id)
       .maybeSingle();
 
@@ -33,7 +33,7 @@ export async function GET() {
       );
     }
 
-    if (callerProfile.role !== 'admin' || callerProfile.status !== 'approved') {
+    if (callerProfile.role !== 'admin' || callerProfile.status !== 'approved' || callerProfile.archived_at) {
       return NextResponse.json(
         { error: 'Forbidden: Only approved administrators can access system health.', code: 'FORBIDDEN' },
         { status: 403 }
@@ -111,4 +111,3 @@ export async function GET() {
     );
   }
 }
-

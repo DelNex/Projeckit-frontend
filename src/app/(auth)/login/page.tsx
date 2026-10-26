@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/components/ui/toast';
 import { friendlyError } from '@/lib/errors';
+import { AppFooter } from '@/components/layout/AppFooter';
 import { AlertCircle, ArrowRight, Eye, EyeOff, Loader2, Mail } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -63,7 +64,19 @@ export default function LoginPage() {
           return;
         }
 
-        router.push('/dashboard');
+        const redirectPath = new URLSearchParams(window.location.search).get('redirect');
+        let destination = '/dashboard';
+        if (redirectPath?.startsWith('/')) {
+          try {
+            const target = new URL(redirectPath, window.location.origin);
+            if (target.origin === window.location.origin) {
+              destination = target.pathname + target.search + target.hash;
+            }
+          } catch {
+            // Keep the safe dashboard fallback for malformed redirect values.
+          }
+        }
+        router.replace(destination);
         router.refresh();
       }
     } catch (err: any) {
@@ -112,7 +125,8 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-8 dark:bg-gray-950 sm:px-6 sm:py-12 lg:px-8">
+    <main className="flex min-h-screen flex-col bg-slate-50 px-4 py-8 dark:bg-gray-950 sm:px-6 sm:py-12 lg:px-8">
+      <div className="flex w-full flex-1 items-center justify-center">
       <section className="w-full max-w-md space-y-7 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-9">
         {/* Brand Header */}
         <div className="text-center">
@@ -225,6 +239,8 @@ export default function LoginPage() {
           </Link>
         </div>
         </section>
+      </div>
+      <AppFooter />
     </main>
   );
 }

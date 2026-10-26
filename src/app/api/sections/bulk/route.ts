@@ -23,11 +23,11 @@ export async function POST(request: Request) {
     // 2. Verify approved profile & tenant linkage
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, tenant_id, role, status')
+      .select('id, tenant_id, role, status, archived_at')
       .eq('id', user.id)
       .maybeSingle();
 
-    if (profile?.status !== 'approved' && profile?.role !== 'admin') {
+    if (!profile || profile.status !== 'approved' || profile.archived_at) {
       return NextResponse.json(
         { error: 'Forbidden: Your account does not have active approval to manage sections.' },
         { status: 403 }

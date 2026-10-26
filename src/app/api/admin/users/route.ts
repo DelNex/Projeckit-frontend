@@ -33,11 +33,12 @@ export async function GET(request: Request) {
       status: string;
       tenant_id: string | null;
       is_platform_admin?: boolean;
+      archived_at?: string | null;
     } | null = null;
 
     const { data: pWithPlatform, error: pErr1 } = await supabase
       .from('profiles')
-      .select('id, role, status, tenant_id, is_platform_admin')
+      .select('id, role, status, tenant_id, is_platform_admin, archived_at')
       .eq('id', caller.id)
       .maybeSingle();
 
@@ -48,7 +49,7 @@ export async function GET(request: Request) {
       );
       const { data: pBase, error: pErr2 } = await supabase
         .from('profiles')
-        .select('id, role, status, tenant_id')
+        .select('id, role, status, tenant_id, archived_at')
         .eq('id', caller.id)
         .maybeSingle();
 
@@ -64,7 +65,7 @@ export async function GET(request: Request) {
       callerProfile = pWithPlatform;
     }
 
-    if (!callerProfile || callerProfile.role !== 'admin' || callerProfile.status !== 'approved') {
+    if (!callerProfile || callerProfile.role !== 'admin' || callerProfile.status !== 'approved' || callerProfile.archived_at) {
       return NextResponse.json(
         { error: 'Forbidden: Only approved administrators can access user accounts.', code: 'FORBIDDEN' },
         { status: 403 }
@@ -477,4 +478,3 @@ export async function GET(request: Request) {
     );
   }
 }
-

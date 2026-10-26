@@ -31,7 +31,7 @@ export async function POST(
     // 2. Verify caller is approved platform admin
     const { data: callerProfile, error: profileErr } = await supabase
       .from('profiles')
-      .select('id, role, status, is_platform_admin')
+      .select('id, role, status, is_platform_admin, archived_at')
       .eq('id', caller.id)
       .maybeSingle();
 
@@ -45,6 +45,7 @@ export async function POST(
     if (
       callerProfile.role !== 'admin' ||
       callerProfile.status !== 'approved' ||
+      callerProfile.archived_at ||
       !callerProfile.is_platform_admin
     ) {
       return NextResponse.json(
@@ -144,4 +145,3 @@ export async function POST(
     );
   }
 }
-

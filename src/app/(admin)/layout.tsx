@@ -1,6 +1,7 @@
 'use client';
 
 import { Header } from '@/components/layout/Header';
+import { AppFooter } from '@/components/layout/AppFooter';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Suspense, useState } from 'react';
 
@@ -31,8 +32,11 @@ export default function AdminLayout({
         />
 
         <main id="main-content" tabIndex={-1} className="flex-1 w-full min-w-0 overflow-y-auto px-3 py-4 sm:px-6 sm:py-6 xl:px-8">
-          <div className="mx-auto w-full max-w-[1440px] min-w-0">
-            {children}
+          <div className="mx-auto flex min-h-full w-full max-w-[1440px] min-w-0 flex-col">
+            <div className="w-full flex-1">
+              {children}
+            </div>
+            <AppFooter />
           </div>
         </main>
       </div>

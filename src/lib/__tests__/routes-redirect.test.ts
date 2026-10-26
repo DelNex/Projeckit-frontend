@@ -5,10 +5,12 @@
 
 import assert from 'node:assert';
 import { describe, it } from 'node:test';
-import nextConfig from '../../../next.config.mjs';
+const nextConfig = require('../../../next.config.js') as {
+  redirects: () => Promise<Array<{ source: string; destination: string }>>;
+};
 
 describe('Project KIT — Safe /grades Route Redirects', () => {
-  it('defines redirects from /grades and /grades/* to /tos in next.config.mjs', async () => {
+  it('defines redirects from /grades and /grades/* to /tos in next.config.js', async () => {
     assert.ok(typeof nextConfig.redirects === 'function', 'nextConfig must export redirects function');
 
     const redirects = await nextConfig.redirects();
