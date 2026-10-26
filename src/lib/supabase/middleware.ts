@@ -43,14 +43,16 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
   const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/register');
-  const isProtectedRoute =
-    pathname.startsWith('/dashboard') ||
-    pathname.startsWith('/assessments') ||
-    pathname.startsWith('/students') ||
-    pathname.startsWith('/analytics') ||
-    pathname.startsWith('/settings') ||
-    pathname.startsWith('/admin') ||
-    pathname.startsWith('/app-hub');
+  // Keep every authenticated application route in one explicit list. In
+  // particular, TOS and Print & Reports contain school data just like the
+  // assessment pages and must not be reachable without a session.
+  const protectedRoots = [
+    '/dashboard', '/assessments', '/students', '/analytics', '/settings',
+    '/admin', '/app-hub', '/tos', '/reports',
+  ];
+  const isProtectedRoute = protectedRoots.some(
+    (root) => pathname === root || pathname.startsWith(`${root}/`)
+  );
 
   // If user is not authenticated and trying to access protected routes
   if (!user && isProtectedRoute) {
@@ -69,4 +71,3 @@ export async function updateSession(request: NextRequest) {
 
   return supabaseResponse;
 }
-

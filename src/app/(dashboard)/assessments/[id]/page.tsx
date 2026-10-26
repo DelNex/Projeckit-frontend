@@ -14,6 +14,8 @@ import { uploadScanImage } from '@/features/omr/storage';
 import { friendlyError } from '@/lib/errors';
 import { getPhilippineSchoolYear } from '@/lib/academic-calendar';
 import { projectTosItems } from '@/lib/tos-item-projection';
+import { shouldRequireVerification } from '@/lib/scan-review-policy';
+import { calculateAssessmentScore } from '@/lib/assessment-scoring';
 import { createClient } from '@/lib/supabase/client';
 import type { Database } from '@/types/database.types';
 import { cn } from '@/lib/utils';
@@ -556,18 +558,20 @@ export default function AssessmentWorkspacePage({
         setSkippedScans((count) => count + 1);
         return 'duplicate';
       }
-      // The barcode and all answer rows have already been explicitly confirmed in the
-      // staged camera review. Keep scan-level failures and identity conflicts gated.
-      const needsReview = hasConflict || scanStatus !== 'PROCESSED' || result.overallConfidence < 0.75;
+      // The staged scanner records teacher confirmation for the learner and each
+      // answer. That explicit review resolves identity/mark uncertainty while the
+      // original machine result and any detected conflict remain in the audit trail.
+      const needsReview = shouldRequireVerification({
+        reviewedItems: result.reviewAudit?.items,
+        assignedStudentId,
+        hasIdentityConflict: hasConflict,
+        scanStatus,
+        overallConfidence: result.overallConfidence,
+      });
 
       // Calculate score if answer key exists
-      let score = 0;
-      result.items.forEach((item) => {
-        if (item.selectedChoice && answers[item.itemNumber] === item.selectedChoice) {
-          score++;
-        }
-      });
-      const percentage = Math.round((score / itemCount) * 1000) / 10;
+      const scannedAnswers = Object.fromEntries(result.items.map((item) => [item.itemNumber, item.selectedChoice]));
+      const { score, percentage } = calculateAssessmentScore(scannedAnswers, answers, itemCount, result.itemStates);
       let imageStoragePath = result.storagePath || null;
       if (imageBlob && !imageStoragePath) {
         const upload = await uploadScanImage(imageBlob, tenantId, assessmentId, result.imageHash);
@@ -704,14 +708,7 @@ export default function AssessmentWorkspacePage({
     const examinees = gradedScans.map((scan) => {
       const ansMap = readScanAnswers(scan);
       const itemStates = readScanItemStates(scan);
-      let score = 0;
-      for (let i = 1; i <= itemCount; i++) {
-        const stAns = ansMap[i];
-        const correct = answers[i];
-        if (stAns && correct && stAns.trim().toUpperCase() === correct.trim().toUpperCase()) {
-          score++;
-        }
-      }
+      const { score } = calculateAssessmentScore(ansMap, answers, itemCount, itemStates);
       const student = studentsList.find((entry) => entry.id === scan.student_id);
       return {
         ansMap,

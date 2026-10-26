@@ -9,6 +9,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "research:materials": "node scripts/generate-technology-materials.mjs",
+    "handoff:client": "node scripts/generate-client-handoff.mjs",
     "sbom": "node scripts/generate-sboms.mjs",
     "report:opencv-bundle": "node scripts/report-opencv-bundle.mjs",
     "build:consolidated": "node ../scripts/build-consolidated.mjs",
@@ -24,8 +25,8 @@
     "docx": "9.0.3",
     "jszip": "3.10.1",
     "lucide-react": "^0.475.0",
-    "mammoth": "1.8.0",
-    "next": "^15.1.7",
+    "mammoth": "^1.13.0",
+    "next": "15.5.28",
     "pdf-parse": "1.1.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -38,9 +39,12 @@
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
     "pngjs": "^7.0.0",
-    "postcss": "^8.5.2",
+    "postcss": "8.5.31",
     "tailwindcss": "^4.0.0",
     "tsx": "^4.23.13",
     "typescript": "^5.7.3"
+  },
+  "overrides": {
+    "postcss": "8.5.31"
   }
 }

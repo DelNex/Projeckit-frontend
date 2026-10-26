@@ -24,6 +24,8 @@ import {
   generateAssessmentReportData,
 } from '@/lib/reports-generator';
 import { downloadAnalyticsReportDocx, downloadConsolidatedReportDocx } from '@/lib/analytics-docx-export';
+import { deduplicateItemScans, readScanAnswers, readScanItemStates, type ItemResponseScan } from '@/lib/item-response-analysis';
+import { calculateAssessmentScore, isAnswerCorrect, percentageToMps } from '@/lib/assessment-scoring';
 
 type TabKey = 'sectional' | 'longitudinal' | 'cognitive' | 'item-analysis' | 'reports';
 
@@ -60,8 +62,12 @@ interface ScanRecord {
   id: string;
   assessmentId: string;
   studentId: string | null;
+  detectedRollNumber: number | null;
+  createdAt: string;
+  status: string;
   confidence: number;
   rawAnswers: Record<number, string | null>;
+  itemStates: Record<number, string>;
   normalizedAnswers: (string | null)[];
 }
 
@@ -190,7 +196,7 @@ function AnalyticsContent() {
         (supabase as any).from('subjects').select('id, code, title, target_items').order('title'),
         (supabase as any).from('grading_periods').select('id, name, code, position').eq('is_archived', false).order('position', { ascending: true }),
         (supabase as any).from('assessments').select('id, title, term, school_year, target_items, class_size, passing_mps, subjects ( title, code ), sections ( name, grade, strand_code )').order('created_at', { ascending: false }),
-        (supabase as any).from('scan_results').select('id, assessment_id, student_id, confidence, raw_answers, normalized_answers, status').order('created_at', { ascending: false }),
+        (supabase as any).from('scan_results').select('id, assessment_id, student_id, detected_roll_number, created_at, confidence, raw_answers, normalized_answers, status').order('created_at', { ascending: false }),
         (supabase as any).from('answer_keys').select('assessment_id, answers'),
         (supabase as any).from('tos_documents').select('assessment_id, rows'),
       ]);
@@ -247,20 +253,26 @@ function AnalyticsContent() {
 
       // 4. Scan Results
       const parsedScans: ScanRecord[] = (scanData || []).map((s: any) => {
-        let ansMap: Record<number, string | null> = {};
-        if (s.raw_answers && typeof s.raw_answers === 'object') {
-          ansMap = s.raw_answers;
-        } else if (Array.isArray(s.normalized_answers)) {
-          s.normalized_answers.forEach((val: string | null, idx: number) => {
-            ansMap[idx + 1] = val;
-          });
-        }
+        const scanInput = {
+          id: s.id,
+          student_id: s.student_id || null,
+          detected_roll_number: s.detected_roll_number ?? null,
+          status: s.status || '',
+          created_at: s.created_at || '',
+          raw_answers: s.raw_answers,
+          normalized_answers: s.normalized_answers,
+        };
+        const answers = readScanAnswers(scanInput);
         return {
           id: s.id,
           assessmentId: s.assessment_id,
           studentId: s.student_id,
+          detectedRollNumber: s.detected_roll_number ?? null,
+          createdAt: s.created_at || '',
+          status: s.status || '',
           confidence: s.confidence || 0,
-          rawAnswers: ansMap,
+          rawAnswers: answers,
+          itemStates: readScanItemStates(scanInput),
           normalizedAnswers: Array.isArray(s.normalized_answers) ? s.normalized_answers : [],
         };
       });
@@ -397,6 +409,16 @@ function AnalyticsContent() {
       if (group) group.push(scan);
       else grouped.set(scan.assessmentId, [scan]);
     });
+    for (const [assessmentId, scans] of grouped) {
+      const itemScans: (ItemResponseScan & ScanRecord)[] = scans.map((scan) => ({
+        ...scan,
+        student_id: scan.studentId,
+        detected_roll_number: scan.detectedRollNumber,
+        created_at: scan.createdAt,
+        raw_answers: scan.rawAnswers,
+      }));
+      grouped.set(assessmentId, deduplicateItemScans(itemScans));
+    }
     return grouped;
   }, [scanResults]);
 
@@ -414,18 +436,13 @@ function AnalyticsContent() {
       totalScans += assScans.length;
 
       assScans.forEach((scan) => {
-        for (let i = 1; i <= ass.targetItems; i++) {
-          const studentAns = scan.rawAnswers[i];
-          const correct = key[i];
-          if (studentAns && correct && studentAns.trim().toUpperCase() === correct.trim().toUpperCase()) {
-            totalCorrect++;
-          }
-        }
+        totalCorrect += calculateAssessmentScore(scan.rawAnswers, key, ass.targetItems, scan.itemStates).score;
         totalPossible += ass.targetItems;
       });
     });
 
-    const mps = totalPossible > 0 ? (totalCorrect / totalPossible) * 100 : null;
+    const pl = totalPossible > 0 ? (totalCorrect / totalPossible) * 100 : null;
+    const mps = pl === null ? null : percentageToMps(pl);
     let mastery: 'High' | 'Moderate' | 'Low' | null = null;
     if (mps !== null) {
       if (mps >= 75) mastery = 'High';
@@ -458,18 +475,13 @@ function AnalyticsContent() {
         secScansCount += assScans.length;
 
         assScans.forEach((scan) => {
-          for (let i = 1; i <= ass.targetItems; i++) {
-            const studentAns = scan.rawAnswers[i];
-            const correct = key[i];
-            if (studentAns && correct && studentAns.trim().toUpperCase() === correct.trim().toUpperCase()) {
-              secCorrect++;
-            }
-          }
+          secCorrect += calculateAssessmentScore(scan.rawAnswers, key, ass.targetItems, scan.itemStates).score;
           secPossible += ass.targetItems;
         });
       });
 
-      const mps = secPossible > 0 ? Math.round(((secCorrect / secPossible) * 100) * 10) / 10 : null;
+      const pl = secPossible > 0 ? (secCorrect / secPossible) * 100 : null;
+      const mps = pl === null ? null : Math.round(percentageToMps(pl) * 10) / 10;
 
       return {
         sectionName: sec.name,
@@ -516,18 +528,12 @@ function AnalyticsContent() {
           const assScans = scansByAssessment.get(ass.id) || [];
           const key = answerKeys[ass.id] || {};
           assScans.forEach((scan) => {
-            for (let i = 1; i <= ass.targetItems; i++) {
-              const studentAns = scan.rawAnswers[i];
-              const correct = key[i];
-              if (studentAns && correct && studentAns.trim().toUpperCase() === correct.trim().toUpperCase()) {
-                totalCorrect++;
-              }
-            }
+            totalCorrect += calculateAssessmentScore(scan.rawAnswers, key, ass.targetItems, scan.itemStates).score;
             totalPossible += ass.targetItems;
           });
         });
 
-        return totalPossible > 0 ? Math.round(((totalCorrect / totalPossible) * 100) * 10) / 10 : null;
+        return totalPossible > 0 ? Math.round(percentageToMps((totalCorrect / totalPossible) * 100) * 10) / 10 : null;
       });
 
       return {
@@ -574,14 +580,7 @@ function AnalyticsContent() {
     }
 
     const examineeScores = assScans.map((scan) => {
-      let score = 0;
-      for (let i = 1; i <= targetItems; i++) {
-        const studentAns = scan.rawAnswers[i];
-        const correct = key[i];
-        if (studentAns && correct && studentAns.trim().toUpperCase() === correct.trim().toUpperCase()) {
-          score++;
-        }
-      }
+      const { score } = calculateAssessmentScore(scan.rawAnswers, key, targetItems, scan.itemStates);
       return { scan, score };
     });
 
@@ -601,8 +600,7 @@ function AnalyticsContent() {
       let Ri = 0;
       if (N > 0) {
         Ri = examineeScores.filter((e) => {
-          const ans = e.scan.rawAnswers[itemNum];
-          return ans && key[itemNum] && ans.trim().toUpperCase() === key[itemNum].trim().toUpperCase();
+          return isAnswerCorrect(e.scan.rawAnswers, key, itemNum, e.scan.itemStates);
         }).length;
       }
 
@@ -616,12 +614,10 @@ function AnalyticsContent() {
       let dIndex = 0;
       if (N >= 4 && groupSize > 0) {
         const rawUpper = upperGroup.filter((e) => {
-          const ans = e.scan.rawAnswers[itemNum];
-          return ans && key[itemNum] && ans.trim().toUpperCase() === key[itemNum].trim().toUpperCase();
+          return isAnswerCorrect(e.scan.rawAnswers, key, itemNum, e.scan.itemStates);
         }).length;
         const rawLower = lowerGroup.filter((e) => {
-          const ans = e.scan.rawAnswers[itemNum];
-          return ans && key[itemNum] && ans.trim().toUpperCase() === key[itemNum].trim().toUpperCase();
+          return isAnswerCorrect(e.scan.rawAnswers, key, itemNum, e.scan.itemStates);
         }).length;
         dIndex = Math.min(1.0, Math.max(-1.0, (rawUpper - rawLower) / groupSize));
       }
@@ -704,23 +700,20 @@ function AnalyticsContent() {
     return secList.map((sec) => {
       const secAssessments = filteredAssessments.filter((a) => a.sectionName === sec.name);
       let studentScores: number[] = [];
-      let totalItemsAll = 0;
+      const responseMps: number[] = [];
+      let totalCorrectAll = 0;
+      let totalPossibleAll = 0;
 
       secAssessments.forEach((ass) => {
         const assScans = scansByAssessment.get(ass.id) || [];
         const key = answerKeys[ass.id] || {};
-        totalItemsAll = ass.targetItems;
 
         assScans.forEach((scan) => {
-          let score = 0;
-          for (let i = 1; i <= ass.targetItems; i++) {
-            const studentAns = scan.rawAnswers[i];
-            const correct = key[i];
-            if (studentAns && correct && studentAns.trim().toUpperCase() === correct.trim().toUpperCase()) {
-              score++;
-            }
-          }
+          const { score } = calculateAssessmentScore(scan.rawAnswers, key, ass.targetItems, scan.itemStates);
           studentScores.push(score);
+          responseMps.push(ass.targetItems > 0 ? percentageToMps((score / ass.targetItems) * 100) : 0);
+          totalCorrectAll += score;
+          totalPossibleAll += ass.targetItems;
         });
       });
 
@@ -742,10 +735,9 @@ function AnalyticsContent() {
       const mean = sum / n;
       const variance = studentScores.reduce((acc, score) => acc + Math.pow(score - mean, 2), 0) / n;
       const stdDev = Math.sqrt(variance);
-      const mps = totalItemsAll > 0 ? (mean / totalItemsAll) * 100 : 0;
-
-      const outstanding = studentScores.filter((sc) => totalItemsAll > 0 && (sc / totalItemsAll) >= 0.90).length;
-      const didNotMeet = studentScores.filter((sc) => totalItemsAll > 0 && (sc / totalItemsAll) < 0.75).length;
+      const mps = totalPossibleAll > 0 ? percentageToMps((totalCorrectAll / totalPossibleAll) * 100) : 0;
+      const outstanding = responseMps.filter((value) => value >= 90).length;
+      const didNotMeet = responseMps.filter((value) => value < 75).length;
 
       return {
         sectionName: sec.name,

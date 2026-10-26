@@ -14,6 +14,7 @@
 
 import { createClient } from './supabase/client';
 import { getPhilippineSchoolYear } from './academic-calendar';
+import { percentageToMps } from './assessment-scoring';
 
 export interface ScoreDistribution {
   outstanding: number; // 90–100%
@@ -210,13 +211,14 @@ export async function generateAssessmentReportData(
 
       if (s > highestScore) highestScore = s;
       if (s < lowestScore) lowestScore = s;
-      if (pct >= passingMps) passingCount++;
+      const mps = percentageToMps(pct);
+      if (mps >= passingMps) passingCount++;
 
       // DepEd score bands
-      if (pct >= 90) scoreDist.outstanding++;
-      else if (pct >= 85) scoreDist.verySatisfactory++;
-      else if (pct >= 80) scoreDist.satisfactory++;
-      else if (pct >= 75) scoreDist.fairlySatisfactory++;
+      if (mps >= 90) scoreDist.outstanding++;
+      else if (mps >= 85) scoreDist.verySatisfactory++;
+      else if (mps >= 80) scoreDist.satisfactory++;
+      else if (mps >= 75) scoreDist.fairlySatisfactory++;
       else scoreDist.didNotMeet++;
 
       const matchedStudent = activeStudents.find((st: any) => st.id === r.student_id);
@@ -227,7 +229,7 @@ export async function generateAssessmentReportData(
         score: s,
         totalItems: targetItems,
         percentage: pct,
-        passed: pct >= passingMps,
+        passed: mps >= passingMps,
         status: r.status || 'GRADED',
       });
     });
@@ -237,7 +239,7 @@ export async function generateAssessmentReportData(
     lowestScore = 0;
   }
 
-  const mps = targetItems > 0 ? parseFloat(((meanScore / targetItems) * 100).toFixed(2)) : 0;
+  const mps = targetItems > 0 ? parseFloat(percentageToMps((meanScore / targetItems) * 100).toFixed(2)) : 0;
   const passingRate = totalScanned > 0 ? parseFloat(((passingCount / totalScanned) * 100).toFixed(1)) : 0;
 
   // =========================================================================

@@ -59,7 +59,9 @@ export function deduplicateItemScans<T extends ItemResponseScan>(scans: T[]): T[
   const seen = new Set<string>();
   const latest: T[] = [];
   for (const scan of sorted) {
-    if (String(scan.status).toUpperCase() === 'VERIFICATION_REQUIRED') continue;
+    // Only confirmed, scored sheets are evidence for learning reports. Pending
+    // and review-required scans remain visible in the scanner for correction.
+    if (!['PROCESSED', 'GRADED', 'EVALUATED'].includes(String(scan.status).toUpperCase())) continue;
     const identity = scan.student_id
       ? `student:${scan.student_id}`
       : scan.detected_roll_number !== null
@@ -87,12 +89,10 @@ export function calculateItemChoiceDistributions(
     let invalidMarks = 0;
     for (const { scan, answers } of graded) {
       const selected = answers[itemNumber];
-      if (selected && counts.has(selected)) counts.set(selected, (counts.get(selected) || 0) + 1);
-      else {
-        const state = readScanItemStates(scan)[itemNumber];
-        if (state === 'MULTIPLE_MARK' || state === 'ERASED_MARK') invalidMarks++;
-        else unanswered++;
-      }
+      const state = readScanItemStates(scan)[itemNumber];
+      if (state === 'MULTIPLE_MARK' || state === 'ERASED_MARK') invalidMarks++;
+      else if (selected && counts.has(selected)) counts.set(selected, (counts.get(selected) || 0) + 1);
+      else unanswered++;
     }
     return {
       itemNumber,

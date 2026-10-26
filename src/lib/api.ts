@@ -1,124 +1,22 @@
-/**
- * Project KIT — Frontend-to-Backend API Client Layer
- * Connects Next.js frontend to NestJS backend on NEXT_PUBLIC_API_BASE_URL (defaults to http://localhost:4000)
- * Includes auth credentials, CSRF token handling, and graceful fallback support.
- */
+/** Same-origin client for the authenticated AI helper. */
 
-import { createClient, invalidateClientQueryCache } from '@/lib/supabase/client';
-
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
-
-export interface ApiFetchOptions extends RequestInit {
-  params?: Record<string, string | number | boolean | undefined>;
+function aiUrl(endpoint: 'info' | 'chat' | 'stream' | 'upload') {
+  return `/api/backend/ai/${endpoint}`;
 }
 
-/**
- * Base fetcher with automatic auth header injection and error wrapping
- */
-export async function apiFetch<T = any>(
-  path: string,
-  options: ApiFetchOptions = {}
-): Promise<T> {
-  const { params, headers, ...restOptions } = options;
-
-  let url = `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
-  if (params) {
-    const searchParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, val]) => {
-      if (val !== undefined && val !== null) {
-        searchParams.append(key, String(val));
-      }
-    });
-    const queryString = searchParams.toString();
-    if (queryString) {
-      url += (url.includes('?') ? '&' : '?') + queryString;
-    }
-  }
-
-  // Get current auth token from Supabase if available
-  let authToken: string | undefined;
-  try {
-    const supabase = createClient();
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      authToken = session.access_token;
-    }
-  } catch {
-    // Non-blocking in SSR or unauthenticated state
-  }
-
-  const defaultHeaders: Record<string, string> = {
-    Accept: 'application/json',
-    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-  };
-
-  // Only attach application/json content-type if body is not FormData
-  if (!(restOptions.body instanceof FormData)) {
-    defaultHeaders['Content-Type'] = 'application/json';
-  }
-
-  const response = await fetch(url, {
-    ...restOptions,
-    credentials: 'include',
-    headers: {
-      ...defaultHeaders,
-      ...(headers as Record<string, string>),
-    },
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const message =
-      errorData?.message ||
-      errorData?.error ||
-      `API Request Failed: ${response.status} ${response.statusText}`;
-    throw new Error(Array.isArray(message) ? message.join(', ') : message);
-  }
-
-  if ((restOptions.method || 'GET').toUpperCase() !== 'GET') {
-    invalidateClientQueryCache();
-  }
-
-  return response.json();
+async function readError(response: Response, fallback: string) {
+  const body = await response.json().catch(() => ({}));
+  const message = body?.message || body?.error || fallback;
+  return new Error(Array.isArray(message) ? message.join(', ') : message);
 }
 
-/**
- * High-level API modules mapped to backend controllers
- */
 export const api = {
-  health: {
-    check: () => apiFetch<{ status: string; database?: string; redis?: string }>('/api/health'),
-  },
-
-  assessments: {
-    list: (params?: { status?: string; subjectId?: string; sectionId?: string }) =>
-      apiFetch<{ success: boolean; data: any[] }>('/api/assessments', { params }),
-
-    getOne: (id: number | string) =>
-      apiFetch<{ success: boolean; data: any }>(`/api/assessments/${id}`),
-
-    getResultsSummary: (assessmentId: number | string) =>
-      apiFetch<any>(`/api/assessments/${assessmentId}/results/summary`),
-
-    getItemAnalysis: (assessmentId: number | string) =>
-      apiFetch<any[]>(`/api/assessments/${assessmentId}/results/items`),
-
-    getStudentResults: (
-      assessmentId: number | string,
-      params?: { page?: number; limit?: number; search?: string }
-    ) =>
-      apiFetch<{ records: any[]; total: number; page: number; limit: number; totalPages: number }>(
-        `/api/assessments/${assessmentId}/results/students`,
-        { params }
-      ),
-
-    getCompetencies: (assessmentId: number | string) =>
-      apiFetch<any[]>(`/api/assessments/${assessmentId}/results/competencies`),
-  },
-
   ai: {
-    getInfo: () => apiFetch<any>('/api/ai/info'),
+    getInfo: async () => {
+      const response = await fetch(aiUrl('info'), { credentials: 'same-origin', cache: 'no-store' });
+      if (!response.ok) throw await readError(response, `AI helper info failed (${response.status})`);
+      return response.json();
+    },
 
     chat: async (payload: {
       message: string;
@@ -126,20 +24,21 @@ export const api = {
       context?: Record<string, any>;
       uiContext?: Record<string, any>;
     }) => {
-      const res = await apiFetch<any>('/api/ai/chat', {
+      const response = await fetch(aiUrl('chat'), {
         method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify(payload),
       });
+      if (!response.ok) throw await readError(response, `AI request failed (${response.status})`);
+      const result = await response.json();
       return {
-        reply: res?.reply || res?.message || 'I processed your request.',
-        message: res?.message || res?.reply || 'I processed your request.',
-        ...res,
+        reply: result?.reply || result?.message || 'I processed your request.',
+        message: result?.message || result?.reply || 'I processed your request.',
+        ...result,
       };
     },
 
-    /**
-     * SSE Streaming chat endpoint. Yields text chunks via callback.
-     */
     stream: async (
       payload: {
         message: string;
@@ -154,130 +53,77 @@ export const api = {
         signal?: AbortSignal;
       }
     ) => {
-      let authToken: string | undefined;
-      try {
-        const supabase = createClient();
-        const { data: { session } } = await supabase.auth.getSession();
-        authToken = session?.access_token;
-      } catch {
-        // ignore
-      }
-
-      const response = await fetch(`${API_BASE_URL}/api/ai/stream`, {
+      const response = await fetch(aiUrl('stream'), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'text/event-stream',
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        },
-        credentials: 'include',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
         body: JSON.stringify({ ...payload, stream: true }),
         signal: callbacks.signal,
+        cache: 'no-store',
       });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.message || `AI stream failed with status ${response.status}`);
-      }
-
-      if (!response.body) {
-        throw new Error('ReadableStream not supported by browser or response');
-      }
+      if (!response.ok) throw await readError(response, `AI stream failed (${response.status})`);
+      if (!response.body) throw new Error('The browser could not read the AI response stream.');
 
       const reader = response.body.getReader();
-      const decoder = new TextDecoder('utf-8');
+      const decoder = new TextDecoder();
       let buffer = '';
-
+      let currentEvent = 'message';
       try {
-        let currentEvent = 'message';
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
           buffer = lines.pop() || '';
-
           for (const line of lines) {
             const trimmed = line.trim();
             if (!trimmed || trimmed.startsWith(':')) continue;
-
             if (trimmed.startsWith('event:')) {
               currentEvent = trimmed.slice(6).trim();
               continue;
             }
-
-            if (trimmed.startsWith('data:')) {
-              const dataStr = trimmed.slice(5).trim();
-              if (dataStr === '[DONE]') {
-                callbacks.onDone?.();
-                return;
-              }
-              try {
-                const parsed = JSON.parse(dataStr);
-                if (currentEvent === 'error') {
-                  callbacks.onError?.(new Error(parsed.message || 'AI streaming error'));
-                  return;
-                }
-                if (currentEvent === 'message_complete') {
-                  callbacks.onDone?.();
-                  return;
-                }
-                if (currentEvent === 'answer_delta') {
-                  callbacks.onChunk(parsed.text || parsed.chunk || parsed.delta || '');
-                } else if (parsed.chunk || parsed.text || parsed.delta) {
-                  callbacks.onChunk(parsed.chunk || parsed.text || parsed.delta);
-                }
-              } catch {
-                // If it's raw text chunk
-                callbacks.onChunk(dataStr);
-              }
+            if (!trimmed.startsWith('data:')) continue;
+            const data = trimmed.slice(5).trim();
+            if (data === '[DONE]' || currentEvent === 'message_complete') {
+              callbacks.onDone?.();
+              return;
             }
+            let parsed: any;
+            try {
+              parsed = JSON.parse(data);
+            } catch {
+              // Some helper versions send unstructured text in data fields.
+              callbacks.onChunk(data);
+              currentEvent = 'message';
+              continue;
+            }
+            if (currentEvent === 'error') {
+              throw new Error(parsed.message || 'AI streaming error');
+            }
+            const text = parsed.text || parsed.chunk || parsed.delta;
+            if (text) callbacks.onChunk(text);
+            currentEvent = 'message';
           }
         }
         callbacks.onDone?.();
-      } catch (err) {
-        if ((err as any)?.name === 'AbortError') {
-          return;
-        }
-        callbacks.onError?.(err);
-        throw err;
+      } catch (error) {
+        if ((error as any)?.name === 'AbortError') return;
+        callbacks.onError?.(error);
+        throw error;
       }
     },
 
     uploadModule: async (file: File) => {
-      let authToken: string | undefined;
-      try {
-        const supabase = createClient();
-        const { data: { session } } = await supabase.auth.getSession();
-        authToken = session?.access_token;
-      } catch {
-        // ignore
-      }
-
       const formData = new FormData();
       formData.append('file', file);
-
-      const response = await fetch(`${API_BASE_URL}/api/ai/upload`, {
+      const response = await fetch(aiUrl('upload'), {
         method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        },
-        credentials: 'include',
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
         body: formData,
       });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.message || 'Module upload failed');
-      }
-
+      if (!response.ok) throw await readError(response, 'Module upload failed');
       return response.json();
     },
-  },
-
-  recommendations: {
-    list: () => apiFetch<{ success: boolean; data: any[] }>('/api/recommendation'),
   },
 };

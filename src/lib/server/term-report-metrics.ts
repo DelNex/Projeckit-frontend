@@ -58,7 +58,7 @@ export function calculateSectionTermMetrics(
   const scores = cases.map((row) => Number(row.score));
   const mean = scores.reduce((sum, score) => sum + score, 0) / cases.length;
   const pl = (mean / items) * 100;
-  const mps = (pl * 0.98) + 2;
+  const mps = percentageToMps(pl);
   return {
     sectionName,
     cases: cases.length,
@@ -91,3 +91,4 @@ export function readSelectedOption(raw: unknown, itemNumber: number): string {
   }
   return typeof value === 'string' ? value.trim().toUpperCase() : '';
 }
+import { percentageToMps } from '@/lib/assessment-scoring';
