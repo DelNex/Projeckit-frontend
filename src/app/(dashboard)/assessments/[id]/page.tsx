@@ -17,7 +17,7 @@ import { projectTosItems } from '@/lib/tos-item-projection';
 import { createClient } from '@/lib/supabase/client';
 import type { Database } from '@/types/database.types';
 import { cn } from '@/lib/utils';
-import { deduplicateItemScans, readScanAnswers } from '@/lib/item-response-analysis';
+import { deduplicateItemScans, readScanAnswers, readScanItemStates } from '@/lib/item-response-analysis';
 
 type ScanResultRow = Database['public']['Tables']['scan_results']['Row'];
 type TosDocRow = Database['public']['Tables']['tos_documents']['Row'] & {
@@ -556,7 +556,9 @@ export default function AssessmentWorkspacePage({
         setSkippedScans((count) => count + 1);
         return 'duplicate';
       }
-      const needsReview = hasConflict || scanStatus !== 'PROCESSED' || result.hasAmbiguity || result.hasMultipleMarks || result.overallConfidence < 0.75;
+      // The barcode and all answer rows have already been explicitly confirmed in the
+      // staged camera review. Keep scan-level failures and identity conflicts gated.
+      const needsReview = hasConflict || scanStatus !== 'PROCESSED' || result.overallConfidence < 0.75;
 
       // Calculate score if answer key exists
       let score = 0;
@@ -582,7 +584,9 @@ export default function AssessmentWorkspacePage({
           image_storage_path: imageStoragePath,
           image_hash: result.imageHash,
           confidence: result.overallConfidence,
-          raw_answers: result.rawAnswers,
+          raw_answers: result.itemStates
+            ? { ...result.rawAnswers, _itemStates: result.itemStates }
+            : result.rawAnswers,
           normalized_answers: result.normalizedAnswers,
           status: needsReview ? 'VERIFICATION_REQUIRED' : scanStatus,
           detected_roll_number: result.detectedRollNumber,
@@ -695,6 +699,7 @@ export default function AssessmentWorkspacePage({
     const actualN = gradedScans.length;
     const examinees = gradedScans.map((scan) => {
       const ansMap = readScanAnswers(scan);
+      const itemStates = readScanItemStates(scan);
       let score = 0;
       for (let i = 1; i <= itemCount; i++) {
         const stAns = ansMap[i];
@@ -706,6 +711,7 @@ export default function AssessmentWorkspacePage({
       const student = studentsList.find((entry) => entry.id === scan.student_id);
       return {
         ansMap,
+        itemStates,
         score,
         studentId: scan.student_id,
         name: student?.name || (scan.detected_roll_number ? `Roll #${scan.detected_roll_number}` : 'Unassigned learner'),
@@ -785,7 +791,10 @@ export default function AssessmentWorkspacePage({
         correct: choice === String(answers[itemNum] || '').toUpperCase(),
       }));
       const unansweredCount = actualN
-        ? examinees.filter((examinee) => !choicesList.includes(examinee.ansMap[itemNum] || '')).length
+        ? examinees.filter((examinee) => !choicesList.includes(examinee.ansMap[itemNum] || '') && !['MULTIPLE_MARK', 'ERASED_MARK'].includes(examinee.itemStates[itemNum] || '')).length
+        : 0;
+      const invalidMarkCount = actualN
+        ? examinees.filter((examinee) => ['MULTIPLE_MARK', 'ERASED_MARK'].includes(examinee.itemStates[itemNum] || '')).length
         : 0;
 
       let discriminationCategory = 'Retain';
@@ -823,6 +832,7 @@ export default function AssessmentWorkspacePage({
         action,
         choiceBreakdown,
         unansweredCount,
+        invalidMarkCount,
         hasScannedCases: actualN > 0,
       };
     });
@@ -879,7 +889,10 @@ export default function AssessmentWorkspacePage({
     if (!selectedAnswerGroup) return [];
     return deduplicateItemScans(scanResults).flatMap((scan) => {
       const selected = readScanAnswers(scan)[selectedAnswerGroup.itemNumber] || 'Blank / unreadable';
-      if (selected !== selectedAnswerGroup.choice) return [];
+      if (selectedAnswerGroup.choice === 'Multiple / erased' ) {
+        const state = readScanItemStates(scan)[selectedAnswerGroup.itemNumber];
+        if (state !== 'MULTIPLE_MARK' && state !== 'ERASED_MARK') return [];
+      } else if (selected !== selectedAnswerGroup.choice) return [];
       const student = studentsList.find((entry) => entry.id === scan.student_id);
       return [{
         id: scan.student_id || scan.id,
@@ -1645,6 +1658,15 @@ export default function AssessmentWorkspacePage({
                                 >
                                   Blank · {row.unansweredCount}
                                 </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedAnswerGroup({ itemNumber: row.itemNumber, choice: 'Multiple / erased' })}
+                                  disabled={!row.hasScannedCases || row.invalidMarkCount === 0}
+                                  title={`${row.invalidMarkCount} multiple or erased marks were scored wrong; click to see learners.`}
+                                  className="rounded-md border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300"
+                                >
+                                  Invalid · {row.invalidMarkCount}
+                                </button>
                               </div>
                             </td>
                             <td className="px-2 py-2 text-center">
@@ -1740,7 +1762,9 @@ export default function AssessmentWorkspacePage({
                   Item {selectedAnswerGroup.itemNumber} · {selectedAnswerGroup.choice}
                 </h2>
                 <p className="mt-1 text-xs text-gray-500">
-                  {selectedAnswerGroup.choice === String(answers[selectedAnswerGroup.itemNumber] || '').toUpperCase()
+                  {selectedAnswerGroup.choice === 'Multiple / erased'
+                    ? 'Multiple or erased marks; scored incorrect'
+                    : selectedAnswerGroup.choice === String(answers[selectedAnswerGroup.itemNumber] || '').toUpperCase()
                     ? 'Correct answer selected by these learners'
                     : 'Incorrect or blank answer selected by these learners'}
                 </p>

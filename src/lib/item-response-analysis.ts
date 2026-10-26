@@ -19,7 +19,18 @@ export interface ItemChoiceDistribution {
   correctAnswer: string;
   choices: ItemChoiceCount[];
   unanswered: number;
+  invalidMarks: number;
   cases: number;
+}
+
+export function readScanItemStates(scan: Pick<ItemResponseScan, 'raw_answers'>): Record<number, string> {
+  const raw = scan.raw_answers;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const states = (raw as Record<string, unknown>)._itemStates;
+  if (!states || typeof states !== 'object' || Array.isArray(states)) return {};
+  return Object.fromEntries(Object.entries(states as Record<string, unknown>)
+    .filter(([key, state]) => Number.isInteger(Number(key)) && Number(key) > 0 && typeof state === 'string')
+    .map(([key, state]) => [Number(key), state as string]));
 }
 
 export function readScanAnswers(scan: Pick<ItemResponseScan, 'normalized_answers' | 'raw_answers'>): Record<number, string> {
@@ -73,16 +84,22 @@ export function calculateItemChoiceDistributions(
     const correctAnswer = String(answerKey[String(itemNumber)] || '').trim().toUpperCase();
     const counts = new Map(choices.map((choice) => [choice, 0]));
     let unanswered = 0;
-    for (const { answers } of graded) {
+    let invalidMarks = 0;
+    for (const { scan, answers } of graded) {
       const selected = answers[itemNumber];
       if (selected && counts.has(selected)) counts.set(selected, (counts.get(selected) || 0) + 1);
-      else unanswered++;
+      else {
+        const state = readScanItemStates(scan)[itemNumber];
+        if (state === 'MULTIPLE_MARK' || state === 'ERASED_MARK') invalidMarks++;
+        else unanswered++;
+      }
     }
     return {
       itemNumber,
       correctAnswer,
       choices: choices.map((choice) => ({ choice, count: counts.get(choice) || 0, correct: choice === correctAnswer })),
       unanswered,
+      invalidMarks,
       cases: graded.length,
     };
   });

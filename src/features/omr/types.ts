@@ -3,7 +3,7 @@
  * Phase 6 Architecture Implementation
  */
 
-export type OmrItemState = 'MARKED' | 'BLANK' | 'AMBIGUOUS' | 'MULTIPLE_MARK';
+export type OmrItemState = 'MARKED' | 'BLANK' | 'AMBIGUOUS' | 'MULTIPLE_MARK' | 'ERASED_MARK';
 
 export interface ProcessedItemResult {
   itemNumber: number;
@@ -33,10 +33,14 @@ export interface OmrScanResult {
   fiducialDetected: boolean;
   fiducialConfidence: number;
   items: ProcessedItemResult[];
+  /** Item classifications retained separately so invalid marks remain distinct from blanks. */
+  itemStates?: Record<number, OmrItemState>;
   rawAnswers: Record<number, string | null>;
   normalizedAnswers: (string | null)[];
   hasAmbiguity: boolean;
   hasMultipleMarks: boolean;
+  /** Faint residual ink was detected in one or more answer bubbles. */
+  hasErasedMarks?: boolean;
   status: OmrScanStatus;
   errorCode?: string;
   failedRegion?: {
@@ -48,7 +52,7 @@ export interface OmrScanResult {
   };
   markedImageBase64?: string; // Optional marked debug/audit visualization
   storagePath?: string; // Supabase Storage path in 'omr-scans' bucket
-  engineUsed: '@armghan3071/omrchecker' | 'kit-optical-native';
+  engineUsed: '@armghan3071/omrchecker' | 'kit-optical-native' | 'kit-opencv.js';
 }
 
 export interface OmrPreprocessResult {
@@ -159,4 +163,3 @@ export interface OmrEngineAdapter {
     options?: OmrProcessOptions
   ): Promise<OmrScanResult>;
 }
-

@@ -126,6 +126,7 @@ export class OmrCheckerEngineAdapter implements OmrEngineAdapter {
   ): OmrScanResult {
     const rawResponse = output.response || {};
     const items: ProcessedItemResult[] = [];
+    const itemStates: Record<number, ProcessedItemResult['state']> = {};
     const rawAnswers: Record<number, string | null> = {};
     const normalizedAnswers: (string | null)[] = [];
 
@@ -172,6 +173,7 @@ export class OmrCheckerEngineAdapter implements OmrEngineAdapter {
           D: selectedChoice === 'D' ? 0.85 : 0.05,
         },
       });
+      itemStates[itemNum] = state;
     }
 
     const itemAvgConf = items.length > 0 ? confidenceSum / items.length : 0;
@@ -197,6 +199,7 @@ export class OmrCheckerEngineAdapter implements OmrEngineAdapter {
       fiducialDetected: true,
       fiducialConfidence: 0.95,
       items,
+      itemStates,
       rawAnswers,
       normalizedAnswers,
       hasAmbiguity,
@@ -207,4 +210,3 @@ export class OmrCheckerEngineAdapter implements OmrEngineAdapter {
     };
   }
 }
-

@@ -1,7 +1,7 @@
 /**
  * Project KIT — Unified OMR Scanner Adapter
- * Orchestrates third-party @armghan3071/omrchecker engine with native optical fallback,
- * normalizing all outputs into KIT's domain OmrScanResult.
+ * Uses the bundled OpenCV.js geometry-aware pipeline by default. The older
+ * OMRChecker adapter remains available for explicit compatibility scans.
  */
 
 import { NativeOpticalEngineAdapter } from './engines/native-optical-engine';
@@ -31,19 +31,7 @@ export class KitOmrAdapter {
       return await this.nativeOpticalAdapter.process(image, activeTemplate, options);
     }
 
-    // Prefer @armghan3071/omrchecker in the browser if supported
-    if (typeof window !== 'undefined' && typeof Worker !== 'undefined') {
-      try {
-        return await this.omrCheckerAdapter.process(image, activeTemplate, options);
-      } catch (err) {
-        console.warn(
-          '[@armghan3071/omrchecker] Primary engine unavailable or encountered error, falling back to native optical engine:',
-          err
-        );
-      }
-    }
-
-    // Fallback to zero-external-CDN native optical engine
+    // The bundled OpenCV worker returns per-bubble features and has no runtime CDN dependency.
     return await this.nativeOpticalAdapter.process(image, activeTemplate, options);
   }
 }
@@ -61,4 +49,3 @@ export async function processOmrScan(
 ): Promise<OmrScanResult> {
   return omrAdapter.processScan(image, template, options);
 }
-

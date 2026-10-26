@@ -23,6 +23,7 @@ import {
   ProcessedItemResult,
 } from '../types';
 import { MarkerDetector } from './marker-detector';
+import { analyzeBubbleSamples, BubbleMeasurement, BubbleSample } from './opencv-bubble-analysis';
 
 export interface DecodedImage {
   pixels: Uint8Array | Uint8ClampedArray;
@@ -180,6 +181,10 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
     }
 
     if (!decoded) {
+      decoded = await this.tryDecodeBrowserImage(rawBuffer, image);
+    }
+
+    if (!decoded) {
       return {
         idempotencyKey: options.idempotencyKey || `scan-${imageHash.substring(0, 16)}`,
         imageHash,
@@ -219,13 +224,13 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
   /**
    * Processes decoded RGBA image using marker-first projective homography.
    */
-  private processWithHomography(
+  private async processWithHomography(
     decoded: DecodedImage,
     geometry: CanonicalOmrGeometry,
     template: KitOmrTemplate,
     imageHash: string,
     options: OmrProcessOptions
-  ): OmrScanResult {
+  ): Promise<OmrScanResult> {
     const { pixels, width, height } = decoded;
 
     // Pre-flight image metrics (contrast and general illumination)
@@ -266,30 +271,70 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
     // Scale factor for radius
     const scale = Math.min(width / geometry.page.width, height / geometry.page.height);
 
+    // Build one batched OpenCV analysis pass for the roll grid and all answer bubbles.
+    // OpenCV runs in a Web Worker; the existing pixel sampler remains a conservative
+    // fallback for server-side fixtures and browsers where WebAssembly cannot start.
+    const circleSamples: BubbleSample[] = [];
+    const rollSampleIndices = new Map<number, number>();
+    const answerSampleIndices = new Map<number, Record<string, number>>();
+    const rollRegion = detectedRegions['ROLL_NUMBER'] || detectedRegions['ANSWERS'];
+    if (rollRegion) {
+      for (const target of geometry.rollNumberGrid) {
+        const pt = rollRegion.homography.transformPoint(target.relativePosition.u, target.relativePosition.v);
+        rollSampleIndices.set(target.rollNumber, circleSamples.length);
+        circleSamples.push({ x: pt.x, y: pt.y, radius: target.radius * scale });
+      }
+    }
+    for (const item of geometry.answerBlocks) {
+      const region = detectedRegions[item.regionId];
+      if (!region) continue;
+      const indices: Record<string, number> = {};
+      for (const choice of item.choices) {
+        const pt = region.homography.transformPoint(choice.relativePosition.u, choice.relativePosition.v);
+        indices[choice.choice] = circleSamples.length;
+        circleSamples.push({ x: pt.x, y: pt.y, radius: choice.radius * scale });
+      }
+      answerSampleIndices.set(item.itemNumber, indices);
+    }
+
+    let cvMeasurements: BubbleMeasurement[] | null = null;
+    if (circleSamples.length > 0) {
+      try {
+        cvMeasurements = await analyzeBubbleSamples(pixels, width, height, circleSamples);
+        if (cvMeasurements.length !== circleSamples.length) throw new Error('OpenCV.js returned an incomplete bubble analysis.');
+      } catch (error) {
+        console.warn('[OMR] OpenCV.js bubble analysis unavailable; this scan will require review.', error);
+      }
+    }
+    const getMeasurement = (index: number, sample: BubbleSample): BubbleMeasurement => {
+      if (cvMeasurements) return cvMeasurements[index];
+      const legacyDarkness = NativeOpticalEngineAdapter.sampleCircleDarkness(pixels, width, height, sample.x, sample.y, sample.radius);
+      return { fillRatio: legacyDarkness, contrast: legacyDarkness };
+    };
+    const isClearMark = (measurement: BubbleMeasurement) => cvMeasurements
+      ? (measurement.fillRatio >= 0.20 && measurement.contrast >= 0.14) || measurement.fillRatio >= 0.37 || measurement.contrast >= 0.32
+      : measurement.fillRatio >= markMinFill;
+    const isResidualMark = (measurement: BubbleMeasurement) => cvMeasurements
+      ? measurement.fillRatio >= 0.035 || measurement.contrast >= 0.075
+      : false;
+
     // STEP 3: DYNAMIC ROLL NUMBER DECODING
     let detectedRollNumber: number | null = null;
     let rollAmbiguity = false;
     let rollMultipleMarks = false;
 
-    const rollRegion = detectedRegions['ROLL_NUMBER'] || detectedRegions['ANSWERS'];
     if (rollRegion && geometry.rollNumberGrid.length > 0) {
-      const H = rollRegion.homography;
       const markedRolls: Array<{ rollNumber: number; score: number }> = [];
 
       for (const target of geometry.rollNumberGrid) {
-        // Project normalized (u, v) into physical image coordinates
-        const pt = H.transformPoint(target.relativePosition.u, target.relativePosition.v);
-        const score = NativeOpticalEngineAdapter.sampleCircleDarkness(
-          pixels,
-          width,
-          height,
-          pt.x,
-          pt.y,
-          target.radius * scale
-        );
-
-        if (score >= markMinFill) {
+        const index = rollSampleIndices.get(target.rollNumber);
+        if (index === undefined) continue;
+        const measurement = getMeasurement(index, circleSamples[index]);
+        const score = Math.max(measurement.fillRatio, measurement.contrast);
+        if (isClearMark(measurement)) {
           markedRolls.push({ rollNumber: target.rollNumber, score });
+        } else if (isResidualMark(measurement)) {
+          rollAmbiguity = true;
         }
       }
 
@@ -305,62 +350,67 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
 
     // STEP 4: DYNAMIC ANSWER ITEM DECODING VIA HOMOGRAPHY
     const items: ProcessedItemResult[] = [];
+    const itemStates: Record<number, ProcessedItemResult['state']> = {};
     const rawAnswers: Record<number, string | null> = {};
     const normalizedAnswers: (string | null)[] = [];
 
     let hasAmbiguity = false;
     let hasMultipleMarks = false;
+    let hasErasedMarks = false;
     let confidenceSum = 0;
 
     for (const item of geometry.answerBlocks) {
       const regionQuad = detectedRegions[item.regionId];
       if (!regionQuad) continue;
 
-      const H = regionQuad.homography;
       const scores: Record<string, number> = {};
+      const measurements: Record<string, BubbleMeasurement> = {};
 
       for (const choice of item.choices) {
-        const pt = H.transformPoint(choice.relativePosition.u, choice.relativePosition.v);
-        const score = NativeOpticalEngineAdapter.sampleCircleDarkness(
-          pixels,
-          width,
-          height,
-          pt.x,
-          pt.y,
-          choice.radius * scale
-        );
-        scores[choice.choice] = parseFloat(score.toFixed(3));
+        const index = answerSampleIndices.get(item.itemNumber)?.[choice.choice];
+        if (index === undefined) continue;
+        const measurement = getMeasurement(index, circleSamples[index]);
+        measurements[choice.choice] = measurement;
+        scores[choice.choice] = parseFloat(Math.max(measurement.fillRatio, measurement.contrast).toFixed(3));
       }
 
       const choicesList = item.choices.map((c) => c.choice);
-      const markedChoices = choicesList.filter((c) => scores[c] >= markMinFill);
-
+      const markedChoices = choicesList.filter((choice) => measurements[choice] && isClearMark(measurements[choice]));
+      const residualChoices = choicesList.filter((choice) => measurements[choice] && isResidualMark(measurements[choice]));
       const sorted = [...choicesList].sort((a, b) => scores[b] - scores[a]);
       const topScore = scores[sorted[0]] || 0;
-      const secondScore = scores[sorted[1]] || 0;
 
       let selectedChoice: string | null = null;
       let state: ProcessedItemResult['state'] = 'BLANK';
       let confidence = 0;
 
-      if (markedChoices.length === 0) {
-        state = 'BLANK';
-        confidence = Math.max(0, 1.0 - topScore);
+      if (markedChoices.length > 1 || residualChoices.length > 1 || (markedChoices.length === 1 && residualChoices.some((choice) => choice !== markedChoices[0]))) {
+        state = 'MULTIPLE_MARK';
+        hasMultipleMarks = true;
+        confidence = 0.3;
       } else if (markedChoices.length === 1) {
         selectedChoice = markedChoices[0];
         state = 'MARKED';
-        confidence = Math.min(1.0, topScore - secondScore + 0.5);
+        confidence = Math.min(1.0, 0.55 + Math.max(0, scores[selectedChoice] - (scores[sorted[1]] || 0)) * 0.8);
+      } else if (residualChoices.length === 1) {
+        // A faint residual is never promoted to an answer: it is scored wrong and shown
+        // as an erased/partial mark for teacher review.
+        state = 'ERASED_MARK';
+        hasErasedMarks = true;
+        hasAmbiguity = true;
+        confidence = 0.25;
+      } else if (!cvMeasurements && topScore >= markMinFill * 0.45) {
+        // A fallback darkness-only result cannot reliably separate a faint fill from
+        // an erasure. Keep it unresolved so the session requires a retake/review.
+        state = 'AMBIGUOUS';
+        hasAmbiguity = true;
+        confidence = 0.25;
+      } else if (markedChoices.length === 0) {
+        state = 'BLANK';
+        confidence = Math.max(0, 1.0 - topScore);
       } else {
-        const delta = topScore - secondScore;
-        if (delta < ambiguousDelta) {
-          state = 'AMBIGUOUS';
-          hasAmbiguity = true;
-          confidence = delta / ambiguousDelta;
-        } else {
-          state = 'MULTIPLE_MARK';
-          hasMultipleMarks = true;
-          confidence = 0.3;
-        }
+        state = 'BLANK';
+        confidence = 0;
       }
 
       confidenceSum += confidence;
@@ -372,6 +422,7 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
         state,
         scores,
       });
+      itemStates[item.itemNumber] = state;
 
       rawAnswers[item.itemNumber] = selectedChoice;
       normalizedAnswers.push(selectedChoice);
@@ -405,12 +456,14 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
       fiducialDetected: true,
       fiducialConfidence: markerResult.overallMarkerConfidence,
       items,
+      itemStates,
       rawAnswers,
       normalizedAnswers,
       hasAmbiguity: hasAmbiguity || rollAmbiguity,
       hasMultipleMarks: hasMultipleMarks || rollMultipleMarks,
-      status,
-      engineUsed: 'kit-optical-native',
+      hasErasedMarks,
+      status: !cvMeasurements || hasErasedMarks || hasAmbiguity || hasMultipleMarks || rollMultipleMarks || rollAmbiguity ? 'VERIFICATION_REQUIRED' : status,
+      engineUsed: cvMeasurements ? 'kit-opencv.js' : 'kit-optical-native',
     };
   }
 
@@ -437,6 +490,31 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
         width: png.width,
         height: png.height,
       };
+    } catch {
+      return null;
+    }
+  }
+
+  private async tryDecodeBrowserImage(buffer: Uint8Array, source: File | Blob | ArrayBuffer | Uint8Array | string | DecodedImage): Promise<DecodedImage | null> {
+    if (typeof createImageBitmap !== 'function') return null;
+    try {
+      let blob: Blob;
+      if (typeof Blob !== 'undefined' && source instanceof Blob) blob = source;
+      else if (typeof source === 'string' && source.startsWith('data:')) blob = await (await fetch(source)).blob();
+      else {
+        const mime = buffer[0] === 0xff && buffer[1] === 0xd8 ? 'image/jpeg' : 'image/png';
+        blob = new Blob([buffer as BlobPart], { type: mime });
+      }
+      const bitmap = await createImageBitmap(blob);
+      const canvas = typeof OffscreenCanvas !== 'undefined'
+        ? new OffscreenCanvas(bitmap.width, bitmap.height)
+        : Object.assign(document.createElement('canvas'), { width: bitmap.width, height: bitmap.height });
+      const context = canvas.getContext('2d');
+      if (!context) { bitmap.close(); return null; }
+      context.drawImage(bitmap, 0, 0);
+      const imageData = context.getImageData(0, 0, bitmap.width, bitmap.height);
+      bitmap.close();
+      return { pixels: imageData.data, width: imageData.width, height: imageData.height };
     } catch {
       return null;
     }

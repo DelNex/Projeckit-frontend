@@ -105,7 +105,13 @@ function OmrExamineeScanSession(props: OmrCameraModalProps) {
   const video = useOmrCamera({ onError: (error) => setErrorMessage(error.message) });
   const rangeEnd = Math.min(itemCount, rangeStart + 4);
   const selectedStudent = students.find((student) => student.id === selectedStudentId) || null;
-  const accountedCount = Object.values(sessionItems).filter((item) => item.blankConfirmed || (item.state === 'MARKED' && Boolean(item.selectedChoice) && item.confidence >= 0.65)).length;
+  const isAccounted = (item?: CapturedItem) => Boolean(item && (
+    item.blankConfirmed ||
+    (item.state === 'MARKED' && Boolean(item.selectedChoice) && item.confidence >= 0.65) ||
+    item.state === 'MULTIPLE_MARK' ||
+    item.state === 'ERASED_MARK'
+  ));
+  const accountedCount = Object.values(sessionItems).filter(isAccounted).length;
 
   useEffect(() => {
     if (!isOpen) {
@@ -181,10 +187,15 @@ function OmrExamineeScanSession(props: OmrCameraModalProps) {
         for (const item of rangeItems) next[item.itemNumber] = { ...item, pass: nextPass, blankConfirmed: false, scannerReadChoice: item.selectedChoice, scannerConfidence: item.confidence };
         return next;
       });
-      const needsRetry = rangeItems.filter((item) => item.state !== 'MARKED' || !item.selectedChoice || item.confidence < 0.65);
+      const needsRetry = rangeItems.filter((item) => !(
+        (item.state === 'MARKED' && item.selectedChoice && item.confidence >= 0.65) ||
+        item.state === 'MULTIPLE_MARK' ||
+        item.state === 'ERASED_MARK'
+      ));
+      const wrongMarks = rangeItems.filter((item) => item.state === 'MULTIPLE_MARK' || item.state === 'ERASED_MARK').length;
       setInfoMessage(needsRetry.length
-        ? `${rangeItems.length - needsRetry.length} read clearly. Retake or confirm the blank items in this range before continuing.`
-        : `Questions ${rangeStart}–${rangeEnd} captured clearly.`);
+        ? `${rangeItems.length - needsRetry.length} resolved, including ${wrongMarks} detected wrong mark${wrongMarks === 1 ? '' : 's'}. Retake uncertain items or confirm blanks before continuing.`
+        : `Questions ${rangeStart}–${rangeEnd} captured. ${wrongMarks ? `${wrongMarks} multiple/erased answer${wrongMarks === 1 ? ' was' : 's were'} marked wrong.` : 'Review the captured choices before continuing.'}`);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : 'Could not scan this answer range.');
     } finally {
@@ -203,14 +214,14 @@ function OmrExamineeScanSession(props: OmrCameraModalProps) {
   const currentRangeComplete = Array.from({ length: rangeEnd - rangeStart + 1 }, (_, index) => rangeStart + index)
     .every((itemNumber) => {
       const item = sessionItems[itemNumber];
-      return Boolean(item && (item.blankConfirmed || (item.state === 'MARKED' && item.selectedChoice && item.confidence >= 0.65)));
+      return isAccounted(item);
     });
 
   const advanceRange = () => {
     const firstUnaccounted = Array.from({ length: itemCount }, (_, index) => index + 1)
       .find((itemNumber) => {
         const item = sessionItems[itemNumber];
-        return !item || (!item.blankConfirmed && !(item.state === 'MARKED' && item.selectedChoice && item.confidence >= 0.65));
+        return !isAccounted(item);
       });
     if (!firstUnaccounted) { setPhase('review'); return; }
     setRangeStart(Math.floor((firstUnaccounted - 1) / 5) * 5 + 1);
@@ -244,20 +255,25 @@ function OmrExamineeScanSession(props: OmrCameraModalProps) {
         const itemNumber = index + 1;
         const item = sessionItems[itemNumber];
         if (!item) throw new Error(`Question ${itemNumber} has not been scanned.`);
-        return { ...item, selectedChoice: item.selectedChoice, state: item.selectedChoice ? 'MARKED' as const : 'BLANK' as const, confidence: 1 };
+        return { ...item, selectedChoice: item.selectedChoice, state: item.blankConfirmed ? 'BLANK' as const : item.state, confidence: 1 };
       });
       const rawAnswers = Object.fromEntries(items.map((item) => [item.itemNumber, item.selectedChoice]));
+      const itemStates = Object.fromEntries(items.map((item) => [item.itemNumber, item.state]));
       const finalResult: OmrScanResult = {
         ...lastCapture,
         idempotencyKey: `session-${assessmentId}-${selectedStudent.id}-${Date.now()}`,
         detectedAssessmentId: assessmentId,
         detectedStudentId: selectedStudent.id,
-        overallConfidence: items.reduce((sum, item) => sum + item.confidence, 0) / itemCount,
+        // Reaching this action means the teacher reviewed every row; scanner confidence
+        // remains visible in scannerConfidence while the persisted result is confirmed.
+        overallConfidence: 1,
         items,
+        itemStates,
         rawAnswers,
         normalizedAnswers: items.map((item) => item.selectedChoice),
-        hasAmbiguity: false,
-        hasMultipleMarks: false,
+        hasAmbiguity: items.some((item) => item.state === 'AMBIGUOUS' || item.state === 'ERASED_MARK'),
+        hasMultipleMarks: items.some((item) => item.state === 'MULTIPLE_MARK'),
+        hasErasedMarks: items.some((item) => item.state === 'ERASED_MARK'),
         status: 'PROCESSED',
       };
       if (onScanComplete) {
@@ -337,7 +353,7 @@ function OmrExamineeScanSession(props: OmrCameraModalProps) {
                   const item = sessionItems[itemNumber];
                   return <div key={itemNumber} className="grid grid-cols-[54px_1fr_100px_120px] items-center gap-2 px-3 py-2 text-xs">
                     <strong>Q{itemNumber}</strong>
-                    <span className="text-gray-300">{item?.scannerReadChoice || 'Blank'} {item?.pass ? `· pass ${item.pass}` : ''}</span>
+                    <span className={item?.state === 'MULTIPLE_MARK' || item?.state === 'ERASED_MARK' ? 'text-red-300' : 'text-gray-300'}>{item?.state === 'MULTIPLE_MARK' ? 'Multiple marks · wrong' : item?.state === 'ERASED_MARK' ? 'Erased/partial mark · wrong' : item?.scannerReadChoice || 'Blank'} {item?.pass ? `· pass ${item.pass}` : ''}</span>
                     <span className="text-gray-400">{item?.blankConfirmed ? 'Teacher confirmed' : `${Math.round((item?.scannerConfidence || 0) * 100)}%`}</span>
                     <select value={item?.selectedChoice || ''} onChange={(event) => updateReviewedAnswer(itemNumber, event.target.value)} className="rounded-lg border border-gray-700 bg-gray-800 px-2 py-1.5 text-xs text-white"><option value="">Blank</option>{choices.map((choice) => <option key={choice} value={choice}>{choice}</option>)}</select>
                   </div>;
@@ -369,8 +385,9 @@ function OmrExamineeScanSession(props: OmrCameraModalProps) {
                   {Array.from({ length: rangeEnd - rangeStart + 1 }, (_, index) => {
                     const itemNumber = rangeStart + index;
                     const item = sessionItems[itemNumber];
-                    const resolved = Boolean(item && (item.blankConfirmed || (item.state === 'MARKED' && item.selectedChoice && item.confidence >= 0.65)));
-                    return <div key={itemNumber} className={`rounded-lg border p-2 text-center ${resolved ? 'border-emerald-800 bg-emerald-950/40' : item ? 'border-amber-800 bg-amber-950/30' : 'border-gray-700 bg-gray-800/60'}`}><p className="text-[9px] text-gray-400">Q{itemNumber}</p><strong className="text-sm">{item?.blankConfirmed ? 'Blank ✓' : item?.selectedChoice || (item ? 'Unsure' : 'Not scanned')}</strong>{item?.state === 'BLANK' && !item.blankConfirmed && <button type="button" onClick={() => confirmBlank(itemNumber)} className="mt-1 block w-full text-[9px] font-bold text-amber-200 underline">Confirm blank</button>}</div>;
+                    const resolved = isAccounted(item);
+                    const wrongMark = item?.state === 'MULTIPLE_MARK' || item?.state === 'ERASED_MARK';
+                    return <div key={itemNumber} className={`rounded-lg border p-2 text-center ${wrongMark ? 'border-red-800 bg-red-950/40' : resolved ? 'border-emerald-800 bg-emerald-950/40' : item ? 'border-amber-800 bg-amber-950/30' : 'border-gray-700 bg-gray-800/60'}`}><p className="text-[9px] text-gray-400">Q{itemNumber}</p><strong className="text-sm">{item?.blankConfirmed ? 'Blank ✓' : item?.state === 'MULTIPLE_MARK' ? 'Multiple · wrong' : item?.state === 'ERASED_MARK' ? 'Erased · wrong' : item?.selectedChoice || (item ? 'Unsure' : 'Not scanned')}</strong>{item?.state === 'BLANK' && !item.blankConfirmed && <button type="button" onClick={() => confirmBlank(itemNumber)} className="mt-1 block w-full text-[9px] font-bold text-amber-200 underline">Confirm blank</button>}</div>;
                   })}
                 </div>
               )}

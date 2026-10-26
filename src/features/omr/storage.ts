@@ -82,7 +82,9 @@ export async function persistOmrScan(payload: SaveScanPayload): Promise<SaveScan
         image_storage_path: storagePath,
         image_hash: payload.scanResult.imageHash,
         confidence: payload.scanResult.overallConfidence,
-        raw_answers: payload.scanResult.rawAnswers,
+        raw_answers: payload.scanResult.itemStates
+          ? { ...payload.scanResult.rawAnswers, _itemStates: payload.scanResult.itemStates }
+          : payload.scanResult.rawAnswers,
         normalized_answers: payload.scanResult.normalizedAnswers,
         status: payload.scanResult.status,
       })
@@ -99,4 +101,3 @@ export async function persistOmrScan(payload: SaveScanPayload): Promise<SaveScan
     return { scanResultId: null, storagePath: null, error: err.message || 'Database insert failed' };
   }
 }
-

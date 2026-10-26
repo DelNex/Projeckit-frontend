@@ -8,6 +8,7 @@
     "start": "next start -p 3000",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "research:materials": "node scripts/generate-technology-materials.mjs",
     "build:consolidated": "node ../scripts/build-consolidated.mjs",
     "test": "node scripts/check-schema-contract.mjs && tsx --test \"src/**/__tests__/*.test.ts\""
   },
@@ -16,6 +17,7 @@
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.49.1",
     "@tanstack/react-table": "^9.2.4",
+    "@techstark/opencv-js": "4.12.0-release.1",
     "clsx": "^2.1.1",
     "docx": "9.0.3",
     "jszip": "3.10.1",

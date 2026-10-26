@@ -274,13 +274,14 @@ export async function createItemAnalysisDocx(header: SchoolReportHeader, distrib
       String(choice.count),
       item.cases ? `${((choice.count / item.cases) * 100).toFixed(1)}%` : '—',
     ]),
+    [String(item.itemNumber), item.correctAnswer || '—', 'Multiple / erased', 'Incorrect', String(item.invalidMarks), item.cases ? `${((item.invalidMarks / item.cases) * 100).toFixed(1)}%` : '—'],
     [String(item.itemNumber), item.correctAnswer || '—', 'Blank / unreadable', 'Incorrect', String(item.unanswered), item.cases ? `${((item.unanswered / item.cases) * 100).toFixed(1)}%` : '—'],
   ]);
   return makeDocument([
     ...headerParagraphs(header),
     titleParagraph('ITEM ANALYSIS — ANSWER CHOICE DISTRIBUTION'),
     contextParagraph(header),
-    new Paragraph({ spacing: { after: 120 }, children: [new TextRun({ text: `Cases: ${distributions[0]?.cases || 0}. Each item lists the answer key and the number and percentage of learners selecting each answer.`, font: 'Arial', size: 18 })] }),
+    new Paragraph({ spacing: { after: 120 }, children: [new TextRun({ text: `Cases: ${distributions[0]?.cases || 0}. Multiple or erased marks are reported separately from blank answers and scored incorrect.`, font: 'Arial', size: 18 })] }),
     dataTable(['Item', 'Key', 'Selected answer', 'Result', 'Learners', 'Percent'], rows, [9, 9, 34, 16, 14, 18]),
     new Paragraph({ text: '', spacing: { after: 220 } }),
     signatureTable(header.preparedBy),
