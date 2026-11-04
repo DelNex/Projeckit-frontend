@@ -71,6 +71,8 @@ export interface PersonalizedSheetData {
   rollNumber?: number; // 1..classSize (legacy)
   totalPoints?: number;
   visibleFields?: VisibleHeaderFields;
+  isAnswerKey?: boolean;
+  answerKey?: Record<number | string, string>;
 }
 
 export function renderOmrMasterSvg(
@@ -160,9 +162,12 @@ export function renderOmrMasterSvg(
   // Row 1: NAME, DATE, SCORE
   svgElements += `  <text x="${li.nameLabelX}" y="${li.row1Y}" font-family="sans-serif" font-size="8" font-weight="bold" fill="#111827">NAME:</text>\n`;
   svgElements += `  <line x1="${li.nameLineStartX}" y1="${li.row1Y + 3}" x2="${li.nameLineEndX}" y2="${li.row1Y + 3}" stroke="#1E293B" stroke-width="0.75"/>\n`;
-  if (learnerNameDisplay) {
-    const nameFontSize = learnerNameDisplay.length > 32 ? 6.5 : learnerNameDisplay.length > 22 ? 7.2 : 8;
-    svgElements += `  <text x="${li.nameLineStartX + 2}" y="${li.row1Y}" font-family="sans-serif" font-size="${nameFontSize}" font-weight="bold" fill="#111827">${escapeXml(learnerNameDisplay)}</text>\n`;
+  const effectiveLearnerName = personalized?.isAnswerKey && !learnerNameDisplay
+    ? 'TEACHER MASTER KEY'
+    : learnerNameDisplay;
+  if (effectiveLearnerName) {
+    const nameFontSize = effectiveLearnerName.length > 32 ? 6.5 : effectiveLearnerName.length > 22 ? 7.2 : 8;
+    svgElements += `  <text x="${li.nameLineStartX + 2}" y="${li.row1Y}" font-family="sans-serif" font-size="${nameFontSize}" font-weight="bold" fill="#111827">${escapeXml(effectiveLearnerName)}</text>\n`;
   }
 
   svgElements += `  <text x="${li.dateLabelX}" y="${li.row1Y}" font-family="sans-serif" font-size="8" font-weight="bold" fill="#111827">DATE:</text>\n`;
@@ -173,12 +178,16 @@ export function renderOmrMasterSvg(
 
   svgElements += `  <text x="${li.scoreLabelX}" y="${li.row1Y}" font-family="sans-serif" font-size="8" font-weight="bold" fill="#111827">SCORE:</text>\n`;
   svgElements += `  <line x1="${li.scoreLineStartX}" y1="${li.row1Y + 3}" x2="${li.scoreLineEndX}" y2="${li.row1Y + 3}" stroke="#1E293B" stroke-width="0.75"/>\n`;
+  if (personalized?.isAnswerKey) {
+    svgElements += `  <text x="${li.scoreLineStartX + 2}" y="${li.row1Y}" font-family="sans-serif" font-size="8" font-weight="bold" fill="#047857">${totalPoints}/${totalPoints}</text>\n`;
+  }
 
   // Row 2: LRN, YEAR/SECTION
   svgElements += `  <text x="${li.lrnLabelX}" y="${li.row2Y}" font-family="sans-serif" font-size="8" font-weight="bold" fill="#111827">LRN:</text>\n`;
   svgElements += `  <line x1="${li.lrnLineStartX}" y1="${li.row2Y + 3}" x2="${li.lrnLineEndX}" y2="${li.row2Y + 3}" stroke="#1E293B" stroke-width="0.75"/>\n`;
-  if (lrnDisplay) {
-    svgElements += `  <text x="${li.lrnLineStartX + 2}" y="${li.row2Y}" font-family="monospace" font-size="8" font-weight="bold" fill="#334155">${escapeXml(lrnDisplay)}</text>\n`;
+  const effectiveLrn = personalized?.isAnswerKey && !lrnDisplay ? 'MASTER-KEY' : lrnDisplay;
+  if (effectiveLrn) {
+    svgElements += `  <text x="${li.lrnLineStartX + 2}" y="${li.row2Y}" font-family="monospace" font-size="8" font-weight="bold" fill="${personalized?.isAnswerKey ? '#047857' : '#334155'}">${escapeXml(effectiveLrn)}</text>\n`;
   }
 
   svgElements += `  <text x="${li.yearSectionLabelX}" y="${li.row2Y}" font-family="sans-serif" font-size="8" font-weight="bold" fill="#111827">YEAR/SECTION:</text>\n`;
@@ -217,7 +226,8 @@ export function renderOmrMasterSvg(
   // 3. TITLE BLOCK (Centered, Bold, Uppercase, Auto-Shrink Font)
   // All coordinates derived from geometry.layout.titleBlock
   // =========================================================================
-  const fullTitle = cleanTitleText(termDisplay, titleDisplay);
+  const rawTitle = cleanTitleText(termDisplay, titleDisplay);
+  const fullTitle = personalized?.isAnswerKey ? `${rawTitle} — MASTER ANSWER KEY` : rawTitle;
   const tb = layout.titleBlock;
 
   svgElements += `  <!-- 3. Title Block -->\n`;
@@ -232,10 +242,17 @@ export function renderOmrMasterSvg(
   // All coordinates derived from geometry.layout.sectionBar
   // =========================================================================
   const sb = layout.sectionBar;
+  const sectionBarTitle = personalized?.isAnswerKey
+    ? `MULTIPLE CHOICE (${totalPoints} POINTS) — MASTER KEY`
+    : `MULTIPLE CHOICE (${totalPoints} POINTS)`;
+  const sectionInstructions = personalized?.isAnswerKey
+    ? `DepEd Master Answer Key. Correct answers are pre-shaded below for scoring reference.`
+    : `Instructions: Shade the circle for the correct answer on the answer sheet.`;
+
   svgElements += `  <!-- 4. Section Bar -->\n`;
   svgElements += `  <line x1="${sb.x1}" y1="${sb.topLineY}" x2="${sb.x2}" y2="${sb.topLineY}" stroke="#000000" stroke-width="1"/>\n`;
-  svgElements += `  <text x="${sb.x1 + 2}" y="${sb.titleY}" font-family="sans-serif" font-size="8" font-weight="900" fill="#111827">MULTIPLE CHOICE (${totalPoints} POINTS)</text>\n`;
-  svgElements += `  <text x="${sb.x1 + 2}" y="${sb.instructionsY}" font-family="sans-serif" font-size="7" font-style="italic" fill="#4B5563">Instructions: Shade the circle for the correct answer on the answer sheet.</text>\n`;
+  svgElements += `  <text x="${sb.x1 + 2}" y="${sb.titleY}" font-family="sans-serif" font-size="8" font-weight="900" fill="#111827">${sectionBarTitle}</text>\n`;
+  svgElements += `  <text x="${sb.x1 + 2}" y="${sb.instructionsY}" font-family="sans-serif" font-size="7" font-style="italic" fill="#4B5563">${sectionInstructions}</text>\n`;
   svgElements += `  <text x="${sb.x2}" y="${sb.formCodeY}" font-family="monospace" font-size="7.5" font-weight="bold" text-anchor="end" fill="#6B7280">${escapeXml(config.formCode)}</text>\n`;
   svgElements += `  <line x1="${sb.x1}" y1="${sb.bottomLineY}" x2="${sb.x2}" y2="${sb.bottomLineY}" stroke="#000000" stroke-width="0.75"/>\n`;
 
@@ -277,9 +294,19 @@ export function renderOmrMasterSvg(
     if (answersRegion.answerItems) {
       for (const item of answersRegion.answerItems) {
         svgElements += `  <text x="${item.labelPosition.x}" y="${item.labelPosition.y}" font-family="sans-serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#111827">${item.label}</text>\n`;
+        const itemAns = personalized?.answerKey
+          ? (personalized.answerKey[item.itemNumber] || personalized.answerKey[String(item.itemNumber)])
+          : undefined;
+
         for (const choice of item.choices) {
-          svgElements += `  <circle cx="${choice.canonicalCenter.x}" cy="${choice.canonicalCenter.y}" r="${choice.radius}" fill="#FFFFFF" stroke="#000000" stroke-width="0.9"/>\n`;
-          svgElements += `  <text x="${choice.canonicalCenter.x}" y="${choice.canonicalCenter.y + 2.5}" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="#1F2937">${choice.choice}</text>\n`;
+          const isFilled = Boolean(itemAns && choice.choice.toUpperCase() === itemAns.toUpperCase());
+          const bubbleFill = isFilled ? '#111827' : '#FFFFFF';
+          const strokeColor = '#000000';
+          const strokeWidth = isFilled ? '1.2' : '0.9';
+          const textFill = isFilled ? '#FFFFFF' : '#1F2937';
+
+          svgElements += `  <circle cx="${choice.canonicalCenter.x}" cy="${choice.canonicalCenter.y}" r="${choice.radius}" fill="${bubbleFill}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>\n`;
+          svgElements += `  <text x="${choice.canonicalCenter.x}" y="${choice.canonicalCenter.y + 2.5}" font-family="sans-serif" font-size="6" font-weight="bold" text-anchor="middle" fill="${textFill}">${choice.choice}</text>\n`;
         }
       }
     }

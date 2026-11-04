@@ -11,10 +11,12 @@ import {
   CheckCircle2,
   Calendar,
   Loader2,
+  Printer,
 } from 'lucide-react';
 import { TosDocument } from '@/types/tos';
 import { ExamQuestion } from '@/lib/exam-types';
 import { generateExamDocx, downloadBlob } from '../exam-word-export';
+import { printOmrAnswerKey, exportOmrAnswerKeyDocx } from '../omr-answer-key-export';
 import { useToast } from '@/components/ui/toast';
 import { createClient } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
@@ -259,8 +261,9 @@ export function TosExamModal({
     }
   };
 
-  // Word Export
+  // Word Export (Student Question Paper)
   const handleExportWord = async (isTeacherCopy = false) => {
+    if (!tos) return;
     if (questions.length === 0) {
       toast.error('Please generate or add questions before exporting to Word.');
       return;
@@ -279,6 +282,29 @@ export function TosExamModal({
     } catch (err) {
       console.error('Failed to export exam docx:', err);
       toast.error('Failed to generate Word document.');
+    }
+  };
+
+  // OMR Answer Key Export (Auto-Print / PDF or Transform into DOCX)
+  const handleExportOmrAnswerKey = async (mode: 'print' | 'docx') => {
+    if (!tos) return;
+    if (questions.length === 0) {
+      toast.error('Please generate or add questions before exporting the answer key.');
+      return;
+    }
+
+    try {
+      if (mode === 'print') {
+        printOmrAnswerKey(tos, questions, { schoolName, examDate });
+        toast.success('Print preview opened for OMR Answer Key.');
+      } else {
+        toast.info('Generating Word document with OMR Answer Key...');
+        await exportOmrAnswerKeyDocx(tos, questions, { schoolName, examDate });
+        toast.success('OMR Answer Key Word document downloaded successfully.');
+      }
+    } catch (err) {
+      console.error('Failed to export OMR answer key:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to export OMR answer key.');
     }
   };
 
@@ -328,7 +354,7 @@ export function TosExamModal({
                 className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 rounded-xl transition-all disabled:opacity-50"
               >
                 <FileDown className="h-3.5 w-3.5" />
-                <span>Export to Word</span>
+                <span>Export Exam / Key</span>
               </button>
 
               <button
@@ -496,41 +522,82 @@ export function TosExamModal({
         onClose={() => setSharedNotesConfirm(false)}
       />
 
-      {/* Export to Word Options Modal */}
+      {/* Export Options Modal */}
       {showTeacherCopyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="relative w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
-            <h3 className="text-base font-bold text-slate-900 dark:text-white">
-              Export Examination to Word (.docx)
-            </h3>
-            <p className="text-xs text-slate-600 dark:text-slate-400">
-              Select which version of the examination you would like to download:
-            </p>
+            <div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Export Examination
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Select which version of the examination you would like to get:
+              </p>
+            </div>
 
-            <div className="space-y-2 pt-2">
+            <div className="space-y-2.5 pt-1">
+              {/* Option 1: Student Question Paper (.docx) */}
               <button
                 type="button"
                 onClick={() => {
                   setShowTeacherCopyModal(false);
                   handleExportWord(false);
                 }}
-                className="w-full flex items-center justify-between p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-xs font-semibold text-slate-900 dark:text-white transition-colors"
+                className="w-full flex items-center justify-between p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-xs font-semibold text-slate-900 dark:text-white transition-colors text-left"
               >
-                <span>Student Question Paper</span>
-                <span className="text-slate-400 font-normal">Clean test sheet</span>
+                <div>
+                  <div className="font-semibold text-slate-900 dark:text-white">Student Question Paper</div>
+                  <div className="text-[11px] text-slate-400 font-normal">Clean test sheet</div>
+                </div>
+                <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700/60 px-2 py-0.5 rounded-md shrink-0">
+                  .docx
+                </span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setShowTeacherCopyModal(false);
-                  handleExportWord(true);
-                }}
-                className="w-full flex items-center justify-between p-3 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 text-xs font-semibold text-emerald-900 dark:text-emerald-200 transition-colors"
-              >
-                <span>Teacher Copy & Answer Key</span>
-                <span className="text-emerald-700 font-normal">Includes rationale</span>
-              </button>
+              {/* Option 2: OMR with answers filled out (The ONLY Answer Key Choice) */}
+              <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/40 p-3 space-y-2">
+                <div className="flex items-start justify-between gap-1.5">
+                  <div>
+                    <div className="text-xs font-bold text-emerald-950 dark:text-emerald-100">
+                      OMR with answers filled out
+                    </div>
+                    <div className="text-[11px] text-emerald-700 dark:text-emerald-300 font-medium">
+                      Official answer sheet with bubbles shaded
+                    </div>
+                  </div>
+                  <span className="text-[9px] font-bold text-emerald-800 dark:text-emerald-200 bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded-md shrink-0">
+                    ANSWER KEY
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTeacherCopyModal(false);
+                      handleExportOmrAnswerKey('print');
+                    }}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+                    title="Automatically open print preview / save as PDF"
+                  >
+                    <Printer className="h-3.5 w-3.5" />
+                    <span>Auto-Print</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTeacherCopyModal(false);
+                      handleExportOmrAnswerKey('docx');
+                    }}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg bg-white dark:bg-slate-800 border border-emerald-300 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-slate-700 text-emerald-900 dark:text-emerald-200 text-xs font-bold transition shadow-xs cursor-pointer"
+                    title="Transform OMR answer sheet into Word (.docx)"
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    <span>Word (.docx)</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             <button
