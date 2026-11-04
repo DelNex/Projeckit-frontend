@@ -402,6 +402,7 @@ export async function exportOmrAnswerKeyDocx(
             alignment: AlignmentType.CENTER,
             children: [
               new ImageRun({
+                type: 'png',
                 data: imageBuffer,
                 transformation: {
                   width: docxWidth,
