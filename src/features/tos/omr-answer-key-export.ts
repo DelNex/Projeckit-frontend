@@ -320,19 +320,38 @@ export async function exportOmrAnswerKeyDocx(
     children: [
       new TableCell({
         width: { size: 10, type: WidthType.PERCENTAGE },
-        children: [new Paragraph({ text: 'Item', bold: true, alignment: AlignmentType.CENTER })],
+        children: [
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: 'Item', bold: true })],
+          }),
+        ],
       }),
       new TableCell({
         width: { size: 15, type: WidthType.PERCENTAGE },
-        children: [new Paragraph({ text: 'Key', bold: true, alignment: AlignmentType.CENTER })],
+        children: [
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: 'Key', bold: true })],
+          }),
+        ],
       }),
       new TableCell({
         width: { size: 25, type: WidthType.PERCENTAGE },
-        children: [new Paragraph({ text: 'Cognitive Domain', bold: true, alignment: AlignmentType.CENTER })],
+        children: [
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: 'Cognitive Domain', bold: true })],
+          }),
+        ],
       }),
       new TableCell({
         width: { size: 50, type: WidthType.PERCENTAGE },
-        children: [new Paragraph({ text: 'Rationale / Explanation', bold: true })],
+        children: [
+          new Paragraph({
+            children: [new TextRun({ text: 'Rationale / Explanation', bold: true })],
+          }),
+        ],
       }),
     ],
   });
