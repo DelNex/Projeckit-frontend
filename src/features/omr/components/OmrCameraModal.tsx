@@ -488,59 +488,25 @@ export function OmrCameraModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-0 sm:p-4 animate-in fade-in duration-200"
     >
       <div className="relative flex h-full w-full flex-col overflow-hidden bg-gray-900 border-0 sm:border sm:border-gray-800 shadow-2xl text-white sm:h-auto sm:max-h-[94vh] sm:max-w-4xl sm:rounded-3xl">
-        {/* Header with 3-Step Breadcrumb */}
-        <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-4 py-3 sm:px-6 sm:py-4 bg-gray-900/90 backdrop-blur-sm z-10">
-          <div className="min-w-0 pr-2">
-            <h3 className="flex items-center gap-2 text-sm sm:text-base font-bold truncate">
-              <Camera className="h-5 w-5 text-blue-400 shrink-0" />
+        {/* Header with Compact Stepper */}
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-3.5 py-2.5 sm:px-6 sm:py-3.5 bg-gray-900 z-10">
+          <div className="flex items-center gap-2 min-w-0">
+            <Camera className="h-4 w-4 sm:h-5 sm:w-5 text-blue-400 shrink-0" />
+            <h3 className="text-xs sm:text-base font-bold truncate">
               {title ||
                 (isAnswerKey
                   ? 'Master Answer Key Camera Scanner'
                   : 'Project KIT — OMR Exam Scanner')}
             </h3>
 
-            {/* Stepper Indicator */}
             {!isAnswerKey && (
-              <div className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-gray-400">
-                <span
-                  className={cn(
-                    'rounded-md px-2 py-0.5 font-bold transition-colors',
-                    phase === 'identify'
-                      ? 'bg-blue-600 text-white'
-                      : matchedStudent
-                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/80'
-                      : 'bg-gray-800 text-gray-400'
-                  )}
-                >
-                  1. Scan Barcode
-                </span>
-                <span>→</span>
-                <span
-                  className={cn(
-                    'rounded-md px-2 py-0.5 font-bold transition-colors',
-                    phase === 'scan'
-                      ? 'bg-blue-600 text-white'
-                      : phase === 'review' || phase === 'saved'
-                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/80'
-                      : 'bg-gray-800 text-gray-500'
-                  )}
-                >
-                  2. Scan Answers
-                </span>
-                <span>→</span>
-                <span
-                  className={cn(
-                    'rounded-md px-2 py-0.5 font-bold transition-colors',
-                    phase === 'review'
-                      ? 'bg-blue-600 text-white'
-                      : phase === 'saved'
-                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/80'
-                      : 'bg-gray-800 text-gray-500'
-                  )}
-                >
-                  3. Review & Save
-                </span>
-              </div>
+              <span className="text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-950/80 border border-blue-800/60 text-blue-300 shrink-0">
+                {phase === 'identify'
+                  ? '1. Barcode'
+                  : phase === 'scan'
+                  ? '2. Answers'
+                  : '3. Review'}
+              </span>
             )}
           </div>
 
@@ -550,15 +516,15 @@ export function OmrCameraModal({
               stopStream();
               onClose();
             }}
-            className="rounded-xl p-2 text-gray-400 hover:bg-gray-800 hover:text-white transition shrink-0"
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-800 hover:text-white transition shrink-0"
             aria-label="Close scanner"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4 sm:h-5 sm:w-5" />
           </button>
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 flex flex-col p-3 sm:p-5 min-h-0 overflow-y-auto">
+        <div className="flex-1 flex flex-col p-2 sm:p-5 min-h-0 overflow-hidden">
           {errorMessage && (
             <div className="mb-3 shrink-0 flex items-start gap-2.5 rounded-2xl bg-red-950/70 border border-red-800/80 p-3 text-xs text-red-200">
               <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-400" />
@@ -615,86 +581,70 @@ export function OmrCameraModal({
               isAnswerKeyMode={isAnswerKey}
             />
           ) : (
-            <div className="flex flex-1 flex-col gap-3 min-h-0">
-              {/* Step 1 Barcode Identified Card / Action Banner */}
+            <div className="flex flex-1 flex-col gap-2 min-h-0">
+              {/* Step 1 Barcode Identified / Action Bar */}
               {phase === 'identify' && (
-                <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-2xl bg-gray-800/80 border border-gray-700 p-3 text-xs">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div
-                      className={cn(
-                        'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-bold',
-                        matchedStudent
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-blue-600 text-white'
+                <div className="shrink-0 flex items-center justify-between gap-2 rounded-xl bg-gray-800/90 border border-gray-700/80 px-2.5 py-1.5 text-xs">
+                  {matchedStudent ? (
+                    <>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <UserCheck className="h-4 w-4 text-emerald-400 shrink-0" />
+                        <span className="truncate text-xs">
+                          Learner: <strong className="text-white">{matchedStudent.name}</strong>
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={proceedToOmrScan}
+                        className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1 text-xs font-bold text-white shrink-0 shadow-sm"
+                      >
+                        <span>Next</span>
+                        <ArrowRight className="h-3 w-3" />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <select
+                        value={selectedStudentId}
+                        onChange={(e) => {
+                          setSelectedStudentId(e.target.value);
+                          setErrorMessage(null);
+                        }}
+                        className="flex-1 min-w-0 rounded-lg bg-gray-900 border border-gray-700 px-2 py-1 text-xs text-white truncate"
+                      >
+                        <option value="">— Or select student manually —</option>
+                        {students.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name} {s.lrn ? `• ${s.lrn}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      {selectedStudentId && (
+                        <button
+                          type="button"
+                          onClick={proceedToOmrScan}
+                          className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-bold text-white shrink-0 shadow-sm"
+                        >
+                          Next
+                        </button>
                       )}
-                    >
-                      {matchedStudent ? (
-                        <UserCheck className="h-5 w-5" />
-                      ) : (
-                        <QrCode className="h-5 w-5" />
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-[11px] font-bold text-gray-400">
-                        {matchedStudent ? 'Identified Learner:' : 'Step 1: Point camera at barcode'}
-                      </span>
-                      <p className="font-bold text-white truncate text-sm">
-                        {matchedStudent
-                          ? `${matchedStudent.name} ${matchedStudent.lrn ? `• ${matchedStudent.lrn}` : ''}`
-                          : 'Align the barcode on the top of the test sheet'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    {/* Manual dropdown fallback if barcode is torn/unreadable */}
-                    <select
-                      value={selectedStudentId}
-                      onChange={(e) => {
-                        setSelectedStudentId(e.target.value);
-                        setErrorMessage(null);
-                      }}
-                      className="rounded-xl bg-gray-900 border border-gray-700 px-2.5 py-2 text-xs text-white max-w-[180px] truncate"
-                    >
-                      <option value="">— Or select manually —</option>
-                      {students.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} {s.lrn ? `(${s.lrn})` : ''}
-                        </option>
-                      ))}
-                    </select>
-
-                    <button
-                      type="button"
-                      disabled={!selectedStudentId}
-                      onClick={proceedToOmrScan}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2 text-xs font-bold text-white transition shadow-sm"
-                    >
-                      <span>Proceed to Sheet</span>
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
+                    </>
+                  )}
                 </div>
               )}
 
-              {/* Step 2 Sheet Scan Student Badge */}
+              {/* Step 2 Target Student Strip */}
               {phase === 'scan' && !isAnswerKey && (
-                <div className="shrink-0 flex items-center justify-between rounded-2xl bg-blue-950/60 border border-blue-800/80 px-4 py-2.5 text-xs text-blue-200">
-                  <div className="flex items-center gap-2 truncate">
-                    <UserCheck className="h-4 w-4 text-emerald-400 shrink-0" />
-                    <span>
-                      Target Student:{' '}
-                      <strong className="text-white">
-                        {matchedStudent?.name || 'Assigned Learner'}
-                      </strong>
-                    </span>
-                  </div>
+                <div className="shrink-0 flex items-center justify-between px-2 py-0.5 text-xs text-gray-300">
+                  <span className="truncate">
+                    Target: <strong className="text-white">{matchedStudent?.name || 'Assigned Student'}</strong>
+                  </span>
                   <button
                     type="button"
                     onClick={() => setPhase('identify')}
-                    className="text-[11px] font-semibold text-blue-300 hover:text-white underline shrink-0"
+                    className="text-[11px] font-semibold text-blue-400 hover:text-blue-300 underline shrink-0 ml-2"
                   >
-                    Change Student
+                    Change
                   </button>
                 </div>
               )}
