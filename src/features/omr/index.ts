@@ -18,4 +18,5 @@ export * from './storage';
 export * from './templates/template-builder';
 export * from './types';
 export * from './useOmrCamera';
+export * from '../scanner';
 
