@@ -143,12 +143,36 @@ export function CameraViewfinder({
 
         {/* Center Target Box: Barcode laser frame OR OMR full sheet outline */}
         {isBarcodeMode ? (
-          <div className="self-center w-[85%] sm:w-[65%] max-w-sm h-36 border-2 rounded-2xl border-dashed border-blue-400/70 bg-blue-950/20 flex flex-col items-center justify-center relative overflow-hidden shadow-2xl">
-            <div className="absolute inset-x-0 h-0.5 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)] animate-pulse" />
-            <QrCode className="h-8 w-8 text-blue-300 opacity-60 mb-1" />
-            <span className="text-[11px] font-bold text-blue-200 text-center px-4">
-              {detectedBarcode ? '✓ Barcode Detected' : 'Aim camera at printed student barcode'}
-            </span>
+          <div className="self-center w-[88%] sm:w-[65%] max-w-sm h-40 border-2 rounded-3xl border-dashed border-blue-400/80 bg-blue-950/25 flex flex-col items-center justify-between p-3 relative overflow-hidden shadow-2xl backdrop-blur-xs">
+            {/* Corner Accent Brackets for Barcode Target */}
+            <div className="absolute top-2 left-2 w-4 h-4 border-t-2 border-l-2 border-blue-400 rounded-tl-sm pointer-events-none" />
+            <div className="absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-blue-400 rounded-tr-sm pointer-events-none" />
+            <div className="absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-blue-400 rounded-bl-sm pointer-events-none" />
+            <div className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-blue-400 rounded-br-sm pointer-events-none" />
+
+            {/* Moving Laser Beam */}
+            <div
+              className="barcode-laser-beam pointer-events-none absolute inset-x-2 h-0.5 bg-red-500 shadow-[0_0_12px_2px_rgba(239,68,68,0.95)] z-20"
+              style={{ animation: 'barcodeLaserMove 2s ease-in-out infinite' }}
+            >
+              <div className="absolute top-0 inset-x-0 h-8 -translate-y-full bg-gradient-to-t from-red-500/25 to-transparent pointer-events-none" />
+            </div>
+
+            {/* Target Content */}
+            <div className="flex items-center gap-1.5 pt-1 text-[11px] font-bold text-blue-300/90 z-10">
+              <QrCode className="h-4 w-4 text-blue-400" />
+              <span>Barcode Alignment Box</span>
+            </div>
+
+            <div className="rounded-full bg-black/75 backdrop-blur-md px-3.5 py-1 text-[11px] font-semibold text-white border border-white/10 shadow-md z-10">
+              {detectedBarcode ? (
+                <span className="text-emerald-400 font-bold flex items-center gap-1">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Barcode Scanned
+                </span>
+              ) : (
+                'Aim camera at printed student barcode'
+              )}
+            </div>
           </div>
         ) : (
           <div
@@ -281,6 +305,26 @@ export function CameraViewfinder({
           </button>
         </div>
       </div>
+
+      <style>{`
+        @keyframes barcodeLaserMove {
+          0% {
+            top: 10%;
+            opacity: 0.8;
+          }
+          50% {
+            top: 86%;
+            opacity: 1;
+          }
+          100% {
+            top: 10%;
+            opacity: 0.8;
+          }
+        }
+        .barcode-laser-beam {
+          animation: barcodeLaserMove 2s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   );
 }

@@ -184,3 +184,20 @@
     font-size: 9px !important;
   }
 }
+
+@keyframes barcodeLaserMove {
+  0% {
+    top: 8%;
+  }
+  50% {
+    top: 88%;
+  }
+  100% {
+    top: 8%;
+  }
+}
+
+.barcode-laser-beam {
+  animation: barcodeLaserMove 2s ease-in-out infinite;
+}
+
