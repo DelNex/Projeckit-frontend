@@ -121,12 +121,19 @@ export function useCameraStream(options: UseCameraStreamOptions = {}) {
             audio: false,
           });
         } catch (firstErr) {
-          console.warn('[Camera] Exact constraints failed, falling back to basic video', firstErr);
-          // Fallback: request default video without strict constraints
-          mediaStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: targetFacingMode } },
-            audio: false,
-          });
+          console.warn('[Camera] Exact constraints failed, trying facing mode fallback', firstErr);
+          try {
+            mediaStream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: { ideal: targetFacingMode } },
+              audio: false,
+            });
+          } catch (secondErr) {
+            console.warn('[Camera] Facing mode failed, falling back to basic video: true', secondErr);
+            mediaStream = await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: false,
+            });
+          }
         }
 
         // Abort if another stream request was triggered while awaiting getUserMedia
@@ -154,15 +161,6 @@ export function useCameraStream(options: UseCameraStreamOptions = {}) {
           video.muted = true;
           video.autoplay = true;
 
-          // Wait for loadedmetadata to measure real aspect ratio
-          await new Promise<void>((resolve) => {
-            if (video.readyState >= 1) {
-              resolve();
-            } else {
-              video.onloadedmetadata = () => resolve();
-            }
-          });
-
           try {
             await video.play();
           } catch (playErr: any) {
@@ -174,8 +172,8 @@ export function useCameraStream(options: UseCameraStreamOptions = {}) {
 
         if (currentSeq !== seqRef.current) return;
 
-        const vW = videoRef.current?.videoWidth || 1920;
-        const vH = videoRef.current?.videoHeight || 1080;
+        const vW = videoRef.current?.videoWidth || 1280;
+        const vH = videoRef.current?.videoHeight || 720;
         const ar = vH > 0 ? vW / vH : 16 / 9;
 
         setState({

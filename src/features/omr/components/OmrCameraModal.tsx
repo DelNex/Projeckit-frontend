@@ -1,7 +1,7 @@
 /**
  * Project KIT — OMR Camera & Scanner Modal Component
  * Comprehensive mobile-first scanning interface with hardware-accelerated / WASM barcode decoding,
- * real-time corner alignment HUD, client-side AI document quality diagnostics,
+ * student pre-identification, real-time corner alignment HUD, client-side AI diagnostics,
  * full-sheet OMR bubble evaluation, and an interactive review/correction grid.
  */
 
@@ -9,7 +9,16 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { AlertCircle, Camera, CheckCircle2, RefreshCw, X } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowRight,
+  Camera,
+  CheckCircle2,
+  QrCode,
+  RefreshCw,
+  UserCheck,
+  X,
+} from 'lucide-react';
 
 import { KitOmrTemplate, OmrScanResult, ProcessedItemResult } from '../types';
 import { processOmrScan } from '../adapter';
@@ -67,8 +76,10 @@ export function OmrCameraModal({
   const totalItems = template?.targetItems || 50;
   const choices = template?.choices || ['A', 'B', 'C', 'D'];
 
-  // Session state
-  const [phase, setPhase] = useState<'scan' | 'review' | 'saved'>('scan');
+  // Session state: 'identify' -> 'scan' -> 'review' -> 'saved'
+  const [phase, setPhase] = useState<'identify' | 'scan' | 'review' | 'saved'>(
+    isAnswerKey ? 'scan' : 'identify'
+  );
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [detectedBarcode, setDetectedBarcode] = useState<DecodedBarcode | null>(null);
   const [qualityMetrics, setQualityMetrics] = useState<DocumentQualityMetrics | null>(null);
@@ -98,7 +109,7 @@ export function OmrCameraModal({
     return students.find((s) => s.id === selectedStudentId) || null;
   }, [students, selectedStudentId]);
 
-  // Handler for continuous barcode detection
+  // Handler for continuous barcode detection in 'identify' phase
   const handleBarcodeDetected = useCallback(
     (barcode: DecodedBarcode) => {
       setDetectedBarcode(barcode);
@@ -142,14 +153,14 @@ export function OmrCameraModal({
     [assessmentId, students]
   );
 
-  // Continuous barcode detection active only during 'scan' phase
+  // Continuous barcode detection active during 'identify' phase
   useContinuousBarcode(videoRef, {
-    enabled: isOpen && phase === 'scan' && cameraState.isStreaming,
+    enabled: isOpen && phase === 'identify' && cameraState.isStreaming,
     onBarcodeDetected: handleBarcodeDetected,
-    throttleMs: 300,
+    throttleMs: 250,
   });
 
-  // Real-time quality evaluation loop (client-side CV diagnostics)
+  // Real-time quality evaluation loop (client-side CV diagnostics active during 'scan' phase)
   useEffect(() => {
     if (!isOpen || phase !== 'scan' || !cameraState.isStreaming) {
       setQualityMetrics(null);
@@ -178,9 +189,9 @@ export function OmrCameraModal({
     };
   }, [isOpen, phase, cameraState.isStreaming, statusMessage]);
 
-  // Control camera activation lifecycle
+  // Keep camera streaming throughout 'identify' and 'scan' phases
   useEffect(() => {
-    if (isOpen && phase === 'scan') {
+    if (isOpen && (phase === 'identify' || phase === 'scan')) {
       void startStream();
     } else {
       stopStream();
@@ -188,6 +199,17 @@ export function OmrCameraModal({
   }, [isOpen, phase, startStream, stopStream]);
 
   if (!isOpen) return null;
+
+  // Manual or automatic transition from Barcode phase to OMR phase
+  const proceedToOmrScan = () => {
+    if (!selectedStudentId && !isAnswerKey) {
+      setErrorMessage('Please scan the student barcode or choose a learner first.');
+      return;
+    }
+    setErrorMessage(null);
+    setStatusMessage(null);
+    setPhase('scan');
+  };
 
   // Process a captured image (from camera or file upload)
   const processImageBlob = async (blob: Blob) => {
@@ -254,10 +276,35 @@ export function OmrCameraModal({
     }
   };
 
-  // Trigger frame capture from video
+  // Trigger frame capture
   const handleCapture = async () => {
     if (isProcessing) return;
-    const blob = await captureFrame({ format: 'image/jpeg', quality: 0.92 });
+
+    if (phase === 'identify') {
+      // In identify phase, shutter captures snapshot to force barcode decode
+      const blob = await captureFrame({ quality: 0.92 });
+      if (!blob) {
+        setErrorMessage('Camera preview is not ready. Please wait a moment.');
+        return;
+      }
+      setIsProcessing(true);
+      try {
+        const barcode = await decodeBarcodeFromBlob(blob);
+        if (barcode) {
+          handleBarcodeDetected(barcode);
+        } else {
+          setErrorMessage('No barcode detected in this frame. Position barcode in center box.');
+        }
+      } catch {
+        setErrorMessage('Could not read barcode. You can choose the learner manually below.');
+      } finally {
+        setIsProcessing(false);
+      }
+      return;
+    }
+
+    // In scan phase, shutter captures full OMR score sheet
+    const blob = await captureFrame({ quality: 0.92 });
     if (!blob) {
       setErrorMessage('Camera preview is not ready. Please wait a moment and try again.');
       return;
@@ -269,6 +316,24 @@ export function OmrCameraModal({
   const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (phase === 'identify') {
+      setIsProcessing(true);
+      try {
+        const barcode = await decodeBarcodeFromBlob(file);
+        if (barcode) {
+          handleBarcodeDetected(barcode);
+        } else {
+          setErrorMessage('No barcode detected in uploaded image. Please select learner manually.');
+        }
+      } catch {
+        setErrorMessage('Could not decode barcode from file.');
+      } finally {
+        setIsProcessing(false);
+      }
+      return;
+    }
+
     await processImageBlob(file);
   };
 
@@ -403,7 +468,7 @@ export function OmrCameraModal({
     }
   };
 
-  // Reset to scan another sheet
+  // Reset to scan another sheet starting with barcode identification
   const handleScanAnother = () => {
     setCurrentResult(null);
     setEditableItems([]);
@@ -413,7 +478,7 @@ export function OmrCameraModal({
     setQualityMetrics(null);
     setErrorMessage(null);
     setStatusMessage(null);
-    setPhase('scan');
+    setPhase(isAnswerKey ? 'scan' : 'identify');
   };
 
   return (
@@ -423,7 +488,7 @@ export function OmrCameraModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-0 sm:p-4 animate-in fade-in duration-200"
     >
       <div className="relative flex h-full w-full flex-col overflow-hidden bg-gray-900 border-0 sm:border sm:border-gray-800 shadow-2xl text-white sm:h-auto sm:max-h-[94vh] sm:max-w-4xl sm:rounded-3xl">
-        {/* Header */}
+        {/* Header with 3-Step Breadcrumb */}
         <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-4 py-3 sm:px-6 sm:py-4 bg-gray-900/90 backdrop-blur-sm z-10">
           <div className="min-w-0 pr-2">
             <h3 className="flex items-center gap-2 text-sm sm:text-base font-bold truncate">
@@ -433,19 +498,50 @@ export function OmrCameraModal({
                   ? 'Master Answer Key Camera Scanner'
                   : 'Project KIT — OMR Exam Scanner')}
             </h3>
-            <p className="mt-0.5 text-xs text-gray-400 truncate">
-              {phase === 'scan'
-                ? isAnswerKey
-                  ? 'Capture teacher answer key sheet'
-                  : matchedStudent
-                  ? `Target: ${matchedStudent.name} (${matchedStudent.section_name || 'Section'})`
-                  : 'Align student answer sheet inside the corner markers'
-                : phase === 'review'
-                ? isAnswerKey
-                  ? 'Review detected answer key before applying'
-                  : `Reviewing answers for: ${matchedStudent?.name || 'Unassigned Learner'}`
-                : 'Scan saved successfully'}
-            </p>
+
+            {/* Stepper Indicator */}
+            {!isAnswerKey && (
+              <div className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-gray-400">
+                <span
+                  className={cn(
+                    'rounded-md px-2 py-0.5 font-bold transition-colors',
+                    phase === 'identify'
+                      ? 'bg-blue-600 text-white'
+                      : matchedStudent
+                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/80'
+                      : 'bg-gray-800 text-gray-400'
+                  )}
+                >
+                  1. Scan Barcode
+                </span>
+                <span>→</span>
+                <span
+                  className={cn(
+                    'rounded-md px-2 py-0.5 font-bold transition-colors',
+                    phase === 'scan'
+                      ? 'bg-blue-600 text-white'
+                      : phase === 'review' || phase === 'saved'
+                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/80'
+                      : 'bg-gray-800 text-gray-500'
+                  )}
+                >
+                  2. Scan Answers
+                </span>
+                <span>→</span>
+                <span
+                  className={cn(
+                    'rounded-md px-2 py-0.5 font-bold transition-colors',
+                    phase === 'review'
+                      ? 'bg-blue-600 text-white'
+                      : phase === 'saved'
+                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/80'
+                      : 'bg-gray-800 text-gray-500'
+                  )}
+                >
+                  3. Review & Save
+                </span>
+              </div>
+            )}
           </div>
 
           <button
@@ -492,7 +588,7 @@ export function OmrCameraModal({
                   className="inline-flex items-center gap-2 rounded-2xl bg-gray-800 hover:bg-gray-700 px-5 py-2.5 text-xs font-bold text-white transition border border-gray-700"
                 >
                   <RefreshCw className="h-4 w-4" />
-                  <span>Scan Next Sheet</span>
+                  <span>Scan Next Student</span>
                 </button>
                 <button
                   type="button"
@@ -519,20 +615,107 @@ export function OmrCameraModal({
               isAnswerKeyMode={isAnswerKey}
             />
           ) : (
-            <CameraViewfinder
-              videoRef={videoRef}
-              cameraState={cameraState}
-              qualityMetrics={qualityMetrics}
-              detectedBarcode={detectedBarcode}
-              matchedStudentName={matchedStudent?.name}
-              onCapture={handleCapture}
-              onCycleCamera={cycleCamera}
-              onUploadFile={handleUploadFile}
-              onClose={onClose}
-              isProcessing={isProcessing}
-              statusMessage={statusMessage || undefined}
-              isAnswerKeyMode={isAnswerKey}
-            />
+            <div className="flex flex-1 flex-col gap-3 min-h-0">
+              {/* Step 1 Barcode Identified Card / Action Banner */}
+              {phase === 'identify' && (
+                <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 rounded-2xl bg-gray-800/80 border border-gray-700 p-3 text-xs">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div
+                      className={cn(
+                        'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-bold',
+                        matchedStudent
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-blue-600 text-white'
+                      )}
+                    >
+                      {matchedStudent ? (
+                        <UserCheck className="h-5 w-5" />
+                      ) : (
+                        <QrCode className="h-5 w-5" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[11px] font-bold text-gray-400">
+                        {matchedStudent ? 'Identified Learner:' : 'Step 1: Point camera at barcode'}
+                      </span>
+                      <p className="font-bold text-white truncate text-sm">
+                        {matchedStudent
+                          ? `${matchedStudent.name} ${matchedStudent.lrn ? `• ${matchedStudent.lrn}` : ''}`
+                          : 'Align the barcode on the top of the test sheet'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {/* Manual dropdown fallback if barcode is torn/unreadable */}
+                    <select
+                      value={selectedStudentId}
+                      onChange={(e) => {
+                        setSelectedStudentId(e.target.value);
+                        setErrorMessage(null);
+                      }}
+                      className="rounded-xl bg-gray-900 border border-gray-700 px-2.5 py-2 text-xs text-white max-w-[180px] truncate"
+                    >
+                      <option value="">— Or select manually —</option>
+                      {students.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} {s.lrn ? `(${s.lrn})` : ''}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      type="button"
+                      disabled={!selectedStudentId}
+                      onClick={proceedToOmrScan}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2 text-xs font-bold text-white transition shadow-sm"
+                    >
+                      <span>Proceed to Sheet</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 2 Sheet Scan Student Badge */}
+              {phase === 'scan' && !isAnswerKey && (
+                <div className="shrink-0 flex items-center justify-between rounded-2xl bg-blue-950/60 border border-blue-800/80 px-4 py-2.5 text-xs text-blue-200">
+                  <div className="flex items-center gap-2 truncate">
+                    <UserCheck className="h-4 w-4 text-emerald-400 shrink-0" />
+                    <span>
+                      Target Student:{' '}
+                      <strong className="text-white">
+                        {matchedStudent?.name || 'Assigned Learner'}
+                      </strong>
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPhase('identify')}
+                    className="text-[11px] font-semibold text-blue-300 hover:text-white underline shrink-0"
+                  >
+                    Change Student
+                  </button>
+                </div>
+              )}
+
+              {/* Viewfinder Component */}
+              <CameraViewfinder
+                videoRef={videoRef}
+                cameraState={cameraState}
+                qualityMetrics={qualityMetrics}
+                detectedBarcode={detectedBarcode}
+                matchedStudentName={matchedStudent?.name}
+                onCapture={handleCapture}
+                onCycleCamera={cycleCamera}
+                onUploadFile={handleUploadFile}
+                onClose={onClose}
+                isProcessing={isProcessing}
+                statusMessage={statusMessage || undefined}
+                isAnswerKeyMode={isAnswerKey}
+                mode={phase === 'identify' ? 'barcode' : 'omr'}
+              />
+            </div>
           )}
         </div>
       </div>

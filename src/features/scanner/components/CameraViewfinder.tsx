@@ -36,6 +36,7 @@ export interface CameraViewfinderProps {
   isProcessing: boolean;
   statusMessage?: string;
   isAnswerKeyMode?: boolean;
+  mode?: 'barcode' | 'omr';
 }
 
 export function CameraViewfinder({
@@ -51,9 +52,11 @@ export function CameraViewfinder({
   isProcessing,
   statusMessage,
   isAnswerKeyMode = false,
+  mode = 'omr',
 }: CameraViewfinderProps) {
   const corners = qualityMetrics?.cornersDetected ?? 0;
   const isAligned = corners >= 3 && !qualityMetrics?.blurDetected;
+  const isBarcodeMode = mode === 'barcode';
 
   return (
     <div className="relative flex-1 w-full h-full min-h-[420px] sm:min-h-[500px] bg-black rounded-3xl overflow-hidden flex items-center justify-center select-none">
@@ -63,25 +66,32 @@ export function CameraViewfinder({
         autoPlay
         playsInline
         muted
-        className={cn(
-          'w-full h-full object-cover transition-opacity duration-300',
-          cameraState.isStreaming ? 'opacity-100' : 'opacity-0'
-        )}
+        className="w-full h-full object-cover"
       />
 
+      {/* Camera Initializing Overlay */}
+      {!cameraState.isStreaming && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-xs z-10 gap-3 text-gray-300 text-xs">
+          <RefreshCw className="h-8 w-8 animate-spin text-blue-400" />
+          <span className="font-medium">{cameraState.statusText || 'Initializing camera stream…'}</span>
+        </div>
+      )}
+
       {/* Viewfinder Alignment HUD */}
-      <div className="pointer-events-none absolute inset-3 sm:inset-6 flex flex-col justify-between">
+      <div className="pointer-events-none absolute inset-3 sm:inset-6 flex flex-col justify-between z-10">
         {/* Top Header: Barcode Chip + Corner Indicators */}
         <div className="flex items-start justify-between w-full">
           {/* Top-Left Registration Marker Indicator */}
-          <div
-            className={cn(
-              'h-10 w-10 sm:h-12 sm:w-12 border-t-4 border-l-4 rounded-tl-xl transition-all duration-200',
-              corners >= 1
-                ? 'border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.5)]'
-                : 'border-white/40'
-            )}
-          />
+          {!isBarcodeMode ? (
+            <div
+              className={cn(
+                'h-10 w-10 sm:h-12 sm:w-12 border-t-4 border-l-4 rounded-tl-xl transition-all duration-200',
+                corners >= 1
+                  ? 'border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.5)]'
+                  : 'border-white/40'
+              )}
+            />
+          ) : <div className="w-10 sm:w-12" />}
 
           {/* Center HUD: Live Barcode & Status Pill */}
           <div className="flex flex-col items-center gap-1.5 max-w-[70%]">
@@ -100,12 +110,18 @@ export function CameraViewfinder({
               <span
                 className={cn(
                   'h-2.5 w-2.5 rounded-full shrink-0',
-                  isAligned ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-amber-400 animate-pulse'
+                  isBarcodeMode
+                    ? detectedBarcode ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-blue-400 animate-pulse'
+                    : isAligned ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-amber-400 animate-pulse'
                 )}
               />
               <span className="truncate">
                 {statusMessage ||
-                  (isAligned
+                  (isBarcodeMode
+                    ? detectedBarcode
+                      ? `✓ Student Identified: ${matchedStudentName || detectedBarcode.rawValue}`
+                      : 'Center student barcode in frame'
+                    : isAligned
                     ? '✓ Aligned — Ready to Capture'
                     : `Align 4 Corners (${corners}/4 Detected)`)}
               </span>
@@ -113,59 +129,72 @@ export function CameraViewfinder({
           </div>
 
           {/* Top-Right Registration Marker Indicator */}
-          <div
-            className={cn(
-              'h-10 w-10 sm:h-12 sm:w-12 border-t-4 border-r-4 rounded-tr-xl transition-all duration-200',
-              corners >= 2
-                ? 'border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.5)]'
-                : 'border-white/40'
-            )}
-          />
+          {!isBarcodeMode ? (
+            <div
+              className={cn(
+                'h-10 w-10 sm:h-12 sm:w-12 border-t-4 border-r-4 rounded-tr-xl transition-all duration-200',
+                corners >= 2
+                  ? 'border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.5)]'
+                  : 'border-white/40'
+              )}
+            />
+          ) : <div className="w-10 sm:w-12" />}
         </div>
 
-        {/* Center Target Box: Dashed guideline for sheet placement */}
-        <div
-          className={cn(
-            'self-center w-[85%] sm:w-[75%] h-[65%] border-2 rounded-2xl border-dashed transition-all duration-300 flex items-center justify-center',
-            isAligned
-              ? 'border-emerald-400/50 bg-emerald-500/5'
-              : 'border-white/20 bg-black/5'
-          )}
-        >
-          {!cameraState.isStreaming && (
-            <div className="flex flex-col items-center gap-2 text-gray-400 text-xs">
-              <RefreshCw className="h-6 w-6 animate-spin text-blue-400" />
-              <span>{cameraState.statusText}</span>
-            </div>
-          )}
-        </div>
+        {/* Center Target Box: Barcode laser frame OR OMR full sheet outline */}
+        {isBarcodeMode ? (
+          <div className="self-center w-[85%] sm:w-[65%] max-w-sm h-36 border-2 rounded-2xl border-dashed border-blue-400/70 bg-blue-950/20 flex flex-col items-center justify-center relative overflow-hidden shadow-2xl">
+            <div className="absolute inset-x-0 h-0.5 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)] animate-pulse" />
+            <QrCode className="h-8 w-8 text-blue-300 opacity-60 mb-1" />
+            <span className="text-[11px] font-bold text-blue-200 text-center px-4">
+              {detectedBarcode ? '✓ Barcode Detected' : 'Aim camera at printed student barcode'}
+            </span>
+          </div>
+        ) : (
+          <div
+            className={cn(
+              'self-center w-[85%] sm:w-[75%] h-[65%] border-2 rounded-2xl border-dashed transition-all duration-300 flex items-center justify-center',
+              isAligned
+                ? 'border-emerald-400/50 bg-emerald-500/5'
+                : 'border-white/20 bg-black/5'
+            )}
+          />
+        )}
 
         {/* Bottom Corner Registration Indicators */}
         <div className="flex items-end justify-between w-full">
           {/* Bottom-Left Marker */}
-          <div
-            className={cn(
-              'h-10 w-10 sm:h-12 sm:w-12 border-b-4 border-l-4 rounded-bl-xl transition-all duration-200',
-              corners >= 3
-                ? 'border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.5)]'
-                : 'border-white/40'
-            )}
-          />
+          {!isBarcodeMode ? (
+            <div
+              className={cn(
+                'h-10 w-10 sm:h-12 sm:w-12 border-b-4 border-l-4 rounded-bl-xl transition-all duration-200',
+                corners >= 3
+                  ? 'border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.5)]'
+                  : 'border-white/40'
+              )}
+            />
+          ) : <div className="w-10 sm:w-12" />}
 
           {/* Bottom Center Hint */}
           <div className="text-[10px] text-white/70 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full font-medium">
-            {isAnswerKeyMode ? 'Master Answer Key' : 'DepEd OMR Score Sheet'}
+            {isBarcodeMode
+              ? 'Step 1: Student Barcode'
+              : isAnswerKeyMode
+              ? 'Master Answer Key'
+              : `Step 2: Score Sheet (${matchedStudentName || 'Learner'})`}
           </div>
 
           {/* Bottom-Right Marker */}
-          <div
-            className={cn(
-              'h-10 w-10 sm:h-12 sm:w-12 border-b-4 border-r-4 rounded-br-xl transition-all duration-200',
-              corners >= 4
-                ? 'border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.5)]'
-                : 'border-white/40'
-            )}
-          />
+          {!isBarcodeMode ? (
+            <div
+              className={cn(
+                'h-10 w-10 sm:h-12 sm:w-12 border-b-4 border-r-4 rounded-br-xl transition-all duration-200',
+                corners >= 4
+                  ? 'border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.5)]'
+                  : 'border-white/40'
+              )}
+            />
+          ) : <div className="w-10 sm:w-12" />}
         </div>
       </div>
 
@@ -174,10 +203,10 @@ export function CameraViewfinder({
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm z-30 animate-in fade-in">
           <RefreshCw className="h-10 w-10 animate-spin text-blue-400" />
           <p className="mt-3 text-sm font-bold text-white tracking-wide">
-            Processing OMR Bubble Analysis…
+            {isBarcodeMode ? 'Reading Barcode…' : 'Processing OMR Bubble Analysis…'}
           </p>
           <span className="text-xs text-gray-400 mt-1">
-            Running projective homography & marker alignment
+            {isBarcodeMode ? 'Identifying student identity' : 'Running projective homography & marker alignment'}
           </span>
         </div>
       )}
@@ -204,21 +233,27 @@ export function CameraViewfinder({
           type="button"
           onClick={onCapture}
           disabled={isProcessing || !cameraState.isStreaming}
-          aria-label="Capture OMR Sheet"
+          aria-label={isBarcodeMode ? 'Scan Barcode' : 'Capture OMR Sheet'}
           className={cn(
             'flex h-16 w-16 sm:h-18 sm:w-18 items-center justify-center rounded-full shadow-2xl transition transform active:scale-90',
-            isAligned
+            isBarcodeMode
+              ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-600/50 hover:scale-105'
+              : isAligned
               ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-600/50 hover:scale-105'
               : 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-600/50'
           )}
         >
           <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-full border-2 border-white/80 flex items-center justify-center">
-            <div
-              className={cn(
-                'h-9 w-9 sm:h-10 sm:w-10 rounded-full transition-colors',
-                isAligned ? 'bg-emerald-400' : 'bg-white'
-              )}
-            />
+            {isBarcodeMode ? (
+              <QrCode className="h-6 w-6 text-white" />
+            ) : (
+              <div
+                className={cn(
+                  'h-9 w-9 sm:h-10 sm:w-10 rounded-full transition-colors',
+                  isAligned ? 'bg-emerald-400' : 'bg-white'
+                )}
+              />
+            )}
           </div>
         </button>
 
@@ -249,4 +284,3 @@ export function CameraViewfinder({
     </div>
   );
 }
-
