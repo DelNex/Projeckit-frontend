@@ -145,12 +145,14 @@ export function CameraViewfinder({
             <div className="absolute bottom-1.5 left-1.5 w-3 h-3 border-b-2 border-l-2 border-blue-400 pointer-events-none" />
             <div className="absolute bottom-1.5 right-1.5 w-3 h-3 border-b-2 border-r-2 border-blue-400 pointer-events-none" />
 
-            {/* Moving Laser Beam */}
+            {/* Moving Laser Scanner Assembly */}
             <div
-              className="barcode-laser-beam pointer-events-none absolute inset-x-2 h-0.5 bg-red-500 shadow-[0_0_12px_2px_rgba(239,68,68,0.95)] z-20"
-              style={{ animation: 'barcodeLaserMove 2s ease-in-out infinite' }}
+              className="barcode-laser-assembly pointer-events-none absolute inset-x-2 top-0 z-20 will-change-transform"
             >
-              <div className="absolute top-0 inset-x-0 h-6 -translate-y-full bg-gradient-to-t from-red-500/25 to-transparent pointer-events-none" />
+              {/* Directional Flipping Trail */}
+              <div className="barcode-laser-trail absolute inset-x-0 bottom-0 h-8 pointer-events-none origin-bottom" />
+              {/* Solid Laser Beam Line */}
+              <div className="h-0.5 bg-red-500 shadow-[0_0_12px_2px_rgba(239,68,68,0.95)]" />
             </div>
 
             <div className="flex items-center gap-1 text-[10px] font-bold text-blue-300 z-10">
@@ -275,20 +277,35 @@ export function CameraViewfinder({
       <style>{`
         @keyframes barcodeLaserMove {
           0% {
-            top: 12%;
-            opacity: 0.8;
+            transform: translate3d(0, 10px, 0);
           }
           50% {
-            top: 84%;
-            opacity: 1;
+            transform: translate3d(0, 108px, 0);
           }
           100% {
-            top: 12%;
-            opacity: 0.8;
+            transform: translate3d(0, 10px, 0);
           }
         }
-        .barcode-laser-beam {
-          animation: barcodeLaserMove 2s ease-in-out infinite;
+        @keyframes barcodeTrailFlip {
+          0%, 49.9% {
+            transform: scaleY(1);
+          }
+          50%, 99.9% {
+            transform: scaleY(-1);
+          }
+          100% {
+            transform: scaleY(1);
+          }
+        }
+        .barcode-laser-assembly {
+          animation: barcodeLaserMove 2.2s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+          will-change: transform;
+        }
+        .barcode-laser-trail {
+          animation: barcodeTrailFlip 2.2s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+          transform-origin: bottom center;
+          background: linear-gradient(to top, rgba(239, 68, 68, 0.35), transparent);
+          will-change: transform;
         }
       `}</style>
     </div>
