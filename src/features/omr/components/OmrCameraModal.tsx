@@ -230,7 +230,7 @@ export function OmrCameraModal({
         decodeBarcodeFromBlob(blob).catch(() => null),
       ]);
 
-      if (omrResult.status === 'REJECTED' || !omrResult.items.length) {
+      if (!omrResult.items.length) {
         throw new Error(
           'Answer sheet was not recognized. Please align the sheet within frame, ensure all 4 corner markers are visible, and hold steady.'
         );
@@ -266,7 +266,11 @@ export function OmrCameraModal({
       setCurrentResult(omrResult);
       setEditableItems(omrResult.items.map((item) => ({ ...item })));
       setPhase('review');
-      setStatusMessage(null);
+      if (!omrResult.fiducialDetected) {
+        setStatusMessage('Low marker alignment confidence. Please review and verify answers below.');
+      } else {
+        setStatusMessage(null);
+      }
     } catch (err) {
       setErrorMessage(err instanceof Error ? err.message : 'Scan processing failed.');
       // Restart stream if processing failed

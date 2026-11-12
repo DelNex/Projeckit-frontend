@@ -23,6 +23,7 @@ import {
   ProcessedItemResult,
 } from '../types';
 import { MarkerDetector } from './marker-detector';
+import { ProjectiveHomography, QuadPoints } from './homography';
 import { analyzeBubbleSamples, BubbleMeasurement, BubbleSample } from './opencv-bubble-analysis';
 import { OMR_THRESHOLDS, OMR_THRESHOLD_PROFILE_VERSION } from '../thresholds';
 
@@ -242,33 +243,63 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
     // STEP 1: PHYSICAL MARKER DETECTION (Mandatory first step)
     const markerResult = MarkerDetector.detectRegionMarkers(pixels, width, height, geometry);
 
-    // STEP 2: STRICT FAILURE ENFORCEMENT
-    // Never guess coordinates if required region markers are missing or degenerate
-    if (!markerResult.allRegionsDetected) {
-      const primaryFailure = markerResult.failedRegions[0];
-      return {
-        idempotencyKey: options.idempotencyKey || `scan-${imageHash.substring(0, 16)}`,
-        imageHash,
-        detectedForm: geometry.templateId,
-        detectedStudentLrn: options.hintStudentLrn || null,
-        detectedRollNumber: null,
-        detectedAssessmentId: options.assessmentId || geometry.assessmentId,
-        overallConfidence: markerResult.overallMarkerConfidence,
-        fiducialDetected: false,
-        fiducialConfidence: markerResult.overallMarkerConfidence,
-        items: [],
-        rawAnswers: {},
-        normalizedAnswers: [],
-        hasAmbiguity: false,
-        hasMultipleMarks: false,
-        status: 'VERIFICATION_REQUIRED',
-        errorCode: 'REGION_MARKER_DETECTION_FAILED',
-        failedRegion: primaryFailure,
-        engineUsed: 'kit-optical-native',
+    let detectedRegions = markerResult.detectedRegions;
+    let fiducialDetected = markerResult.allRegionsDetected;
+    let fallbackUsed = false;
+
+    // STEP 2: RESILIENT GEOMETRY FALLBACK
+    // If physical markers are missing or partially occluded, synthesize a nominal framing quad
+    // so bubble analysis can proceed instead of aborting the user scan.
+    if (!markerResult.allRegionsDetected || Object.keys(detectedRegions).length === 0) {
+      fallbackUsed = true;
+      const fallbackQuad: QuadPoints = {
+        TL: { x: width * 0.08, y: height * 0.12 },
+        TR: { x: width * 0.92, y: height * 0.12 },
+        BL: { x: width * 0.08, y: height * 0.92 },
+        BR: { x: width * 0.92, y: height * 0.92 },
       };
+      try {
+        const homography = ProjectiveHomography.fromUnitSquareToQuad(fallbackQuad);
+        detectedRegions = {
+          ANSWERS: {
+            regionId: 'ANSWERS',
+            quad: fallbackQuad,
+            homography,
+            confidence: 0.45,
+            markers: {
+              TL: { cx: fallbackQuad.TL.x, cy: fallbackQuad.TL.y, width: 14, height: 14, fillFactor: 0.7, aspectRatio: 1, confidence: 0.45 },
+              TR: { cx: fallbackQuad.TR.x, cy: fallbackQuad.TR.y, width: 14, height: 14, fillFactor: 0.7, aspectRatio: 1, confidence: 0.45 },
+              BL: { cx: fallbackQuad.BL.x, cy: fallbackQuad.BL.y, width: 14, height: 14, fillFactor: 0.7, aspectRatio: 1, confidence: 0.45 },
+              BR: { cx: fallbackQuad.BR.x, cy: fallbackQuad.BR.y, width: 14, height: 14, fillFactor: 0.7, aspectRatio: 1, confidence: 0.45 },
+            },
+          },
+        };
+      } catch {
+        // Degenerate fallback, return verification required with zero items only if homography math fails
+        const primaryFailure = markerResult.failedRegions[0];
+        return {
+          idempotencyKey: options.idempotencyKey || `scan-${imageHash.substring(0, 16)}`,
+          imageHash,
+          detectedForm: geometry.templateId,
+          detectedStudentLrn: options.hintStudentLrn || null,
+          detectedRollNumber: null,
+          detectedAssessmentId: options.assessmentId || geometry.assessmentId,
+          overallConfidence: markerResult.overallMarkerConfidence,
+          fiducialDetected: false,
+          fiducialConfidence: markerResult.overallMarkerConfidence,
+          items: [],
+          rawAnswers: {},
+          normalizedAnswers: [],
+          hasAmbiguity: false,
+          hasMultipleMarks: false,
+          status: 'VERIFICATION_REQUIRED',
+          errorCode: 'REGION_MARKER_DETECTION_FAILED',
+          failedRegion: primaryFailure,
+          engineUsed: 'kit-optical-native',
+        };
+      }
     }
 
-    const { detectedRegions } = markerResult;
     const { markMinFill, ambiguousDelta, highConfidenceMin } = template.thresholds;
 
     // Scale factor for radius
@@ -463,19 +494,19 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
       detectedStudentLrn: options.hintStudentLrn || (detectedRollNumber ? `ROLL-${detectedRollNumber}` : null),
       detectedRollNumber,
       detectedAssessmentId: options.assessmentId || geometry.assessmentId,
-      overallConfidence,
-      fiducialDetected: true,
-      fiducialConfidence: markerResult.overallMarkerConfidence,
+      overallConfidence: fallbackUsed ? Math.min(overallConfidence, 0.5) : overallConfidence,
+      fiducialDetected,
+      fiducialConfidence: markerResult.overallMarkerConfidence || (fallbackUsed ? 0.45 : 1),
       items,
       itemStates,
       rawAnswers,
       normalizedAnswers,
-      hasAmbiguity: hasAmbiguity || rollAmbiguity,
+      hasAmbiguity: hasAmbiguity || rollAmbiguity || fallbackUsed,
       hasMultipleMarks: hasMultipleMarks || rollMultipleMarks,
       hasErasedMarks,
       openCvDiagnostics,
       thresholdProfileVersion: OMR_THRESHOLD_PROFILE_VERSION,
-      status: !cvMeasurements || hasErasedMarks || hasAmbiguity || hasMultipleMarks || rollMultipleMarks || rollAmbiguity ? 'VERIFICATION_REQUIRED' : status,
+      status: fallbackUsed || !cvMeasurements || hasErasedMarks || hasAmbiguity || hasMultipleMarks || rollMultipleMarks || rollAmbiguity ? 'VERIFICATION_REQUIRED' : status,
       engineUsed: cvMeasurements ? 'kit-opencv.js' : 'kit-optical-native',
     };
   }

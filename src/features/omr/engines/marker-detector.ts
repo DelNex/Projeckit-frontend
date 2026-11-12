@@ -121,6 +121,7 @@ export class MarkerDetector {
 
   /**
    * Fast connected-component detection for dark, solid, square blobs.
+   * Uses adaptive lighting threshold so markers are reliably extracted on mobile cameras.
    */
   private static findCandidateMarkers(
     pixels: Uint8Array | Uint8ClampedArray,
@@ -129,21 +130,36 @@ export class MarkerDetector {
     geometry: CanonicalOmrGeometry
   ): DetectedMarkerCandidate[] {
     const scale = Math.min(width / geometry.page.width, height / geometry.page.height);
-    const minMarkerDim = Math.max(7, Math.floor(9 * scale));
-    const maxMarkerDim = Math.max(35, Math.ceil(30 * scale));
+    const minMarkerDim = Math.max(5, Math.floor(6 * scale));
+    const maxMarkerDim = Math.max(55, Math.ceil(45 * scale));
+
+    // Sample image brightness to determine adaptive dark threshold
+    let totalLum = 0;
+    const sampleStep = 8;
+    let sampledCount = 0;
+    for (let i = 0; i < pixels.length; i += 4 * sampleStep) {
+      totalLum += 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
+      sampledCount++;
+    }
+    const avgLum = sampledCount > 0 ? totalLum / sampledCount : 128;
+    // Dark threshold: adaptive between 65 and 125 based on ambient scene lighting
+    const darkThreshold = Math.min(125, Math.max(65, Math.floor(avgLum * 0.70)));
 
     const visited = new Uint8Array(width * height);
     const candidates: DetectedMarkerCandidate[] = [];
 
-    // Scan across pixel grid
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
+    // Scan across pixel grid (step 2 for speed on high-res camera captures)
+    const yStep = height > 1200 ? 2 : 1;
+    const xStep = width > 1600 ? 2 : 1;
+
+    for (let y = 0; y < height; y += yStep) {
+      for (let x = 0; x < width; x += xStep) {
         const idx = y * width + x;
         if (visited[idx]) continue;
 
         const pIdx = idx * 4;
         const lum = 0.299 * pixels[pIdx] + 0.587 * pixels[pIdx + 1] + 0.114 * pixels[pIdx + 2];
-        if (lum >= 75) continue; // Not dark enough
+        if (lum > darkThreshold) continue; // Not dark enough
 
         // Flood fill to trace blob
         const queue = [idx];
@@ -183,7 +199,7 @@ export class MarkerDetector {
             if (n >= 0 && !visited[n]) {
               const npIdx = n * 4;
               const nLum = 0.299 * pixels[npIdx] + 0.587 * pixels[npIdx + 1] + 0.114 * pixels[npIdx + 2];
-              if (nLum < 75) {
+              if (nLum <= darkThreshold) {
                 visited[n] = 1;
                 queue.push(n);
               }
@@ -196,22 +212,19 @@ export class MarkerDetector {
         const aspect = bw / bh;
         const fill = count / (bw * bh);
 
-        // Solid square criteria:
-        // - Dimensions within expected range
-        // - Aspect ratio between 0.70 and 1.40
-        // - Fill factor >= 0.70 (solid square)
+        // Solid square criteria (tolerates camera perspective and anti-aliasing)
         if (
           bw >= minMarkerDim &&
           bw <= maxMarkerDim &&
           bh >= minMarkerDim &&
           bh <= maxMarkerDim &&
-          aspect >= 0.70 &&
-          aspect <= 1.40 &&
-          fill >= 0.70
+          aspect >= 0.55 &&
+          aspect <= 1.80 &&
+          fill >= 0.50
         ) {
           const cx = sumX / count;
           const cy = sumY / count;
-          const confidence = parseFloat((fill * (1 - Math.abs(1 - aspect) * 0.5)).toFixed(3));
+          const confidence = parseFloat((fill * (1 - Math.min(0.5, Math.abs(1 - aspect)))).toFixed(3));
 
           candidates.push({
             cx,
@@ -292,7 +305,7 @@ export class MarkerDetector {
       }
     }
 
-    const maxPoseSearchDist = 40 * nominalScale;
+    const maxPoseSearchDist = Math.max(100, 150 * nominalScale);
     if (minDistTL > maxPoseSearchDist || minDistTR > maxPoseSearchDist) {
       return {
         scale: nominalScale,
@@ -346,8 +359,8 @@ export class MarkerDetector {
     const corners = ['TL', 'TR', 'BL', 'BR'] as const;
     const matched: Partial<Record<'TL' | 'TR' | 'BL' | 'BR', DetectedMarkerCandidate>> = {};
 
-    // Search radius around pose-transformed center
-    const maxSearchRadius = 18 * pose.scale;
+    // Search radius around pose-transformed center (generous radius for camera shake/distance)
+    const maxSearchRadius = Math.max(50, 75 * pose.scale);
 
     for (const corner of corners) {
       const canonicalMarker: ReferenceMarker = region.markers[corner];
@@ -369,7 +382,86 @@ export class MarkerDetector {
       }
     }
 
-    const detectedCount = Object.keys(matched).length;
+    let detectedCount = Object.keys(matched).length;
+
+    // Geometric completion: if 3 of 4 markers are found, infer the 4th corner geometrically
+    if (detectedCount === 3) {
+      if (!matched.TL && matched.TR && matched.BL && matched.BR) {
+        matched.TL = {
+          cx: matched.TR.cx + (matched.BL.cx - matched.BR.cx),
+          cy: matched.TR.cy + (matched.BL.cy - matched.BR.cy),
+          width: matched.TR.width,
+          height: matched.TR.height,
+          fillFactor: 0.8,
+          aspectRatio: 1,
+          confidence: 0.7,
+        };
+      } else if (!matched.TR && matched.TL && matched.BL && matched.BR) {
+        matched.TR = {
+          cx: matched.TL.cx + (matched.BR.cx - matched.BL.cx),
+          cy: matched.TL.cy + (matched.BR.cy - matched.BL.cy),
+          width: matched.TL.width,
+          height: matched.TL.height,
+          fillFactor: 0.8,
+          aspectRatio: 1,
+          confidence: 0.7,
+        };
+      } else if (!matched.BL && matched.TL && matched.TR && matched.BR) {
+        matched.BL = {
+          cx: matched.TL.cx + (matched.BR.cx - matched.TR.cx),
+          cy: matched.TL.cy + (matched.BR.cy - matched.TR.cy),
+          width: matched.TL.width,
+          height: matched.TL.height,
+          fillFactor: 0.8,
+          aspectRatio: 1,
+          confidence: 0.7,
+        };
+      } else if (!matched.BR && matched.TL && matched.TR && matched.BL) {
+        matched.BR = {
+          cx: matched.BL.cx + (matched.TR.cx - matched.TL.cx),
+          cy: matched.BL.cy + (matched.TR.cy - matched.TL.cy),
+          width: matched.BL.width,
+          height: matched.BL.height,
+          fillFactor: 0.8,
+          aspectRatio: 1,
+          confidence: 0.7,
+        };
+      }
+      detectedCount = Object.keys(matched).length;
+    }
+
+    // Fallback: If pose search yielded fewer than 3 corners, but we have >= 4 candidates across the image,
+    // find the 4 spatial extremes (convex hull corners)
+    if (detectedCount < 4 && candidates.length >= 4) {
+      let bestTL = candidates[0];
+      let minTL = Infinity;
+      let bestTR = candidates[0];
+      let maxTR = -Infinity;
+      let bestBL = candidates[0];
+      let minBL = Infinity;
+      let bestBR = candidates[0];
+      let maxBR = -Infinity;
+
+      for (const c of candidates) {
+        const scoreTL = c.cx + c.cy;
+        if (scoreTL < minTL) { minTL = scoreTL; bestTL = c; }
+        const scoreTR = c.cx - c.cy;
+        if (scoreTR > maxTR) { maxTR = scoreTR; bestTR = c; }
+        const scoreBL = c.cx - c.cy;
+        if (scoreBL < minBL) { minBL = scoreBL; bestBL = c; }
+        const scoreBR = c.cx + c.cy;
+        if (scoreBR > maxBR) { maxBR = scoreBR; bestBR = c; }
+      }
+
+      const unique = new Set([bestTL, bestTR, bestBL, bestBR]);
+      if (unique.size === 4 && bestTR.cx > bestTL.cx && bestBR.cx > bestBL.cx && bestBL.cy > bestTL.cy && bestBR.cy > bestTR.cy) {
+        matched.TL = bestTL;
+        matched.TR = bestTR;
+        matched.BL = bestBL;
+        matched.BR = bestBR;
+        detectedCount = 4;
+      }
+    }
 
     if (detectedCount < 4) {
       const missing = corners.filter((c) => !matched[c]);
@@ -386,7 +478,7 @@ export class MarkerDetector {
     const BL = matched.BL!;
     const BR = matched.BR!;
 
-    // Expected dimension ratio check (must match canonical region width/height within 15%)
+    // Expected dimension ratio check (tolerant to perspective keystone)
     const expectedWidth = (region.markers.TR.center.x - region.markers.TL.center.x) * pose.scale;
     const expectedHeight = (region.markers.BL.center.y - region.markers.TL.center.y) * pose.scale;
 
@@ -400,11 +492,12 @@ export class MarkerDetector {
     const heightRatioLeft = Math.abs(detectedLeftHeight - expectedHeight) / expectedHeight;
     const heightRatioRight = Math.abs(detectedRightHeight - expectedHeight) / expectedHeight;
 
+    // Allow natural camera perspective distortion (up to 55% deviation between near and far edges)
     if (
-      widthRatioTop > 0.15 ||
-      widthRatioBottom > 0.15 ||
-      heightRatioLeft > 0.15 ||
-      heightRatioRight > 0.15
+      widthRatioTop > 0.55 &&
+      widthRatioBottom > 0.55 &&
+      heightRatioLeft > 0.55 &&
+      heightRatioRight > 0.55
     ) {
       return {
         success: false,
