@@ -91,24 +91,45 @@ export function useContinuousBarcode(
       const vH = video.videoHeight;
       if (!vW || !vH) return null;
 
-      // Downscale to 640px max width for rapid barcode decoding
-      const scale = Math.min(1, 640 / vW);
-      const targetW = Math.round(vW * scale);
-      const targetH = Math.round(vH * scale);
-
       if (!offscreenCanvasRef.current) {
         offscreenCanvasRef.current = document.createElement('canvas');
       }
       const canvas = offscreenCanvasRef.current;
-      canvas.width = targetW;
-      canvas.height = targetH;
-
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       if (!ctx) return null;
 
-      ctx.drawImage(video, 0, 0, targetW, targetH);
+      // PASS 1: High-resolution center crop (matches the viewfinder barcode box: center 75% W x 40% H)
+      // Capturing at 100% native resolution preserves crisp 1D Code 39 bars without downscaling blur
+      const cropW = Math.round(vW * 0.75);
+      const cropH = Math.round(vH * 0.40);
+      const cropX = Math.round((vW - cropW) / 2);
+      const cropY = Math.round((vH - cropH) / 2);
 
-      const barcode = await decodeBarcodeFromCanvas(canvas);
+      canvas.width = cropW;
+      canvas.height = cropH;
+      ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+      let barcode = await decodeBarcodeFromCanvas(canvas);
+      let activeOffsetX = cropX;
+      let activeOffsetY = cropY;
+      let activeScale = 1;
+
+      // PASS 2: Full video frame fallback if center crop did not yield a barcode
+      if (!barcode) {
+        const fullScale = Math.min(1, 960 / vW);
+        const targetW = Math.round(vW * fullScale);
+        const targetH = Math.round(vH * fullScale);
+
+        canvas.width = targetW;
+        canvas.height = targetH;
+        ctx.drawImage(video, 0, 0, targetW, targetH);
+
+        barcode = await decodeBarcodeFromCanvas(canvas);
+        activeOffsetX = 0;
+        activeOffsetY = 0;
+        activeScale = fullScale;
+      }
+
       if (!barcode) {
         setScanBox(null);
         return null;
@@ -132,10 +153,10 @@ export function useContinuousBarcode(
       if (barcode.boundingBox) {
         // Map back to video aspect
         setScanBox({
-          x: barcode.boundingBox.x / scale,
-          y: barcode.boundingBox.y / scale,
-          width: barcode.boundingBox.width / scale,
-          height: barcode.boundingBox.height / scale,
+          x: activeOffsetX + barcode.boundingBox.x / activeScale,
+          y: activeOffsetY + barcode.boundingBox.y / activeScale,
+          width: barcode.boundingBox.width / activeScale,
+          height: barcode.boundingBox.height / activeScale,
         });
       }
 
@@ -180,12 +201,26 @@ export function useContinuousBarcode(
   }, []);
 
   useEffect(() => {
-    if (passedRef?.current && enabled) {
-      startScanningLoop(passedRef.current);
-    } else {
+    if (!enabled || !passedRef) {
       stopScanningLoop();
+      return;
     }
+
+    let cancelled = false;
+    const waitForVideo = () => {
+      if (cancelled) return;
+      const video = passedRef?.current;
+      if (video) {
+        startScanningLoop(video);
+        return;
+      }
+      animFrameRef.current = requestAnimationFrame(waitForVideo);
+    };
+
+    waitForVideo();
+
     return () => {
+      cancelled = true;
       stopScanningLoop();
     };
   }, [passedRef, enabled, startScanningLoop, stopScanningLoop]);

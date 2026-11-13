@@ -133,9 +133,28 @@ async function decodeWithNativeDetector(
 
   try {
     const Detector = (window as any).BarcodeDetector;
-    const detector = new Detector({
-      formats: ['code_39', 'code_128', 'qr_code', 'ean_13', 'ean_8', 'upc_a', 'upc_e'],
-    });
+    const allWanted: SupportedBarcodeFormat[] = [
+      'code_39',
+      'code_128',
+      'qr_code',
+      'ean_13',
+      'ean_8',
+      'upc_a',
+      'upc_e',
+    ];
+
+    let supportedFormats = allWanted;
+    if (typeof Detector.getSupportedFormats === 'function') {
+      try {
+        const nativeSupported = await Detector.getSupportedFormats();
+        supportedFormats = allWanted.filter((f) => nativeSupported.includes(f));
+        if (supportedFormats.length === 0) return null;
+      } catch {
+        // Continue with wanted formats
+      }
+    }
+
+    const detector = new Detector({ formats: supportedFormats });
 
     const results = await detector.detect(imageSource);
     if (!results || results.length === 0) return null;
@@ -183,29 +202,42 @@ async function decodeWithZxing(
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return null;
 
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const luminanceSource = new RGBLuminanceSource(
-      imageData.data,
-      canvas.width,
-      canvas.height
-    );
+    const width = canvas.width;
+    const height = canvas.height;
+    if (width === 0 || height === 0) return null;
+
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+
+    // Convert RGBA (4 bytes per pixel) into a 1-channel grayscale buffer
+    // using standard Rec. 601 luma weights: (306*R + 601*G + 117*B + 512) >> 10
+    const grayscale = new Uint8ClampedArray(width * height);
+    for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+      grayscale[j] = (306 * data[i] + 601 * data[i + 1] + 117 * data[i + 2] + 512) >> 10;
+    }
+
+    const luminanceSource = new RGBLuminanceSource(grayscale, width, height);
     const binaryBitmap = new BinaryBitmap(new HybridBinarizer(luminanceSource));
 
-    const result = zxing.reader.decode(binaryBitmap, zxing.hints);
-    if (!result) return null;
+    try {
+      const result = zxing.reader.decode(binaryBitmap, zxing.hints);
+      if (!result) return null;
 
-    const rawValue = result.getText();
-    if (!rawValue) return null;
+      const rawValue = result.getText();
+      if (!rawValue) return null;
 
-    const formatName = result.getBarcodeFormat() ? String(result.getBarcodeFormat()).toLowerCase() : 'code_39';
-    const parsedIdentity = parseProjectKitBarcodePayload(rawValue);
+      const formatName = result.getBarcodeFormat() ? String(result.getBarcodeFormat()).toLowerCase() : 'code_39';
+      const parsedIdentity = parseProjectKitBarcodePayload(rawValue);
 
-    return {
-      rawValue,
-      format: formatName,
-      parsedIdentity,
-      timestamp: Date.now(),
-    };
+      return {
+        rawValue,
+        format: formatName,
+        parsedIdentity,
+        timestamp: Date.now(),
+      };
+    } finally {
+      zxing.reader.reset?.();
+    }
   } catch (err) {
     // Normal when no barcode is found in current frame
     return null;

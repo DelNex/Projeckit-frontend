@@ -8,7 +8,7 @@ import assert from 'node:assert';
 import { describe, it } from 'node:test';
 
 import { formatCameraError } from '../camera/camera-utils';
-import { extractDepEdBarcodePayload, isBarcodeFormatSupported } from '../barcode/barcode-engine';
+import { decodeBarcodeFromBlob, extractDepEdBarcodePayload, isBarcodeFormatSupported } from '../barcode/barcode-engine';
 import { adviseOnQuality, clientAiAdvisor } from '../ai/client-ai-advisor';
 import { DocumentQualityMetrics } from '../ai/ai-types';
 
@@ -79,6 +79,16 @@ describe('Project KIT — Local AI Scanner Unit Tests', () => {
       const payload = extractDepEdBarcodePayload('RANDOM-CODE-999');
       assert.strictEqual(payload.assessmentId, undefined);
       assert.strictEqual(payload.studentId, undefined);
+    });
+
+    it('decodes embedded barcode metadata from vector SVG template', async () => {
+      const svgText = '<svg class="omr-master-svg" data-assessment-id="4A91B2" data-student-id="7C38E1" data-code="K4A91B-7C38E1"></svg>';
+      const blob = new Blob([svgText], { type: 'image/svg+xml' });
+      const result = await decodeBarcodeFromBlob(blob);
+      assert.ok(result);
+      assert.strictEqual(result.rawValue, 'K4A91B-7C38E1');
+      assert.strictEqual(result.parsedIdentity?.assessmentId, '4A91B2');
+      assert.strictEqual(result.parsedIdentity?.studentId, '7C38E1');
     });
   });
 
