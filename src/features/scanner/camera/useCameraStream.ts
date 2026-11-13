@@ -17,6 +17,24 @@ import {
 } from './camera-types';
 import { discoverVideoDevices, formatCameraError, stopMediaStreamTracks } from './camera-utils';
 
+function checkTorchSupport(track: MediaStreamTrack | null | undefined, facingMode?: CameraFacingMode): boolean {
+  if (!track) return false;
+  try {
+    if (typeof track.getCapabilities === 'function') {
+      const caps = track.getCapabilities() as { torch?: boolean };
+      if (typeof caps.torch === 'boolean') {
+        return caps.torch;
+      }
+    }
+  } catch {
+    // Ignore capabilities error
+  }
+  // Mobile rear cameras almost universally feature an LED flashlight
+  const settings = track.getSettings?.();
+  const actualFacing = (settings?.facingMode as CameraFacingMode) || facingMode;
+  return actualFacing === 'environment';
+}
+
 export function useCameraStream(options: UseCameraStreamOptions = {}) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -31,6 +49,8 @@ export function useCameraStream(options: UseCameraStreamOptions = {}) {
     activeFacingMode: options.preferredFacingMode || 'environment',
     availableCameras: [],
     hasMultipleCameras: false,
+    hasTorch: false,
+    isTorchOn: false,
     aspectRatio: 16 / 9,
     videoWidth: 0,
     videoHeight: 0,
@@ -69,6 +89,7 @@ export function useCameraStream(options: UseCameraStreamOptions = {}) {
     setState((prev) => ({
       ...prev,
       isStreaming: false,
+      isTorchOn: false,
       permissionState: prev.permissionState === 'denied' ? 'denied' : 'idle',
       statusText: 'Camera stopped',
     }));
@@ -189,6 +210,7 @@ export function useCameraStream(options: UseCameraStreamOptions = {}) {
         const vW = videoRef.current?.videoWidth || 1280;
         const vH = videoRef.current?.videoHeight || 720;
         const ar = vH > 0 ? vW / vH : 16 / 9;
+        const hasTorch = checkTorchSupport(videoTrack, actualFacing);
 
         setState({
           isStreaming: true,
@@ -197,6 +219,8 @@ export function useCameraStream(options: UseCameraStreamOptions = {}) {
           activeFacingMode: actualFacing,
           availableCameras: devices,
           hasMultipleCameras: devices.length > 1,
+          hasTorch,
+          isTorchOn: false,
           aspectRatio: ar,
           videoWidth: vW,
           videoHeight: vH,
@@ -320,6 +344,62 @@ export function useCameraStream(options: UseCameraStreamOptions = {}) {
     []
   );
 
+  /**
+   * Toggles the camera torch / flashlight on or off.
+   */
+  const toggleTorch = useCallback(async (): Promise<boolean> => {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track) return false;
+
+    const nextState = !stateRef.current.isTorchOn;
+
+    try {
+      await track.applyConstraints({
+        advanced: [{ torch: nextState } as any],
+      });
+
+      setState((prev) => ({
+        ...prev,
+        isTorchOn: nextState,
+      }));
+      return nextState;
+    } catch (err) {
+      console.warn('[Camera] Failed to toggle flashlight:', err);
+      setState((prev) => ({
+        ...prev,
+        isTorchOn: false,
+      }));
+      return false;
+    }
+  }, []);
+
+  /**
+   * Directly sets the camera torch state.
+   */
+  const setTorch = useCallback(async (enabled: boolean): Promise<boolean> => {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track) return false;
+
+    try {
+      await track.applyConstraints({
+        advanced: [{ torch: enabled } as any],
+      });
+
+      setState((prev) => ({
+        ...prev,
+        isTorchOn: enabled,
+      }));
+      return enabled;
+    } catch (err) {
+      console.warn('[Camera] Failed to set flashlight:', err);
+      setState((prev) => ({
+        ...prev,
+        isTorchOn: false,
+      }));
+      return false;
+    }
+  }, []);
+
   // Handle visibility changes (pause/stop when tab is hidden, resume when visible)
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -362,5 +442,9 @@ export function useCameraStream(options: UseCameraStreamOptions = {}) {
     cycleCamera,
     refreshDevices,
     captureFrame,
+    toggleTorch,
+    setTorch,
+    hasTorch: state.hasTorch,
+    isTorchOn: state.isTorchOn,
   };
 }

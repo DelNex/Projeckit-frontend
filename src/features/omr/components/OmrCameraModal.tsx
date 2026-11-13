@@ -14,6 +14,8 @@ import {
   ArrowRight,
   Camera,
   CheckCircle2,
+  Flashlight,
+  FlashlightOff,
   QrCode,
   RefreshCw,
   UserCheck,
@@ -99,6 +101,7 @@ export function OmrCameraModal({
     stopStream,
     cycleCamera,
     captureFrame,
+    toggleTorch,
   } = useCameraStream({
     preferredFacingMode: 'environment',
     onError: (err) => setErrorMessage(err.message),
@@ -527,17 +530,44 @@ export function OmrCameraModal({
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              stopStream();
-              onClose();
-            }}
-            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-800 hover:text-white transition shrink-0"
-            aria-label="Close scanner"
-          >
-            <X className="h-4 w-4 sm:h-5 sm:w-5" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Quick Flashlight Header Toggle (active during camera phases) */}
+            {(phase === 'identify' || phase === 'scan') && cameraState.isStreaming && cameraState.hasTorch && (
+              <button
+                type="button"
+                onClick={toggleTorch}
+                title={cameraState.isTorchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
+                aria-label={cameraState.isTorchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
+                className={cn(
+                  'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition border active:scale-95',
+                  cameraState.isTorchOn
+                    ? 'bg-amber-500/25 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.5)] ring-1 ring-amber-400/50'
+                    : 'bg-gray-800/90 border-gray-700 text-gray-300 hover:text-white hover:bg-gray-700'
+                )}
+              >
+                {cameraState.isTorchOn ? (
+                  <Flashlight className="h-3.5 w-3.5 text-amber-400" />
+                ) : (
+                  <FlashlightOff className="h-3.5 w-3.5 text-gray-400" />
+                )}
+                <span className="text-[11px] font-medium hidden xs:inline sm:inline">
+                  {cameraState.isTorchOn ? 'Light On' : 'Light'}
+                </span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                stopStream();
+                onClose();
+              }}
+              className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-800 hover:text-white transition shrink-0"
+              aria-label="Close scanner"
+            >
+              <X className="h-4 w-4 sm:h-5 sm:w-5" />
+            </button>
+          </div>
         </div>
 
         {/* Modal Body */}
@@ -681,6 +711,9 @@ export function OmrCameraModal({
                 statusMessage={statusMessage || undefined}
                 isAnswerKeyMode={isAnswerKey}
                 mode={phase === 'identify' ? 'barcode' : 'omr'}
+                hasTorch={cameraState.hasTorch}
+                isTorchOn={cameraState.isTorchOn}
+                onToggleTorch={toggleTorch}
               />
             </div>
           )}

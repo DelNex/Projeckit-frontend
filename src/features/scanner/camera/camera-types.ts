@@ -26,6 +26,8 @@ export interface CameraState {
   activeFacingMode: CameraFacingMode;
   availableCameras: CameraDeviceInfo[];
   hasMultipleCameras: boolean;
+  hasTorch: boolean;
+  isTorchOn: boolean;
   aspectRatio: number;
   videoWidth: number;
   videoHeight: number;

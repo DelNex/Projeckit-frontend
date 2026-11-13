@@ -11,6 +11,8 @@ import { cn } from '@/lib/utils';
 import {
   Camera,
   CheckCircle2,
+  Flashlight,
+  FlashlightOff,
   QrCode,
   RefreshCw,
   SwitchCamera,
@@ -34,6 +36,9 @@ export interface CameraViewfinderProps {
   statusMessage?: string;
   isAnswerKeyMode?: boolean;
   mode?: 'barcode' | 'omr';
+  hasTorch?: boolean;
+  isTorchOn?: boolean;
+  onToggleTorch?: () => void;
 }
 
 export function CameraViewfinder({
@@ -48,6 +53,9 @@ export function CameraViewfinder({
   isProcessing,
   statusMessage,
   mode = 'omr',
+  hasTorch = false,
+  isTorchOn = false,
+  onToggleTorch,
 }: CameraViewfinderProps) {
   const corners = qualityMetrics?.cornersDetected ?? 0;
   const isAligned = corners >= 3 && !qualityMetrics?.blurDetected;
@@ -211,10 +219,10 @@ export function CameraViewfinder({
       )}
 
       {/* Floating Bottom Touch Controls Bar */}
-      <div className="absolute bottom-3 left-0 right-0 flex items-center justify-around px-8 pointer-events-auto z-20">
+      <div className="absolute bottom-3 inset-x-0 flex items-center justify-center gap-3 sm:gap-6 px-4 pointer-events-auto z-20">
         {/* Left Control: Upload File Alternative */}
         <label
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 transition cursor-pointer shadow-lg active:scale-95"
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 transition cursor-pointer shadow-lg active:scale-95 shrink-0"
           title="Upload image"
           aria-label="Upload image"
         >
@@ -227,6 +235,29 @@ export function CameraViewfinder({
           />
         </label>
 
+        {/* Torch / Flashlight Toggle */}
+        {hasTorch && onToggleTorch && (
+          <button
+            type="button"
+            onClick={onToggleTorch}
+            disabled={isProcessing || !cameraState.isStreaming}
+            aria-label={isTorchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
+            title={isTorchOn ? 'Turn off flashlight' : 'Turn on flashlight'}
+            className={cn(
+              'flex h-11 w-11 items-center justify-center rounded-full backdrop-blur-md border transition shadow-lg active:scale-95 shrink-0',
+              isTorchOn
+                ? 'bg-amber-500/25 border-amber-400 text-amber-300 shadow-[0_0_14px_rgba(251,191,36,0.6)] ring-1 ring-amber-400/50'
+                : 'bg-black/60 border-white/20 text-white/80 hover:bg-white/20 hover:text-white'
+            )}
+          >
+            {isTorchOn ? (
+              <Flashlight className="h-5 w-5 text-amber-400" />
+            ) : (
+              <FlashlightOff className="h-5 w-5 text-gray-400" />
+            )}
+          </button>
+        )}
+
         {/* Center Control: Clean Touch Shutter Button */}
         <button
           type="button"
@@ -234,7 +265,7 @@ export function CameraViewfinder({
           disabled={isProcessing || !cameraState.isStreaming}
           aria-label={isBarcodeMode ? 'Scan Barcode' : 'Capture OMR Sheet'}
           className={cn(
-            'flex h-15 w-15 sm:h-17 sm:w-17 items-center justify-center rounded-full shadow-2xl transition transform active:scale-90',
+            'flex h-15 w-15 sm:h-17 sm:w-17 items-center justify-center rounded-full shadow-2xl transition transform active:scale-90 shrink-0',
             isBarcodeMode
               ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-600/50'
               : isAligned
@@ -257,21 +288,20 @@ export function CameraViewfinder({
         </button>
 
         {/* Right Control: Switch Camera (Front/Rear) */}
-        <div className="flex items-center justify-center w-11 h-11">
-          {cameraState.hasMultipleCameras ? (
-            <button
-              type="button"
-              onClick={onCycleCamera}
-              aria-label="Switch Camera"
-              title="Switch Camera (Front/Rear)"
-              className="flex h-11 w-11 items-center justify-center rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 transition shadow-lg active:scale-95"
-            >
-              <SwitchCamera className="h-5 w-5 text-emerald-400" />
-            </button>
-          ) : (
-            <div className="w-11" />
-          )}
-        </div>
+        {cameraState.hasMultipleCameras ? (
+          <button
+            type="button"
+            onClick={onCycleCamera}
+            disabled={isProcessing}
+            aria-label="Switch Camera"
+            title="Switch Camera (Front/Rear)"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 transition shadow-lg active:scale-95 shrink-0"
+          >
+            <SwitchCamera className="h-5 w-5 text-emerald-400" />
+          </button>
+        ) : (
+          !hasTorch && <div className="w-11 shrink-0" />
+        )}
       </div>
     </div>
   );
