@@ -85,6 +85,7 @@ export function OmrCameraModal({
   );
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [detectedBarcode, setDetectedBarcode] = useState<DecodedBarcode | null>(null);
+  const detectedBarcodeRef = useRef<DecodedBarcode | null>(null);
   const [qualityMetrics, setQualityMetrics] = useState<DocumentQualityMetrics | null>(null);
   const [currentResult, setCurrentResult] = useState<OmrScanResult | null>(null);
   const [editableItems, setEditableItems] = useState<ProcessedItemResult[]>([]);
@@ -116,6 +117,7 @@ export function OmrCameraModal({
   // Handler for continuous barcode detection in 'identify' phase
   const handleBarcodeDetected = useCallback(
     (barcode: DecodedBarcode) => {
+      detectedBarcodeRef.current = barcode;
       setDetectedBarcode(barcode);
       setErrorMessage(null); // Clear any stale snapshot error when continuous scanner finds barcode
       const identity = barcode.parsedIdentity;
@@ -347,15 +349,16 @@ export function OmrCameraModal({
         const barcode = await decodeBarcodeFromBlob(blob);
         if (barcode) {
           handleBarcodeDetected(barcode);
-          proceedToOmrScan();
         } else {
           // Don't show error if continuous scanner already found a barcode
-          if (!detectedBarcode) {
+          if (!detectedBarcodeRef.current) {
             toast.info('No barcode detected in this frame. Position barcode in center box or select learner manually.');
           }
         }
       } catch {
-        toast.info('Could not read barcode. You can choose the learner manually below.');
+        if (!detectedBarcodeRef.current) {
+          toast.info('Could not read barcode. You can choose the learner manually below.');
+        }
       } finally {
         setIsProcessing(false);
       }
@@ -552,6 +555,7 @@ export function OmrCameraModal({
     setEditableItems([]);
     setCapturedBlob(null);
     setSelectedStudentId('');
+    detectedBarcodeRef.current = null;
     setDetectedBarcode(null);
     setQualityMetrics(null);
     setErrorMessage(null);

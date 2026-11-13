@@ -521,12 +521,16 @@ export function generateCanonicalGeometry(rawConfig: AssessmentOmrConfig): Canon
   const yearSectionLineStartX = yearSectionLabelX + 75;
   const yearSectionLineEndX = isHalf ? 485 : 690;
 
-  // Barcode placed strictly in header to the right of the title block (never overlaps learner info or title text)
+  // Keep the barcode right-aligned while leaving enough width for its fixed 15-character payload.
+  const barcodeNarrowBarWidth = isHalf ? 1.0 : 1.1;
+  const barcodeCharacterCount = 17; // Code 39 start/stop characters plus Kxxxxxx-xxxxxx
+  const barcodeUnitWidth = 6 + 3 * 2.2 + 1; // six narrow elements, three wide elements, and the gap
+  const barcodeWidth = barcodeCharacterCount * barcodeUnitWidth * barcodeNarrowBarWidth;
   const barcode = {
-    x: isHalf ? answerAreaX + answerAreaWidth - 135 : answerAreaX + answerAreaWidth - 165,
+    x: answerAreaX + answerAreaWidth - barcodeWidth - 8,
     y: Math.round(subjectY - (isHalf ? 4 : 6)),
     height: isHalf ? 26 : 32,
-    narrowBarWidth: isHalf ? 0.62 : 0.78,
+    narrowBarWidth: barcodeNarrowBarWidth,
     wideBarRatio: 2.2,
   };
 
