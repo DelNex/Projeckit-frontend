@@ -82,7 +82,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
       {/* Toast Notification Container */}
       <div
-        className="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2.5 pointer-events-none max-w-sm w-full px-4"
+        className="fixed top-4 right-4 sm:top-5 sm:right-5 z-[9999] flex flex-col gap-2.5 pointer-events-none max-w-sm w-full px-4 sm:px-0"
         aria-live="polite"
         role="region"
       >
@@ -90,7 +90,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           <div
             key={t.id}
             className={cn(
-              'pointer-events-auto rounded-2xl border p-4 shadow-xl backdrop-blur-md transition-all animate-in slide-in-from-bottom-5 duration-200 flex items-center justify-between gap-3 text-xs font-semibold',
+              'pointer-events-auto rounded-2xl border p-4 shadow-xl backdrop-blur-md transition-all animate-in slide-in-from-top-4 duration-200 flex items-start justify-between gap-3 text-xs font-semibold',
               t.type === 'success' &&
                 'bg-white dark:bg-gray-900 border-emerald-200 text-emerald-950 dark:border-emerald-800 dark:text-emerald-100 shadow-emerald-500/10',
               t.type === 'error' &&
@@ -99,11 +99,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 'bg-white dark:bg-gray-900 border-blue-200 text-blue-950 dark:border-blue-800 dark:text-blue-100 shadow-blue-500/10'
             )}
           >
-            <div className="flex items-center gap-2.5 min-w-0">
-              {t.type === 'success' && <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />}
-              {t.type === 'error' && <AlertCircle className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />}
-              {t.type === 'info' && <Info className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />}
-              <span className="truncate leading-snug">{t.message}</span>
+            <div className="flex items-start gap-2.5 min-w-0 flex-1">
+              {t.type === 'success' && <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />}
+              {t.type === 'error' && <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />}
+              {t.type === 'info' && <Info className="h-4 w-4 shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" />}
+              <span className="line-clamp-3 text-xs leading-snug break-words">{t.message}</span>
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0">

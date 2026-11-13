@@ -10,7 +10,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import {
-  AlertCircle,
   ArrowRight,
   Camera,
   CheckCircle2,
@@ -21,6 +20,7 @@ import {
   UserCheck,
   X,
 } from 'lucide-react';
+import { useToast } from '@/components/ui/toast';
 
 import { KitOmrTemplate, OmrScanResult, ProcessedItemResult } from '../types';
 import { processOmrScan } from '../adapter';
@@ -77,6 +77,7 @@ export function OmrCameraModal({
   const isAnswerKey = mode === 'answer_key';
   const totalItems = template?.targetItems || 50;
   const choices = template?.choices || ['A', 'B', 'C', 'D'];
+  const { toast } = useToast();
 
   // Session state: 'identify' -> 'scan' -> 'review' -> 'saved'
   const [phase, setPhase] = useState<'identify' | 'scan' | 'review' | 'saved'>(
@@ -104,7 +105,7 @@ export function OmrCameraModal({
     toggleTorch,
   } = useCameraStream({
     preferredFacingMode: 'environment',
-    onError: (err) => setErrorMessage(err.message),
+    onError: (err) => toast.error(err.message),
   });
 
   // Matched student derived from selectedStudentId or detected barcode
@@ -116,6 +117,7 @@ export function OmrCameraModal({
   const handleBarcodeDetected = useCallback(
     (barcode: DecodedBarcode) => {
       setDetectedBarcode(barcode);
+      setErrorMessage(null); // Clear any stale snapshot error when continuous scanner finds barcode
       const identity = barcode.parsedIdentity;
 
       // Check if barcode assessment matches current assessment (if specified)
@@ -312,7 +314,9 @@ export function OmrCameraModal({
         setStatusMessage(null);
       }
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Scan processing failed.');
+      const msg = err instanceof Error ? err.message : 'Scan processing failed. Please try again.';
+      toast.error(msg, { duration: 6000 });
+      setErrorMessage(null);
       // Restart stream if processing failed
       void startStream();
     } finally {
@@ -335,7 +339,7 @@ export function OmrCameraModal({
       // In identify phase, shutter captures snapshot to force barcode decode
       const blob = await captureFrame({ quality: 0.92 });
       if (!blob) {
-        setErrorMessage('Camera preview is not ready. Please wait a moment.');
+        toast.error('Camera preview is not ready. Please wait a moment.');
         return;
       }
       setIsProcessing(true);
@@ -345,10 +349,13 @@ export function OmrCameraModal({
           handleBarcodeDetected(barcode);
           proceedToOmrScan();
         } else {
-          setErrorMessage('No barcode detected in this frame. Position barcode in center box.');
+          // Don't show error if continuous scanner already found a barcode
+          if (!detectedBarcode) {
+            toast.info('No barcode detected in this frame. Position barcode in center box or select learner manually.');
+          }
         }
       } catch {
-        setErrorMessage('Could not read barcode. You can choose the learner manually below.');
+        toast.info('Could not read barcode. You can choose the learner manually below.');
       } finally {
         setIsProcessing(false);
       }
@@ -356,12 +363,18 @@ export function OmrCameraModal({
     }
 
     // In scan phase, shutter captures full OMR score sheet
-    const blob = await captureFrame({ quality: 0.92 });
-    if (!blob) {
-      setErrorMessage('Camera preview is not ready. Please wait a moment and try again.');
-      return;
+    setIsProcessing(true); // Block immediately to prevent double-tap
+    try {
+      const blob = await captureFrame({ quality: 0.92 });
+      if (!blob) {
+        toast.error('Camera preview is not ready. Please wait a moment and try again.');
+        setIsProcessing(false);
+        return;
+      }
+      await processImageBlob(blob);
+    } catch {
+      setIsProcessing(false);
     }
-    await processImageBlob(blob);
   };
 
   // Trigger file upload fallback
@@ -376,10 +389,10 @@ export function OmrCameraModal({
         if (barcode) {
           handleBarcodeDetected(barcode);
         } else {
-          setErrorMessage('No barcode detected in uploaded image. Please select learner manually.');
+          toast.info('No barcode detected in uploaded image. Please select learner manually.');
         }
       } catch {
-        setErrorMessage('Could not decode barcode from file.');
+        toast.error('Could not decode barcode from file.');
       } finally {
         setIsProcessing(false);
       }
@@ -426,7 +439,7 @@ export function OmrCameraModal({
     }
 
     if (!selectedStudentId) {
-      setErrorMessage('Please select or verify the learner before saving.');
+      toast.error('Please select or verify the learner before saving.');
       return;
     }
 
@@ -514,12 +527,19 @@ export function OmrCameraModal({
 
       setPhase('saved');
     } catch (err: any) {
+      // Extract the most useful error message from various error shapes
       const msg =
+        (err instanceof Error ? err.message : null) ||
         err?.message ||
         err?.error_description ||
         err?.details ||
-        (typeof err === 'string' ? err : 'Could not save the scan.');
-      setErrorMessage(msg);
+        err?.hint ||
+        (typeof err === 'string' ? err : null) ||
+        (err?.code ? `Database error (${err.code})` : null) ||
+        (() => { try { return JSON.stringify(err); } catch { return null; } })() ||
+        'Could not save the scan. Please check your connection and try again.';
+      toast.error(msg, { duration: 8000 });
+      setErrorMessage(null); // Clear inline banner — toast handles it
       console.error('[OmrCameraModal] Save error:', err);
     } finally {
       setIsSaving(false);
@@ -610,12 +630,6 @@ export function OmrCameraModal({
 
         {/* Modal Body */}
         <div className="flex-1 flex flex-col p-2 sm:p-5 min-h-0 overflow-hidden">
-          {errorMessage && (
-            <div className="mb-3 shrink-0 flex items-start gap-2.5 rounded-2xl bg-red-950/70 border border-red-800/80 p-3 text-xs text-red-200">
-              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-400" />
-              <p className="flex-1">{errorMessage}</p>
-            </div>
-          )}
 
           {phase === 'saved' ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-4 py-12 text-center">

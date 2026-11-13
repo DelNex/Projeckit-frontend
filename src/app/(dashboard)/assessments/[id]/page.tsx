@@ -696,7 +696,14 @@ export default function AssessmentWorkspacePage({
 
     } catch (e: any) {
       console.error('Failed to persist scan result:', e);
-      throw e;
+      // Ensure the re-thrown error is always an Error instance with a meaningful message
+      if (e instanceof Error) throw e;
+      const errMsg =
+        e?.message || e?.error_description || e?.details || e?.hint ||
+        (typeof e === 'string' ? e : null) ||
+        (e?.code ? `Database error (${e.code})` : null) ||
+        'Could not save the scan. Please try again.';
+      throw new Error(errMsg);
     }
   };
 
