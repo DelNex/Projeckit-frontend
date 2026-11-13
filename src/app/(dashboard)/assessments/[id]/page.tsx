@@ -580,6 +580,10 @@ export default function AssessmentWorkspacePage({
       }
 
       // Insert scan result record with student reference
+      const scanDbStatus = needsReview
+        ? 'VERIFICATION_REQUIRED'
+        : (scanStatus === 'REJECTED' || scanStatus === 'DUPLICATE' ? 'REJECTED' : 'PROCESSED');
+
       const { data: savedScan, error: scanErr } = await supabase
         .from('scan_results')
         .insert({
@@ -596,41 +600,75 @@ export default function AssessmentWorkspacePage({
             }
             : result.rawAnswers,
           normalized_answers: result.normalizedAnswers,
-          status: needsReview ? 'VERIFICATION_REQUIRED' : scanStatus,
+          status: scanDbStatus,
           detected_roll_number: result.detectedRollNumber,
         })
         .select('id')
         .single();
 
-      if (scanErr) throw scanErr;
+      if (scanErr) {
+        console.error('[handleScanCompleted] scan_results insert error:', scanErr);
+        throw new Error(scanErr.message || scanErr.details || 'Failed to save scan record.');
+      }
 
-      // Upsert into responses
-      const { error: responseErr } = await supabase.from('responses').upsert(
-        {
-          assessment_id: assessmentId,
-          tenant_id: tenantId,
-          student_id: matchedStudent?.id || null,
-          student_lrn: matchedStudent?.lrn || result.detectedStudentLrn || null,
-          section_name: matchedStudent.section_name || assessment.section,
-          score,
-          total_items: itemCount,
-          percentage,
-          status: needsReview ? 'VERIFICATION_REQUIRED' : 'GRADED',
-          raw_response: result.normalizedAnswers,
-          audit_trail: {
-            studentName: matchedStudent?.name || (result.detectedRollNumber ? `Roll #${result.detectedRollNumber}` : 'Unassigned Learner'),
-            detectedRoll: result.detectedRollNumber,
-            detectedBarcodeStudentId: result.detectedStudentId || null,
-            rollConflict: hasConflict,
-            confidence: result.overallConfidence,
-            term: assessment.term,
-          },
+      // Response status must adhere to CHECK (status IN ('PENDING', 'GRADED', 'EVALUATED'))
+      const responseStatus = needsReview ? 'PENDING' : 'GRADED';
+
+      const responseData = {
+        assessment_id: assessmentId,
+        tenant_id: tenantId,
+        student_id: matchedStudent?.id || null,
+        student_lrn: matchedStudent?.lrn || result.detectedStudentLrn || null,
+        section_name: matchedStudent.section_name || assessment.section,
+        score,
+        total_items: itemCount,
+        percentage,
+        status: responseStatus,
+        raw_response: result.normalizedAnswers,
+        audit_trail: {
+          studentName: matchedStudent?.name || (result.detectedRollNumber ? `Roll #${result.detectedRollNumber}` : 'Unassigned Learner'),
+          detectedRoll: result.detectedRollNumber,
+          detectedBarcodeStudentId: result.detectedStudentId || null,
+          rollConflict: hasConflict,
+          confidence: result.overallConfidence,
+          term: assessment.term,
         },
-        { onConflict: 'assessment_id,student_id' }
-      );
+      };
+
+      // Check if response already exists to decide whether to update or insert
+      // Avoids PostgreSQL 42P10 error since responses table has no unique constraint on (assessment_id, student_id)
+      const { data: existingResp, error: checkRespErr } = await supabase
+        .from('responses')
+        .select('id')
+        .eq('assessment_id', assessmentId)
+        .eq('student_id', matchedStudent.id)
+        .maybeSingle();
+
+      if (checkRespErr) {
+        console.warn('[handleScanCompleted] Error checking existing response:', checkRespErr);
+      }
+
+      let responseErr: any = null;
+      if (existingResp?.id) {
+        const { error } = await supabase
+          .from('responses')
+          .update({
+            ...responseData,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingResp.id);
+        responseErr = error;
+      } else {
+        const { error } = await supabase
+          .from('responses')
+          .insert(responseData);
+        responseErr = error;
+      }
+
       if (responseErr) {
+        console.error('[handleScanCompleted] Response save error:', responseErr);
         if (savedScan?.id) await supabase.from('scan_results').delete().eq('id', savedScan.id);
-        throw responseErr;
+        throw new Error(responseErr.message || responseErr.details || 'Failed to save student response.');
       }
 
       // Refetch scan results and responses

@@ -130,14 +130,16 @@ export function OmrCameraModal({
         const directMatch = students.find((s) => s.id === studentCode);
         if (directMatch) {
           setSelectedStudentId(directMatch.id);
-          setStatusMessage(`Identified: ${directMatch.name}`);
+          setStatusMessage(`Identified: ${directMatch.name}. Position the answer sheet.`);
+          setPhase('scan');
           return;
         }
 
         const lrnMatch = students.find((s) => s.lrn && s.lrn === studentCode);
         if (lrnMatch) {
           setSelectedStudentId(lrnMatch.id);
-          setStatusMessage(`Identified: ${lrnMatch.name}`);
+          setStatusMessage(`Identified: ${lrnMatch.name}. Position the answer sheet.`);
+          setPhase('scan');
           return;
         }
 
@@ -146,7 +148,8 @@ export function OmrCameraModal({
         );
         if (prefixMatches.length === 1) {
           setSelectedStudentId(prefixMatches[0].id);
-          setStatusMessage(`Identified: ${prefixMatches[0].name}`);
+          setStatusMessage(`Identified: ${prefixMatches[0].name}. Position the answer sheet.`);
+          setPhase('scan');
           return;
         }
       }
@@ -481,8 +484,14 @@ export function OmrCameraModal({
       }
 
       setPhase('saved');
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Could not save the scan.');
+    } catch (err: any) {
+      const msg =
+        err?.message ||
+        err?.error_description ||
+        err?.details ||
+        (typeof err === 'string' ? err : 'Could not save the scan.');
+      setErrorMessage(msg);
+      console.error('[OmrCameraModal] Save error:', err);
     } finally {
       setIsSaving(false);
     }

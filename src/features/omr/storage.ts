@@ -90,7 +90,7 @@ export async function persistOmrScan(payload: SaveScanPayload): Promise<SaveScan
           }
           : payload.scanResult.rawAnswers,
         normalized_answers: payload.scanResult.normalizedAnswers,
-        status: payload.scanResult.status,
+        status: payload.scanResult.status === 'DUPLICATE' ? 'REJECTED' : payload.scanResult.status,
       })
       .select('id')
       .single();
