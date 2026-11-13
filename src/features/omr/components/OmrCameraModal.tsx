@@ -125,36 +125,61 @@ export function OmrCameraModal({
       }
 
       // Attempt to auto-assign student by id, LRN, or shortcode prefix
-      const studentCode = identity?.studentId || identity?.studentLrn;
+      const rawCode = barcode.rawValue.trim();
+      const studentCode = identity?.studentId || identity?.studentLrn || rawCode;
+
       if (studentCode) {
-        const directMatch = students.find((s) => s.id === studentCode);
-        if (directMatch) {
-          setSelectedStudentId(directMatch.id);
-          setStatusMessage(`Identified: ${directMatch.name}. Position the answer sheet.`);
-          setPhase('scan');
-          return;
+        // 1. Direct ID match
+        let match = students.find((s) => s.id === studentCode || s.id === rawCode);
+
+        // 2. Exact or partial LRN match
+        if (!match) {
+          const digits = studentCode.replace(/\D/g, '');
+          if (digits.length >= 6) {
+            match = students.find((s) => {
+              if (!s.lrn) return false;
+              const sDigits = s.lrn.replace(/\D/g, '');
+              return sDigits === digits || sDigits.endsWith(digits) || digits.endsWith(sDigits);
+            });
+          }
         }
 
-        const lrnMatch = students.find((s) => s.lrn && s.lrn === studentCode);
-        if (lrnMatch) {
-          setSelectedStudentId(lrnMatch.id);
-          setStatusMessage(`Identified: ${lrnMatch.name}. Position the answer sheet.`);
-          setPhase('scan');
-          return;
+        // 3. ShortCode match
+        if (!match) {
+          const targetSc = shortCode(studentCode);
+          if (targetSc.length >= 4) {
+            const prefixMatches = students.filter(
+              (s) => shortCode(s.id) === targetSc
+            );
+            if (prefixMatches.length === 1) {
+              match = prefixMatches[0];
+            }
+          }
         }
 
-        const prefixMatches = students.filter(
-          (s) => shortCode(s.id) === shortCode(studentCode)
-        );
-        if (prefixMatches.length === 1) {
-          setSelectedStudentId(prefixMatches[0].id);
-          setStatusMessage(`Identified: ${prefixMatches[0].name}. Position the answer sheet.`);
+        // 4. Hex ID prefix match
+        if (!match && studentCode.length >= 4) {
+          const cleanCode = studentCode.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+          if (cleanCode.length >= 4) {
+            const idMatches = students.filter((s) =>
+              s.id.replace(/[^0-9A-Fa-f]/g, '').toUpperCase().startsWith(cleanCode) ||
+              cleanCode.startsWith(s.id.replace(/[^0-9A-Fa-f]/g, '').toUpperCase().slice(0, 6))
+            );
+            if (idMatches.length === 1) {
+              match = idMatches[0];
+            }
+          }
+        }
+
+        if (match) {
+          setSelectedStudentId(match.id);
+          setStatusMessage(`Identified: ${match.name}. Position the answer sheet.`);
           setPhase('scan');
           return;
         }
       }
 
-      setStatusMessage(`Barcode decoded: ${barcode.rawValue}`);
+      setStatusMessage(`Barcode decoded: ${barcode.rawValue}. Tap Scan Sheet or select learner.`);
     },
     [assessmentId, students]
   );
@@ -208,12 +233,8 @@ export function OmrCameraModal({
 
   // Manual or automatic transition from Barcode phase to OMR phase
   const proceedToOmrScan = () => {
-    if (!selectedStudentId && !isAnswerKey) {
-      setErrorMessage('Please scan the student barcode or choose a learner first.');
-      return;
-    }
     setErrorMessage(null);
-    setStatusMessage(null);
+    setStatusMessage('Position the answer sheet within the 4 corner markers.');
     setPhase('scan');
   };
 
@@ -304,6 +325,13 @@ export function OmrCameraModal({
     if (isProcessing) return;
 
     if (phase === 'identify') {
+      // If a barcode was already decoded or learner is selected, shutter tap directly advances to sheet scan
+      if (detectedBarcode || selectedStudentId) {
+        setErrorMessage(null);
+        proceedToOmrScan();
+        return;
+      }
+
       // In identify phase, shutter captures snapshot to force barcode decode
       const blob = await captureFrame({ quality: 0.92 });
       if (!blob) {
@@ -315,6 +343,7 @@ export function OmrCameraModal({
         const barcode = await decodeBarcodeFromBlob(blob);
         if (barcode) {
           handleBarcodeDetected(barcode);
+          proceedToOmrScan();
         } else {
           setErrorMessage('No barcode detected in this frame. Position barcode in center box.');
         }
@@ -668,20 +697,23 @@ export function OmrCameraModal({
                         }}
                         className="flex-1 min-w-0 rounded-lg bg-gray-900 border border-gray-700 px-2 py-1 text-xs text-white truncate"
                       >
-                        <option value="">— Or select student manually —</option>
+                        <option value="">
+                          {detectedBarcode ? `Barcode: ${detectedBarcode.rawValue} (Select learner)` : '— Or select student manually —'}
+                        </option>
                         {students.map((s) => (
                           <option key={s.id} value={s.id}>
                             {s.name} {s.lrn ? `• ${s.lrn}` : ''}
                           </option>
                         ))}
                       </select>
-                      {selectedStudentId && (
+                      {(selectedStudentId || detectedBarcode) && (
                         <button
                           type="button"
                           onClick={proceedToOmrScan}
-                          className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-bold text-white shrink-0 shadow-sm"
+                          className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1 text-xs font-bold text-white shrink-0 shadow-sm"
                         >
-                          Next
+                          <span>{selectedStudentId ? 'Next' : 'Scan Sheet'}</span>
+                          <ArrowRight className="h-3 w-3" />
                         </button>
                       )}
                     </>

@@ -23,6 +23,7 @@ export function parseProjectKitBarcodePayload(rawValue: string): {
   studentLrn?: string;
 } {
   const trimmed = rawValue.trim();
+  if (!trimmed) return {};
 
   // DepEd short code: K<assessment>-<student>
   const matchK = trimmed.match(/^K([0-9A-Fa-f]{4,10})-([0-9A-Fa-f]{4,10})$/i);
@@ -42,11 +43,12 @@ export function parseProjectKitBarcodePayload(rawValue: string): {
     };
   }
 
-  // DepEd 12-digit Learner Reference Number (LRN)
-  const matchLrn = trimmed.match(/^(?:LRN:?)?(\d{12})$/i);
+  // DepEd Learner Reference Number (LRN) or numeric student ID (6 to 14 digits, e.g. "15472304")
+  const matchLrn = trimmed.match(/^(?:LRN:?)?(\d{6,14})$/i);
   if (matchLrn) {
     return {
       studentLrn: matchLrn[1],
+      studentId: matchLrn[1],
     };
   }
 

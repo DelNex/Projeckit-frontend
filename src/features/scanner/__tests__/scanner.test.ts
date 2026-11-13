@@ -81,6 +81,13 @@ describe('Project KIT — Local AI Scanner Unit Tests', () => {
       assert.strictEqual(payload.studentId, undefined);
     });
 
+    it('extracts numeric student barcode identifier (e.g. 15472304)', () => {
+      const payload = extractDepEdBarcodePayload('15472304');
+      assert.ok(payload);
+      assert.strictEqual(payload.studentId, '15472304');
+      assert.strictEqual(payload.studentLrn, '15472304');
+    });
+
     it('decodes embedded barcode metadata from vector SVG template', async () => {
       const svgText = '<svg class="omr-master-svg" data-assessment-id="4A91B2" data-student-id="7C38E1" data-code="K4A91B-7C38E1"></svg>';
       const blob = new Blob([svgText], { type: 'image/svg+xml' });
