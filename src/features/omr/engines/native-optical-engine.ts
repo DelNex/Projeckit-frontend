@@ -299,7 +299,7 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
       for (const target of geometry.rollNumberGrid) {
         const pt = rollRegion.homography.transformPoint(target.relativePosition.u, target.relativePosition.v);
         rollSampleIndices.set(target.rollNumber, circleSamples.length);
-        circleSamples.push({ x: pt.x, y: pt.y, radius: target.radius * scale });
+        circleSamples.push({ x: pt.x, y: pt.y, radius: target.radius * scale * 0.8 });
       }
     }
     for (const item of geometry.answerBlocks) {
@@ -309,7 +309,7 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
       for (const choice of item.choices) {
         const pt = region.homography.transformPoint(choice.relativePosition.u, choice.relativePosition.v);
         indices[choice.choice] = circleSamples.length;
-        circleSamples.push({ x: pt.x, y: pt.y, radius: choice.radius * scale });
+        circleSamples.push({ x: pt.x, y: pt.y, radius: choice.radius * scale * 0.8 });
       }
       answerSampleIndices.set(item.itemNumber, indices);
     }
@@ -336,8 +336,8 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
       return { fillRatio: legacyDarkness, contrast: legacyDarkness };
     };
     const isClearMark = (measurement: BubbleMeasurement) => cvMeasurements
-      ? (measurement.fillRatio >= OMR_THRESHOLDS.openCv.clearMark.fillAndContrast.fillRatio && measurement.contrast >= OMR_THRESHOLDS.openCv.clearMark.fillAndContrast.contrast) ||
-        measurement.fillRatio >= OMR_THRESHOLDS.openCv.clearMark.fillOnly || measurement.contrast >= OMR_THRESHOLDS.openCv.clearMark.contrastOnly
+      ? measurement.fillRatio >= OMR_THRESHOLDS.openCv.clearMark.fillAndContrast.fillRatio &&
+        measurement.contrast >= OMR_THRESHOLDS.openCv.clearMark.fillAndContrast.contrast
       : measurement.fillRatio >= markMinFill;
     const isResidualMark = (measurement: BubbleMeasurement) => cvMeasurements
       ? measurement.fillRatio >= OMR_THRESHOLDS.openCv.residualInk.fillRatio &&
@@ -410,19 +410,34 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
       );
       const sorted = [...choicesList].sort((a, b) => scores[b] - scores[a]);
       const topScore = scores[sorted[0]] || 0;
+      const secondScore = scores[sorted[1]] || 0;
+      const topChoice = sorted[0];
+      const topMeasurement = measurements[topChoice];
+      const topHasEvidence = topMeasurement ? isClearMark(topMeasurement) : false;
+      const topHasMargin = topScore - secondScore >= ambiguousDelta;
 
       let selectedChoice: string | null = null;
       let state: ProcessedItemResult['state'] = 'BLANK';
       let confidence = 0;
 
-      if (markedChoices.length > 1 || residualChoices.length > 1 || (markedChoices.length === 1 && residualChoices.some((choice) => choice !== markedChoices[0]))) {
+      if (
+        markedChoices.length > 1 &&
+        !(topHasEvidence && topHasMargin)
+      ) {
         state = 'MULTIPLE_MARK';
         hasMultipleMarks = true;
         confidence = 0.3;
-      } else if (markedChoices.length === 1) {
-        selectedChoice = markedChoices[0];
+      } else if (markedChoices.length >= 1 && topHasEvidence && topHasMargin) {
+        selectedChoice = topChoice;
         state = 'MARKED';
-        confidence = Math.min(1.0, 0.55 + Math.max(0, scores[selectedChoice] - (scores[sorted[1]] || 0)) * 0.8);
+        confidence = Math.min(1.0, 0.55 + Math.max(0, topScore - secondScore) * 0.8);
+      } else if (
+        residualChoices.length > 1 ||
+        (markedChoices.length === 1 && residualChoices.some((choice) => choice !== markedChoices[0]))
+      ) {
+        state = 'MULTIPLE_MARK';
+        hasMultipleMarks = true;
+        confidence = 0.3;
       } else if (residualChoices.length === 1) {
         // A faint residual is never promoted to an answer: it is scored wrong and shown
         // as an erased/partial mark for teacher review.

@@ -98,25 +98,41 @@ export function useContinuousBarcode(
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       if (!ctx) return null;
 
-      // PASS 1: High-resolution center crop (matches the viewfinder barcode box: center 75% W x 40% H)
-      // Capturing at 100% native resolution preserves crisp 1D Code 39 bars without downscaling blur
-      const cropW = Math.round(vW * 0.75);
-      const cropH = Math.round(vH * 0.40);
-      const cropX = Math.round((vW - cropW) / 2);
-      const cropY = Math.round((vH - cropH) / 2);
+      // Try the viewfinder area first, then lower/wider bands where printed
+      // answer-sheet barcodes commonly appear. Keep each pass at native
+      // resolution so narrow Code 39 bars are not blurred by downscaling.
+      const regions = [
+        { x: 0.125, y: 0.30, width: 0.75, height: 0.40 },
+        { x: 0.08, y: 0.45, width: 0.84, height: 0.45 },
+        { x: 0.05, y: 0.20, width: 0.90, height: 0.70 },
+      ];
 
-      canvas.width = cropW;
-      canvas.height = cropH;
-      ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-
-      let barcode = await decodeBarcodeFromCanvas(canvas);
-      let activeOffsetX = cropX;
-      let activeOffsetY = cropY;
+      let barcode: DecodedBarcode | null = null;
+      let activeOffsetX = 0;
+      let activeOffsetY = 0;
       let activeScale = 1;
 
-      // PASS 2: Full video frame fallback if center crop did not yield a barcode
+      for (const region of regions) {
+        const cropX = Math.round(vW * region.x);
+        const cropY = Math.round(vH * region.y);
+        const cropW = Math.round(vW * region.width);
+        const cropH = Math.round(vH * region.height);
+
+        canvas.width = cropW;
+        canvas.height = cropH;
+        ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+        barcode = await decodeBarcodeFromCanvas(canvas);
+        if (barcode) {
+          activeOffsetX = cropX;
+          activeOffsetY = cropY;
+          break;
+        }
+      }
+
+      // Final fallback for barcodes outside the expected sheet bands.
       if (!barcode) {
-        const fullScale = Math.min(1, 960 / vW);
+        const fullScale = Math.min(1, 1280 / vW);
         const targetW = Math.round(vW * fullScale);
         const targetH = Math.round(vH * fullScale);
 
@@ -125,8 +141,6 @@ export function useContinuousBarcode(
         ctx.drawImage(video, 0, 0, targetW, targetH);
 
         barcode = await decodeBarcodeFromCanvas(canvas);
-        activeOffsetX = 0;
-        activeOffsetY = 0;
         activeScale = fullScale;
       }
 

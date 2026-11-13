@@ -132,8 +132,8 @@ export class MarkerDetector {
     geometry: CanonicalOmrGeometry
   ): DetectedMarkerCandidate[] {
     const scale = Math.min(width / geometry.page.width, height / geometry.page.height);
-    const minMarkerDim = Math.max(5, Math.floor(6 * scale));
-    const maxMarkerDim = Math.max(55, Math.ceil(45 * scale));
+    const minMarkerDim = Math.max(7, Math.floor(7 * scale));
+    const maxMarkerDim = Math.max(45, Math.ceil(34 * scale));
 
     // Sample image brightness to determine adaptive dark threshold
     let totalLum = 0;
@@ -144,8 +144,9 @@ export class MarkerDetector {
       sampledCount++;
     }
     const avgLum = sampledCount > 0 ? totalLum / sampledCount : 128;
-    // Dark threshold: adaptive between 60 and 130 based on ambient scene lighting
-    const darkThreshold = Math.min(130, Math.max(60, Math.floor(avgLum * 0.72)));
+    // Dark threshold: adaptive between 65 and 130 based on ambient scene lighting,
+    // tuned to reliably detect paper markers under low/moderate camera lighting.
+    const darkThreshold = Math.min(130, Math.max(65, Math.floor(avgLum * 0.95)));
 
     const visited = new Uint8Array(width * height);
     const candidates: DetectedMarkerCandidate[] = [];
@@ -220,9 +221,9 @@ export class MarkerDetector {
           bw <= maxMarkerDim &&
           bh >= minMarkerDim &&
           bh <= maxMarkerDim &&
-          aspect >= 0.55 &&
-          aspect <= 1.80 &&
-          fill >= 0.50
+          aspect >= 0.65 &&
+          aspect <= 1.55 &&
+          fill >= 0.68
         ) {
           const cx = sumX / count;
           const cy = sumY / count;
@@ -363,9 +364,14 @@ export class MarkerDetector {
     const matched: Partial<Record<'TL' | 'TR' | 'BL' | 'BR', DetectedMarkerCandidate>> = {};
 
     // Search radius around pose-transformed center
-    // Must be large enough for camera perspective/lens curvature (up to 33px),
-    // but strictly smaller than the ~43px distance to the nearest answer bubble (Q1).
-    const maxSearchRadius = Math.max(22, Math.min(33, 38 * pose.scale));
+    // Tolerates camera perspective foreshortening while remaining strictly within
+    // the distance to any adjacent answer bubbles.
+    const maxSearchRadius = Math.max(26, Math.min(42, 40 * pose.scale));
+
+    // Prioritize candidates with high fill factor (solid black squares) when available,
+    // to distinguish physical fiducial markers from filled answer bubbles.
+    const solidCandidates = candidates.filter((c) => c.fillFactor >= 0.88);
+    const candidatePool = solidCandidates.length >= 3 ? solidCandidates : candidates;
 
     for (const corner of corners) {
       const canonicalMarker: ReferenceMarker = region.markers[corner];
@@ -374,7 +380,7 @@ export class MarkerDetector {
       let bestCandidate: DetectedMarkerCandidate | null = null;
       let minDistance = Infinity;
 
-      for (const cand of candidates) {
+      for (const cand of candidatePool) {
         const dist = Math.hypot(cand.cx - target.x, cand.cy - target.y);
         if (dist <= maxSearchRadius && dist < minDistance) {
           minDistance = dist;

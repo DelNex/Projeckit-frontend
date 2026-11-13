@@ -199,7 +199,12 @@ async function decodeWithZxing(
   if (!zxing) return null;
 
   try {
-    const { RGBLuminanceSource, BinaryBitmap, HybridBinarizer } = await import('@zxing/library');
+    const {
+      RGBLuminanceSource,
+      BinaryBitmap,
+      GlobalHistogramBinarizer,
+      HybridBinarizer,
+    } = await import('@zxing/library');
 
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return null;
@@ -219,10 +224,20 @@ async function decodeWithZxing(
     }
 
     const luminanceSource = new RGBLuminanceSource(grayscale, width, height);
-    const binaryBitmap = new BinaryBitmap(new HybridBinarizer(luminanceSource));
-
     try {
-      const result = zxing.reader.decode(binaryBitmap, zxing.hints);
+      let result;
+      try {
+        result = zxing.reader.decode(
+          new BinaryBitmap(new HybridBinarizer(luminanceSource)),
+          zxing.hints
+        );
+      } catch {
+        zxing.reader.reset?.();
+        result = zxing.reader.decode(
+          new BinaryBitmap(new GlobalHistogramBinarizer(luminanceSource)),
+          zxing.hints
+        );
+      }
       if (!result) return null;
 
       const rawValue = result.getText();
