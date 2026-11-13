@@ -38,6 +38,9 @@ export function useCameraStream(options: UseCameraStreamOptions = {}) {
     statusText: 'Camera idle',
   });
 
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
   /**
    * Refreshes the list of available camera devices.
    */
@@ -80,8 +83,8 @@ export function useCameraStream(options: UseCameraStreamOptions = {}) {
     async (override?: { deviceId?: string; facingMode?: CameraFacingMode }) => {
       const currentSeq = ++seqRef.current;
 
-      const targetDeviceId = override?.deviceId ?? state.activeDeviceId;
-      const targetFacingMode = override?.facingMode ?? state.activeFacingMode;
+      const targetDeviceId = override?.deviceId ?? stateRef.current.activeDeviceId;
+      const targetFacingMode = override?.facingMode ?? stateRef.current.activeFacingMode;
 
       // Clean up previous tracks first
       if (streamRef.current) {
@@ -153,13 +156,24 @@ export function useCameraStream(options: UseCameraStreamOptions = {}) {
         const actualDeviceId = settings.deviceId || targetDeviceId || null;
         const actualFacing = (settings.facingMode as CameraFacingMode) || targetFacingMode;
 
-        // Attach stream to video element
+        // Attach stream to video element and wait for actual video frames
         if (videoRef.current) {
           const video = videoRef.current;
           video.srcObject = mediaStream;
           video.setAttribute('playsinline', 'true');
           video.muted = true;
           video.autoplay = true;
+
+          // Wait for video metadata to load so dimensions are available
+          if (video.readyState < 1) {
+            await new Promise<void>((resolve) => {
+              const timeout = setTimeout(resolve, 3000);
+              video.addEventListener('loadedmetadata', () => {
+                clearTimeout(timeout);
+                resolve();
+              }, { once: true });
+            });
+          }
 
           try {
             await video.play();
@@ -207,7 +221,7 @@ export function useCameraStream(options: UseCameraStreamOptions = {}) {
         optionsRef.current.onError?.(err instanceof Error ? err : new Error(formatted.message));
       }
     },
-    [state.activeDeviceId, state.activeFacingMode]
+    [] // No state dependencies — reads from stateRef instead
   );
 
   /**

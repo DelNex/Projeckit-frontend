@@ -68,10 +68,20 @@ export function analyzeBubbleSamples(
   const id = ++requestId;
   const pixelBuffer = new Uint8Array(pixels).buffer;
   return new Promise((resolve, reject) => {
-    pending.set(id, { resolve, reject });
+    // Timeout: reject if OpenCV worker takes longer than 20 seconds
+    const timeout = setTimeout(() => {
+      pending.delete(id);
+      reject(new Error('OpenCV.js worker timed out after 20s. Falling back to pixel sampler.'));
+    }, 20000);
+
+    pending.set(id, {
+      resolve: (value) => { clearTimeout(timeout); resolve(value); },
+      reject: (reason) => { clearTimeout(timeout); reject(reason); },
+    });
     try {
       getWorker().postMessage({ id, pixels: pixelBuffer, width, height, circles }, [pixelBuffer]);
     } catch (error) {
+      clearTimeout(timeout);
       pending.delete(id);
       reject(error instanceof Error ? error : new Error('Could not send image to OpenCV.js worker.'));
     }

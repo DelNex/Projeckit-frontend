@@ -247,57 +247,40 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
     let fiducialDetected = markerResult.allRegionsDetected;
     let fallbackUsed = false;
 
-    // STEP 2: RESILIENT GEOMETRY FALLBACK
-    // If physical markers are missing or partially occluded, synthesize a nominal framing quad
-    // so bubble analysis can proceed instead of aborting the user scan.
-    if (!markerResult.allRegionsDetected || Object.keys(detectedRegions).length === 0) {
-      fallbackUsed = true;
-      const fallbackQuad: QuadPoints = {
-        TL: { x: width * 0.08, y: height * 0.12 },
-        TR: { x: width * 0.92, y: height * 0.12 },
-        BL: { x: width * 0.08, y: height * 0.92 },
-        BR: { x: width * 0.92, y: height * 0.92 },
+    // STEP 2: RESILIENT GEOMETRY & MARKER FAILURE HANDLING
+    // If NO regions could be detected at all, abort bubble analysis and report marker detection failure.
+    if (Object.keys(detectedRegions).length === 0) {
+      const primaryFailure = markerResult.failedRegions[0] || {
+        regionId: 'ANSWERS',
+        expectedMarkerCount: 4,
+        detectedMarkerCount: 0,
+        markerConfidence: 0,
+        reason: 'No fiducial markers detected in camera frame. Please align all 4 corner markers.',
       };
-      try {
-        const homography = ProjectiveHomography.fromUnitSquareToQuad(fallbackQuad);
-        detectedRegions = {
-          ANSWERS: {
-            regionId: 'ANSWERS',
-            quad: fallbackQuad,
-            homography,
-            confidence: 0.45,
-            markers: {
-              TL: { cx: fallbackQuad.TL.x, cy: fallbackQuad.TL.y, width: 14, height: 14, fillFactor: 0.7, aspectRatio: 1, confidence: 0.45 },
-              TR: { cx: fallbackQuad.TR.x, cy: fallbackQuad.TR.y, width: 14, height: 14, fillFactor: 0.7, aspectRatio: 1, confidence: 0.45 },
-              BL: { cx: fallbackQuad.BL.x, cy: fallbackQuad.BL.y, width: 14, height: 14, fillFactor: 0.7, aspectRatio: 1, confidence: 0.45 },
-              BR: { cx: fallbackQuad.BR.x, cy: fallbackQuad.BR.y, width: 14, height: 14, fillFactor: 0.7, aspectRatio: 1, confidence: 0.45 },
-            },
-          },
-        };
-      } catch {
-        // Degenerate fallback, return verification required with zero items only if homography math fails
-        const primaryFailure = markerResult.failedRegions[0];
-        return {
-          idempotencyKey: options.idempotencyKey || `scan-${imageHash.substring(0, 16)}`,
-          imageHash,
-          detectedForm: geometry.templateId,
-          detectedStudentLrn: options.hintStudentLrn || null,
-          detectedRollNumber: null,
-          detectedAssessmentId: options.assessmentId || geometry.assessmentId,
-          overallConfidence: markerResult.overallMarkerConfidence,
-          fiducialDetected: false,
-          fiducialConfidence: markerResult.overallMarkerConfidence,
-          items: [],
-          rawAnswers: {},
-          normalizedAnswers: [],
-          hasAmbiguity: false,
-          hasMultipleMarks: false,
-          status: 'VERIFICATION_REQUIRED',
-          errorCode: 'REGION_MARKER_DETECTION_FAILED',
-          failedRegion: primaryFailure,
-          engineUsed: 'kit-optical-native',
-        };
-      }
+      return {
+        idempotencyKey: options.idempotencyKey || `scan-${imageHash.substring(0, 16)}`,
+        imageHash,
+        detectedForm: geometry.templateId,
+        detectedStudentLrn: options.hintStudentLrn || null,
+        detectedRollNumber: null,
+        detectedAssessmentId: options.assessmentId || geometry.assessmentId,
+        overallConfidence: markerResult.overallMarkerConfidence,
+        fiducialDetected: false,
+        fiducialConfidence: markerResult.overallMarkerConfidence,
+        items: [],
+        rawAnswers: {},
+        normalizedAnswers: [],
+        hasAmbiguity: false,
+        hasMultipleMarks: false,
+        status: 'VERIFICATION_REQUIRED',
+        errorCode: 'REGION_MARKER_DETECTION_FAILED',
+        failedRegion: primaryFailure,
+        engineUsed: 'kit-optical-native',
+      };
+    }
+
+    if (!markerResult.allRegionsDetected) {
+      fallbackUsed = true;
     }
 
     const { markMinFill, ambiguousDelta, highConfidenceMin } = template.thresholds;
@@ -357,7 +340,8 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
         measurement.fillRatio >= OMR_THRESHOLDS.openCv.clearMark.fillOnly || measurement.contrast >= OMR_THRESHOLDS.openCv.clearMark.contrastOnly
       : measurement.fillRatio >= markMinFill;
     const isResidualMark = (measurement: BubbleMeasurement) => cvMeasurements
-      ? measurement.fillRatio >= OMR_THRESHOLDS.openCv.residualInk.fillRatio || measurement.contrast >= OMR_THRESHOLDS.openCv.residualInk.contrast
+      ? measurement.fillRatio >= OMR_THRESHOLDS.openCv.residualInk.fillRatio &&
+        measurement.contrast >= OMR_THRESHOLDS.openCv.residualInk.contrast
       : false;
 
     // STEP 3: DYNAMIC ROLL NUMBER DECODING
@@ -418,7 +402,12 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
 
       const choicesList = item.choices.map((c) => c.choice);
       const markedChoices = choicesList.filter((choice) => measurements[choice] && isClearMark(measurements[choice]));
-      const residualChoices = choicesList.filter((choice) => measurements[choice] && isResidualMark(measurements[choice]));
+      const residualChoices = choicesList.filter(
+        (choice) =>
+          measurements[choice] &&
+          !markedChoices.includes(choice) &&
+          isResidualMark(measurements[choice])
+      );
       const sorted = [...choicesList].sort((a, b) => scores[b] - scores[a]);
       const topScore = scores[sorted[0]] || 0;
 
@@ -507,6 +496,8 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
       openCvDiagnostics,
       thresholdProfileVersion: OMR_THRESHOLD_PROFILE_VERSION,
       status: fallbackUsed || !cvMeasurements || hasErasedMarks || hasAmbiguity || hasMultipleMarks || rollMultipleMarks || rollAmbiguity ? 'VERIFICATION_REQUIRED' : status,
+      errorCode: !markerResult.allRegionsDetected ? 'REGION_MARKER_DETECTION_FAILED' : undefined,
+      failedRegion: markerResult.failedRegions[0],
       engineUsed: cvMeasurements ? 'kit-opencv.js' : 'kit-optical-native',
     };
   }

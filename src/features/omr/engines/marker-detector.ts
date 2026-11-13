@@ -75,7 +75,7 @@ export class MarkerDetector {
     for (const region of geometry.regions) {
       const match = this.matchRegionQuad(region, candidates, pose);
 
-      if (match.success && match.quad && match.markers) {
+      if (match.quad && match.markers) {
         try {
           const homography = ProjectiveHomography.fromUnitSquareToQuad(match.quad);
           detectedRegions[region.id] = {
@@ -95,7 +95,9 @@ export class MarkerDetector {
             reason: `Region '${region.id}' quad is mathematically degenerate: ${err.message}`,
           });
         }
-      } else {
+      }
+
+      if (!match.success) {
         failedRegions.push({
           regionId: region.id,
           detectedMarkerCount: match.detectedCount,
@@ -142,8 +144,8 @@ export class MarkerDetector {
       sampledCount++;
     }
     const avgLum = sampledCount > 0 ? totalLum / sampledCount : 128;
-    // Dark threshold: adaptive between 65 and 125 based on ambient scene lighting
-    const darkThreshold = Math.min(125, Math.max(65, Math.floor(avgLum * 0.70)));
+    // Dark threshold: adaptive between 60 and 130 based on ambient scene lighting
+    const darkThreshold = Math.min(130, Math.max(60, Math.floor(avgLum * 0.72)));
 
     const visited = new Uint8Array(width * height);
     const candidates: DetectedMarkerCandidate[] = [];
@@ -212,7 +214,7 @@ export class MarkerDetector {
         const aspect = bw / bh;
         const fill = count / (bw * bh);
 
-        // Solid square criteria (tolerates camera perspective and anti-aliasing)
+        // Solid square criteria: tolerates camera tilt perspective, lighting, and edge anti-aliasing
         if (
           bw >= minMarkerDim &&
           bw <= maxMarkerDim &&
@@ -277,9 +279,9 @@ export class MarkerDetector {
     const scaleX = imgWidth / geometry.page.width;
     const scaleY = imgHeight / geometry.page.height;
 
-    // Filter candidates to solid squares with high fill factor (markers are solid squares with fillFactor >= 0.80)
+    // Filter candidates to solid squares with reasonable fill factor (when >= 3 exist)
     const solidCandidates = candidates.filter((c) => c.fillFactor >= 0.80);
-    const pool = solidCandidates.length >= 4 ? solidCandidates : candidates;
+    const pool = solidCandidates.length >= 3 ? solidCandidates : candidates;
 
     // Expected nominal positions
     const expectedTL = { x: refTL.x * scaleX, y: refTL.y * scaleY };
@@ -305,8 +307,9 @@ export class MarkerDetector {
       }
     }
 
-    const maxPoseSearchDist = Math.max(100, 150 * nominalScale);
-    if (minDistTL > maxPoseSearchDist || minDistTR > maxPoseSearchDist) {
+    // Generous pose search distance for camera captures where sheet is centered/shifted
+    const maxPoseSearchDist = Math.max(90, 140 * nominalScale);
+    if (minDistTL > maxPoseSearchDist || minDistTR > maxPoseSearchDist || candTL === candTR) {
       return {
         scale: nominalScale,
         transformPoint: (cx, cy) => ({
@@ -359,8 +362,10 @@ export class MarkerDetector {
     const corners = ['TL', 'TR', 'BL', 'BR'] as const;
     const matched: Partial<Record<'TL' | 'TR' | 'BL' | 'BR', DetectedMarkerCandidate>> = {};
 
-    // Search radius around pose-transformed center (generous radius for camera shake/distance)
-    const maxSearchRadius = Math.max(50, 75 * pose.scale);
+    // Search radius around pose-transformed center
+    // Must be large enough for camera perspective/lens curvature (up to 33px),
+    // but strictly smaller than the ~43px distance to the nearest answer bubble (Q1).
+    const maxSearchRadius = Math.max(22, Math.min(33, 38 * pose.scale));
 
     for (const corner of corners) {
       const canonicalMarker: ReferenceMarker = region.markers[corner];
@@ -382,85 +387,76 @@ export class MarkerDetector {
       }
     }
 
-    let detectedCount = Object.keys(matched).length;
+    const detectedCount = Object.keys(matched).length;
+    let missingCorner: 'TL' | 'TR' | 'BL' | 'BR' | null = null;
 
     // Geometric completion: if 3 of 4 markers are found, infer the 4th corner geometrically
     if (detectedCount === 3) {
       if (!matched.TL && matched.TR && matched.BL && matched.BR) {
+        missingCorner = 'TL';
         matched.TL = {
           cx: matched.TR.cx + (matched.BL.cx - matched.BR.cx),
           cy: matched.TR.cy + (matched.BL.cy - matched.BR.cy),
           width: matched.TR.width,
           height: matched.TR.height,
-          fillFactor: 0.8,
+          fillFactor: 0.75,
           aspectRatio: 1,
-          confidence: 0.7,
+          confidence: 0.65,
         };
       } else if (!matched.TR && matched.TL && matched.BL && matched.BR) {
+        missingCorner = 'TR';
         matched.TR = {
           cx: matched.TL.cx + (matched.BR.cx - matched.BL.cx),
           cy: matched.TL.cy + (matched.BR.cy - matched.BL.cy),
           width: matched.TL.width,
           height: matched.TL.height,
-          fillFactor: 0.8,
+          fillFactor: 0.75,
           aspectRatio: 1,
-          confidence: 0.7,
+          confidence: 0.65,
         };
       } else if (!matched.BL && matched.TL && matched.TR && matched.BR) {
+        missingCorner = 'BL';
         matched.BL = {
           cx: matched.TL.cx + (matched.BR.cx - matched.TR.cx),
           cy: matched.TL.cy + (matched.BR.cy - matched.TR.cy),
           width: matched.TL.width,
           height: matched.TL.height,
-          fillFactor: 0.8,
+          fillFactor: 0.75,
           aspectRatio: 1,
-          confidence: 0.7,
+          confidence: 0.65,
         };
       } else if (!matched.BR && matched.TL && matched.TR && matched.BL) {
+        missingCorner = 'BR';
         matched.BR = {
           cx: matched.BL.cx + (matched.TR.cx - matched.TL.cx),
           cy: matched.BL.cy + (matched.TR.cy - matched.TL.cy),
           width: matched.BL.width,
           height: matched.BL.height,
-          fillFactor: 0.8,
+          fillFactor: 0.75,
           aspectRatio: 1,
-          confidence: 0.7,
+          confidence: 0.65,
         };
       }
-      detectedCount = Object.keys(matched).length;
     }
 
-    // Fallback: If pose search yielded fewer than 3 corners, but we have >= 4 candidates across the image,
-    // find the 4 spatial extremes (convex hull corners)
-    if (detectedCount < 4 && candidates.length >= 4) {
-      let bestTL = candidates[0];
-      let minTL = Infinity;
-      let bestTR = candidates[0];
-      let maxTR = -Infinity;
-      let bestBL = candidates[0];
-      let minBL = Infinity;
-      let bestBR = candidates[0];
-      let maxBR = -Infinity;
-
-      for (const c of candidates) {
-        const scoreTL = c.cx + c.cy;
-        if (scoreTL < minTL) { minTL = scoreTL; bestTL = c; }
-        const scoreTR = c.cx - c.cy;
-        if (scoreTR > maxTR) { maxTR = scoreTR; bestTR = c; }
-        const scoreBL = c.cx - c.cy;
-        if (scoreBL < minBL) { minBL = scoreBL; bestBL = c; }
-        const scoreBR = c.cx + c.cy;
-        if (scoreBR > maxBR) { maxBR = scoreBR; bestBR = c; }
-      }
-
-      const unique = new Set([bestTL, bestTR, bestBL, bestBR]);
-      if (unique.size === 4 && bestTR.cx > bestTL.cx && bestBR.cx > bestBL.cx && bestBL.cy > bestTL.cy && bestBR.cy > bestTR.cy) {
-        matched.TL = bestTL;
-        matched.TR = bestTR;
-        matched.BL = bestBL;
-        matched.BR = bestBR;
-        detectedCount = 4;
-      }
+    if (missingCorner) {
+      // 1 marker was missing, but inferred geometrically:
+      // return success: false (so allRegionsDetected=false and failedRegions has details),
+      // BUT include the inferred quad so homography can still evaluate real answers.
+      const avgConfidence = (matched.TL!.confidence + matched.TR!.confidence + matched.BL!.confidence + matched.BR!.confidence) / 4;
+      return {
+        success: false,
+        detectedCount: 3,
+        confidence: parseFloat(avgConfidence.toFixed(3)),
+        reason: `Missing fiducial markers: ${region.id}.${missingCorner}.`,
+        quad: {
+          TL: { x: matched.TL!.cx, y: matched.TL!.cy },
+          TR: { x: matched.TR!.cx, y: matched.TR!.cy },
+          BL: { x: matched.BL!.cx, y: matched.BL!.cy },
+          BR: { x: matched.BR!.cx, y: matched.BR!.cy },
+        },
+        markers: { TL: matched.TL!, TR: matched.TR!, BL: matched.BL!, BR: matched.BR! },
+      };
     }
 
     if (detectedCount < 4) {
@@ -478,32 +474,44 @@ export class MarkerDetector {
     const BL = matched.BL!;
     const BR = matched.BR!;
 
-    // Expected dimension ratio check (tolerant to perspective keystone)
-    const expectedWidth = (region.markers.TR.center.x - region.markers.TL.center.x) * pose.scale;
-    const expectedHeight = (region.markers.BL.center.y - region.markers.TL.center.y) * pose.scale;
-
+    // Expected dimension check:
+    // Ensure the 4 corners form a valid convex quadrilateral roughly matching expected region geometry
     const detectedTopWidth = Math.hypot(TR.cx - TL.cx, TR.cy - TL.cy);
     const detectedBottomWidth = Math.hypot(BR.cx - BL.cx, BR.cy - BL.cy);
     const detectedLeftHeight = Math.hypot(BL.cx - TL.cx, BL.cy - TL.cy);
     const detectedRightHeight = Math.hypot(BR.cx - TR.cx, BR.cy - TR.cy);
 
-    const widthRatioTop = Math.abs(detectedTopWidth - expectedWidth) / expectedWidth;
-    const widthRatioBottom = Math.abs(detectedBottomWidth - expectedWidth) / expectedWidth;
-    const heightRatioLeft = Math.abs(detectedLeftHeight - expectedHeight) / expectedHeight;
-    const heightRatioRight = Math.abs(detectedRightHeight - expectedHeight) / expectedHeight;
+    // Natural camera perspective allows near/far edge trapezoid ratios up to 55%
+    const maxWidth = Math.max(detectedTopWidth, detectedBottomWidth);
+    const minWidth = Math.min(detectedTopWidth, detectedBottomWidth);
+    const maxHeight = Math.max(detectedLeftHeight, detectedRightHeight);
+    const minHeight = Math.min(detectedLeftHeight, detectedRightHeight);
 
-    // Allow natural camera perspective distortion (up to 55% deviation between near and far edges)
+    const widthRatioDelta = (maxWidth - minWidth) / (maxWidth || 1);
+    const heightRatioDelta = (maxHeight - minHeight) / (maxHeight || 1);
+
+    const canonicalWidth = region.markers.TR.center.x - region.markers.TL.center.x;
+    const canonicalHeight = region.markers.BL.center.y - region.markers.TL.center.y;
+    const expectedAspectRatio = canonicalWidth / (canonicalHeight || 1);
+    const avgWidth = (detectedTopWidth + detectedBottomWidth) / 2;
+    const avgHeight = (detectedLeftHeight + detectedRightHeight) / 2;
+    const detectedAspectRatio = avgWidth / (avgHeight || 1);
+    const aspectDev = Math.abs(detectedAspectRatio - expectedAspectRatio) / expectedAspectRatio;
+
     if (
-      widthRatioTop > 0.55 &&
-      widthRatioBottom > 0.55 &&
-      heightRatioLeft > 0.55 &&
-      heightRatioRight > 0.55
+      widthRatioDelta > 0.55 ||
+      heightRatioDelta > 0.55 ||
+      aspectDev > 0.55 ||
+      TR.cx <= TL.cx ||
+      BR.cx <= BL.cx ||
+      BL.cy <= TL.cy ||
+      BR.cy <= TR.cy
     ) {
       return {
         success: false,
-        detectedCount,
-        confidence: 0.4,
-        reason: `Detected marker quadrilateral for region '${region.id}' deviates from expected dimensions.`,
+        detectedCount: 4,
+        confidence: 0.35,
+        reason: `Detected marker quadrilateral for region '${region.id}' deviates from expected geometry.`,
       };
     }
 

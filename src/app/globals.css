@@ -199,25 +199,24 @@
 
 @keyframes barcodeTrailFlip {
   0%, 49.9% {
-    transform: scaleY(1);
-  }
-  50%, 99.9% {
     transform: scaleY(-1);
   }
-  100% {
+  50%, 99.9% {
     transform: scaleY(1);
+  }
+  100% {
+    transform: scaleY(-1);
   }
 }
 
 .barcode-laser-assembly {
-  animation: barcodeLaserMove 2.2s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  animation: barcodeLaserMove 2s ease-in-out infinite;
   will-change: transform;
 }
 
 .barcode-laser-trail {
-  animation: barcodeTrailFlip 2.2s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  animation: barcodeTrailFlip 2s steps(1) infinite;
   transform-origin: bottom center;
-  background: linear-gradient(to top, rgba(239, 68, 68, 0.35), transparent);
-  will-change: transform;
+  background: linear-gradient(to top, rgba(239, 68, 68, 0.4), transparent);
 }
 

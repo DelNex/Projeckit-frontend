@@ -13,7 +13,7 @@
     "sbom": "node scripts/generate-sboms.mjs",
     "report:opencv-bundle": "node scripts/report-opencv-bundle.mjs",
     "build:consolidated": "node ../scripts/build-consolidated.mjs",
-    "test": "node scripts/check-schema-contract.mjs && tsx --test \"src/**/__tests__/*.test.ts\""
+    "test": "node scripts/check-schema-contract.mjs && node node_modules/tsx/dist/cli.mjs --test \"src/**/__tests__/*.test.ts\""
   },
   "dependencies": {
     "@armghan3071/omrchecker": "file:./packages/armghan3071-omrchecker-1.0.2.tgz",

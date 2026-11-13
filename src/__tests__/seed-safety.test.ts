@@ -8,6 +8,12 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '../../..');
+const frontendNodeModules = path.join(repoRoot, 'frontend', 'node_modules');
+const tsxCli = path.join(frontendNodeModules, 'tsx', 'dist', 'cli.mjs');
+const baseEnv = {
+  ...process.env,
+  NODE_PATH: frontendNodeModules,
+};
 
 describe('Project KIT — Seed Safety & Validation Tests (Task 5)', () => {
   const seedScriptPath = path.join(repoRoot, 'scripts', 'seed-supabase.ts');
@@ -24,12 +30,12 @@ describe('Project KIT — Seed Safety & Validation Tests (Task 5)', () => {
 
   it('2. exits with code 1 when ADMIN_PASSWORD is missing', () => {
     const res = spawnSync(
-      'npx',
-      ['tsx', 'scripts/seed-supabase.ts', '--dry-run'],
+      process.execPath,
+      [tsxCli, 'scripts/seed-supabase.ts', '--dry-run'],
       {
         cwd: repoRoot,
         env: {
-          ...process.env,
+          ...baseEnv,
           SUPABASE_URL: 'https://testproject123.supabase.co',
           SUPABASE_SERVICE_ROLE_KEY: 'test-service-key',
           ADMIN_EMAIL: 'admin@deped.gov.ph',
@@ -49,12 +55,12 @@ describe('Project KIT — Seed Safety & Validation Tests (Task 5)', () => {
 
   it('3. exits with code 1 when ADMIN_PASSWORD is shorter than 12 characters', () => {
     const res = spawnSync(
-      'npx',
-      ['tsx', 'scripts/seed-supabase.ts', '--dry-run'],
+      process.execPath,
+      [tsxCli, 'scripts/seed-supabase.ts', '--dry-run'],
       {
         cwd: repoRoot,
         env: {
-          ...process.env,
+          ...baseEnv,
           SUPABASE_URL: 'https://testproject123.supabase.co',
           SUPABASE_SERVICE_ROLE_KEY: 'test-service-key',
           ADMIN_EMAIL: 'admin@deped.gov.ph',
@@ -74,12 +80,12 @@ describe('Project KIT — Seed Safety & Validation Tests (Task 5)', () => {
 
   it('4. exits with code 1 when CONFIRM_PROJECT_REF does not match project ref', () => {
     const res = spawnSync(
-      'npx',
-      ['tsx', 'scripts/seed-supabase.ts', '--dry-run'],
+      process.execPath,
+      [tsxCli, 'scripts/seed-supabase.ts', '--dry-run'],
       {
         cwd: repoRoot,
         env: {
-          ...process.env,
+          ...baseEnv,
           SUPABASE_URL: 'https://testproject123.supabase.co',
           SUPABASE_SERVICE_ROLE_KEY: 'test-service-key',
           ADMIN_EMAIL: 'admin@deped.gov.ph',
@@ -99,12 +105,12 @@ describe('Project KIT — Seed Safety & Validation Tests (Task 5)', () => {
 
   it('5. exits with code 0 in --dry-run mode when valid configuration and matching project ref are provided', () => {
     const res = spawnSync(
-      'npx',
-      ['tsx', 'scripts/seed-supabase.ts', '--dry-run'],
+      process.execPath,
+      [tsxCli, 'scripts/seed-supabase.ts', '--dry-run'],
       {
         cwd: repoRoot,
         env: {
-          ...process.env,
+          ...baseEnv,
           SUPABASE_URL: 'https://testproject123.supabase.co',
           SUPABASE_SERVICE_ROLE_KEY: 'test-service-key',
           ADMIN_EMAIL: 'admin@deped.gov.ph',
@@ -122,12 +128,12 @@ describe('Project KIT — Seed Safety & Validation Tests (Task 5)', () => {
 
   it('6. --demo does not provision a teacher or require a teacher password', () => {
     const res = spawnSync(
-      'npx',
-      ['tsx', 'scripts/seed-supabase.ts', '--dry-run', '--demo'],
+      process.execPath,
+      [tsxCli, 'scripts/seed-supabase.ts', '--dry-run', '--demo'],
       {
         cwd: repoRoot,
         env: {
-          ...process.env,
+          ...baseEnv,
           SUPABASE_URL: 'https://testproject123.supabase.co',
           SUPABASE_SERVICE_ROLE_KEY: 'test-service-key',
           ADMIN_EMAIL: 'admin@deped.gov.ph',
@@ -146,18 +152,22 @@ describe('Project KIT — Seed Safety & Validation Tests (Task 5)', () => {
   });
 
   it('rejects an ADMIN_EMAIL outside @deped.gov.ph', () => {
-    const res = spawnSync('npx', ['tsx', 'scripts/seed-supabase.ts', '--dry-run'], {
-      cwd: repoRoot,
-      env: {
-        ...process.env,
-        SUPABASE_URL: 'https://testproject123.supabase.co',
-        SUPABASE_SERVICE_ROLE_KEY: 'test-service-key',
-        ADMIN_EMAIL: 'admin@example.com',
-        ADMIN_PASSWORD: 'SuperSecurePassword2026!',
-        CONFIRM_PROJECT_REF: 'testproject123',
-      },
-      encoding: 'utf8',
-    });
+    const res = spawnSync(
+      process.execPath,
+      [tsxCli, 'scripts/seed-supabase.ts', '--dry-run'],
+      {
+        cwd: repoRoot,
+        env: {
+          ...baseEnv,
+          SUPABASE_URL: 'https://testproject123.supabase.co',
+          SUPABASE_SERVICE_ROLE_KEY: 'test-service-key',
+          ADMIN_EMAIL: 'admin@example.com',
+          ADMIN_PASSWORD: 'SuperSecurePassword2026!',
+          CONFIRM_PROJECT_REF: 'testproject123',
+        },
+        encoding: 'utf8',
+      }
+    );
     assert.strictEqual(res.status, 1, 'Should reject admin emails outside the enforced domain');
     assert.match(`${res.stdout}${res.stderr}`, /@deped\.gov\.ph/);
   });

@@ -222,11 +222,24 @@ export function OmrCameraModal({
       stopStream();
 
       // Parallelize OMR processing and fallback barcode extraction from the snapshot
+      // Add a timeout so the user isn't stuck on a spinner indefinitely
+      const omrWithTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> =>
+        Promise.race([
+          promise,
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s. Please try again.`)), ms)
+          ),
+        ]);
+
       const [omrResult, barcodeResult] = await Promise.all([
-        processOmrScan(blob, template, {
-          assessmentId,
-          includeMarkedImage: true,
-        }),
+        omrWithTimeout(
+          processOmrScan(blob, template, {
+            assessmentId,
+            includeMarkedImage: true,
+          }),
+          30000,
+          'OMR bubble analysis'
+        ),
         decodeBarcodeFromBlob(blob).catch(() => null),
       ]);
 

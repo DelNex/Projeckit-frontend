@@ -17,6 +17,35 @@ import { createKitOmrTemplate } from '../templates/template-builder';
 
 const SCRATCH_DIR = path.join(__dirname, 'fixtures');
 
+function checkRsvgConvert(): boolean {
+  try {
+    const cmd = process.platform === 'win32' ? 'where rsvg-convert' : 'which rsvg-convert';
+    execSync(cmd, { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function checkImageMagick(): { available: boolean; command: string } {
+  try {
+    const out = execSync('magick -version', { stdio: 'pipe' }).toString();
+    if (out.includes('ImageMagick')) return { available: true, command: 'magick' };
+  } catch {}
+
+  if (process.platform !== 'win32') {
+    try {
+      const out = execSync('convert -version', { stdio: 'pipe' }).toString();
+      if (out.includes('ImageMagick')) return { available: true, command: 'convert' };
+    } catch {}
+  }
+
+  return { available: false, command: '' };
+}
+
+const hasRsvg = checkRsvgConvert();
+const im = checkImageMagick();
+
 describe('Project KIT — Dynamic OMR Scanner Integration Tests', () => {
   const engine = new NativeOpticalEngineAdapter();
 
@@ -52,7 +81,12 @@ describe('Project KIT — Dynamic OMR Scanner Integration Tests', () => {
   });
 
   describe('2. End-to-End Dynamic Sheet Scanning (Synthetic Raster Validation)', () => {
-    it('scans a 60-item sheet, detecting answers Q1=A, Q2=B, Q3=C, Q4=D and blank remaining items', async () => {
+    it('scans a 60-item sheet, detecting answers Q1=A, Q2=B, Q3=C, Q4=D and blank remaining items', async (t) => {
+      if (!hasRsvg) {
+        t.skip('Skipping: rsvg-convert is not installed');
+        return;
+      }
+
       const geom = generateCanonicalGeometry({
         assessmentId: 'test-60-scan',
         itemCount: 60,
@@ -108,7 +142,12 @@ describe('Project KIT — Dynamic OMR Scanner Integration Tests', () => {
       assert.strictEqual(result.items[4].state, 'BLANK');
     });
 
-    it('scans a 63-item assessment, verifying exactly 63 items and 3 items in final block', async () => {
+    it('scans a 63-item assessment, verifying exactly 63 items and 3 items in final block', async (t) => {
+      if (!hasRsvg) {
+        t.skip('Skipping: rsvg-convert is not installed');
+        return;
+      }
+
       const geom = generateCanonicalGeometry({
         assessmentId: 'test-63-scan',
         itemCount: 63,
@@ -133,7 +172,12 @@ describe('Project KIT — Dynamic OMR Scanner Integration Tests', () => {
   });
 
   describe('3. Marker Distortion, Rotation & Translation Robustness', () => {
-    it('recovers coordinates and extracts correct answers on a rotated and translated sheet', async () => {
+    it('recovers coordinates and extracts correct answers on a rotated and translated sheet', async (t) => {
+      if (!im.available) {
+        t.skip('Skipping: ImageMagick (magick/convert) is not installed');
+        return;
+      }
+
       const geom = generateCanonicalGeometry({
         assessmentId: 'test-60-scan',
         itemCount: 60,
@@ -144,7 +188,7 @@ describe('Project KIT — Dynamic OMR Scanner Integration Tests', () => {
       const rotatedPng = path.join(SCRATCH_DIR, 'rotated_60.png');
 
       // Rotate by 1.2 degrees
-      execSync(`convert ${sourcePng} -background white -rotate 1.2 ${rotatedPng}`);
+      execSync(`${im.command} ${sourcePng} -background white -rotate 1.2 ${rotatedPng}`);
 
       const template = createKitOmrTemplate({ geometry: geom });
       const pngBytes = fs.readFileSync(rotatedPng);
@@ -158,7 +202,7 @@ describe('Project KIT — Dynamic OMR Scanner Integration Tests', () => {
       assert.strictEqual(result.items[3].selectedChoice, 'D');
     });
 
-    it('rejects with VERIFICATION_REQUIRED when a required region marker is missing', async () => {
+    it('rejects with VERIFICATION_REQUIRED when a required region marker is missing', async (t) => {
       const geom = generateCanonicalGeometry({
         assessmentId: 'test-missing-marker',
         itemCount: 60,
@@ -166,6 +210,10 @@ describe('Project KIT — Dynamic OMR Scanner Integration Tests', () => {
       });
 
       const sourcePng = path.join(SCRATCH_DIR, 'marked_60.png');
+      if (!fs.existsSync(sourcePng)) {
+        t.skip('Skipping: source fixture marked_60.png not found');
+        return;
+      }
       const png = PNG.sync.read(fs.readFileSync(sourcePng));
 
       // White out ANSWERS.TL marker
@@ -199,7 +247,12 @@ describe('Project KIT — Dynamic OMR Scanner Integration Tests', () => {
   });
 
   describe('4. Legacy Roll Number Regression & Multiple Marks', () => {
-    it('legacy regression test: correctly decodes roll number 37 on older template with roll grid', async () => {
+    it('legacy regression test: correctly decodes roll number 37 on older template with roll grid', async (t) => {
+      if (!hasRsvg) {
+        t.skip('Skipping: rsvg-convert is not installed');
+        return;
+      }
+
       const geom = generateCanonicalGeometry({
         assessmentId: 'test-legacy-roll',
         itemCount: 60,
@@ -230,7 +283,12 @@ describe('Project KIT — Dynamic OMR Scanner Integration Tests', () => {
       assert.strictEqual(result.items[0].selectedChoice, 'A');
     });
 
-    it('detects multiple marked roll numbers on legacy template and flags for verification', async () => {
+    it('detects multiple marked roll numbers on legacy template and flags for verification', async (t) => {
+      if (!hasRsvg) {
+        t.skip('Skipping: rsvg-convert is not installed');
+        return;
+      }
+
       const geom = generateCanonicalGeometry({
         assessmentId: 'test-multi-roll',
         itemCount: 20,

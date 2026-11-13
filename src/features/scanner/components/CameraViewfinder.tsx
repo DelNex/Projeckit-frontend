@@ -61,7 +61,7 @@ export function CameraViewfinder({
         autoPlay
         playsInline
         muted
-        className="w-full h-full object-cover"
+        className="absolute inset-0 w-full h-full object-cover"
       />
 
       {/* Camera Initializing Overlay */}
@@ -138,7 +138,7 @@ export function CameraViewfinder({
 
         {/* Center Target Box: Active ONLY in Barcode Mode */}
         {isBarcodeMode && (
-          <div className="self-center w-[85%] sm:w-[65%] max-w-xs h-32 border border-dashed border-blue-400/80 bg-blue-950/20 rounded-2xl flex flex-col items-center justify-between p-2.5 relative overflow-hidden shadow-2xl backdrop-blur-xs">
+          <div className="self-center w-[85%] sm:w-[65%] max-w-xs h-32 border border-dashed border-blue-400/80 bg-blue-950/40 rounded-2xl flex flex-col items-center justify-between p-2.5 relative overflow-hidden shadow-2xl">
             {/* Corner Accent Brackets for Barcode Target */}
             <div className="absolute top-1.5 left-1.5 w-3 h-3 border-t-2 border-l-2 border-blue-400 pointer-events-none" />
             <div className="absolute top-1.5 right-1.5 w-3 h-3 border-t-2 border-r-2 border-blue-400 pointer-events-none" />
@@ -152,7 +152,7 @@ export function CameraViewfinder({
               {/* Directional Flipping Trail */}
               <div className="barcode-laser-trail absolute inset-x-0 bottom-0 h-8 pointer-events-none origin-bottom" />
               {/* Solid Laser Beam Line */}
-              <div className="h-0.5 bg-red-500 shadow-[0_0_12px_2px_rgba(239,68,68,0.95)]" />
+              <div className="h-0.5 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)]" />
             </div>
 
             <div className="flex items-center gap-1 text-[10px] font-bold text-blue-300 z-10">
@@ -273,41 +273,6 @@ export function CameraViewfinder({
           )}
         </div>
       </div>
-
-      <style>{`
-        @keyframes barcodeLaserMove {
-          0% {
-            transform: translate3d(0, 10px, 0);
-          }
-          50% {
-            transform: translate3d(0, 108px, 0);
-          }
-          100% {
-            transform: translate3d(0, 10px, 0);
-          }
-        }
-        @keyframes barcodeTrailFlip {
-          0%, 49.9% {
-            transform: scaleY(1);
-          }
-          50%, 99.9% {
-            transform: scaleY(-1);
-          }
-          100% {
-            transform: scaleY(1);
-          }
-        }
-        .barcode-laser-assembly {
-          animation: barcodeLaserMove 2.2s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
-          will-change: transform;
-        }
-        .barcode-laser-trail {
-          animation: barcodeTrailFlip 2.2s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
-          transform-origin: bottom center;
-          background: linear-gradient(to top, rgba(239, 68, 68, 0.35), transparent);
-          will-change: transform;
-        }
-      `}</style>
     </div>
   );
 }
