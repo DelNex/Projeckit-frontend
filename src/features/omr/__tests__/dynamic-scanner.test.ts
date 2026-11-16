@@ -202,6 +202,41 @@ describe('Project KIT — Dynamic OMR Scanner Integration Tests', () => {
       assert.strictEqual(result.items[3].selectedChoice, 'D');
     });
 
+    it('detects markers when a portrait sheet is centered in a wider phone frame', async (t) => {
+      const sourcePng = path.join(SCRATCH_DIR, 'marked_60.png');
+      if (!fs.existsSync(sourcePng)) {
+        t.skip('Skipping: source fixture marked_60.png not found');
+        return;
+      }
+
+      const source = PNG.sync.read(fs.readFileSync(sourcePng));
+      const padded = new PNG({ width: 1280, height: source.height });
+      padded.data.fill(255);
+      for (let y = 0; y < source.height; y++) {
+        for (let x = 0; x < source.width; x++) {
+          const sourceIndex = (y * source.width + x) * 4;
+          const targetIndex = (y * padded.width + x + 360) * 4;
+          padded.data[targetIndex] = source.data[sourceIndex];
+          padded.data[targetIndex + 1] = source.data[sourceIndex + 1];
+          padded.data[targetIndex + 2] = source.data[sourceIndex + 2];
+          padded.data[targetIndex + 3] = source.data[sourceIndex + 3];
+        }
+      }
+
+      const geom = generateCanonicalGeometry({
+        assessmentId: 'test-60-scan',
+        itemCount: 60,
+        classSize: 60,
+      });
+      const result = await engine.process(PNG.sync.write(padded), createKitOmrTemplate({ geometry: geom }));
+
+      assert.strictEqual(result.fiducialDetected, true);
+      assert.strictEqual(result.items[0].selectedChoice, 'A');
+      assert.strictEqual(result.items[1].selectedChoice, 'B');
+      assert.strictEqual(result.items[2].selectedChoice, 'C');
+      assert.strictEqual(result.items[3].selectedChoice, 'D');
+    });
+
     it('rejects with VERIFICATION_REQUIRED when a required region marker is missing', async (t) => {
       const geom = generateCanonicalGeometry({
         assessmentId: 'test-missing-marker',

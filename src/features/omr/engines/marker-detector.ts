@@ -258,14 +258,17 @@ export class MarkerDetector {
     transformPoint: (cx: number, cy: number) => { x: number; y: number };
   } {
     const nominalScale = Math.min(imgWidth / geometry.page.width, imgHeight / geometry.page.height);
+    const pageOffsetX = (imgWidth - geometry.page.width * nominalScale) / 2;
+    const pageOffsetY = (imgHeight - geometry.page.height * nominalScale) / 2;
+    const nominalTransformPoint = (cx: number, cy: number) => ({
+      x: pageOffsetX + cx * nominalScale,
+      y: pageOffsetY + cy * nominalScale,
+    });
 
     if (candidates.length < 4) {
       return {
         scale: nominalScale,
-        transformPoint: (cx, cy) => ({
-          x: cx * (imgWidth / geometry.page.width),
-          y: cy * (imgHeight / geometry.page.height),
-        }),
+        transformPoint: nominalTransformPoint,
       };
     }
 
@@ -277,16 +280,13 @@ export class MarkerDetector {
       geometry.markerMap['ANSWERS.TR']?.center ||
       geometry.markers.find((m) => m.corner === 'TR')?.center || { x: 634, y: 287 };
 
-    const scaleX = imgWidth / geometry.page.width;
-    const scaleY = imgHeight / geometry.page.height;
-
     // Filter candidates to solid squares with reasonable fill factor (when >= 3 exist)
     const solidCandidates = candidates.filter((c) => c.fillFactor >= 0.80);
     const pool = solidCandidates.length >= 3 ? solidCandidates : candidates;
 
     // Expected nominal positions
-    const expectedTL = { x: refTL.x * scaleX, y: refTL.y * scaleY };
-    const expectedTR = { x: refTR.x * scaleX, y: refTR.y * scaleY };
+    const expectedTL = nominalTransformPoint(refTL.x, refTL.y);
+    const expectedTR = nominalTransformPoint(refTR.x, refTR.y);
 
     let candTL = pool[0];
     let minDistTL = Infinity;
@@ -313,10 +313,7 @@ export class MarkerDetector {
     if (minDistTL > maxPoseSearchDist || minDistTR > maxPoseSearchDist || candTL === candTR) {
       return {
         scale: nominalScale,
-        transformPoint: (cx, cy) => ({
-          x: cx * scaleX,
-          y: cy * scaleY,
-        }),
+        transformPoint: nominalTransformPoint,
       };
     }
 
