@@ -90,6 +90,8 @@ export function OmrCameraModal({
   const [currentResult, setCurrentResult] = useState<OmrScanResult | null>(null);
   const [editableItems, setEditableItems] = useState<ProcessedItemResult[]>([]);
   const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
+  const [readyFrame, setReadyFrame] = useState<Blob | null>(null);
+  const recognitionBusyRef = useRef(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -195,6 +197,44 @@ export function OmrCameraModal({
     throttleMs: 250,
   });
 
+  // Run the actual OMR engine on live camera frames. Only offer capture when the
+  // sheet is registered, the answer set is stable across two frames, and quality
+  // meets the template's high confidence threshold.
+  useEffect(() => {
+    if (!isOpen || phase !== 'scan' || !cameraState.isStreaming || readyFrame) return;
+    let active = true;
+    let previousSignature = '';
+    let stableFrames = 0;
+    const inspectFrame = async () => {
+      if (!active || recognitionBusyRef.current || !videoRef.current || videoRef.current.readyState < 2) return;
+      recognitionBusyRef.current = true;
+      try {
+        const blob = await captureFrame({ quality: 0.9, maxWidth: 1600, maxHeight: 1600 });
+        if (!blob || !active) return;
+        const result = await processOmrScan(blob, template, { assessmentId });
+        if (!active) return;
+        const signature = JSON.stringify(result.normalizedAnswers);
+        const minimumConfidence = template?.thresholds?.highConfidenceMin ?? 0.85;
+        const reliable = result.fiducialDetected && result.items.length > 0 &&
+          result.overallConfidence >= minimumConfidence && !result.hasAmbiguity && !result.hasMultipleMarks;
+        if (reliable && signature === previousSignature) stableFrames += 1;
+        else stableFrames = reliable ? 1 : 0;
+        previousSignature = reliable ? signature : '';
+        if (stableFrames >= 2) {
+          setReadyFrame(blob);
+          setStatusMessage('Sheet and answers detected. Capture this frame to lock it and review.');
+        }
+      } catch {
+        // A partial or out-of-frame sheet is expected while positioning.
+      } finally {
+        recognitionBusyRef.current = false;
+      }
+    };
+    const timer = window.setInterval(() => void inspectFrame(), 1200);
+    void inspectFrame();
+    return () => { active = false; window.clearInterval(timer); };
+  }, [isOpen, phase, cameraState.isStreaming, readyFrame, captureFrame, assessmentId, template]);
+
   // Real-time quality evaluation loop (client-side CV diagnostics active during 'scan' phase)
   useEffect(() => {
     if (!isOpen || phase !== 'scan' || !cameraState.isStreaming) {
@@ -237,6 +277,7 @@ export function OmrCameraModal({
 
   // Manual or automatic transition from Barcode phase to OMR phase
   const proceedToOmrScan = () => {
+    setReadyFrame(null);
     setErrorMessage(null);
     setStatusMessage('Position the answer sheet within the 4 corner markers.');
     setPhase('scan');
@@ -318,6 +359,7 @@ export function OmrCameraModal({
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Scan processing failed. Please try again.';
       toast.error(msg, { duration: 6000 });
+      setReadyFrame(null);
       setErrorMessage(null);
       // Restart stream if processing failed
       void startStream();
@@ -368,7 +410,7 @@ export function OmrCameraModal({
     // In scan phase, shutter captures full OMR score sheet
     setIsProcessing(true); // Block immediately to prevent double-tap
     try {
-      const blob = await captureFrame({ quality: 0.92 });
+      const blob = readyFrame || await captureFrame({ quality: 0.92 });
       if (!blob) {
         toast.error('Camera preview is not ready. Please wait a moment and try again.');
         setIsProcessing(false);
@@ -554,6 +596,7 @@ export function OmrCameraModal({
     setCurrentResult(null);
     setEditableItems([]);
     setCapturedBlob(null);
+    setReadyFrame(null);
     setSelectedStudentId('');
     detectedBarcodeRef.current = null;
     setDetectedBarcode(null);
@@ -767,6 +810,7 @@ export function OmrCameraModal({
                 onUploadFile={handleUploadFile}
                 onClose={onClose}
                 isProcessing={isProcessing}
+                capturePrompt={Boolean(readyFrame)}
                 statusMessage={statusMessage || undefined}
                 isAnswerKeyMode={isAnswerKey}
                 mode={phase === 'identify' ? 'barcode' : 'omr'}

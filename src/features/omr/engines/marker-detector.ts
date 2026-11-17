@@ -108,7 +108,60 @@ export class MarkerDetector {
       }
     }
 
-    const allRegionsDetected = failedRegions.length === 0;
+    // Phone frames often include large margins, so canonical page-centering can
+    // place the expected marker coordinates nowhere near the actual sheet. When
+    // that positional match fails, recover a single answer region from four
+    // unusually solid square candidates and register their projective quad.
+    if (geometry.regions.length === 1 && Object.keys(detectedRegions).length === 0) {
+      const region = geometry.regions[0];
+      const strongSquares = candidates
+        .filter((candidate) => candidate.fillFactor >= 0.88 && candidate.aspectRatio >= 0.78 && candidate.aspectRatio <= 1.28)
+        .sort((a, b) => b.confidence - a.confidence)
+        .slice(0, 4);
+
+      if (strongSquares.length === 4) {
+        const bySum = [...strongSquares].sort((a, b) => a.cx + a.cy - (b.cx + b.cy));
+        const byDifference = [...strongSquares].sort((a, b) => a.cx - a.cy - (b.cx - b.cy));
+        const corners = {
+          TL: bySum[0],
+          BR: bySum[3],
+          TR: byDifference[3],
+          BL: byDifference[0],
+        };
+        const quad: QuadPoints = {
+          TL: { x: corners.TL.cx, y: corners.TL.cy },
+          TR: { x: corners.TR.cx, y: corners.TR.cy },
+          BL: { x: corners.BL.cx, y: corners.BL.cy },
+          BR: { x: corners.BR.cx, y: corners.BR.cy },
+        };
+        const observedWidth = (Math.hypot(quad.TR.x - quad.TL.x, quad.TR.y - quad.TL.y) +
+          Math.hypot(quad.BR.x - quad.BL.x, quad.BR.y - quad.BL.y)) / 2;
+        const observedHeight = (Math.hypot(quad.BL.x - quad.TL.x, quad.BL.y - quad.TL.y) +
+          Math.hypot(quad.BR.x - quad.TR.x, quad.BR.y - quad.TR.y)) / 2;
+        const expectedAspect = (region.markers.TR.center.x - region.markers.TL.center.x) /
+          (region.markers.BL.center.y - region.markers.TL.center.y);
+        const observedAspect = observedWidth / Math.max(1, observedHeight);
+        const aspectDeviation = Math.abs(observedAspect - expectedAspect) / expectedAspect;
+        const ordered = quad.TR.x > quad.TL.x && quad.BR.x > quad.BL.x &&
+          quad.BL.y > quad.TL.y && quad.BR.y > quad.TR.y;
+
+        if (ordered && aspectDeviation <= 0.4) {
+          const homography = ProjectiveHomography.fromUnitSquareToQuad(quad);
+          const confidence = strongSquares.reduce((sum, candidate) => sum + candidate.confidence, 0) / 4;
+          detectedRegions[region.id] = {
+            regionId: region.id,
+            quad,
+            homography,
+            confidence,
+            markers: corners,
+          };
+          failedRegions.length = 0;
+          totalConfidence = confidence;
+        }
+      }
+    }
+
+    const allRegionsDetected = failedRegions.length === 0 && Object.keys(detectedRegions).length === geometry.regions.length;
     const overallMarkerConfidence =
       geometry.regions.length > 0 ? totalConfidence / geometry.regions.length : 0;
 

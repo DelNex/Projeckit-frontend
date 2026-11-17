@@ -33,6 +33,7 @@ export interface CameraViewfinderProps {
   onUploadFile: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onClose: () => void;
   isProcessing: boolean;
+  capturePrompt?: boolean;
   statusMessage?: string;
   isAnswerKeyMode?: boolean;
   mode?: 'barcode' | 'omr';
@@ -51,6 +52,7 @@ export function CameraViewfinder({
   onCycleCamera,
   onUploadFile,
   isProcessing,
+  capturePrompt = false,
   statusMessage,
   mode = 'omr',
   hasTorch = false,
@@ -259,15 +261,22 @@ export function CameraViewfinder({
         )}
 
         {/* Center Control: Clean Touch Shutter Button */}
+        {capturePrompt && !isBarcodeMode && (
+          <div className="absolute bottom-[4.5rem] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-emerald-300/70 bg-emerald-950/90 px-4 py-2 text-xs font-bold text-emerald-100 shadow-xl">
+            Sheet detected — tap to capture and lock
+          </div>
+        )}
         <button
           type="button"
           onClick={onCapture}
           disabled={isProcessing || !cameraState.isStreaming}
-          aria-label={isBarcodeMode ? 'Scan Barcode' : 'Capture OMR Sheet'}
+          aria-label={isBarcodeMode ? 'Scan Barcode' : capturePrompt ? 'Capture and lock detected OMR sheet' : 'Capture OMR Sheet'}
           className={cn(
             'flex h-15 w-15 sm:h-17 sm:w-17 items-center justify-center rounded-full shadow-2xl transition transform active:scale-90 shrink-0',
             isBarcodeMode
               ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-600/50'
+              : capturePrompt
+              ? 'bg-emerald-500 text-white hover:bg-emerald-400 shadow-emerald-500/60 animate-pulse'
               : isAligned
               ? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-600/50 hover:scale-105'
               : 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-600/50'

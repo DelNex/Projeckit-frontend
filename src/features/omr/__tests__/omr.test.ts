@@ -227,5 +227,31 @@ describe('Project KIT — OMR Pipeline & Adapter Tests', () => {
       assert.strictEqual(result.items.length, 60);
       assert.strictEqual(result.items[0].selectedChoice, 'A');
     });
+
+    it('decodes the provided angled real-world photo with at least 95% exact answer accuracy', async () => {
+      const photo = fs.readFileSync(path.join(FIXTURES_DIR, 'real_world_scan.png'));
+      const expected = [
+        'A', 'B', 'C', 'D', 'B', 'A', 'C', 'D', 'B', 'A',
+        'A', 'A', 'C', 'A', 'A', 'D', 'A', 'A', 'A', 'B',
+        'D', 'D', 'D', 'A', 'C', 'B', 'B', 'B', 'C', 'C',
+        'A', 'B', 'B', 'B', 'A', 'C', 'B', 'B', 'B', 'C',
+        'B', 'C', 'D', 'A', 'D', 'B', 'D', 'B', 'D', 'D',
+        'B', 'A', 'C', 'B', 'D', 'D', 'B', 'C', 'C', 'D',
+      ];
+      const realWorldTemplate = createKitOmrTemplate({ itemCount: expected.length });
+      const result = await processOmrScan(photo, realWorldTemplate, { forceEngine: 'kit-optical-native' });
+      const correct = result.normalizedAnswers.reduce(
+        (count, answer, index) => count + Number(answer === expected[index]),
+        0
+      );
+      const accuracy = correct / expected.length;
+
+      assert.strictEqual(result.items.length, expected.length, 'all 60 bubbles must be sampled');
+      assert.strictEqual(result.fiducialDetected, true, 'sheet markers must register despite camera margins');
+      assert.ok(accuracy >= 0.95, `expected >=95% accuracy, received ${(accuracy * 100).toFixed(1)}%`);
+      assert.strictEqual(accuracy, 1, 'the current provided photo should decode all answers exactly');
+      assert.strictEqual(result.hasAmbiguity, false);
+      assert.strictEqual(result.hasMultipleMarks, false);
+    });
   });
 });
