@@ -1,0 +1,62 @@
+name: OMR Branch Validation
+
+on:
+  push:
+    branches:
+      - fix/omr-mobile-calibration
+    paths:
+      - 'src/features/omr/**'
+      - 'src/app/omr-validation/**'
+      - 'e2e/**'
+      - 'playwright.omr.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/omr-branch-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: omr-branch-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript typecheck
+        run: npm run typecheck
+
+      - name: Unit and integration tests
+        run: npm test
+
+      - name: Install Chrome for Playwright
+        run: npx playwright install --with-deps chrome
+
+      - name: Browser OMR regression
+        run: npm run test:omr:browser
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: omr-playwright-failure-${{ github.sha }}
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
