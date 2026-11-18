@@ -9,9 +9,11 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, it } from 'node:test';
+import { PNG } from 'pngjs';
 import { KitOmrAdapter, processOmrScan } from '../adapter';
 import { NativeOpticalEngineAdapter } from '../engines/native-optical-engine';
 import { generateCanonicalGeometry } from '../geometry/canonical-geometry';
+import { fitImageDimensions } from '../image-normalization';
 import { buildOmrCheckerTemplate, createKitOmrTemplate } from '../templates/template-builder';
 
 const FIXTURES_DIR = path.join(__dirname, 'fixtures');
@@ -246,10 +248,34 @@ describe('Project KIT — OMR Pipeline & Adapter Tests', () => {
       );
       const accuracy = correct / expected.length;
 
+      // Simulate the dimensions used by mobile live-preview and shutter capture.
+      const source = PNG.sync.read(photo);
+      const dimensions = fitImageDimensions(source.width, source.height);
+      const resizedPixels = new Uint8Array(dimensions.width * dimensions.height * 4);
+      for (let y = 0; y < dimensions.height; y++) {
+        const sourceY = Math.min(source.height - 1, Math.floor((y + 0.5) * source.height / dimensions.height));
+        for (let x = 0; x < dimensions.width; x++) {
+          const sourceX = Math.min(source.width - 1, Math.floor((x + 0.5) * source.width / dimensions.width));
+          const sourceIndex = (sourceY * source.width + sourceX) * 4;
+          const targetIndex = (y * dimensions.width + x) * 4;
+          resizedPixels.set(source.data.subarray(sourceIndex, sourceIndex + 4), targetIndex);
+        }
+      }
+      const resizedResult = await new NativeOpticalEngineAdapter().process(
+        { pixels: resizedPixels, width: dimensions.width, height: dimensions.height },
+        realWorldTemplate
+      );
+      const resizedAccuracy = resizedResult.normalizedAnswers.reduce(
+        (count, answer, index) => count + Number(answer === expected[index]),
+        0
+      ) / expected.length;
+
       assert.strictEqual(result.items.length, expected.length, 'all 60 bubbles must be sampled');
       assert.strictEqual(result.fiducialDetected, true, 'sheet markers must register despite camera margins');
       assert.ok(accuracy >= 0.95, `expected >=95% accuracy, received ${(accuracy * 100).toFixed(1)}%`);
       assert.strictEqual(accuracy, 1, 'the current provided photo should decode all answers exactly');
+      assert.deepStrictEqual(dimensions, { width: 900, height: 1600 });
+      assert.ok(resizedAccuracy >= 0.95, `expected >=95% resized accuracy, received ${(resizedAccuracy * 100).toFixed(1)}%`);
       assert.strictEqual(result.hasAmbiguity, false);
       assert.strictEqual(result.hasMultipleMarks, false);
     });

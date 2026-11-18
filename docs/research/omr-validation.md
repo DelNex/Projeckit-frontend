@@ -1,6 +1,8 @@
 # OMR validation and release calibration record
 
-This document defines the capture set and measurements to keep with every OMR threshold change or scanner release. It is a protocol, not a claim that the current implementation has passed these trials. At creation, the repository contains synthetic SVG fixtures; no labeled photographic capture set or measured accuracy report was found.
+This document defines the capture set and measurements to keep with every OMR threshold change or scanner release. It is a protocol, not a claim that the current implementation has passed these trials. The repository now includes one de-identified, angled phone-photo regression fixture at `src/features/omr/__tests__/fixtures/real_world_scan.png`; there is still no multi-device labeled photo set or measured cross-device accuracy report.
+
+The browser scanner proportionally caps the longest processing-image edge at 1600 pixels, applies EXIF orientation when decoding uploads, and derives bubble sample radii from the detected marker quad. Manual camera capture and live detection use the same size cap. These changes address coordinate and mobile processing-load risks but do not establish physical-device accuracy.
 
 ## Versioned operating profile
 
@@ -59,7 +61,7 @@ Any false acceptance of a double/erased mark is a release-blocking case until th
 
 | Release | Threshold profile | Dataset version | Capture count | Clean accuracy | Invalid-mark false acceptance | Retake rate | p95 worker ready | p95 scan analysis | Reviewer / date |
 |---|---|---|---:|---:|---:|---:|---:|---:|---|
-| Pending baseline measurement | 1.0.0 | No labeled photo set yet | — | Not measured | Not measured | Not measured | Measured at runtime; release baseline pending | Measured at runtime; release baseline pending | — |
+| Pending baseline measurement | 1.0.0 | One de-identified phone photo; no multi-device set | 1 | 100% on this fixture only | Not measured | Not measured | Measured at runtime; release baseline pending | Measured at runtime; release baseline pending | — |
 
 ## Runtime instrumentation
 

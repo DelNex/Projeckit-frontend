@@ -26,6 +26,8 @@ import { MarkerDetector } from './marker-detector';
 import { ProjectiveHomography, QuadPoints } from './homography';
 import { analyzeBubbleSamples, BubbleMeasurement, BubbleSample } from './opencv-bubble-analysis';
 import { OMR_THRESHOLDS, OMR_THRESHOLD_PROFILE_VERSION } from '../thresholds';
+import { mapCanonicalBubbleSample } from '../geometry/bubble-sampling';
+import { fitImageDimensions, MAX_OMR_IMAGE_EDGE } from '../image-normalization';
 
 export interface DecodedImage {
   pixels: Uint8Array | Uint8ClampedArray;
@@ -179,14 +181,13 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
 
     const imageHash = await this.computeSha256(rawBuffer);
 
-    // Try decoding PNG in Node if not already decoded
-    if (!decoded) {
-      decoded = await this.tryDecodePng(rawBuffer);
-    }
-
-    if (!decoded) {
+    // Browser decoding applies image orientation and caps the actual pixel
+    // dimensions before marker detection. Node uses the PNG decoder in tests.
+    if (!decoded && typeof window !== 'undefined') {
       decoded = await this.tryDecodeBrowserImage(rawBuffer, image);
     }
+
+    if (!decoded) decoded = await this.tryDecodePng(rawBuffer);
 
     if (!decoded) {
       return {
@@ -285,9 +286,6 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
 
     const { markMinFill, ambiguousDelta, highConfidenceMin } = template.thresholds;
 
-    // Scale factor for radius
-    const scale = Math.min(width / geometry.page.width, height / geometry.page.height);
-
     // Build one batched OpenCV analysis pass for the roll grid and all answer bubbles.
     // OpenCV runs in a Web Worker; the existing pixel sampler remains a conservative
     // fallback for server-side fixtures and browsers where WebAssembly cannot start.
@@ -295,21 +293,24 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
     const rollSampleIndices = new Map<number, number>();
     const answerSampleIndices = new Map<number, Record<string, number>>();
     const rollRegion = detectedRegions['ROLL_NUMBER'] || detectedRegions['ANSWERS'];
+    const rollRegionGeometry = geometry.regions.find((region) => region.id === rollRegion?.regionId);
     if (rollRegion) {
       for (const target of geometry.rollNumberGrid) {
-        const pt = rollRegion.homography.transformPoint(target.relativePosition.u, target.relativePosition.v);
+        if (!rollRegionGeometry) continue;
+        const sample = mapCanonicalBubbleSample(target.relativePosition, target.radius, rollRegionGeometry.markers, rollRegion.homography);
         rollSampleIndices.set(target.rollNumber, circleSamples.length);
-        circleSamples.push({ x: pt.x, y: pt.y, radius: target.radius * scale * 0.8 });
+        circleSamples.push(sample);
       }
     }
     for (const item of geometry.answerBlocks) {
       const region = detectedRegions[item.regionId];
-      if (!region) continue;
+      const regionGeometry = geometry.regions.find((candidate) => candidate.id === item.regionId);
+      if (!region || !regionGeometry) continue;
       const indices: Record<string, number> = {};
       for (const choice of item.choices) {
-        const pt = region.homography.transformPoint(choice.relativePosition.u, choice.relativePosition.v);
+        const sample = mapCanonicalBubbleSample(choice.relativePosition, choice.radius, regionGeometry.markers, region.homography);
         indices[choice.choice] = circleSamples.length;
-        circleSamples.push({ x: pt.x, y: pt.y, radius: choice.radius * scale * 0.8 });
+        circleSamples.push(sample);
       }
       answerSampleIndices.set(item.itemNumber, indices);
     }
@@ -546,7 +547,7 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
   }
 
   private async tryDecodeBrowserImage(buffer: Uint8Array, source: File | Blob | ArrayBuffer | Uint8Array | string | DecodedImage): Promise<DecodedImage | null> {
-    if (typeof createImageBitmap !== 'function') return null;
+    if (typeof window === 'undefined') return null;
     try {
       let blob: Blob;
       if (typeof Blob !== 'undefined' && source instanceof Blob) blob = source;
@@ -555,16 +556,53 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
         const mime = buffer[0] === 0xff && buffer[1] === 0xd8 ? 'image/jpeg' : 'image/png';
         blob = new Blob([buffer as BlobPart], { type: mime });
       }
-      const bitmap = await createImageBitmap(blob);
-      const canvas = typeof OffscreenCanvas !== 'undefined'
-        ? new OffscreenCanvas(bitmap.width, bitmap.height)
-        : Object.assign(document.createElement('canvas'), { width: bitmap.width, height: bitmap.height });
-      const context = canvas.getContext('2d');
-      if (!context) { bitmap.close(); return null; }
-      context.drawImage(bitmap, 0, 0);
-      const imageData = context.getImageData(0, 0, bitmap.width, bitmap.height);
-      bitmap.close();
-      return { pixels: imageData.data, width: imageData.width, height: imageData.height };
+      let drawable: CanvasImageSource;
+      let sourceWidth: number;
+      let sourceHeight: number;
+      let releaseSource = () => {};
+      if (typeof createImageBitmap === 'function') {
+        let bitmap: ImageBitmap;
+        try {
+          bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' });
+        } catch {
+          bitmap = await createImageBitmap(blob);
+        }
+        drawable = bitmap;
+        sourceWidth = bitmap.width;
+        sourceHeight = bitmap.height;
+        releaseSource = () => bitmap.close();
+      } else {
+        // HTMLImageElement fallback for mobile browsers without createImageBitmap.
+        const objectUrl = URL.createObjectURL(blob);
+        try {
+          const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+            const element = new Image();
+            element.onload = () => resolve(element);
+            element.onerror = () => reject(new Error('IMAGE_DECODE_FAILED'));
+            element.src = objectUrl;
+          });
+          drawable = image;
+          sourceWidth = image.naturalWidth || image.width;
+          sourceHeight = image.naturalHeight || image.height;
+          releaseSource = () => URL.revokeObjectURL(objectUrl);
+        } catch (error) {
+          URL.revokeObjectURL(objectUrl);
+          throw error;
+        }
+      }
+      try {
+        const dimensions = fitImageDimensions(sourceWidth, sourceHeight, MAX_OMR_IMAGE_EDGE);
+        const canvas = typeof OffscreenCanvas !== 'undefined'
+          ? new OffscreenCanvas(dimensions.width, dimensions.height)
+          : Object.assign(document.createElement('canvas'), { width: dimensions.width, height: dimensions.height });
+        const context = canvas.getContext('2d');
+        if (!context) return null;
+        context.drawImage(drawable, 0, 0, dimensions.width, dimensions.height);
+        const imageData = context.getImageData(0, 0, dimensions.width, dimensions.height);
+        return { pixels: imageData.data, width: imageData.width, height: imageData.height };
+      } finally {
+        releaseSource();
+      }
     } catch {
       return null;
     }

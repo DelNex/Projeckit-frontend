@@ -26,6 +26,7 @@ import { KitOmrTemplate, OmrScanResult, ProcessedItemResult } from '../types';
 import { processOmrScan } from '../adapter';
 import { persistOmrScan } from '../storage';
 import { OMR_THRESHOLD_PROFILE_VERSION } from '../thresholds';
+import { MAX_OMR_IMAGE_EDGE } from '../image-normalization';
 
 // Modular Scanner Engine Imports
 import { useCameraStream } from '../../scanner/camera/useCameraStream';
@@ -303,17 +304,16 @@ export function OmrCameraModal({
           ),
         ]);
 
-      const [omrResult, barcodeResult] = await Promise.all([
-        omrWithTimeout(
-          processOmrScan(blob, template, {
-            assessmentId,
-            includeMarkedImage: true,
-          }),
-          30000,
-          'OMR bubble analysis'
-        ),
-        decodeBarcodeFromBlob(blob).catch(() => null),
-      ]);
+      // Barcode identification already ran before the answer-sheet phase. Do
+      // not decode the full sheet a second time on mobile during OMR analysis.
+      const omrResult = await omrWithTimeout(
+        processOmrScan(blob, template, {
+          assessmentId,
+          includeMarkedImage: true,
+        }),
+        30000,
+        'OMR bubble analysis'
+      );
 
       if (!omrResult.items.length) {
         throw new Error(
@@ -322,7 +322,7 @@ export function OmrCameraModal({
       }
 
       // Handle barcode resolution if not already matched
-      const effectiveBarcode = barcodeResult || detectedBarcode;
+      const effectiveBarcode = detectedBarcode;
       const effectiveStudentCode =
         effectiveBarcode?.parsedIdentity?.studentId ||
         effectiveBarcode?.parsedIdentity?.studentLrn;
@@ -410,7 +410,11 @@ export function OmrCameraModal({
     // In scan phase, shutter captures full OMR score sheet
     setIsProcessing(true); // Block immediately to prevent double-tap
     try {
-      const blob = readyFrame || await captureFrame({ quality: 0.92 });
+      const blob = readyFrame || await captureFrame({
+        quality: 0.92,
+        maxWidth: MAX_OMR_IMAGE_EDGE,
+        maxHeight: MAX_OMR_IMAGE_EDGE,
+      });
       if (!blob) {
         toast.error('Camera preview is not ready. Please wait a moment and try again.');
         setIsProcessing(false);
