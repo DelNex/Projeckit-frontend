@@ -13,7 +13,8 @@
     "sbom": "node scripts/generate-sboms.mjs",
     "report:opencv-bundle": "node scripts/report-opencv-bundle.mjs",
     "build:consolidated": "node ../scripts/build-consolidated.mjs",
-    "test": "node scripts/check-schema-contract.mjs && node node_modules/tsx/dist/cli.mjs --test \"src/**/__tests__/*.test.ts\""
+    "test": "node scripts/check-schema-contract.mjs && node node_modules/tsx/dist/cli.mjs --test \"src/**/__tests__/*.test.ts\"",
+    "test:omr:browser": "playwright test --config=playwright.omr.config.ts"
   },
   "dependencies": {
     "@armghan3071/omrchecker": "file:./packages/armghan3071-omrchecker-1.0.2.tgz",
@@ -34,6 +35,7 @@
     "tailwind-merge": "^3.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/node": "^22.13.4",
     "@types/pngjs": "^6.0.5",

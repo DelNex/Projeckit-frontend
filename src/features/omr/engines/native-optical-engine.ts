@@ -331,14 +331,15 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
         };
       }
     }
-    const getMeasurement = (index: number, sample: BubbleSample): BubbleMeasurement => {
-      if (cvMeasurements) return cvMeasurements[index];
-      const legacyDarkness = NativeOpticalEngineAdapter.sampleCircleDarkness(pixels, width, height, sample.x, sample.y, sample.radius);
-      return { fillRatio: legacyDarkness, contrast: legacyDarkness };
+    const getMeasurement = (index: number, sample: BubbleSample): BubbleMeasurement & { pixelDarkness: number } => {
+      const pixelDarkness = NativeOpticalEngineAdapter.sampleCircleDarkness(pixels, width, height, sample.x, sample.y, sample.radius);
+      if (cvMeasurements) return { ...cvMeasurements[index], pixelDarkness };
+      return { fillRatio: pixelDarkness, contrast: pixelDarkness, pixelDarkness };
     };
     const isClearMark = (measurement: BubbleMeasurement) => cvMeasurements
-      ? measurement.fillRatio >= OMR_THRESHOLDS.openCv.clearMark.fillAndContrast.fillRatio &&
-        measurement.contrast >= OMR_THRESHOLDS.openCv.clearMark.fillAndContrast.contrast
+      ? (measurement.fillRatio >= OMR_THRESHOLDS.openCv.clearMark.fillAndContrast.fillRatio &&
+        measurement.contrast >= OMR_THRESHOLDS.openCv.clearMark.fillAndContrast.contrast) ||
+        ('pixelDarkness' in measurement && measurement.pixelDarkness >= markMinFill)
       : measurement.fillRatio >= markMinFill;
     const isResidualMark = (measurement: BubbleMeasurement) => cvMeasurements
       ? measurement.fillRatio >= OMR_THRESHOLDS.openCv.residualInk.fillRatio &&
@@ -398,7 +399,7 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
         if (index === undefined) continue;
         const measurement = getMeasurement(index, circleSamples[index]);
         measurements[choice.choice] = measurement;
-        scores[choice.choice] = parseFloat(Math.max(measurement.fillRatio, measurement.contrast).toFixed(3));
+        scores[choice.choice] = parseFloat(Math.max(measurement.fillRatio, measurement.contrast, 'pixelDarkness' in measurement ? measurement.pixelDarkness : 0).toFixed(3));
       }
 
       const choicesList = item.choices.map((c) => c.choice);

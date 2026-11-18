@@ -68,11 +68,12 @@ export function analyzeBubbleSamples(
   const id = ++requestId;
   const pixelBuffer = new Uint8Array(pixels).buffer;
   return new Promise((resolve, reject) => {
-    // Timeout: reject if OpenCV worker takes longer than 20 seconds
+    // OpenCV initialization allows 45 seconds on slower mobile devices.
+    // Keep the request deadline beyond that budget so slow starts can succeed.
     const timeout = setTimeout(() => {
       pending.delete(id);
-      reject(new Error('OpenCV.js worker timed out after 20s. Falling back to pixel sampler.'));
-    }, 20000);
+      reject(new Error('OpenCV.js worker timed out after 55s. Falling back to pixel sampler.'));
+    }, 55000);
 
     pending.set(id, {
       resolve: (value) => { clearTimeout(timeout); resolve(value); },
