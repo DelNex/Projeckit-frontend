@@ -412,6 +412,7 @@ export class MarkerDetector {
   } {
     const corners = ['TL', 'TR', 'BL', 'BR'] as const;
     const matched: Partial<Record<'TL' | 'TR' | 'BL' | 'BR', DetectedMarkerCandidate>> = {};
+    const usedCandidates = new Set<DetectedMarkerCandidate>();
 
     // Search radius around pose-transformed center
     // Tolerates camera perspective foreshortening while remaining strictly within
@@ -431,6 +432,9 @@ export class MarkerDetector {
       let minDistance = Infinity;
 
       for (const cand of candidatePool) {
+        // One physical square can represent only one corner. Reusing it creates
+        // collapsed or misleading homographies when detections are sparse.
+        if (usedCandidates.has(cand)) continue;
         const dist = Math.hypot(cand.cx - target.x, cand.cy - target.y);
         if (dist <= maxSearchRadius && dist < minDistance) {
           minDistance = dist;
@@ -440,6 +444,7 @@ export class MarkerDetector {
 
       if (bestCandidate) {
         matched[corner] = bestCandidate;
+        usedCandidates.add(bestCandidate);
       }
     }
 
