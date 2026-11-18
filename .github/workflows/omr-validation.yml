@@ -49,5 +49,8 @@ jobs:
           path: |
             .artifacts/omr-validation/omr-results.json
             src/features/omr/__tests__/fixtures/real_world_scan.png
+            src/features/omr/__tests__/fixtures/ambiguous_sheet.png
+            src/features/omr/__tests__/fixtures/marked_sheet.png
+            src/features/omr/__tests__/fixtures/marked_with_lrn.png
           if-no-files-found: warn
           retention-days: 14
