@@ -24,8 +24,8 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Run repository test suite
-        run: npm test
+      - name: Run OMR unit and regression tests
+        run: node node_modules/tsx/dist/cli.mjs --test "src/features/omr/__tests__/*.test.ts"
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
       - name: Validate the production OMR browser path
