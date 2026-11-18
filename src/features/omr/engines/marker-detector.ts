@@ -134,7 +134,10 @@ export class MarkerDetector {
     geometry: CanonicalOmrGeometry
   ): DetectedMarkerCandidate[] {
     const scale = Math.min(width / geometry.page.width, height / geometry.page.height);
-    // Small phone captures can contain valid fiducials only 3–6 pixels wide.\n    // Geometry/topology validation below filters noise; a fixed 7px floor\n    // incorrectly discarded those real markers before calibration.\n    const minMarkerDim = Math.max(3, Math.floor(4 * scale));
+    // Small phone captures can contain valid fiducials only 3–6 pixels wide.
+    // Geometry/topology validation below filters noise; a fixed 7px floor
+    // incorrectly discarded those real markers before calibration.
+    const minMarkerDim = Math.max(3, Math.floor(4 * scale));
     const maxMarkerDim = Math.max(45, Math.ceil(34 * scale));
 
     // Sample image brightness to determine adaptive dark threshold
