@@ -25,11 +25,20 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Run unit and raster fixture validation
-        run: npm run test:omr:unit && npm run test:omr:fixtures
+      - name: Run OMR unit tests
+        id: unit
+        run: npm run test:omr:unit
+      - name: Run every raster fixture and report all mismatches
+        id: fixtures
+        if: always() && steps.install.outcome == 'success'
+        run: npm run test:omr:fixtures
       - name: Install Playwright Chromium
+        id: playwright
+        if: always() && steps.install.outcome == 'success'
         run: npx playwright install --with-deps chromium
       - name: Run browser OMR validation against every image fixture
+        id: browser
+        if: always() && steps.install.outcome == 'success' && steps.playwright.outcome == 'success'
         run: npm run test:omr:browser
       - name: Upload full OMR diagnostic JSON
         if: always()
