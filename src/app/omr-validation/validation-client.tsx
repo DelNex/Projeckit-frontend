@@ -51,6 +51,7 @@ function buildAnswerDiagnostics(result: Awaited<ReturnType<typeof processOmrScan
       compared: expected.length,
       correct: expected.length - mismatches.length,
       nullCount,
+      expectedNullCount: expected.filter((answer) => answer === null).length,
       mismatches,
       accuracy: expected.length ? (expected.length - mismatches.length) / expected.length : null,
     } : null,
