@@ -30,17 +30,21 @@ function buildAnswerDiagnostics(result: Awaited<ReturnType<typeof processOmrScan
       state: item?.state ?? 'MISSING_ITEM',
       confidence: item?.confidence ?? 0,
       scores: item?.scores ?? null,
+      measurementDetails: item?.measurementDetails ?? null,
     };
   });
   const mismatches = expected
     ? expected.flatMap((answer, index) => {
       const item = answers[index];
-      return item && item.selected === answer ? [] : [{
+      const expectedState = answer === null ? 'BLANK' : 'MARKED';
+      return item && item.selected === answer && item.state === expectedState ? [] : [{
         question: index + 1,
         expected: answer,
         actual: item?.selected ?? null,
-        state: item?.state ?? 'MISSING_ITEM',
+        expectedState,
+        actualState: item?.state ?? 'MISSING_ITEM',
         scores: item?.scores ?? null,
+        measurementDetails: item?.measurementDetails ?? null,
       }];
     })
     : [];
