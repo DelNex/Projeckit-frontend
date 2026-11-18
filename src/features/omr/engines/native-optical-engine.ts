@@ -331,10 +331,14 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
       if (cvMeasurements) return { ...cvMeasurements[index], pixelDarkness };
       return { fillRatio: pixelDarkness, contrast: pixelDarkness, pixelDarkness };
     };
+    // When OpenCV is available, only its fill-ratio + local-contrast pair can
+    // promote a bubble to MARKED. Raw darkness is diagnostic only: shadows,
+    // printed text, and camera exposure must not override the classifier.
+    // The native fallback remains conservative and the whole scan is flagged
+    // for review because it lacks OpenCV's local-contrast evidence.
     const isClearMark = (measurement: BubbleMeasurement) => cvMeasurements
-      ? (measurement.fillRatio >= OMR_THRESHOLDS.openCv.clearMark.fillAndContrast.fillRatio &&
-        measurement.contrast >= OMR_THRESHOLDS.openCv.clearMark.fillAndContrast.contrast) ||
-        ('pixelDarkness' in measurement && measurement.pixelDarkness >= markMinFill)
+      ? measurement.fillRatio >= OMR_THRESHOLDS.openCv.clearMark.fillAndContrast.fillRatio &&
+        measurement.contrast >= OMR_THRESHOLDS.openCv.clearMark.fillAndContrast.contrast
       : measurement.fillRatio >= markMinFill;
     const isResidualMark = (measurement: BubbleMeasurement) => cvMeasurements
       ? measurement.fillRatio >= OMR_THRESHOLDS.openCv.residualInk.fillRatio &&
@@ -417,7 +421,8 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
           pixelDarkness: parseFloat(measurement.pixelDarkness.toFixed(4)),
           sample: circleSamples[index],
         };
-        scores[choice.choice] = parseFloat(Math.max(measurement.fillRatio, measurement.contrast, measurement.pixelDarkness).toFixed(3));
+        // Keep raw pixel darkness in measurementDetails, not in the decision score.
+        scores[choice.choice] = parseFloat(Math.max(measurement.fillRatio, measurement.contrast).toFixed(3));
       }
 
       const choicesList = item.choices.map((c) => c.choice);
