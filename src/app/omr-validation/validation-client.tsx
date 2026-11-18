@@ -33,7 +33,12 @@ export function OmrBrowserValidation() {
         const accuracy = correct / EXPECTED_ANSWERS.length;
         if (!cancelled) {
           setReport({
-            outcome: result.openCvDiagnostics?.status === 'used' && accuracy >= 0.95 ? 'PASS' : 'FAIL',
+            outcome: result.openCvDiagnostics?.status === 'used' &&
+              result.items.length === EXPECTED_ANSWERS.length &&
+              result.normalizedAnswers.length === EXPECTED_ANSWERS.length &&
+              result.normalizedAnswers.every((answer) => answer !== null) &&
+              correct === EXPECTED_ANSWERS.length && accuracy === 1
+              ? 'PASS' : 'FAIL',
             accuracy,
             correct,
             total: EXPECTED_ANSWERS.length,
