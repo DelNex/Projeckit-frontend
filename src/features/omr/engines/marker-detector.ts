@@ -134,7 +134,10 @@ export class MarkerDetector {
     geometry: CanonicalOmrGeometry
   ): DetectedMarkerCandidate[] {
     const scale = Math.min(width / geometry.page.width, height / geometry.page.height);
-    const minMarkerDim = Math.max(7, Math.floor(7 * scale));
+    // Small phone captures can contain valid fiducials only 3–6 pixels wide.
+    // Geometry/topology validation below filters noise; a fixed 7px floor
+    // incorrectly discarded those real markers before calibration.
+    const minMarkerDim = 3;
     const maxMarkerDim = Math.max(45, Math.ceil(34 * scale));
 
     // Sample image brightness to determine adaptive dark threshold
@@ -267,105 +270,112 @@ export class MarkerDetector {
       y: pageOffsetY + cy * nominalScale,
     });
 
-    // A two-point similarity transform cannot model camera perspective. Fit the
-    // sheet plane from all four physical fiducials in the primary region instead.
     const anchorRegion = geometry.regions[0];
     if (!anchorRegion || candidates.length < 4) {
       return { scale: nominalScale, transformPoint: nominalTransformPoint };
     }
 
+    // Do not assume the paper is centered or fills the camera frame. That
+    // assumption rejected valid phone photos even when all printed markers
+    // were visible. Instead, find a physically plausible four-marker anchor
+    // constellation, then derive the page scale and perspective from it.
     const corners = ['TL', 'TR', 'BL', 'BR'] as const;
-    const solidCandidates = candidates.filter((candidate) => candidate.fillFactor >= 0.80);
-    const pool = solidCandidates.length >= 4 ? solidCandidates : candidates;
-    const used = new Set<DetectedMarkerCandidate>();
-    const anchors: Partial<Record<(typeof corners)[number], DetectedMarkerCandidate>> = {};
-    // Phone photos can place the sheet well away from the nominal centered-page
-    // estimate. Allow a wider anchor search, then require a valid four-point
-    // quadrilateral and marker-size consistency before accepting the homography.
-    const maxAnchorDistance = Math.max(
-      70,
-      Math.min(360, anchorRegion.markers.TL.size * nominalScale * 16),
-    );
-
-    for (const corner of corners) {
-      const marker = anchorRegion.markers[corner];
-      const target = nominalTransformPoint(marker.center.x, marker.center.y);
-      const expectedSize = marker.size * nominalScale;
-      let best: DetectedMarkerCandidate | null = null;
-      let bestScore = Infinity;
-
-      for (const candidate of pool) {
-        if (used.has(candidate)) continue;
-        const distance = Math.hypot(candidate.cx - target.x, candidate.cy - target.y);
-        const candidateSize = (candidate.width + candidate.height) / 2;
-        const sizeRatio = candidateSize / Math.max(1, expectedSize);
-        if (
-          distance > maxAnchorDistance ||
-          sizeRatio < 0.40 ||
-          sizeRatio > 2.5
-        ) continue;
-
-        const score = distance / maxAnchorDistance + Math.abs(Math.log(sizeRatio)) * 0.35;
-        if (score < bestScore) {
-          best = candidate;
-          bestScore = score;
-        }
-      }
-
-      if (best) {
-        anchors[corner] = best;
-        used.add(best);
-      }
-    }
-
-    if (corners.some((corner) => !anchors[corner])) {
-      return { scale: nominalScale, transformPoint: nominalTransformPoint };
-    }
-
-    const TL = anchors.TL!;
-    const TR = anchors.TR!;
-    const BL = anchors.BL!;
-    const BR = anchors.BR!;
-    const topWidth = Math.hypot(TR.cx - TL.cx, TR.cy - TL.cy);
-    const bottomWidth = Math.hypot(BR.cx - BL.cx, BR.cy - BL.cy);
-    const leftHeight = Math.hypot(BL.cx - TL.cx, BL.cy - TL.cy);
-    const rightHeight = Math.hypot(BR.cx - TR.cx, BR.cy - TR.cy);
+    const solidCandidates = candidates
+      .filter((candidate) => candidate.fillFactor >= 0.80)
+      .sort((a, b) => (b.width * b.height) - (a.width * a.height))
+      .slice(0, 32);
+    const pool = solidCandidates.length >= 4 ? solidCandidates : candidates.slice(0, 32);
     const canonicalWidth = anchorRegion.markers.TR.center.x - anchorRegion.markers.TL.center.x;
     const canonicalHeight = anchorRegion.markers.BL.center.y - anchorRegion.markers.TL.center.y;
-    const widthRatio = Math.min(topWidth, bottomWidth) / Math.max(topWidth, bottomWidth, 1);
-    const heightRatio = Math.min(leftHeight, rightHeight) / Math.max(leftHeight, rightHeight, 1);
-    const detectedAspect = ((topWidth + bottomWidth) / 2) / Math.max(1, (leftHeight + rightHeight) / 2);
     const expectedAspect = canonicalWidth / Math.max(1, canonicalHeight);
-    const aspectDeviation = Math.abs(detectedAspect - expectedAspect) / Math.max(expectedAspect, 1e-6);
 
-    // Reject implausible anchor assignments; never turn arbitrary dark blobs into a sheet.
-    if (
-      TL.cx >= TR.cx ||
-      BL.cx >= BR.cx ||
-      TL.cy >= BL.cy ||
-      TR.cy >= BR.cy ||
-      widthRatio < 0.25 ||
-      heightRatio < 0.25 ||
-      aspectDeviation > 0.80
-    ) {
+    let bestQuad: QuadPoints | null = null;
+    let bestScore = Infinity;
+    let bestScale = nominalScale;
+
+    const getCorners = (quad: DetectedMarkerCandidate[]) => {
+      const bySum = [...quad].sort((a, b) => (a.cx + a.cy) - (b.cx + b.cy));
+      const byDiff = [...quad].sort((a, b) => (a.cx - a.cy) - (b.cx - b.cy));
+      return {
+        TL: bySum[0],
+        BR: bySum[3],
+        TR: byDiff[3],
+        BL: byDiff[0],
+      };
+    };
+
+    for (let a = 0; a < pool.length - 3; a++) {
+      for (let b = a + 1; b < pool.length - 2; b++) {
+        for (let c = b + 1; c < pool.length - 1; c++) {
+          for (let d = c + 1; d < pool.length; d++) {
+            const selected = [pool[a], pool[b], pool[c], pool[d]];
+            const ordered = getCorners(selected);
+            const orderedMarkers = [ordered.TL, ordered.TR, ordered.BL, ordered.BR];
+            if (new Set(orderedMarkers).size !== 4) continue;
+
+            const TL = ordered.TL;
+            const TR = ordered.TR;
+            const BL = ordered.BL;
+            const BR = ordered.BR;
+            if (TL.cx >= TR.cx || BL.cx >= BR.cx || TL.cy >= BL.cy || TR.cy >= BR.cy) continue;
+
+            const topWidth = Math.hypot(TR.cx - TL.cx, TR.cy - TL.cy);
+            const bottomWidth = Math.hypot(BR.cx - BL.cx, BR.cy - BL.cy);
+            const leftHeight = Math.hypot(BL.cx - TL.cx, BL.cy - TL.cy);
+            const rightHeight = Math.hypot(BR.cx - TR.cx, BR.cy - TR.cy);
+            const avgWidth = (topWidth + bottomWidth) / 2;
+            const avgHeight = (leftHeight + rightHeight) / 2;
+            if (avgWidth < 12 || avgHeight < 12) continue;
+
+            const detectedAspect = avgWidth / avgHeight;
+            const aspectDeviation = Math.abs(detectedAspect - expectedAspect) / Math.max(expectedAspect, 1e-6);
+            const widthDelta = Math.abs(topWidth - bottomWidth) / Math.max(topWidth, bottomWidth, 1);
+            const heightDelta = Math.abs(leftHeight - rightHeight) / Math.max(leftHeight, rightHeight, 1);
+            if (aspectDeviation > 0.80 || widthDelta > 0.70 || heightDelta > 0.70) continue;
+
+            const scale = avgWidth / Math.max(1, canonicalWidth);
+            const expectedMarkerSize = anchorRegion.markers.TL.size * scale;
+            const markerSizes = orderedMarkers.map((marker) => (marker.width + marker.height) / 2);
+            const minSize = Math.min(...markerSizes);
+            const maxSize = Math.max(...markerSizes);
+            const meanSize = markerSizes.reduce((sum, size) => sum + size, 0) / markerSizes.length;
+            const sizeSpread = (maxSize - minSize) / Math.max(1, meanSize);
+            const sizeRatio = meanSize / Math.max(1, expectedMarkerSize);
+            if (sizeRatio < 0.35 || sizeRatio > 2.8 || sizeSpread > 0.75) continue;
+
+            // The first canonical region is the upper registration region.
+            // A small vertical tie-break favors its actual marker group over
+            // similarly shaped answer blocks lower down the sheet.
+            const topY = Math.min(TL.cy, TR.cy);
+            const score = aspectDeviation * 4 + widthDelta + heightDelta + sizeSpread * 2 +
+              Math.abs(Math.log(sizeRatio)) * 0.5 + (topY / Math.max(1, imgHeight)) * 0.08;
+
+            if (score < bestScore) {
+              bestScore = score;
+              bestScale = scale;
+              bestQuad = {
+                TL: { x: TL.cx, y: TL.cy },
+                TR: { x: TR.cx, y: TR.cy },
+                BL: { x: BL.cx, y: BL.cy },
+                BR: { x: BR.cx, y: BR.cy },
+              };
+            }
+          }
+        }
+      }
+    }
+
+    if (!bestQuad) {
       return { scale: nominalScale, transformPoint: nominalTransformPoint };
     }
 
-    const quad: QuadPoints = {
-      TL: { x: TL.cx, y: TL.cy },
-      TR: { x: TR.cx, y: TR.cy },
-      BL: { x: BL.cx, y: BL.cy },
-      BR: { x: BR.cx, y: BR.cy },
-    };
-
     try {
-      const homography = ProjectiveHomography.fromUnitSquareToQuad(quad);
+      const homography = ProjectiveHomography.fromUnitSquareToQuad(bestQuad);
       const refTL = anchorRegion.markers.TL.center;
       const refTR = anchorRegion.markers.TR.center;
       const refBL = anchorRegion.markers.BL.center;
-      const scale = ((topWidth + bottomWidth) / 2) / Math.max(1, canonicalWidth);
       return {
-        scale,
+        scale: bestScale,
         transformPoint: (x: number, y: number) => homography.transformPoint(
           (x - refTL.x) / Math.max(1, refTR.x - refTL.x),
           (y - refTL.y) / Math.max(1, refBL.y - refTL.y)

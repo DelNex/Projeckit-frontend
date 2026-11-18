@@ -78,4 +78,49 @@ describe('Project KIT — Mobile fiducial calibration', () => {
     assert.equal(result.allRegionsDetected, false);
     assert.ok(result.failedRegions.length > 0);
   });
+  it('registers a small, off-center sheet without assuming it fills or is centered in the frame', () => {
+    const geometry = generateCanonicalGeometry({
+      assessmentId: 'small-off-center-mobile-regression',
+      itemCount: 60,
+      classSize: 60,
+    });
+    const width = 1600;
+    const height = 1200;
+    const pixels = new Uint8ClampedArray(width * height * 4);
+    pixels.fill(255);
+    // The printed sheet occupies only ~35% of the frame and is pushed into
+    // the upper-left corner, as can happen with phone uploads/camera framing.
+    const pageTransform = ProjectiveHomography.fromUnitSquareToQuad({
+      TL: { x: 18, y: 16 },
+      TR: { x: 278, y: 28 },
+      BL: { x: 12, y: 382 },
+      BR: { x: 290, y: 370 },
+    });
+
+    for (const marker of geometry.markers) {
+      const point = pageTransform.transformPoint(
+        marker.center.x / geometry.page.width,
+        marker.center.y / geometry.page.height,
+      );
+      const side = Math.max(3, Math.round(marker.size * 0.36));
+      const left = Math.round(point.x - side / 2);
+      const top = Math.round(point.y - side / 2);
+      for (let y = top; y < top + side; y++) {
+        for (let x = left; x < left + side; x++) {
+          if (x < 0 || y < 0 || x >= width || y >= height) continue;
+          const offset = (y * width + x) * 4;
+          pixels[offset] = 0;
+          pixels[offset + 1] = 0;
+          pixels[offset + 2] = 0;
+          pixels[offset + 3] = 255;
+        }
+      }
+    }
+
+    const result = MarkerDetector.detectRegionMarkers(pixels, width, height, geometry);
+    assert.equal(result.allRegionsDetected, true, JSON.stringify(result.failedRegions));
+    assert.equal(result.failedRegions.length, 0);
+    assert.equal(Object.keys(result.detectedRegions).length, geometry.regions.length);
+  });
+
 });

@@ -316,8 +316,12 @@ export function OmrCameraModal({
       );
 
       if (!omrResult.items.length) {
+        const markerFailure = omrResult.failedRegion;
+        const diagnostic = markerFailure
+          ? ` ${markerFailure.regionId}: ${markerFailure.detectedMarkerCount}/${markerFailure.expectedMarkerCount} corner markers detected. ${markerFailure.reason}`
+          : ` Scanner status: ${omrResult.status}; error: ${omrResult.errorCode || 'no item regions returned'}.`;
         throw new Error(
-          'Answer sheet was not recognized. Please align the sheet within frame, ensure all 4 corner markers are visible, and hold steady.'
+          `Answer sheet could not be registered.${diagnostic} Check that the complete printed sheet is visible, then try again.`
         );
       }
 

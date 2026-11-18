@@ -20,6 +20,11 @@ type BrowserReport = {
   openCvDiagnostics?: { status?: string };
   answers?: BrowserAnswer[];
   error?: string;
+  inputParity?: {
+    cameraBlob?: { passed?: boolean; detectedItems?: number; accuracy?: number };
+    uploadFile?: { passed?: boolean; detectedItems?: number; accuracy?: number };
+    sameAnswers?: boolean;
+  };
 };
 
 const REAL_WORLD_IMAGE_SHA256 =
@@ -45,6 +50,19 @@ test('scores the actual real-world OMR scan and rejects a wrong detected option'
   expect(report.fiducialDetected).toBe(true);
   expect(report.openCvDiagnostics?.status).toBe('used');
   expect(report.answers).toHaveLength(60);
+  expect(report.inputParity?.cameraBlob).toMatchObject({
+    passed: true,
+    detectedItems: 60,
+    accuracy: 1,
+  });
+  expect(report.inputParity?.uploadFile).toMatchObject({
+    passed: true,
+    detectedItems: 60,
+    accuracy: 1,
+  });
+  expect(report.inputParity?.cameraBlob?.mimeType).toBe('image/jpeg');
+  expect(report.inputParity?.uploadFile?.mimeType).toBe('image/png');
+  expect(report.inputParity?.sameAnswers).toBe(true);
 
   const orderedAnswers = [...report.answers!].sort(
     (left, right) => left.question - right.question,

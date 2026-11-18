@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { processOmrScan } from '@/features/omr/adapter';
 import { createKitOmrTemplate } from '@/features/omr/templates/template-builder';
+import { generateCanonicalGeometry } from '@/features/omr/geometry/canonical-geometry';
 import expectedAnswerSets from '@/features/omr/__tests__/fixtures/expected-answers.json';
 
 type ExpectedAnswer = string | null;
@@ -73,32 +74,79 @@ export function OmrBrowserValidation() {
         const response = await fetch('/api/omr-validation-fixture');
         if (!response.ok) throw new Error(`Fixture request failed (${response.status})`);
         const image = await response.blob();
-        const template = createKitOmrTemplate({ itemCount: EXPECTED_ANSWERS.length });
-        const result = await processOmrScan(image, template, { forceEngine: 'kit-optical-native' });
-        const diagnostics = buildAnswerDiagnostics(result, EXPECTED_ANSWERS);
-        const validation = diagnostics.validation!;
-        const outcome = result.fiducialDetected &&
-          result.openCvDiagnostics?.status === 'used' &&
-          validation.mismatches.length === 0 &&
-          validation.correct === validation.compared ? 'PASS' : 'FAIL';
+        // Match the assessment page's real template construction path rather
+        // than testing a separately-created generic item-count template.
+        const geometry = generateCanonicalGeometry({
+          assessmentId: 'browser-validation-assessment',
+          itemCount: EXPECTED_ANSWERS.length,
+          classSize: 60,
+        });
+        const template = createKitOmrTemplate({ geometry });
+
+        // A live camera frame is captured as a compressed JPEG Blob, while
+        // file upload preserves the original image File. Exercise both paths.
+        const bitmap = await createImageBitmap(image);
+        const cameraCanvas = document.createElement('canvas');
+        cameraCanvas.width = bitmap.width;
+        cameraCanvas.height = bitmap.height;
+        const cameraContext = cameraCanvas.getContext('2d');
+        if (!cameraContext) throw new Error('Could not initialize camera-frame test canvas.');
+        cameraContext.drawImage(bitmap, 0, 0);
+        bitmap.close();
+        const cameraBlob = await new Promise<Blob>((resolve, reject) => {
+          cameraCanvas.toBlob((blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Could not encode camera-style JPEG frame.'));
+          }, 'image/jpeg', 0.9);
+        });
+
+        const [cameraResult, uploadResult] = await Promise.all([
+          processOmrScan(cameraBlob, template, { forceEngine: 'kit-optical-native' }),
+          processOmrScan(
+            new File([image], 'real_world_scan.png', { type: image.type || 'image/png' }),
+            template,
+            { forceEngine: 'kit-optical-native' },
+          ),
+        ]);
+        const cameraDiagnostics = buildAnswerDiagnostics(cameraResult, EXPECTED_ANSWERS);
+        const uploadDiagnostics = buildAnswerDiagnostics(uploadResult, EXPECTED_ANSWERS);
+        const cameraValidation = cameraDiagnostics.validation!;
+        const uploadValidation = uploadDiagnostics.validation!;
+        const cameraPassed = cameraResult.fiducialDetected &&
+          cameraResult.openCvDiagnostics?.status === 'used' &&
+          cameraValidation.mismatches.length === 0 &&
+          cameraValidation.correct === cameraValidation.compared;
+        const uploadPassed = uploadResult.fiducialDetected &&
+          uploadResult.openCvDiagnostics?.status === 'used' &&
+          uploadValidation.mismatches.length === 0 &&
+          uploadValidation.correct === uploadValidation.compared;
+        const sameAnswers = JSON.stringify(cameraResult.normalizedAnswers) === JSON.stringify(uploadResult.normalizedAnswers) &&
+          cameraResult.items.length === uploadResult.items.length;
+        const outcome = cameraPassed && uploadPassed && sameAnswers ? 'PASS' : 'FAIL';
         if (!cancelled) {
           setReport({
             outcome,
-            imageHash: result.imageHash,
-            accuracy: validation.accuracy,
-            correct: validation.correct,
-            total: validation.compared,
-            nullCount: validation.nullCount,
-            mismatches: validation.mismatches,
-            fiducialDetected: result.fiducialDetected,
-            fiducialConfidence: result.fiducialConfidence,
-            overallConfidence: result.overallConfidence,
-            openCvDiagnostics: result.openCvDiagnostics,
-            status: result.status,
-            errorCode: result.errorCode,
-            engineUsed: result.engineUsed,
-            thresholdProfileVersion: result.thresholdProfileVersion,
-            answers: diagnostics.answers,
+            imageHash: uploadResult.imageHash,
+            accuracy: uploadValidation.accuracy,
+            correct: uploadValidation.correct,
+            total: uploadValidation.compared,
+            nullCount: uploadValidation.nullCount,
+            mismatches: uploadValidation.mismatches,
+            fiducialDetected: uploadResult.fiducialDetected,
+            fiducialConfidence: uploadResult.fiducialConfidence,
+            overallConfidence: uploadResult.overallConfidence,
+            openCvDiagnostics: uploadResult.openCvDiagnostics,
+            status: uploadResult.status,
+            errorCode: uploadResult.errorCode,
+            failedRegion: uploadResult.failedRegion || null,
+            engineUsed: uploadResult.engineUsed,
+            thresholdProfileVersion: uploadResult.thresholdProfileVersion,
+            answers: uploadDiagnostics.answers,
+            inputParity: {
+              cameraBlob: { passed: cameraPassed, detectedItems: cameraResult.items.length, accuracy: cameraValidation.accuracy, mimeType: cameraBlob.type },
+              uploadFile: { passed: uploadPassed, detectedItems: uploadResult.items.length, accuracy: uploadValidation.accuracy, mimeType: image.type },
+              sameAnswers,
+            },
           });
         }
       } catch (error) {
