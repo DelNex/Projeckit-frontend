@@ -9,7 +9,6 @@ export default defineConfig({
   use: {
     baseURL: 'http://127.0.0.1:3100',
     browserName: 'chromium',
-    launchOptions: { channel: 'chrome' },
   },
   webServer: {
     command: 'node node_modules/next/dist/bin/next dev -p 3100',
