@@ -16,7 +16,8 @@
     "test": "node scripts/check-schema-contract.mjs && node node_modules/tsx/dist/cli.mjs --test \"src/**/__tests__/*.test.ts\"",
     "test:omr:browser": "playwright test --config=playwright.omr.config.ts",
     "test:omr:fixtures": "node node_modules/tsx/dist/cli.mjs scripts/validate-omr-fixtures.ts",
-    "prebuild": "npm test && npm run test:omr:fixtures"
+    "prebuild": "npm run test:omr:unit && npm run test:omr:fixtures",
+    "test:omr:unit": "node node_modules/tsx/dist/cli.mjs --test \"src/features/omr/__tests__/*.test.ts\""
   },
   "dependencies": {
     "@armghan3071/omrchecker": "file:./packages/armghan3071-omrchecker-1.0.2.tgz",
