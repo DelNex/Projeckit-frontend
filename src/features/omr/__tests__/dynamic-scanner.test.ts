@@ -87,6 +87,45 @@ describe('Project KIT — Dynamic OMR Scanner Integration Tests', () => {
       assert.strictEqual(result.items[4].state, 'BLANK');
     });
 
+    it('never accepts the strongest bubble when a second answer bubble is also clearly filled', async (t) => {
+      const sourcePath = path.join(SCRATCH_DIR, 'marked_60.png');
+      if (!fs.existsSync(sourcePath)) {
+        t.skip('Skipping: source fixture marked_60.png not found');
+        return;
+      }
+
+      const geom = generateCanonicalGeometry({
+        assessmentId: 'test-double-mark',
+        itemCount: 60,
+        classSize: 60,
+      });
+      const png = PNG.sync.read(fs.readFileSync(sourcePath));
+      const secondChoice = geom.answerBlocks[0].choices.find((choice) => choice.choice === 'B');
+      assert.ok(secondChoice, 'Q1 B bubble must exist in canonical geometry');
+
+      // Q1 A is already filled in marked_60.png. Fill Q1 B as well to
+      // reproduce a double mark where one bubble can be darker than the other.
+      const centerX = secondChoice.canonicalCenter.x;
+      const centerY = secondChoice.canonicalCenter.y;
+      const radius = secondChoice.radius * 0.58;
+      for (let y = Math.max(0, Math.floor(centerY - radius)); y <= Math.min(png.height - 1, Math.ceil(centerY + radius)); y++) {
+        for (let x = Math.max(0, Math.floor(centerX - radius)); x <= Math.min(png.width - 1, Math.ceil(centerX + radius)); x++) {
+          if ((x - centerX) ** 2 + (y - centerY) ** 2 > radius ** 2) continue;
+          const index = (y * png.width + x) * 4;
+          png.data[index] = 0;
+          png.data[index + 1] = 0;
+          png.data[index + 2] = 0;
+          png.data[index + 3] = 255;
+        }
+      }
+
+      const result = await engine.process(PNG.sync.write(png), createKitOmrTemplate({ geometry: geom }));
+      assert.strictEqual(result.items[0].selectedChoice, null);
+      assert.strictEqual(result.items[0].state, 'MULTIPLE_MARK');
+      assert.strictEqual(result.hasMultipleMarks, true);
+      assert.strictEqual(result.status, 'VERIFICATION_REQUIRED');
+    });
+
     it('scans a 63-item assessment, verifying exactly 63 items and 3 items in final block', async () => {
       const geom = generateCanonicalGeometry({
         assessmentId: 'test-63-scan',
