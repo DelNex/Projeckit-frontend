@@ -108,59 +108,7 @@ export class MarkerDetector {
       }
     }
 
-    // Phone frames often include large margins, so canonical page-centering can
-    // place the expected marker coordinates nowhere near the actual sheet. When
-    // that positional match fails, recover a single answer region from four
-    // unusually solid square candidates and register their projective quad.
-    if (geometry.regions.length === 1 && Object.keys(detectedRegions).length === 0) {
-      const region = geometry.regions[0];
-      const strongSquares = candidates
-        .filter((candidate) => candidate.fillFactor >= 0.88 && candidate.aspectRatio >= 0.78 && candidate.aspectRatio <= 1.28)
-        .sort((a, b) => b.confidence - a.confidence)
-        .slice(0, 4);
-
-      if (strongSquares.length === 4) {
-        const bySum = [...strongSquares].sort((a, b) => a.cx + a.cy - (b.cx + b.cy));
-        const byDifference = [...strongSquares].sort((a, b) => a.cx - a.cy - (b.cx - b.cy));
-        const corners = {
-          TL: bySum[0],
-          BR: bySum[3],
-          TR: byDifference[3],
-          BL: byDifference[0],
-        };
-        const quad: QuadPoints = {
-          TL: { x: corners.TL.cx, y: corners.TL.cy },
-          TR: { x: corners.TR.cx, y: corners.TR.cy },
-          BL: { x: corners.BL.cx, y: corners.BL.cy },
-          BR: { x: corners.BR.cx, y: corners.BR.cy },
-        };
-        const observedWidth = (Math.hypot(quad.TR.x - quad.TL.x, quad.TR.y - quad.TL.y) +
-          Math.hypot(quad.BR.x - quad.BL.x, quad.BR.y - quad.BL.y)) / 2;
-        const observedHeight = (Math.hypot(quad.BL.x - quad.TL.x, quad.BL.y - quad.TL.y) +
-          Math.hypot(quad.BR.x - quad.TR.x, quad.BR.y - quad.TR.y)) / 2;
-        const expectedAspect = (region.markers.TR.center.x - region.markers.TL.center.x) /
-          (region.markers.BL.center.y - region.markers.TL.center.y);
-        const observedAspect = observedWidth / Math.max(1, observedHeight);
-        const aspectDeviation = Math.abs(observedAspect - expectedAspect) / expectedAspect;
-        const ordered = quad.TR.x > quad.TL.x && quad.BR.x > quad.BL.x &&
-          quad.BL.y > quad.TL.y && quad.BR.y > quad.TR.y;
-
-        if (ordered && aspectDeviation <= 0.4) {
-          const homography = ProjectiveHomography.fromUnitSquareToQuad(quad);
-          const confidence = strongSquares.reduce((sum, candidate) => sum + candidate.confidence, 0) / 4;
-          detectedRegions[region.id] = {
-            regionId: region.id,
-            quad,
-            homography,
-            confidence,
-            markers: corners,
-          };
-          failedRegions.length = 0;
-          totalConfidence = confidence;
-        }
-      }
-    }
-
+    // Do not register a region from an unverified ranking of square candidates.
     const allRegionsDetected = failedRegions.length === 0 && Object.keys(detectedRegions).length === geometry.regions.length;
     const overallMarkerConfidence =
       geometry.regions.length > 0 ? totalConfidence / geometry.regions.length : 0;
@@ -449,77 +397,6 @@ export class MarkerDetector {
     }
 
     const detectedCount = Object.keys(matched).length;
-    let missingCorner: 'TL' | 'TR' | 'BL' | 'BR' | null = null;
-
-    // Geometric completion: if 3 of 4 markers are found, infer the 4th corner geometrically
-    if (detectedCount === 3) {
-      if (!matched.TL && matched.TR && matched.BL && matched.BR) {
-        missingCorner = 'TL';
-        matched.TL = {
-          cx: matched.TR.cx + (matched.BL.cx - matched.BR.cx),
-          cy: matched.TR.cy + (matched.BL.cy - matched.BR.cy),
-          width: matched.TR.width,
-          height: matched.TR.height,
-          fillFactor: 0.75,
-          aspectRatio: 1,
-          confidence: 0.65,
-        };
-      } else if (!matched.TR && matched.TL && matched.BL && matched.BR) {
-        missingCorner = 'TR';
-        matched.TR = {
-          cx: matched.TL.cx + (matched.BR.cx - matched.BL.cx),
-          cy: matched.TL.cy + (matched.BR.cy - matched.BL.cy),
-          width: matched.TL.width,
-          height: matched.TL.height,
-          fillFactor: 0.75,
-          aspectRatio: 1,
-          confidence: 0.65,
-        };
-      } else if (!matched.BL && matched.TL && matched.TR && matched.BR) {
-        missingCorner = 'BL';
-        matched.BL = {
-          cx: matched.TL.cx + (matched.BR.cx - matched.TR.cx),
-          cy: matched.TL.cy + (matched.BR.cy - matched.TR.cy),
-          width: matched.TL.width,
-          height: matched.TL.height,
-          fillFactor: 0.75,
-          aspectRatio: 1,
-          confidence: 0.65,
-        };
-      } else if (!matched.BR && matched.TL && matched.TR && matched.BL) {
-        missingCorner = 'BR';
-        matched.BR = {
-          cx: matched.BL.cx + (matched.TR.cx - matched.TL.cx),
-          cy: matched.BL.cy + (matched.TR.cy - matched.TL.cy),
-          width: matched.BL.width,
-          height: matched.BL.height,
-          fillFactor: 0.75,
-          aspectRatio: 1,
-          confidence: 0.65,
-        };
-      }
-    }
-
-    if (missingCorner) {
-      // 1 marker was missing, but inferred geometrically:
-      // return success: false (so allRegionsDetected=false and failedRegions has details),
-      // BUT include the inferred quad so homography can still evaluate real answers.
-      const avgConfidence = (matched.TL!.confidence + matched.TR!.confidence + matched.BL!.confidence + matched.BR!.confidence) / 4;
-      return {
-        success: false,
-        detectedCount: 3,
-        confidence: parseFloat(avgConfidence.toFixed(3)),
-        reason: `Missing fiducial markers: ${region.id}.${missingCorner}.`,
-        quad: {
-          TL: { x: matched.TL!.cx, y: matched.TL!.cy },
-          TR: { x: matched.TR!.cx, y: matched.TR!.cy },
-          BL: { x: matched.BL!.cx, y: matched.BL!.cy },
-          BR: { x: matched.BR!.cx, y: matched.BR!.cy },
-        },
-        markers: { TL: matched.TL!, TR: matched.TR!, BL: matched.BL!, BR: matched.BR! },
-      };
-    }
-
     if (detectedCount < 4) {
       const missing = corners.filter((c) => !matched[c]);
       return {
