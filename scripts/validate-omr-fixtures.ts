@@ -8,18 +8,11 @@ const fixturesDir = path.resolve('src/features/omr/__tests__/fixtures');
 const imageNames = fs.readdirSync(fixturesDir)
   .filter((name) => /\.(png|jpe?g|webp|bmp|tiff?)$/i.test(name))
   .sort();
+const expectedAnswers = JSON.parse(
+  fs.readFileSync(path.join(fixturesDir, 'expected-answers.json'), 'utf8'),
+) as Record<string, (string | null)[]>;
 
 assert.ok(imageNames.length > 0, 'No raster OMR fixtures were found; refusing to skip validation.');
-
-const expectedRealWorld = [
-  'A', 'B', 'C', 'D', 'B', 'A', 'C', 'D', 'B', 'A',
-  'A', 'A', 'C', 'A', 'A', 'D', 'A', 'A', 'A', 'B',
-  'D', 'D', 'D', 'A', 'C', 'B', 'B', 'B', 'C', 'C',
-  'A', 'B', 'B', 'B', 'A', 'C', 'B', 'B', 'B', 'C',
-  'B', 'C', 'D', 'A', 'D', 'B', 'D', 'B', 'D', 'D',
-  'B', 'A', 'C', 'B', 'D', 'D', 'B', 'C', 'C', 'D',
-];
-const firstFourMarked = ['A', 'B', 'C', 'D', ...Array.from({ length: 56 }, () => null)];
 
 function itemCountFor(name: string): number {
   if (name.includes('sheet_63')) return 63;
@@ -31,7 +24,15 @@ function itemCountFor(name: string): number {
 
 async function main() {
   const engine = new NativeOpticalEngineAdapter();
-  const results: Array<{ name: string; status: string; items: number; marker: boolean }> = [];
+  const results: Array<{
+    name: string;
+    status: string;
+    items: number;
+    marker: boolean;
+    nullCount: number;
+    compared: number | null;
+    correct: number | null;
+  }> = [];
 
   for (const name of imageNames) {
     const bytes = fs.readFileSync(path.join(fixturesDir, name));
@@ -52,21 +53,30 @@ async function main() {
       );
     }
 
-    if (name === 'real_world_scan.png') {
-      const correct = result.normalizedAnswers.reduce(
-        (total, answer, index) => total + Number(answer === expectedRealWorld[index]), 0,
+    const expected = expectedAnswers[name];
+    let correct: number | null = null;
+    if (expected) {
+      assert.equal(expected.length, count, `${name}: answer key length does not match its template`);
+      const mismatches = expected.flatMap((answer, index) =>
+        result.normalizedAnswers[index] === answer ? [] : [{
+          question: index + 1,
+          expected: answer,
+          actual: result.normalizedAnswers[index] ?? null,
+          state: result.items[index]?.state ?? 'MISSING_ITEM',
+          scores: result.items[index]?.scores ?? null,
+        }],
       );
-      assert.equal(result.fiducialDetected, true, 'real_world_scan.png: registration failed');
-      assert.equal(result.items.length, 60, 'real_world_scan.png: expected all 60 answers');
-      assert.equal(correct, 60, `real_world_scan.png: expected 60/60 answers, got ${correct}/60`);
-    }
-
-    if (name === 'marked_60.png' || name === 'rotated_60.png') {
-      assert.equal(result.fiducialDetected, true, `${name}: registration failed`);
+      correct = expected.length - mismatches.length;
       assert.deepEqual(
-        result.normalizedAnswers,
-        firstFourMarked,
-        `${name}: known marked/blank answer pattern changed`,
+        mismatches,
+        [],
+        `${name}: expected answers did not match scanner output (including null answers). Diagnostics: ${JSON.stringify({
+          imageHash: result.imageHash,
+          fiducialDetected: result.fiducialDetected,
+          fiducialConfidence: result.fiducialConfidence,
+          openCvDiagnostics: result.openCvDiagnostics,
+          mismatches,
+        })}`,
       );
     }
 
@@ -75,13 +85,14 @@ async function main() {
       status: result.status,
       items: result.items.length,
       marker: result.fiducialDetected,
+      nullCount: result.normalizedAnswers.filter((answer) => answer === null).length,
+      compared: expected?.length ?? null,
+      correct,
     });
   }
 
-  console.log(`OMR fixture validation passed: ${results.length} raster images`);
-  for (const result of results) {
-    console.log(`- ${result.name}: ${result.status}, markers=${result.marker}, items=${result.items}`);
-  }
+  console.log('OMR fixture diagnostic report:', JSON.stringify(results));
+  console.log(`OMR fixture validation passed: ${results.length} raster images; ${results.filter((result) => result.compared !== null).length} labeled images checked exactly`);
 }
 
 main().catch((error) => {
