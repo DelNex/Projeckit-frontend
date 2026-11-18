@@ -279,9 +279,12 @@ export class MarkerDetector {
     const pool = solidCandidates.length >= 4 ? solidCandidates : candidates;
     const used = new Set<DetectedMarkerCandidate>();
     const anchors: Partial<Record<(typeof corners)[number], DetectedMarkerCandidate>> = {};
+    // Phone photos can place the sheet well away from the nominal centered-page
+    // estimate. Allow a wider anchor search, then require a valid four-point
+    // quadrilateral and marker-size consistency before accepting the homography.
     const maxAnchorDistance = Math.max(
       70,
-      Math.min(320, anchorRegion.markers.TL.size * nominalScale * 12),
+      Math.min(360, anchorRegion.markers.TL.size * nominalScale * 16),
     );
 
     for (const corner of corners) {
@@ -396,7 +399,7 @@ export class MarkerDetector {
     // rejects real fiducials in high-resolution mobile captures after perspective
     // projection. Candidate-size validation below limits false positives.
     const expectedMarkerSize = region.markers.TL.size * pose.scale;
-    const maxSearchRadius = Math.max(24, Math.min(180, expectedMarkerSize * 3.5));
+    const maxSearchRadius = Math.max(24, Math.min(240, expectedMarkerSize * 8));
 
     // Prioritize candidates with high fill factor (solid black squares) when available,
     // to distinguish physical fiducial markers from filled answer bubbles.
