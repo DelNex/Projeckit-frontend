@@ -245,6 +245,10 @@ describe('Project KIT — Dynamic OMR Scanner Integration Tests', () => {
       assert.strictEqual(result.failedRegion?.regionId, 'ANSWERS');
       assert.strictEqual(result.failedRegion?.expectedMarkerCount, 4);
       assert.ok(result.failedRegion?.reason.includes('ANSWERS.TL'));
+      // A partial marker set must never be used to produce guessed bubble coordinates.
+      assert.strictEqual(result.items.length, 0);
+      assert.deepStrictEqual(result.normalizedAnswers, []);
+      assert.strictEqual(result.fiducialDetected, false);
     });
   });
 
