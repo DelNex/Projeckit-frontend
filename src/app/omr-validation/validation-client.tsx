@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { processOmrScan } from '@/features/omr/adapter';
 import { createKitOmrTemplate } from '@/features/omr/templates/template-builder';
+import { generateCanonicalGeometry } from '@/features/omr/geometry/canonical-geometry';
 import expectedAnswerSets from '@/features/omr/__tests__/fixtures/expected-answers.json';
 
 type ExpectedAnswer = string | null;
@@ -73,32 +74,66 @@ export function OmrBrowserValidation() {
         const response = await fetch('/api/omr-validation-fixture');
         if (!response.ok) throw new Error(`Fixture request failed (${response.status})`);
         const image = await response.blob();
-        const template = createKitOmrTemplate({ itemCount: EXPECTED_ANSWERS.length });
-        const result = await processOmrScan(image, template, { forceEngine: 'kit-optical-native' });
-        const diagnostics = buildAnswerDiagnostics(result, EXPECTED_ANSWERS);
+        // Match the assessment page's real template construction path rather
+        // than testing a separately-created generic item-count template.
+        const geometry = generateCanonicalGeometry({
+          assessmentId: 'browser-validation-assessment',
+          itemCount: EXPECTED_ANSWERS.length,
+          classSize: 60,
+        });
+        const template = createKitOmrTemplate({ geometry });
+
+        // Camera capture supplies a Blob; file upload supplies a File. Both
+        // must pass through the same adapter and produce identical OMR reads.
+        const [cameraResult, uploadResult] = await Promise.all([
+          processOmrScan(image, template, { forceEngine: 'kit-optical-native' }),
+          processOmrScan(
+            new File([image], 'real_world_scan.png', { type: image.type || 'image/png' }),
+            template,
+            { forceEngine: 'kit-optical-native' },
+          ),
+        ]);
+        const diagnostics = buildAnswerDiagnostics(cameraResult, EXPECTED_ANSWERS);
+        const uploadDiagnostics = buildAnswerDiagnostics(uploadResult, EXPECTED_ANSWERS);
         const validation = diagnostics.validation!;
-        const outcome = result.fiducialDetected &&
-          result.openCvDiagnostics?.status === 'used' &&
+        const uploadValidation = uploadDiagnostics.validation!;
+        const cameraPassed = cameraResult.fiducialDetected &&
+          cameraResult.openCvDiagnostics?.status === 'used' &&
           validation.mismatches.length === 0 &&
-          validation.correct === validation.compared ? 'PASS' : 'FAIL';
+          validation.correct === validation.compared;
+        const uploadPassed = uploadResult.fiducialDetected &&
+          uploadResult.openCvDiagnostics?.status === 'used' &&
+          uploadValidation.mismatches.length === 0 &&
+          uploadValidation.correct === uploadValidation.compared;
+        const inputParity = cameraResult.imageHash === uploadResult.imageHash &&
+          JSON.stringify(cameraResult.normalizedAnswers) === JSON.stringify(uploadResult.normalizedAnswers) &&
+          cameraResult.items.length === uploadResult.items.length;
+        const outcome = cameraPassed && uploadPassed && inputParity ? 'PASS' : 'FAIL';
         if (!cancelled) {
           setReport({
             outcome,
-            imageHash: result.imageHash,
+            imageHash: cameraResult.imageHash,
             accuracy: validation.accuracy,
             correct: validation.correct,
             total: validation.compared,
             nullCount: validation.nullCount,
             mismatches: validation.mismatches,
-            fiducialDetected: result.fiducialDetected,
-            fiducialConfidence: result.fiducialConfidence,
-            overallConfidence: result.overallConfidence,
-            openCvDiagnostics: result.openCvDiagnostics,
-            status: result.status,
-            errorCode: result.errorCode,
-            engineUsed: result.engineUsed,
-            thresholdProfileVersion: result.thresholdProfileVersion,
+            fiducialDetected: cameraResult.fiducialDetected,
+            fiducialConfidence: cameraResult.fiducialConfidence,
+            overallConfidence: cameraResult.overallConfidence,
+            openCvDiagnostics: cameraResult.openCvDiagnostics,
+            status: cameraResult.status,
+            errorCode: cameraResult.errorCode,
+            failedRegion: cameraResult.failedRegion || null,
+            engineUsed: cameraResult.engineUsed,
+            thresholdProfileVersion: cameraResult.thresholdProfileVersion,
             answers: diagnostics.answers,
+            inputParity: {
+              cameraBlob: { passed: cameraPassed, detectedItems: cameraResult.items.length, accuracy: validation.accuracy },
+              uploadFile: { passed: uploadPassed, detectedItems: uploadResult.items.length, accuracy: uploadValidation.accuracy },
+              identicalHash: cameraResult.imageHash === uploadResult.imageHash,
+              identicalAnswers: JSON.stringify(cameraResult.normalizedAnswers) === JSON.stringify(uploadResult.normalizedAnswers),
+            },
           });
         }
       } catch (error) {
