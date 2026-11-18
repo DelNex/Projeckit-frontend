@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   omr:
@@ -30,3 +31,11 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run browser OMR validation against every image fixture
         run: npm run test:omr:browser
+      - name: Upload full OMR diagnostic JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: omr-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .artifacts/omr-validation/omr-results.json
+          if-no-files-found: warn
+          retention-days: 14
