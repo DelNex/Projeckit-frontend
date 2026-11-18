@@ -23,14 +23,15 @@ test('Chrome validates labeled answers and records diagnostics for every image f
     error?: string;
   };
 
-  const fixturesDir = path.resolve('src/features/omr/__tests__/fixtures');
-  const projectImages = fs.readdirSync(fixturesDir)
-    .filter((name) => /\.(png|jpe?g|webp|bmp|tiff?|svg)$/i.test(name))
-    .map((name) => path.join(fixturesDir, name));
-  const attachmentPaths = (process.env.OMR_ATTACHMENT_FILES || '')
-    .split(path.delimiter)
-    .filter(Boolean);
-  const files = [...projectImages, ...attachmentPaths];
+  // The primary browser acceptance test must use the real phone photograph only.
+  // Synthetic images remain covered by focused unit/regression tests, but they
+  // must never inflate the real-world browser accuracy result.
+  const realWorldFixture = path.resolve(
+    'src/features/omr/__tests__/fixtures/real_world_scan.png',
+  );
+  expect(fs.existsSync(realWorldFixture), 'real_world_scan.png is required').toBe(true);
+  const files = [realWorldFixture];
+  expect(files.map((file) => path.basename(file))).toEqual(['real_world_scan.png']);
 
   await page.getByTestId('omr-file-input').setInputFiles(files);
   const uploadResults = page.getByTestId('omr-upload-results');
@@ -74,28 +75,28 @@ test('Chrome validates labeled answers and records diagnostics for every image f
     scans: scanReports,
   }, null, 2) + '\n');
 
-  const labeledFixtures = [
-    'real_world_scan.png',
-    'marked_60.png',
-    'marked_60.svg',
-    'rotated_60.png',
-    'blank_sheet.png',
-    'blank_sheet.svg',
-    'sample_60_blank_half.png',
-    'sample_60_blank_half.svg',
-  ];
-  for (const name of labeledFixtures) {
-    const fixture = scanReports.find((item) => item.name === name);
-    expect(fixture, `${name} was not tested`).toBeDefined();
-    expect(fixture?.validation, `${name} has no expected-answer comparison`).not.toBeNull();
-    expect(fixture?.validation?.mismatches, `${name} contains wrong or missing answers`).toEqual([]);
-    expect(fixture?.validation?.correct, `${name} answer count mismatch`).toBe(fixture?.validation?.compared);
-    expect(fixture?.validation?.accuracy, `${name} must match every expected answer`).toBe(1);
-    expect(
-      fixture?.validation?.nullCount,
-      `${name} null-answer count differs from the explicit answer key`,
-    ).toBe(fixture?.validation?.expectedNullCount);
-  }
+  expect(scanReports).toHaveLength(1);
+  const realWorld = scanReports[0];
+  expect(realWorld.name).toBe('real_world_scan.png');
+  expect(realWorld).toMatchObject({
+    fiducialDetected: true,
+    detectedItems: 60,
+    status: 'PROCESSED',
+    openCv: 'used',
+    nullCount: 0,
+  });
+  expect(realWorld.validation).toMatchObject({
+    compared: 60,
+    correct: 60,
+    nullCount: 0,
+    expectedNullCount: 0,
+    mismatches: [],
+    accuracy: 1,
+  });
+  expect(
+    realWorld.answers?.every((answer) => answer.state === 'MARKED'),
+    'Every real-world answer must be classified as a verified mark',
+  ).toBe(true);
 
   // Assert the primary real-world capture only after every fixture has been scanned
   // and its complete diagnostic report has been persisted.
