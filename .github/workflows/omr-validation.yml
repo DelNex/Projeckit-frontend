@@ -20,12 +20,12 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - name: Install dependencies
         run: npm ci
       - name: Run unit and raster fixture validation
-        run: npm test && npm run test:omr:fixtures
+        run: npm run test:omr:unit && npm run test:omr:fixtures
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
       - name: Run browser OMR validation against every image fixture
