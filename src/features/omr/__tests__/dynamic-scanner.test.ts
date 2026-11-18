@@ -91,6 +91,8 @@ describe('Project KIT — Dynamic OMR Scanner Integration Tests', () => {
         assert.strictEqual(item.state, 'BLANK', `Q${item.itemNumber} should be classified as blank, not ambiguous`);
       }
       assert.deepStrictEqual(result.normalizedAnswers.slice(4), Array(56).fill(null));
+      assert.strictEqual(result.hasAmbiguity, false, 'A confidently blank answer is not an ambiguous read');
+      assert.strictEqual(result.hasMultipleMarks, false);
     });
 
     it('never accepts the strongest bubble when a second answer bubble is also clearly filled', async (t) => {
@@ -131,6 +133,8 @@ describe('Project KIT — Dynamic OMR Scanner Integration Tests', () => {
       const result = await engine.process(PNG.sync.write(png), createKitOmrTemplate({ geometry: geom }));
       assert.strictEqual(result.items[0].selectedChoice, null);
       assert.strictEqual(result.items[0].state, 'MULTIPLE_MARK');
+      assert.strictEqual(result.normalizedAnswers[0], null, 'Multiple marks must never be collapsed into one answer');
+      assert.strictEqual(result.rawAnswers[1], 'B', 'Other single-mark answers should remain intact');
       assert.strictEqual(result.hasMultipleMarks, true);
       assert.strictEqual(result.status, 'VERIFICATION_REQUIRED');
     });
