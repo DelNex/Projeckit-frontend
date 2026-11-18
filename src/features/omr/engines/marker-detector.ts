@@ -137,7 +137,7 @@ export class MarkerDetector {
     // Small phone captures can contain valid fiducials only 3–6 pixels wide.
     // Geometry/topology validation below filters noise; a fixed 7px floor
     // incorrectly discarded those real markers before calibration.
-    const minMarkerDim = Math.max(3, Math.floor(4 * scale));
+    const minMarkerDim = 3;
     const maxMarkerDim = Math.max(45, Math.ceil(34 * scale));
 
     // Sample image brightness to determine adaptive dark threshold
