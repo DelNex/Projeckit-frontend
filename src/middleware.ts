@@ -1,7 +1,18 @@
+import { NextResponse, type NextRequest } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
-import { type NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
+  // The OMR validation page and its fixture endpoint are development-only.
+  // Let CI exercise the scanner without requiring live Supabase credentials
+  // or making network calls to the authentication service.
+  if (
+    process.env.NODE_ENV === 'development' &&
+    (request.nextUrl.pathname === '/omr-validation' ||
+      request.nextUrl.pathname === '/api/omr-validation-fixture')
+  ) {
+    return NextResponse.next();
+  }
+
   return await updateSession(request);
 }
 
@@ -17,4 +28,3 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|images|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };
-
