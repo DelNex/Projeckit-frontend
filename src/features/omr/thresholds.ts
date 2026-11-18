@@ -1,5 +1,5 @@
 /** Versioned baseline. Calibrate against the release's labeled capture set before changing. */
-export const OMR_THRESHOLD_PROFILE_VERSION = '1.0.0';
+export const OMR_THRESHOLD_PROFILE_VERSION = '1.1.0';
 
 export const OMR_THRESHOLDS = Object.freeze({
   imageQuality: { minimumAverageLuminance: 35, maximumAverageLuminance: 250, minimumContrastRatio: 0.35 },
