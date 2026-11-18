@@ -105,9 +105,12 @@ describe('Project KIT — Dynamic OMR Scanner Integration Tests', () => {
 
       // Q1 A is already filled in marked_60.png. Fill Q1 B as well to
       // reproduce a double mark where one bubble can be darker than the other.
-      const centerX = secondChoice.canonicalCenter.x;
-      const centerY = secondChoice.canonicalCenter.y;
-      const radius = secondChoice.radius * 0.58;
+      // Fixtures may be rendered above canonical page resolution.
+      const scaleX = png.width / geom.page.width;
+      const scaleY = png.height / geom.page.height;
+      const centerX = secondChoice.canonicalCenter.x * scaleX;
+      const centerY = secondChoice.canonicalCenter.y * scaleY;
+      const radius = secondChoice.radius * Math.min(scaleX, scaleY) * 0.58;
       for (let y = Math.max(0, Math.floor(centerY - radius)); y <= Math.min(png.height - 1, Math.ceil(centerY + radius)); y++) {
         for (let x = Math.max(0, Math.floor(centerX - radius)); x <= Math.min(png.width - 1, Math.ceil(centerX + radius)); x++) {
           if ((x - centerX) ** 2 + (y - centerY) ** 2 > radius ** 2) continue;
