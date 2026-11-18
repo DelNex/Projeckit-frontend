@@ -10,7 +10,14 @@ export interface ProcessedItemResult {
   selectedChoice: string | null; // "A" | "B" | "C" | "D" | null
   confidence: number; // 0.0 to 1.0
   state: OmrItemState;
-  scores: Record<string, number>; // Darkness score per choice (e.g. { A: 0.82, B: 0.05, ... })
+  scores: Record<string, number>; // Composite bubble score per choice.
+  /** Per-choice raw metrics and image-space sample geometry for scan diagnostics. */
+  measurementDetails?: Record<string, {
+    fillRatio: number;
+    contrast: number;
+    pixelDarkness: number;
+    sample: { x: number; y: number; radius: number };
+  }>;
 }
 
 export interface OmrDecisionAuditItem {

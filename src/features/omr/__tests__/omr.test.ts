@@ -270,7 +270,17 @@ describe('Project KIT — OMR Pipeline & Adapter Tests', () => {
         0
       ) / expected.length;
 
-      assert.strictEqual(result.items.length, expected.length, 'all 60 bubbles must be sampled');
+      assert.strictEqual(
+        result.items.length,
+        expected.length,
+        `all 60 bubbles must be sampled; ${JSON.stringify({
+          errorCode: result.errorCode,
+          failedRegion: result.failedRegion,
+          fiducialConfidence: result.fiducialConfidence,
+          resizedFailedRegion: resizedResult.failedRegion,
+          resizedFiducialConfidence: resizedResult.fiducialConfidence,
+        })}`,
+      );
       assert.strictEqual(result.fiducialDetected, true, 'sheet markers must register despite camera margins');
       assert.ok(accuracy >= 0.95, `expected >=95% accuracy, received ${(accuracy * 100).toFixed(1)}%`);
       assert.strictEqual(accuracy, 1, 'the current provided photo should decode all answers exactly');

@@ -1,0 +1,65 @@
+name: OMR mobile calibration
+
+on:
+  push:
+    branches: [main, "fix/**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  omr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        id: install
+        run: npm ci
+      - name: Run OMR unit and regression tests
+        id: unit
+        if: always() && steps.install.outcome == 'success'
+        run: node node_modules/tsx/dist/cli.mjs --test "src/features/omr/__tests__/*.test.ts"
+      - name: Build production Next.js application
+        id: build
+        if: always() && steps.install.outcome == 'success'
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder-publishable-key
+          NEXT_PUBLIC_APP_URL: https://example.vercel.app
+          SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
+        run: npm run build
+      - name: Install Playwright Chromium
+        id: playwright
+        if: always() && steps.install.outcome == 'success'
+        run: npx playwright install --with-deps chromium
+      - name: Validate the production OMR browser path
+        id: browser
+        if: always() && steps.install.outcome == 'success' && steps.playwright.outcome == 'success'
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder-publishable-key
+          NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
+        run: npm run test:omr:browser
+      - name: Upload OMR browser diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: omr-mobile-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .artifacts/omr-validation/omr-results.json
+            src/features/omr/__tests__/fixtures/real_world_scan.png
+            src/features/omr/__tests__/fixtures/ambiguous_sheet.png
+            src/features/omr/__tests__/fixtures/marked_sheet.png
+            src/features/omr/__tests__/fixtures/marked_with_lrn.png
+          if-no-files-found: warn
+          retention-days: 14

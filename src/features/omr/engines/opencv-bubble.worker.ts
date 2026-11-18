@@ -28,8 +28,15 @@ function ensureOpenCv(): Promise<void> {
 }
 
 function measureCircle(gray: any, binary: any, sample: CircleSample): CircleMeasurement {
-  const radius = Math.max(2, sample.radius * 0.62); // Exclude the printed bubble outline.
-  const outerRadius = Math.max(radius + 1, sample.radius * 0.92);
+  const radius = Math.max(2, sample.radius * 0.62); // Stay inside the printed bubble outline.
+  // The answer sheet prints A/B/C/D inside each empty bubble. Exclude that
+  // center label and measure the surrounding ink annulus so letters are not
+  // mistaken for student marks.
+  const centerExclusionRadius = sample.radius * 0.34;
+  // The printed bubble outline sits near 0.76–0.92 radii; it is NOT paper.
+  // Sample the local paper outside the outline so filled graphite can be compared
+  // with the actual sheet background instead of a darker printed border.
+  const outerRadius = Math.max(radius + 1, sample.radius * 1.45);
   const minX = Math.max(0, Math.floor(sample.x - outerRadius));
   const maxX = Math.min(gray.cols - 1, Math.ceil(sample.x + outerRadius));
   const minY = Math.max(0, Math.floor(sample.y - outerRadius));
@@ -48,12 +55,15 @@ function measureCircle(gray: any, binary: any, sample: CircleSample): CircleMeas
       const distance = Math.hypot(dx, dy);
       if (distance > outerRadius) continue;
       const lum = gray.ucharPtr(y, x)[0];
-      if (distance <= radius) {
+      if (distance <= radius && distance >= centerExclusionRadius) {
         insidePixels++;
         innerLum += lum;
         innerCount++;
         if (binary.ucharPtr(y, x)[0] > 0) darkPixels++;
-      } else if (distance >= sample.radius * 0.76) {
+      } else if (
+        distance >= sample.radius * 1.12 &&
+        distance <= outerRadius
+      ) {
         paperLum += lum;
         paperCount++;
       }
