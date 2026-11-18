@@ -3,15 +3,64 @@
 import { useEffect, useState } from 'react';
 import { processOmrScan } from '@/features/omr/adapter';
 import { createKitOmrTemplate } from '@/features/omr/templates/template-builder';
+import expectedAnswerSets from '@/features/omr/__tests__/fixtures/expected-answers.json';
 
-const EXPECTED_ANSWERS = [
-  'A', 'B', 'C', 'D', 'B', 'A', 'C', 'D', 'B', 'A',
-  'A', 'A', 'C', 'A', 'A', 'D', 'A', 'A', 'A', 'B',
-  'D', 'D', 'D', 'A', 'C', 'B', 'B', 'B', 'C', 'C',
-  'A', 'B', 'B', 'B', 'A', 'C', 'B', 'B', 'B', 'C',
-  'B', 'C', 'D', 'A', 'D', 'B', 'D', 'B', 'D', 'D',
-  'B', 'A', 'C', 'B', 'D', 'D', 'B', 'C', 'C', 'D',
-];
+type ExpectedAnswer = string | null;
+type ExpectedAnswerSets = Record<string, ExpectedAnswer[]>;
+
+const EXPECTED_ANSWERS = (expectedAnswerSets as ExpectedAnswerSets)['real_world_scan.png'];
+
+function expectedFor(name: string): ExpectedAnswer[] | null {
+  const exact = (expectedAnswerSets as ExpectedAnswerSets)[name];
+  if (exact) return exact;
+  // Phone screenshots supplied to the browser test use generated names.
+  if (name.includes('codex-clipboard-ff4ca3c4')) return EXPECTED_ANSWERS;
+  return null;
+}
+
+function buildAnswerDiagnostics(result: Awaited<ReturnType<typeof processOmrScan>>, expected: ExpectedAnswer[] | null) {
+  const diagnosticCount = Math.max(result.items.length, expected?.length ?? 0);
+  const answers = Array.from({ length: diagnosticCount }, (_, index) => {
+    const item = result.items[index];
+    return {
+      question: index + 1,
+      selected: item?.selectedChoice ?? null,
+      expected: expected?.[index] ?? null,
+      hasExpected: Boolean(expected && index < expected.length),
+      state: item?.state ?? 'MISSING_ITEM',
+      confidence: item?.confidence ?? 0,
+      scores: item?.scores ?? null,
+      measurementDetails: item?.measurementDetails ?? null,
+    };
+  });
+  const mismatches = expected
+    ? expected.flatMap((answer, index) => {
+      const item = answers[index];
+      const expectedState = answer === null ? 'BLANK' : 'MARKED';
+      return item && item.selected === answer && item.state === expectedState ? [] : [{
+        question: index + 1,
+        expected: answer,
+        actual: item?.selected ?? null,
+        expectedState,
+        actualState: item?.state ?? 'MISSING_ITEM',
+        scores: item?.scores ?? null,
+        measurementDetails: item?.measurementDetails ?? null,
+      }];
+    })
+    : [];
+  const nullCount = result.normalizedAnswers.filter((answer) => answer === null).length;
+  return {
+    answers,
+    validation: expected ? {
+      compared: expected.length,
+      correct: expected.length - mismatches.length,
+      nullCount,
+      expectedNullCount: expected.filter((answer) => answer === null).length,
+      mismatches,
+      accuracy: expected.length ? (expected.length - mismatches.length) / expected.length : null,
+    } : null,
+  };
+}
 
 export function OmrBrowserValidation() {
   const [report, setReport] = useState<Record<string, unknown> | null>(null);
@@ -26,33 +75,30 @@ export function OmrBrowserValidation() {
         const image = await response.blob();
         const template = createKitOmrTemplate({ itemCount: EXPECTED_ANSWERS.length });
         const result = await processOmrScan(image, template, { forceEngine: 'kit-optical-native' });
-        const correct = result.normalizedAnswers.reduce(
-          (count, answer, index) => count + Number(answer === EXPECTED_ANSWERS[index]),
-          0,
-        );
-        const accuracy = correct / EXPECTED_ANSWERS.length;
+        const diagnostics = buildAnswerDiagnostics(result, EXPECTED_ANSWERS);
+        const validation = diagnostics.validation!;
+        const outcome = result.fiducialDetected &&
+          result.openCvDiagnostics?.status === 'used' &&
+          validation.mismatches.length === 0 &&
+          validation.correct === validation.compared ? 'PASS' : 'FAIL';
         if (!cancelled) {
           setReport({
-            outcome: result.openCvDiagnostics?.status === 'used' &&
-              result.items.length === EXPECTED_ANSWERS.length &&
-              result.normalizedAnswers.length === EXPECTED_ANSWERS.length &&
-              result.normalizedAnswers.every((answer) => answer !== null) &&
-              correct === EXPECTED_ANSWERS.length && accuracy === 1
-              ? 'PASS' : 'FAIL',
-            accuracy,
-            correct,
-            total: EXPECTED_ANSWERS.length,
+            outcome,
+            imageHash: result.imageHash,
+            accuracy: validation.accuracy,
+            correct: validation.correct,
+            total: validation.compared,
+            nullCount: validation.nullCount,
+            mismatches: validation.mismatches,
             fiducialDetected: result.fiducialDetected,
+            fiducialConfidence: result.fiducialConfidence,
+            overallConfidence: result.overallConfidence,
             openCvDiagnostics: result.openCvDiagnostics,
             status: result.status,
             errorCode: result.errorCode,
-            answers: result.items.map((item) => ({
-              question: item.itemNumber,
-              selected: item.selectedChoice,
-              expected: EXPECTED_ANSWERS[item.itemNumber - 1],
-              state: item.state,
-              scores: item.scores,
-            })),
+            engineUsed: result.engineUsed,
+            thresholdProfileVersion: result.thresholdProfileVersion,
+            answers: diagnostics.answers,
           });
         }
       } catch (error) {
@@ -74,33 +120,31 @@ export function OmrBrowserValidation() {
         : 60;
       const includeRollNumberGrid = name.includes('legacy_roll') || name.includes('multi_roll');
       try {
-        const template = createKitOmrTemplate({ itemCount, includeRollNumberGrid });
+        const template = createKitOmrTemplate({ itemCount });
         const result = await processOmrScan(file, template, { forceEngine: 'kit-optical-native' });
-        const expected = name.includes('real_world_scan') || name.includes('codex-clipboard-ff4ca3c4')
-          ? EXPECTED_ANSWERS
-          : name.includes('marked_60') || name.includes('rotated_60')
-            ? ['A', 'B', 'C', 'D', ...Array.from({ length: 56 }, () => null)]
-            : null;
-        const comparedCount = expected?.length || 0;
-        const correct = expected
-          ? result.normalizedAnswers.slice(0, comparedCount).reduce(
-            (count, answer, index) => count + Number(answer === expected[index]), 0,
-          )
-          : null;
+        const expected = expectedFor(file.name);
+        const diagnostics = buildAnswerDiagnostics(result, expected);
+        const validation = diagnostics.validation;
         reports.push({
           name: file.name,
           bytes: file.size,
           mimeType: file.type,
+          imageHash: result.imageHash,
           fiducialDetected: result.fiducialDetected,
+          fiducialConfidence: result.fiducialConfidence,
+          overallConfidence: result.overallConfidence,
           detectedItems: result.items.length,
           status: result.status,
           errorCode: result.errorCode || null,
-          failedRegion: result.failedRegion?.reason || null,
+          failedRegion: result.failedRegion || null,
           detectedRollNumber: result.detectedRollNumber,
           openCv: result.openCvDiagnostics?.status || 'not-run',
-          correct,
-          compared: comparedCount || null,
-          accuracy: comparedCount ? correct! / comparedCount : null,
+          openCvDiagnostics: result.openCvDiagnostics || null,
+          engineUsed: result.engineUsed,
+          thresholdProfileVersion: result.thresholdProfileVersion || null,
+          nullCount: result.normalizedAnswers.filter((answer) => answer === null).length,
+          answers: diagnostics.answers,
+          validation,
         });
       } catch (error) {
         reports.push({ name: file.name, bytes: file.size, outcome: 'ERROR', error: error instanceof Error ? error.message : String(error) });
