@@ -51,6 +51,7 @@ test('Chrome validates labeled answers and records diagnostics for every image f
     compared?: number | null;
     accuracy?: number | null;
     nullCount?: number;
+    answers?: Array<{ state: string }>;
     validation?: {
       compared: number;
       correct: number;
