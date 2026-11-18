@@ -85,6 +85,12 @@ describe('Project KIT — Dynamic OMR Scanner Integration Tests', () => {
       // Subsequent items should be blank
       assert.strictEqual(result.items[4].selectedChoice, null);
       assert.strictEqual(result.items[4].state, 'BLANK');
+      // Null is a valid, intentional unanswered response for every untouched item.
+      for (const item of result.items.slice(4)) {
+        assert.strictEqual(item.selectedChoice, null, `Q${item.itemNumber} should remain unanswered`);
+        assert.strictEqual(item.state, 'BLANK', `Q${item.itemNumber} should be classified as blank, not ambiguous`);
+      }
+      assert.deepStrictEqual(result.normalizedAnswers.slice(4), Array(56).fill(null));
     });
 
     it('never accepts the strongest bubble when a second answer bubble is also clearly filled', async (t) => {
