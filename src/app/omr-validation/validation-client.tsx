@@ -118,7 +118,6 @@ export function OmrBrowserValidation() {
         : name.includes('sample_30') ? 30
         : name.includes('multi_roll') ? 20
         : 60;
-      const includeRollNumberGrid = name.includes('legacy_roll') || name.includes('multi_roll');
       try {
         const template = createKitOmrTemplate({ itemCount });
         const result = await processOmrScan(file, template, { forceEngine: 'kit-optical-native' });
