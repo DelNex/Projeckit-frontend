@@ -25,3 +25,20 @@ test('a shaded C is wrong when the answer key says A', () => {
     { score: 0, totalItems: 1, percentage: 0 }
   );
 });
+
+test('unresolved OMR states cannot earn points even when an answer value is present', () => {
+  for (const state of ['BLANK', 'AMBIGUOUS', 'MULTIPLE_MARK', 'ERASED_MARK', 'UNKNOWN']) {
+    assert.equal(
+      isAnswerCorrect({ 1: 'A' }, { 1: 'A' }, 1, { 1: state }),
+      false,
+      `state ${state} must not be graded as correct`
+    );
+    assert.deepEqual(
+      calculateAssessmentScore({ 1: 'A' }, { 1: 'A' }, 1, { 1: state }),
+      { score: 0, totalItems: 1, percentage: 0 }
+    );
+  }
+
+  assert.equal(isAnswerCorrect({ 1: 'A' }, { 1: 'A' }, 1, { 1: 'MARKED' }), true);
+  assert.equal(isAnswerCorrect({ 1: 'A' }, { 1: 'A' }, 1), true);
+});
