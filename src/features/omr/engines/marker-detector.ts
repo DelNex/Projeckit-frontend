@@ -436,12 +436,32 @@ export class MarkerDetector {
 
     const detectedCount = Object.keys(matched).length;
     if (detectedCount < 4) {
-      const missing = corners.filter((c) => !matched[c]);
+      const missing = corners.filter((corner) => !matched[corner]);
+      const nearestDiagnostics = missing.map((corner) => {
+        const marker = region.markers[corner];
+        const target = pose.transformPoint(marker.center.x, marker.center.y);
+        const expectedSize = Math.max(1, marker.size * pose.scale);
+        const nearest = candidatePool
+          .map((candidate) => {
+            const distance = Math.hypot(candidate.cx - target.x, candidate.cy - target.y);
+            const candidateSize = (candidate.width + candidate.height) / 2;
+            return {
+              distance,
+              sizeRatio: candidateSize / expectedSize,
+              fill: candidate.fillFactor,
+              x: Math.round(candidate.cx),
+              y: Math.round(candidate.cy),
+            };
+          })
+          .sort((a, b) => a.distance - b.distance)
+          .slice(0, 3);
+        return `${corner} target=(${Math.round(target.x)},${Math.round(target.y)}) nearest=${JSON.stringify(nearest)}`;
+      });
       return {
         success: false,
         detectedCount,
         confidence: detectedCount / 4,
-        reason: `Missing fiducial markers: ${missing.map((c) => `${region.id}.${c}`).join(', ')}.`,
+        reason: `Missing fiducial markers: ${missing.map((corner) => `${region.id}.${corner}`).join(', ')}. candidates=${candidatePool.length}; radius=${maxSearchRadius.toFixed(1)}; ${nearestDiagnostics.join('; ')}.`,
       };
     }
 
