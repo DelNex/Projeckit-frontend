@@ -267,81 +267,110 @@ export class MarkerDetector {
       y: pageOffsetY + cy * nominalScale,
     });
 
-    if (candidates.length < 4) {
-      return {
-        scale: nominalScale,
-        transformPoint: nominalTransformPoint,
-      };
+    // A two-point similarity transform cannot model camera perspective. Fit the
+    // sheet plane from all four physical fiducials in the primary region instead.
+    const anchorRegion = geometry.regions[0];
+    if (!anchorRegion || candidates.length < 4) {
+      return { scale: nominalScale, transformPoint: nominalTransformPoint };
     }
 
-    // Reference canonical outer top markers: ANSWERS.TL and ANSWERS.TR
-    const refTL =
-      geometry.markerMap['ANSWERS.TL']?.center ||
-      geometry.markers.find((m) => m.corner === 'TL')?.center || { x: 47, y: 287 };
-    const refTR =
-      geometry.markerMap['ANSWERS.TR']?.center ||
-      geometry.markers.find((m) => m.corner === 'TR')?.center || { x: 634, y: 287 };
+    const corners = ['TL', 'TR', 'BL', 'BR'] as const;
+    const solidCandidates = candidates.filter((candidate) => candidate.fillFactor >= 0.80);
+    const pool = solidCandidates.length >= 4 ? solidCandidates : candidates;
+    const used = new Set<DetectedMarkerCandidate>();
+    const anchors: Partial<Record<(typeof corners)[number], DetectedMarkerCandidate>> = {};
+    const maxAnchorDistance = Math.max(
+      70,
+      Math.min(320, anchorRegion.markers.TL.size * nominalScale * 12),
+    );
 
-    // Filter candidates to solid squares with reasonable fill factor (when >= 3 exist)
-    const solidCandidates = candidates.filter((c) => c.fillFactor >= 0.80);
-    const pool = solidCandidates.length >= 3 ? solidCandidates : candidates;
+    for (const corner of corners) {
+      const marker = anchorRegion.markers[corner];
+      const target = nominalTransformPoint(marker.center.x, marker.center.y);
+      const expectedSize = marker.size * nominalScale;
+      let best: DetectedMarkerCandidate | null = null;
+      let bestScore = Infinity;
 
-    // Expected nominal positions
-    const expectedTL = nominalTransformPoint(refTL.x, refTL.y);
-    const expectedTR = nominalTransformPoint(refTR.x, refTR.y);
+      for (const candidate of pool) {
+        if (used.has(candidate)) continue;
+        const distance = Math.hypot(candidate.cx - target.x, candidate.cy - target.y);
+        const candidateSize = (candidate.width + candidate.height) / 2;
+        const sizeRatio = candidateSize / Math.max(1, expectedSize);
+        if (
+          distance > maxAnchorDistance ||
+          sizeRatio < 0.40 ||
+          sizeRatio > 2.5
+        ) continue;
 
-    let candTL = pool[0];
-    let minDistTL = Infinity;
-    for (const c of pool) {
-      const dist = Math.hypot(c.cx - expectedTL.x, c.cy - expectedTL.y);
-      if (dist < minDistTL) {
-        minDistTL = dist;
-        candTL = c;
+        const score = distance / maxAnchorDistance + Math.abs(Math.log(sizeRatio)) * 0.35;
+        if (score < bestScore) {
+          best = candidate;
+          bestScore = score;
+        }
+      }
+
+      if (best) {
+        anchors[corner] = best;
+        used.add(best);
       }
     }
 
-    let candTR = pool[0];
-    let minDistTR = Infinity;
-    for (const c of pool) {
-      const dist = Math.hypot(c.cx - expectedTR.x, c.cy - expectedTR.y);
-      if (dist < minDistTR) {
-        minDistTR = dist;
-        candTR = c;
-      }
+    if (corners.some((corner) => !anchors[corner])) {
+      return { scale: nominalScale, transformPoint: nominalTransformPoint };
     }
 
-    // Generous pose search distance for camera captures where sheet is centered/shifted
-    const maxPoseSearchDist = Math.max(90, 140 * nominalScale);
-    if (minDistTL > maxPoseSearchDist || minDistTR > maxPoseSearchDist || candTL === candTR) {
-      return {
-        scale: nominalScale,
-        transformPoint: nominalTransformPoint,
-      };
+    const TL = anchors.TL!;
+    const TR = anchors.TR!;
+    const BL = anchors.BL!;
+    const BR = anchors.BR!;
+    const topWidth = Math.hypot(TR.cx - TL.cx, TR.cy - TL.cy);
+    const bottomWidth = Math.hypot(BR.cx - BL.cx, BR.cy - BL.cy);
+    const leftHeight = Math.hypot(BL.cx - TL.cx, BL.cy - TL.cy);
+    const rightHeight = Math.hypot(BR.cx - TR.cx, BR.cy - TR.cy);
+    const canonicalWidth = anchorRegion.markers.TR.center.x - anchorRegion.markers.TL.center.x;
+    const canonicalHeight = anchorRegion.markers.BL.center.y - anchorRegion.markers.TL.center.y;
+    const widthRatio = Math.min(topWidth, bottomWidth) / Math.max(topWidth, bottomWidth, 1);
+    const heightRatio = Math.min(leftHeight, rightHeight) / Math.max(leftHeight, rightHeight, 1);
+    const detectedAspect = ((topWidth + bottomWidth) / 2) / Math.max(1, (leftHeight + rightHeight) / 2);
+    const expectedAspect = canonicalWidth / Math.max(1, canonicalHeight);
+    const aspectDeviation = Math.abs(detectedAspect - expectedAspect) / Math.max(expectedAspect, 1e-6);
+
+    // Reject implausible anchor assignments; never turn arbitrary dark blobs into a sheet.
+    if (
+      TL.cx >= TR.cx ||
+      BL.cx >= BR.cx ||
+      TL.cy >= BL.cy ||
+      TR.cy >= BR.cy ||
+      widthRatio < 0.25 ||
+      heightRatio < 0.25 ||
+      aspectDeviation > 0.80
+    ) {
+      return { scale: nominalScale, transformPoint: nominalTransformPoint };
     }
 
-    const d0 = Math.hypot(refTR.x - refTL.x, refTR.y - refTL.y);
-    const d = Math.hypot(candTR.cx - candTL.cx, candTR.cy - candTL.cy);
-    const scale = d0 > 0 ? d / d0 : nominalScale;
-
-    // Angle of paper tilt
-    const theta0 = Math.atan2(refTR.y - refTL.y, refTR.x - refTL.x);
-    const theta = Math.atan2(candTR.cy - candTL.cy, candTR.cx - candTL.cx);
-    const angleDelta = theta - theta0;
-
-    const cosA = Math.cos(angleDelta);
-    const sinA = Math.sin(angleDelta);
-
-    return {
-      scale,
-      transformPoint: (cx: number, cy: number) => {
-        const dx = cx - refTL.x;
-        const dy = cy - refTL.y;
-        return {
-          x: candTL.cx + scale * (dx * cosA - dy * sinA),
-          y: candTL.cy + scale * (dx * sinA + dy * cosA),
-        };
-      },
+    const quad: QuadPoints = {
+      TL: { x: TL.cx, y: TL.cy },
+      TR: { x: TR.cx, y: TR.cy },
+      BL: { x: BL.cx, y: BL.cy },
+      BR: { x: BR.cx, y: BR.cy },
     };
+
+    try {
+      const homography = ProjectiveHomography.fromUnitSquareToQuad(quad);
+      const refTL = anchorRegion.markers.TL.center;
+      const refTR = anchorRegion.markers.TR.center;
+      const refBL = anchorRegion.markers.BL.center;
+      const scale = ((topWidth + bottomWidth) / 2) / Math.max(1, canonicalWidth);
+      return {
+        scale,
+        transformPoint: (x: number, y: number) => homography.transformPoint(
+          (x - refTL.x) / Math.max(1, refTR.x - refTL.x),
+          (y - refTL.y) / Math.max(1, refBL.y - refTL.y)
+        ),
+      };
+    } catch {
+      return { scale: nominalScale, transformPoint: nominalTransformPoint };
+    }
   }
 
   /**
@@ -363,10 +392,11 @@ export class MarkerDetector {
     const matched: Partial<Record<'TL' | 'TR' | 'BL' | 'BR', DetectedMarkerCandidate>> = {};
     const usedCandidates = new Set<DetectedMarkerCandidate>();
 
-    // Search radius around pose-transformed center
-    // Tolerates camera perspective foreshortening while remaining strictly within
-    // the distance to any adjacent answer bubbles.
-    const maxSearchRadius = Math.max(26, Math.min(42, 40 * pose.scale));
+    // Scale the search radius with the physical marker. A fixed 42px ceiling
+    // rejects real fiducials in high-resolution mobile captures after perspective
+    // projection. Candidate-size validation below limits false positives.
+    const expectedMarkerSize = region.markers.TL.size * pose.scale;
+    const maxSearchRadius = Math.max(24, Math.min(180, expectedMarkerSize * 3.5));
 
     // Prioritize candidates with high fill factor (solid black squares) when available,
     // to distinguish physical fiducial markers from filled answer bubbles.
@@ -385,7 +415,14 @@ export class MarkerDetector {
         // collapsed or misleading homographies when detections are sparse.
         if (usedCandidates.has(cand)) continue;
         const dist = Math.hypot(cand.cx - target.x, cand.cy - target.y);
-        if (dist <= maxSearchRadius && dist < minDistance) {
+        const candidateSize = (cand.width + cand.height) / 2;
+        const sizeRatio = candidateSize / Math.max(1, expectedMarkerSize);
+        if (
+          dist <= maxSearchRadius &&
+          sizeRatio >= 0.40 &&
+          sizeRatio <= 2.5 &&
+          dist < minDistance
+        ) {
           minDistance = dist;
           bestCandidate = cand;
         }
