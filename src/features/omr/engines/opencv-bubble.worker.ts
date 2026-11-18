@@ -33,7 +33,10 @@ function measureCircle(gray: any, binary: any, sample: CircleSample): CircleMeas
   // center label and measure the surrounding ink annulus so letters are not
   // mistaken for student marks.
   const centerExclusionRadius = sample.radius * 0.34;
-  const outerRadius = Math.max(radius + 1, sample.radius * 0.92);
+  // The printed bubble outline sits near 0.76–0.92 radii; it is NOT paper.
+  // Sample the local paper outside the outline so filled graphite can be compared
+  // with the actual sheet background instead of a darker printed border.
+  const outerRadius = Math.max(radius + 1, sample.radius * 1.45);
   const minX = Math.max(0, Math.floor(sample.x - outerRadius));
   const maxX = Math.min(gray.cols - 1, Math.ceil(sample.x + outerRadius));
   const minY = Math.max(0, Math.floor(sample.y - outerRadius));
@@ -57,7 +60,10 @@ function measureCircle(gray: any, binary: any, sample: CircleSample): CircleMeas
         innerLum += lum;
         innerCount++;
         if (binary.ucharPtr(y, x)[0] > 0) darkPixels++;
-      } else if (distance >= sample.radius * 0.76) {
+      } else if (
+        distance >= sample.radius * 1.12 &&
+        distance <= outerRadius
+      ) {
         paperLum += lum;
         paperCount++;
       }
