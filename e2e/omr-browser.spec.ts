@@ -21,17 +21,7 @@ test('Chrome processes every project image fixture and any supplied attachments'
     error?: string;
   };
 
-  expect(report, `Browser decoded ${report.correct}/${report.total}; OpenCV status: ${report.openCvDiagnostics?.status}`).toMatchObject({
-    outcome: 'PASS',
-    correct: 60,
-    total: 60,
-    fiducialDetected: true,
-    openCvDiagnostics: { status: 'used' },
-  });
-  // This fixture has a complete reviewed answer key: partial accuracy is a failure.
-  expect(report.accuracy).toBe(1);
-  expect(report.correct).toBe(report.total);
-  expect(pageErrors).toEqual([]);
+  // Keep scanning every fixture and persist diagnostics even if the primary photo fails.
 
   const fixturesDir = path.resolve('src/features/omr/__tests__/fixtures');
   const projectImages = fs.readdirSync(fixturesDir)
@@ -63,8 +53,29 @@ test('Chrome processes every project image fixture and any supplied attachments'
     error?: string;
   }>;
 
+  const artifactPath = path.resolve('.artifacts/omr-validation/omr-results.json');
+  fs.mkdirSync(path.dirname(artifactPath), { recursive: true });
+  fs.writeFileSync(artifactPath, JSON.stringify({
+    generatedAt: new Date().toISOString(),
+    commit: process.env.GITHUB_SHA || null,
+    primaryRealWorldFixture: report,
+    fixtureCount: scanReports.length,
+    scans: scanReports,
+    pageErrors,
+  }, null, 2) + '\\n');
+
   expect(scanReports).toHaveLength(files.length);
   expect(scanReports.filter((item) => item.outcome === 'ERROR')).toEqual([]);
+  expect(report, `Browser decoded ${report.correct}/${report.total}; OpenCV status: ${report.openCvDiagnostics?.status}`).toMatchObject({
+    outcome: 'PASS',
+    correct: 60,
+    total: 60,
+    fiducialDetected: true,
+    openCvDiagnostics: { status: 'used' },
+  });
+  expect(report.accuracy).toBe(1);
+  expect(report.correct).toBe(report.total);
+  expect(pageErrors).toEqual([]);
   // Unknown-key fixtures are coverage-only; never report an invented accuracy for them.
   for (const item of scanReports.filter((entry) => entry.compared == null)) {
     expect(item.correct, `${item.name} has no reviewed answer key`).toBeNull();
