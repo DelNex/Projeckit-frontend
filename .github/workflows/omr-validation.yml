@@ -36,6 +36,10 @@ jobs:
       - name: Validate the production OMR browser path
         id: browser
         if: always() && steps.install.outcome == 'success' && steps.playwright.outcome == 'success'
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder-publishable-key
+          NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
         run: npm run test:omr:browser
       - name: Upload OMR browser diagnostics
         if: always()
