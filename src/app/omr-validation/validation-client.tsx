@@ -141,12 +141,11 @@ export function OmrBrowserValidation() {
             failedRegion: uploadResult.failedRegion || null,
             engineUsed: uploadResult.engineUsed,
             thresholdProfileVersion: uploadResult.thresholdProfileVersion,
-            answers: diagnostics.answers,
+            answers: uploadDiagnostics.answers,
             inputParity: {
               cameraBlob: { passed: cameraPassed, detectedItems: cameraResult.items.length, accuracy: cameraValidation.accuracy, mimeType: cameraBlob.type },
               uploadFile: { passed: uploadPassed, detectedItems: uploadResult.items.length, accuracy: uploadValidation.accuracy, mimeType: image.type },
-              identicalHash: cameraResult.imageHash === uploadResult.imageHash,
-              identicalAnswers: JSON.stringify(cameraResult.normalizedAnswers) === JSON.stringify(uploadResult.normalizedAnswers),
+              sameAnswers,
             },
           });
         }
