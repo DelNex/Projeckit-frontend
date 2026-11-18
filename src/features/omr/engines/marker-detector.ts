@@ -362,10 +362,14 @@ export class MarkerDetector {
     const matched: Partial<Record<'TL' | 'TR' | 'BL' | 'BR', DetectedMarkerCandidate>> = {};
     const usedCandidates = new Set<DetectedMarkerCandidate>();
 
-    // Search radius around pose-transformed center
-    // Tolerates camera perspective foreshortening while remaining strictly within
-    // the distance to any adjacent answer bubbles.
-    const maxSearchRadius = Math.max(26, Math.min(42, 40 * pose.scale));
+    // Search tolerance must scale with the printed fiducial, not a fixed pixel
+    // ceiling. A 42px cap rejects valid markers in high-resolution phone captures
+    // when perspective moves the lower corners away from a similarity-only pose.
+    // The candidate must also have a plausible physical size, which prevents the
+    // wider search from accepting ordinary text blobs or answer bubbles.
+    const markerSizes = corners.map((corner) => region.markers[corner].size * pose.scale);
+    const expectedMarkerSize = markerSizes.reduce((sum, size) => sum + size, 0) / markerSizes.length;
+    const maxSearchRadius = Math.max(24, Math.min(180, expectedMarkerSize * 3.5));
 
     // Prioritize candidates with high fill factor (solid black squares) when available,
     // to distinguish physical fiducial markers from filled answer bubbles.
@@ -384,7 +388,14 @@ export class MarkerDetector {
         // collapsed or misleading homographies when detections are sparse.
         if (usedCandidates.has(cand)) continue;
         const dist = Math.hypot(cand.cx - target.x, cand.cy - target.y);
-        if (dist <= maxSearchRadius && dist < minDistance) {
+        const candidateSize = (cand.width + cand.height) / 2;
+        const sizeRatio = candidateSize / Math.max(1, expectedMarkerSize);
+        if (
+          dist <= maxSearchRadius &&
+          sizeRatio >= 0.45 &&
+          sizeRatio <= 2.2 &&
+          dist < minDistance
+        ) {
           minDistance = dist;
           bestCandidate = cand;
         }
