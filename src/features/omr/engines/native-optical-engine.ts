@@ -389,7 +389,23 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
 
     for (const item of geometry.answerBlocks) {
       const regionQuad = detectedRegions[item.regionId];
-      if (!regionQuad) continue;
+      if (!regionQuad) {
+        // Never omit an item when its answer region could not be registered.
+        // Preserve its position and make the missing read explicit for review.
+        const missingItem: ProcessedItemResult = {
+          itemNumber: item.itemNumber,
+          selectedChoice: null,
+          confidence: 0,
+          state: 'AMBIGUOUS',
+          scores: {},
+        };
+        items.push(missingItem);
+        itemStates[item.itemNumber] = 'AMBIGUOUS';
+        rawAnswers[item.itemNumber] = null;
+        normalizedAnswers.push(null);
+        hasAmbiguity = true;
+        continue;
+      }
 
       const scores: Record<string, number> = {};
       const measurements: Record<string, BubbleMeasurement> = {};
@@ -410,6 +426,22 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
       }
 
       const choicesList = item.choices.map((c) => c.choice);
+      if (choicesList.some((choice) => !measurements[choice])) {
+        // A partial set of bubble samples is not evidence of a blank answer.
+        const incompleteItem: ProcessedItemResult = {
+          itemNumber: item.itemNumber,
+          selectedChoice: null,
+          confidence: 0,
+          state: 'AMBIGUOUS',
+          scores,
+        };
+        items.push(incompleteItem);
+        itemStates[item.itemNumber] = 'AMBIGUOUS';
+        rawAnswers[item.itemNumber] = null;
+        normalizedAnswers.push(null);
+        hasAmbiguity = true;
+        continue;
+      }
       const markedChoices = choicesList.filter((choice) => measurements[choice] && isClearMark(measurements[choice]));
       const residualChoices = choicesList.filter(
         (choice) =>
@@ -429,14 +461,13 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
       let state: ProcessedItemResult['state'] = 'BLANK';
       let confidence = 0;
 
-      if (
-        markedChoices.length > 1 &&
-        !(topHasEvidence && topHasMargin)
-      ) {
+      if (markedChoices.length > 1) {
+        // Two bubbles above the clear-mark threshold are always a double mark.
+        // A score gap must never erase evidence that another bubble is filled.
         state = 'MULTIPLE_MARK';
         hasMultipleMarks = true;
         confidence = 0.3;
-      } else if (markedChoices.length >= 1 && topHasEvidence && topHasMargin) {
+      } else if (markedChoices.length === 1 && topHasEvidence && topHasMargin) {
         selectedChoice = topChoice;
         state = 'MARKED';
         confidence = Math.min(1.0, 0.55 + Math.max(0, topScore - secondScore) * 0.8);
