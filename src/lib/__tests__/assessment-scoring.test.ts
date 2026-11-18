@@ -17,3 +17,11 @@ test('missing keys and invalid marks count as wrong, and empty tests do not divi
     { score: 0, totalItems: 2, percentage: 0 }
   );
 });
+
+test('a shaded C is wrong when the answer key says A', () => {
+  assert.equal(isAnswerCorrect({ 1: 'C' }, { 1: 'A' }, 1), false);
+  assert.deepEqual(
+    calculateAssessmentScore({ 1: 'C' }, { 1: 'A' }, 1),
+    { score: 0, totalItems: 1, percentage: 0 }
+  );
+});
