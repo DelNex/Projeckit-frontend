@@ -134,7 +134,7 @@ describe('Project KIT — Dynamic OMR Scanner Integration Tests', () => {
       assert.strictEqual(result.items[0].selectedChoice, null);
       assert.strictEqual(result.items[0].state, 'MULTIPLE_MARK');
       assert.strictEqual(result.normalizedAnswers[0], null, 'Multiple marks must never be collapsed into one answer');
-      assert.strictEqual(result.rawAnswers[1], 'B', 'Other single-mark answers should remain intact');
+      assert.strictEqual(result.rawAnswers[2], 'B', 'Other single-mark answers should remain intact');
       assert.strictEqual(result.hasMultipleMarks, true);
       assert.strictEqual(result.status, 'VERIFICATION_REQUIRED');
     });
