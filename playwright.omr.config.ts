@@ -15,5 +15,11 @@ export default defineConfig({
     url: 'http://127.0.0.1:3100/omr-validation',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    // The root layout mounts TenantProvider even on the isolated OMR test route.
+    // Supply inert public values so the client can initialize without real credentials.
+    env: {
+      NEXT_PUBLIC_SUPABASE_URL: 'https://example.supabase.co',
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'omr-browser-test-key',
+    },
   },
 });
