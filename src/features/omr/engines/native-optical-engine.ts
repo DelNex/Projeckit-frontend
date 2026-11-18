@@ -248,7 +248,7 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
     let fiducialDetected = markerResult.allRegionsDetected;
 
     // STEP 2: RESILIENT GEOMETRY & MARKER FAILURE HANDLING
-    // If NO regions could be detected at all, abort bubble analysis and report marker detection failure.
+    // Every region must have four physically detected markers before any bubble is sampled.
     if (!markerResult.allRegionsDetected) {
       const primaryFailure = markerResult.failedRegions[0] || {
         regionId: 'ANSWERS',
@@ -278,7 +278,6 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
         engineUsed: 'kit-optical-native',
       };
     }
-
 
     const { markMinFill, ambiguousDelta, highConfidenceMin } = template.thresholds;
 
@@ -332,9 +331,14 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
       if (cvMeasurements) return { ...cvMeasurements[index], pixelDarkness };
       return { fillRatio: pixelDarkness, contrast: pixelDarkness, pixelDarkness };
     };
+    // When OpenCV is available, only its fill-ratio + local-contrast pair can
+    // promote a bubble to MARKED. Raw darkness is diagnostic only: shadows,
+    // printed text, and camera exposure must not override the classifier.
+    // The native fallback remains conservative and the whole scan is flagged
+    // for review because it lacks OpenCV's local-contrast evidence.
     const isClearMark = (measurement: BubbleMeasurement) => cvMeasurements
-      ? (measurement.fillRatio >= OMR_THRESHOLDS.openCv.clearMark.fillAndContrast.fillRatio &&
-        measurement.contrast >= OMR_THRESHOLDS.openCv.clearMark.fillAndContrast.contrast)
+      ? measurement.fillRatio >= OMR_THRESHOLDS.openCv.clearMark.fillAndContrast.fillRatio &&
+        measurement.contrast >= OMR_THRESHOLDS.openCv.clearMark.fillAndContrast.contrast
       : measurement.fillRatio >= markMinFill;
     const isResidualMark = (measurement: BubbleMeasurement) => cvMeasurements
       ? measurement.fillRatio >= OMR_THRESHOLDS.openCv.residualInk.fillRatio &&
@@ -404,13 +408,21 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
 
       const scores: Record<string, number> = {};
       const measurements: Record<string, BubbleMeasurement> = {};
+      const measurementDetails: NonNullable<ProcessedItemResult['measurementDetails']> = {};
 
       for (const choice of item.choices) {
         const index = answerSampleIndices.get(item.itemNumber)?.[choice.choice];
         if (index === undefined) continue;
         const measurement = getMeasurement(index, circleSamples[index]);
         measurements[choice.choice] = measurement;
-        scores[choice.choice] = parseFloat(Math.max(measurement.fillRatio, measurement.contrast, 'pixelDarkness' in measurement ? measurement.pixelDarkness : 0).toFixed(3));
+        measurementDetails[choice.choice] = {
+          fillRatio: parseFloat(measurement.fillRatio.toFixed(4)),
+          contrast: parseFloat(measurement.contrast.toFixed(4)),
+          pixelDarkness: parseFloat(measurement.pixelDarkness.toFixed(4)),
+          sample: circleSamples[index],
+        };
+        // Keep raw pixel darkness in measurementDetails, not in the decision score.
+        scores[choice.choice] = parseFloat(Math.max(measurement.fillRatio, measurement.contrast).toFixed(3));
       }
 
       const choicesList = item.choices.map((c) => c.choice);
@@ -495,6 +507,7 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
         confidence: parseFloat(confidence.toFixed(3)),
         state,
         scores,
+        measurementDetails,
       });
       itemStates[item.itemNumber] = state;
 
