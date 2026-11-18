@@ -83,54 +83,68 @@ export function OmrBrowserValidation() {
         });
         const template = createKitOmrTemplate({ geometry });
 
-        // Camera capture supplies a Blob; file upload supplies a File. Both
-        // must pass through the same adapter and produce identical OMR reads.
+        // A live camera frame is captured as a compressed JPEG Blob, while
+        // file upload preserves the original image File. Exercise both paths.
+        const bitmap = await createImageBitmap(image);
+        const cameraCanvas = document.createElement('canvas');
+        cameraCanvas.width = bitmap.width;
+        cameraCanvas.height = bitmap.height;
+        const cameraContext = cameraCanvas.getContext('2d');
+        if (!cameraContext) throw new Error('Could not initialize camera-frame test canvas.');
+        cameraContext.drawImage(bitmap, 0, 0);
+        bitmap.close();
+        const cameraBlob = await new Promise<Blob>((resolve, reject) => {
+          cameraCanvas.toBlob((blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Could not encode camera-style JPEG frame.'));
+          }, 'image/jpeg', 0.9);
+        });
+
         const [cameraResult, uploadResult] = await Promise.all([
-          processOmrScan(image, template, { forceEngine: 'kit-optical-native' }),
+          processOmrScan(cameraBlob, template, { forceEngine: 'kit-optical-native' }),
           processOmrScan(
             new File([image], 'real_world_scan.png', { type: image.type || 'image/png' }),
             template,
             { forceEngine: 'kit-optical-native' },
           ),
         ]);
-        const diagnostics = buildAnswerDiagnostics(cameraResult, EXPECTED_ANSWERS);
+        const cameraDiagnostics = buildAnswerDiagnostics(cameraResult, EXPECTED_ANSWERS);
         const uploadDiagnostics = buildAnswerDiagnostics(uploadResult, EXPECTED_ANSWERS);
-        const validation = diagnostics.validation!;
+        const cameraValidation = cameraDiagnostics.validation!;
         const uploadValidation = uploadDiagnostics.validation!;
         const cameraPassed = cameraResult.fiducialDetected &&
           cameraResult.openCvDiagnostics?.status === 'used' &&
-          validation.mismatches.length === 0 &&
-          validation.correct === validation.compared;
+          cameraValidation.mismatches.length === 0 &&
+          cameraValidation.correct === cameraValidation.compared;
         const uploadPassed = uploadResult.fiducialDetected &&
           uploadResult.openCvDiagnostics?.status === 'used' &&
           uploadValidation.mismatches.length === 0 &&
           uploadValidation.correct === uploadValidation.compared;
-        const inputParity = cameraResult.imageHash === uploadResult.imageHash &&
-          JSON.stringify(cameraResult.normalizedAnswers) === JSON.stringify(uploadResult.normalizedAnswers) &&
+        const sameAnswers = JSON.stringify(cameraResult.normalizedAnswers) === JSON.stringify(uploadResult.normalizedAnswers) &&
           cameraResult.items.length === uploadResult.items.length;
-        const outcome = cameraPassed && uploadPassed && inputParity ? 'PASS' : 'FAIL';
+        const outcome = cameraPassed && uploadPassed && sameAnswers ? 'PASS' : 'FAIL';
         if (!cancelled) {
           setReport({
             outcome,
-            imageHash: cameraResult.imageHash,
-            accuracy: validation.accuracy,
-            correct: validation.correct,
-            total: validation.compared,
-            nullCount: validation.nullCount,
-            mismatches: validation.mismatches,
-            fiducialDetected: cameraResult.fiducialDetected,
-            fiducialConfidence: cameraResult.fiducialConfidence,
-            overallConfidence: cameraResult.overallConfidence,
-            openCvDiagnostics: cameraResult.openCvDiagnostics,
-            status: cameraResult.status,
-            errorCode: cameraResult.errorCode,
-            failedRegion: cameraResult.failedRegion || null,
-            engineUsed: cameraResult.engineUsed,
-            thresholdProfileVersion: cameraResult.thresholdProfileVersion,
+            imageHash: uploadResult.imageHash,
+            accuracy: uploadValidation.accuracy,
+            correct: uploadValidation.correct,
+            total: uploadValidation.compared,
+            nullCount: uploadValidation.nullCount,
+            mismatches: uploadValidation.mismatches,
+            fiducialDetected: uploadResult.fiducialDetected,
+            fiducialConfidence: uploadResult.fiducialConfidence,
+            overallConfidence: uploadResult.overallConfidence,
+            openCvDiagnostics: uploadResult.openCvDiagnostics,
+            status: uploadResult.status,
+            errorCode: uploadResult.errorCode,
+            failedRegion: uploadResult.failedRegion || null,
+            engineUsed: uploadResult.engineUsed,
+            thresholdProfileVersion: uploadResult.thresholdProfileVersion,
             answers: diagnostics.answers,
             inputParity: {
-              cameraBlob: { passed: cameraPassed, detectedItems: cameraResult.items.length, accuracy: validation.accuracy },
-              uploadFile: { passed: uploadPassed, detectedItems: uploadResult.items.length, accuracy: uploadValidation.accuracy },
+              cameraBlob: { passed: cameraPassed, detectedItems: cameraResult.items.length, accuracy: cameraValidation.accuracy, mimeType: cameraBlob.type },
+              uploadFile: { passed: uploadPassed, detectedItems: uploadResult.items.length, accuracy: uploadValidation.accuracy, mimeType: image.type },
               identicalHash: cameraResult.imageHash === uploadResult.imageHash,
               identicalAnswers: JSON.stringify(cameraResult.normalizedAnswers) === JSON.stringify(uploadResult.normalizedAnswers),
             },
