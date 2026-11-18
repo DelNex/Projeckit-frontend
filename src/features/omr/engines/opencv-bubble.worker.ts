@@ -28,7 +28,11 @@ function ensureOpenCv(): Promise<void> {
 }
 
 function measureCircle(gray: any, binary: any, sample: CircleSample): CircleMeasurement {
-  const radius = Math.max(2, sample.radius * 0.62); // Exclude the printed bubble outline.
+  const radius = Math.max(2, sample.radius * 0.62); // Stay inside the printed bubble outline.
+  // The answer sheet prints A/B/C/D inside each empty bubble. Exclude that
+  // center label and measure the surrounding ink annulus so letters are not
+  // mistaken for student marks.
+  const centerExclusionRadius = sample.radius * 0.34;
   const outerRadius = Math.max(radius + 1, sample.radius * 0.92);
   const minX = Math.max(0, Math.floor(sample.x - outerRadius));
   const maxX = Math.min(gray.cols - 1, Math.ceil(sample.x + outerRadius));
@@ -48,7 +52,7 @@ function measureCircle(gray: any, binary: any, sample: CircleSample): CircleMeas
       const distance = Math.hypot(dx, dy);
       if (distance > outerRadius) continue;
       const lum = gray.ucharPtr(y, x)[0];
-      if (distance <= radius) {
+      if (distance <= radius && distance >= centerExclusionRadius) {
         insidePixels++;
         innerLum += lum;
         innerCount++;
