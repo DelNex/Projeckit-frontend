@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { PNG } from 'pngjs';
 import { NativeOpticalEngineAdapter } from '../src/features/omr/engines/native-optical-engine';
 import { createKitOmrTemplate } from '../src/features/omr/templates/template-builder';
 
