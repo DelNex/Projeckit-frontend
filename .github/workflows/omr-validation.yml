@@ -29,6 +29,15 @@ jobs:
         id: unit
         if: always() && steps.install.outcome == 'success'
         run: node node_modules/tsx/dist/cli.mjs --test "src/features/omr/__tests__/*.test.ts"
+      - name: Build production Next.js application
+        id: build
+        if: always() && steps.install.outcome == 'success'
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder-publishable-key
+          NEXT_PUBLIC_APP_URL: https://example.vercel.app
+          SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
+        run: npm run build
       - name: Install Playwright Chromium
         id: playwright
         if: always() && steps.install.outcome == 'success'
