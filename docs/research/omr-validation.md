@@ -4,6 +4,8 @@ This document defines the capture set and measurements to keep with every OMR th
 
 The browser scanner proportionally caps the longest processing-image edge at 1600 pixels, applies EXIF orientation when decoding uploads, and derives bubble sample radii from the detected marker quad. Manual camera capture and live detection use the same size cap. These changes address coordinate and mobile processing-load risks but do not establish physical-device accuracy.
 
+On 18 November 2026, the Chrome/Playwright browser run processed all 21 OMR image fixtures in the project (13 raster sheets and 8 SVG sheets) plus the two supplied attachments. All 8 SVGs and 10 of 13 raster fixtures registered their answer-region markers; three older raster fixtures were safely rejected because answer-area markers were missing. The full-resolution attached sheet and the redacted real-world fixture both matched the 60-answer key exactly (60/60). The 4-answer marked and rotated fixtures also matched their complete 60-item keys. The low-resolution scanner UI screenshot was rejected for a missing answer marker. This is corpus coverage for the available files, not a multi-device accuracy study.
+
 ## Versioned operating profile
 
 Profile: `1.0.0`, implemented in `src/features/omr/thresholds.ts`.

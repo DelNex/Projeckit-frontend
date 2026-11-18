@@ -15,6 +15,7 @@ const EXPECTED_ANSWERS = [
 
 export function OmrBrowserValidation() {
   const [report, setReport] = useState<Record<string, unknown> | null>(null);
+  const [uploadReports, setUploadReports] = useState<Record<string, unknown>[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,10 +57,68 @@ export function OmrBrowserValidation() {
     return () => { cancelled = true; };
   }, []);
 
+  const processUploadedFiles = async (files: File[]) => {
+    const reports: Record<string, unknown>[] = [];
+    setUploadReports([{ outcome: 'RUNNING', count: files.length }]);
+    for (const file of files) {
+      const name = file.name.toLowerCase();
+      const itemCount = name.includes('sheet_63') ? 63
+        : name.includes('sample_90') ? 90
+        : name.includes('sample_30') ? 30
+        : name.includes('multi_roll') ? 20
+        : 60;
+      const includeRollNumberGrid = name.includes('legacy_roll') || name.includes('multi_roll');
+      try {
+        const template = createKitOmrTemplate({ itemCount, includeRollNumberGrid });
+        const result = await processOmrScan(file, template, { forceEngine: 'kit-optical-native' });
+        const expected = name.includes('real_world_scan') || name.includes('codex-clipboard-ff4ca3c4')
+          ? EXPECTED_ANSWERS
+          : name.includes('marked_60') || name.includes('rotated_60')
+            ? ['A', 'B', 'C', 'D', ...Array.from({ length: 56 }, () => null)]
+            : null;
+        const comparedCount = expected?.length || 0;
+        const correct = expected
+          ? result.normalizedAnswers.slice(0, comparedCount).reduce(
+            (count, answer, index) => count + Number(answer === expected[index]), 0,
+          )
+          : null;
+        reports.push({
+          name: file.name,
+          bytes: file.size,
+          mimeType: file.type,
+          fiducialDetected: result.fiducialDetected,
+          detectedItems: result.items.length,
+          status: result.status,
+          errorCode: result.errorCode || null,
+          failedRegion: result.failedRegion?.reason || null,
+          detectedRollNumber: result.detectedRollNumber,
+          openCv: result.openCvDiagnostics?.status || 'not-run',
+          correct,
+          compared: comparedCount || null,
+          accuracy: comparedCount ? correct! / comparedCount : null,
+        });
+      } catch (error) {
+        reports.push({ name: file.name, bytes: file.size, outcome: 'ERROR', error: error instanceof Error ? error.message : String(error) });
+      }
+    }
+    setUploadReports(reports);
+  };
+
   return (
     <main style={{ fontFamily: 'sans-serif', padding: 24 }}>
       <h1>OMR browser validation</h1>
       <pre data-testid="omr-browser-result">{report ? JSON.stringify(report) : 'RUNNING'}</pre>
+      <label>
+        Scan image fixtures
+        <input
+          data-testid="omr-file-input"
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={(event) => void processUploadedFiles(Array.from(event.currentTarget.files || []))}
+        />
+      </label>
+      <pre data-testid="omr-upload-results">{uploadReports.length ? JSON.stringify(uploadReports) : 'WAITING'}</pre>
     </main>
   );
 }

@@ -561,19 +561,7 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
       let sourceWidth: number;
       let sourceHeight: number;
       let releaseSource = () => {};
-      if (typeof createImageBitmap === 'function') {
-        let bitmap: ImageBitmap;
-        try {
-          bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' });
-        } catch {
-          bitmap = await createImageBitmap(blob);
-        }
-        drawable = bitmap;
-        sourceWidth = bitmap.width;
-        sourceHeight = bitmap.height;
-        releaseSource = () => bitmap.close();
-      } else {
-        // HTMLImageElement fallback for mobile browsers without createImageBitmap.
+      const loadImageElement = async () => {
         const objectUrl = URL.createObjectURL(blob);
         try {
           const image = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -582,22 +570,57 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
             element.onerror = () => reject(new Error('IMAGE_DECODE_FAILED'));
             element.src = objectUrl;
           });
-          drawable = image;
-          sourceWidth = image.naturalWidth || image.width;
-          sourceHeight = image.naturalHeight || image.height;
-          releaseSource = () => URL.revokeObjectURL(objectUrl);
+          return { image, objectUrl };
         } catch (error) {
           URL.revokeObjectURL(objectUrl);
           throw error;
         }
+      };
+      if (typeof createImageBitmap === 'function') {
+        try {
+          let bitmap: ImageBitmap;
+          try {
+            bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' });
+          } catch {
+            bitmap = await createImageBitmap(blob);
+          }
+          drawable = bitmap;
+          sourceWidth = bitmap.width;
+          sourceHeight = bitmap.height;
+          releaseSource = () => bitmap.close();
+        } catch {
+          // Some browsers cannot create an ImageBitmap from SVG. The image
+          // element path handles SVG and older camera-browser decoders.
+          const { image, objectUrl } = await loadImageElement();
+          drawable = image;
+          sourceWidth = image.naturalWidth || image.width;
+          sourceHeight = image.naturalHeight || image.height;
+          releaseSource = () => URL.revokeObjectURL(objectUrl);
+        }
+      } else {
+        // HTMLImageElement fallback for mobile browsers without createImageBitmap.
+        const { image, objectUrl } = await loadImageElement();
+        drawable = image;
+        sourceWidth = image.naturalWidth || image.width;
+        sourceHeight = image.naturalHeight || image.height;
+        releaseSource = () => URL.revokeObjectURL(objectUrl);
       }
       try {
-        const dimensions = fitImageDimensions(sourceWidth, sourceHeight, MAX_OMR_IMAGE_EDGE);
+        const isSvg = blob.type.toLowerCase().includes('svg');
+        const edgeScale = MAX_OMR_IMAGE_EDGE / Math.max(sourceWidth, sourceHeight);
+        const scale = isSvg ? edgeScale : Math.min(1, edgeScale);
+        const dimensions = isSvg
+          ? { width: Math.max(1, Math.round(sourceWidth * scale)), height: Math.max(1, Math.round(sourceHeight * scale)) }
+          : fitImageDimensions(sourceWidth, sourceHeight, MAX_OMR_IMAGE_EDGE);
         const canvas = typeof OffscreenCanvas !== 'undefined'
           ? new OffscreenCanvas(dimensions.width, dimensions.height)
           : Object.assign(document.createElement('canvas'), { width: dimensions.width, height: dimensions.height });
         const context = canvas.getContext('2d');
         if (!context) return null;
+        // Imported PNGs may use transparent page margins. The marker detector
+        // measures RGB brightness, so composite alpha onto paper white first.
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, dimensions.width, dimensions.height);
         context.drawImage(drawable, 0, 0, dimensions.width, dimensions.height);
         const imageData = context.getImageData(0, 0, dimensions.width, dimensions.height);
         return { pixels: imageData.data, width: imageData.width, height: imageData.height };
