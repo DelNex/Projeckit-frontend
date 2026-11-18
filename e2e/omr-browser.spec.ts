@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test';
 
 test.setTimeout(360_000);
 
-test('Chrome processes every project image fixture and any supplied attachments', async ({ page }) => {
+test('Chrome validates labeled answers and records diagnostics for every image fixture', async ({ page }) => {
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
 
@@ -16,19 +16,23 @@ test('Chrome processes every project image fixture and any supplied attachments'
     accuracy?: number;
     correct?: number;
     total?: number;
+    nullCount?: number;
+    mismatches?: unknown[];
     fiducialDetected?: boolean;
     openCvDiagnostics?: { status?: string };
     error?: string;
   };
 
-  expect(report, `Browser decoded ${report.correct}/${report.total}; OpenCV status: ${report.openCvDiagnostics?.status}`).toMatchObject({
+  expect(report, `Browser decoded ${report.correct}/${report.total}; nulls=${report.nullCount}; OpenCV status: ${report.openCvDiagnostics?.status}`).toMatchObject({
     outcome: 'PASS',
     correct: 60,
     total: 60,
+    nullCount: 0,
+    mismatches: [],
     fiducialDetected: true,
     openCvDiagnostics: { status: 'used' },
   });
-  expect(report.accuracy).toBeGreaterThanOrEqual(0.95);
+  expect(report.accuracy).toBe(1);
   expect(pageErrors).toEqual([]);
 
   const fixturesDir = path.resolve('src/features/omr/__tests__/fixtures');
@@ -51,29 +55,59 @@ test('Chrome processes every project image fixture and any supplied attachments'
     fiducialDetected?: boolean;
     detectedItems?: number;
     errorCode?: string | null;
-    failedRegion?: string | null;
+    failedRegion?: unknown;
     status?: string;
     openCv?: string;
     correct?: number | null;
     compared?: number | null;
     accuracy?: number | null;
+    nullCount?: number;
+    validation?: {
+      compared: number;
+      correct: number;
+      nullCount: number;
+      mismatches: unknown[];
+      accuracy: number | null;
+    } | null;
     outcome?: string;
     error?: string;
   }>;
 
+  // Persist the full machine-readable result before assertions so failed runs
+  // still upload their diagnostics as a GitHub Actions artifact.
+  const artifactPath = path.resolve('.artifacts/omr-validation/omr-results.json');
+  fs.mkdirSync(path.dirname(artifactPath), { recursive: true });
+  fs.writeFileSync(artifactPath, JSON.stringify({
+    generatedAt: new Date().toISOString(),
+    commit: process.env.GITHUB_SHA || null,
+    fixtureCount: scanReports.length,
+    primaryRealWorldFixture: report,
+    scans: scanReports,
+  }, null, 2) + '\n');
+
   expect(scanReports).toHaveLength(files.length);
   expect(scanReports.filter((item) => item.outcome === 'ERROR')).toEqual([]);
-  console.log('OMR image scan report:', JSON.stringify(scanReports.map(({ name, fiducialDetected, detectedItems, errorCode, failedRegion, status, openCv, correct, compared, accuracy, outcome }) => ({
-    name, fiducialDetected, detectedItems, errorCode, failedRegion, status, openCv, correct, compared, accuracy, outcome,
-  }))));
 
-  const knownPhoto = scanReports.find((item) => item.name === 'codex-clipboard-ff4ca3c4-51cd-4e8c-864e-6fcfa459682a.png');
-  if (knownPhoto) expect(knownPhoto).toMatchObject({ fiducialDetected: true, detectedItems: 60, correct: 60, compared: 60, accuracy: 1 });
-  for (const name of ['real_world_scan.png', 'marked_60.png', 'marked_60.svg', 'rotated_60.png']) {
+  const labeledFixtures = [
+    'real_world_scan.png',
+    'marked_60.png',
+    'marked_60.svg',
+    'rotated_60.png',
+    'blank_sheet.png',
+    'blank_sheet.svg',
+    'sample_60_blank_half.png',
+    'sample_60_blank_half.svg',
+  ];
+  for (const name of labeledFixtures) {
     const fixture = scanReports.find((item) => item.name === name);
     expect(fixture, `${name} was not tested`).toBeDefined();
-    expect(fixture).toMatchObject({ fiducialDetected: true, openCv: 'used', correct: 60, compared: 60, accuracy: 1 });
+    expect(fixture?.validation, `${name} has no expected-answer comparison`).not.toBeNull();
+    expect(fixture?.validation?.mismatches, `${name} contains wrong or missing answers`).toEqual([]);
+    expect(fixture?.validation?.correct, `${name} answer count mismatch`).toBe(fixture?.validation?.compared);
+    expect(fixture?.validation?.accuracy, `${name} must match every expected answer`).toBe(1);
+    const expectedNulls = name.startsWith('blank_sheet') || name.startsWith('sample_60_blank_half') ? 60 : 0;
+    expect(fixture?.validation?.nullCount, `${name} null-answer count differs from its answer key`).toBe(expectedNulls);
   }
-  const previewScreenshot = scanReports.find((item) => item.name === 'codex-clipboard-b4f9a904-9496-4967-97e7-0618ae91df1c.png');
-  if (previewScreenshot) expect(previewScreenshot).toMatchObject({ fiducialDetected: false, status: 'VERIFICATION_REQUIRED' });
+
+  console.log('OMR full diagnostic report:', JSON.stringify(scanReports));
 });
