@@ -393,13 +393,20 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
 
       const scores: Record<string, number> = {};
       const measurements: Record<string, BubbleMeasurement> = {};
+      const measurementDetails: NonNullable<ProcessedItemResult['measurementDetails']> = {};
 
       for (const choice of item.choices) {
         const index = answerSampleIndices.get(item.itemNumber)?.[choice.choice];
         if (index === undefined) continue;
         const measurement = getMeasurement(index, circleSamples[index]);
         measurements[choice.choice] = measurement;
-        scores[choice.choice] = parseFloat(Math.max(measurement.fillRatio, measurement.contrast, 'pixelDarkness' in measurement ? measurement.pixelDarkness : 0).toFixed(3));
+        measurementDetails[choice.choice] = {
+          fillRatio: parseFloat(measurement.fillRatio.toFixed(4)),
+          contrast: parseFloat(measurement.contrast.toFixed(4)),
+          pixelDarkness: parseFloat(measurement.pixelDarkness.toFixed(4)),
+          sample: circleSamples[index],
+        };
+        scores[choice.choice] = parseFloat(Math.max(measurement.fillRatio, measurement.contrast, measurement.pixelDarkness).toFixed(3));
       }
 
       const choicesList = item.choices.map((c) => c.choice);
@@ -469,6 +476,7 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
         confidence: parseFloat(confidence.toFixed(3)),
         state,
         scores,
+        measurementDetails,
       });
       itemStates[item.itemNumber] = state;
 
