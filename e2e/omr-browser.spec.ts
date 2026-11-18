@@ -62,7 +62,7 @@ test('Chrome processes every project image fixture and any supplied attachments'
     fixtureCount: scanReports.length,
     scans: scanReports,
     pageErrors,
-  }, null, 2) + '\\n');
+  }, null, 2) + '\n');
 
   expect(scanReports).toHaveLength(files.length);
   expect(scanReports.filter((item) => item.outcome === 'ERROR')).toEqual([]);
