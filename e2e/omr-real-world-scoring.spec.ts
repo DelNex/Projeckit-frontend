@@ -46,11 +46,30 @@ test('scores the actual real-world OMR scan and rejects a wrong detected option'
   expect(report.openCvDiagnostics?.status).toBe('used');
   expect(report.answers).toHaveLength(60);
 
-  const detectedAnswers = report.answers!
-    .sort((left, right) => left.question - right.question)
-    .map((answer) => answer.selected);
+  const orderedAnswers = [...report.answers!].sort(
+    (left, right) => left.question - right.question,
+  );
+  const detectedAnswers = orderedAnswers.map((answer, index) => {
+    expect(answer.question).toBe(index + 1);
+    expect(answer.expected).toBe(answerKey[index]);
+    expect(answer.selected).toBe(answerKey[index]);
+    expect(answer.state).toBe('MARKED');
+
+    const selectedScore = answer.scores?.[answer.selected || ''] ?? 0;
+    const runnerUpScore = Math.max(
+      0,
+      ...Object.entries(answer.scores || {})
+        .filter(([choice]) => choice !== answer.selected)
+        .map(([, score]) => score),
+    );
+    expect(
+      selectedScore - runnerUpScore,
+      `Q${answer.question}: selected bubble must beat every alternative`,
+    ).toBeGreaterThan(0.3);
+    return answer.selected;
+  });
   const detectedStates = Object.fromEntries(
-    report.answers!.map((answer) => [answer.question, answer.state]),
+    orderedAnswers.map((answer) => [answer.question, answer.state]),
   );
 
   // Independently score the browser's actual detected choices with the same
