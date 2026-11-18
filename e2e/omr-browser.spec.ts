@@ -66,6 +66,7 @@ test('Chrome validates labeled answers and records diagnostics for every image f
       compared: number;
       correct: number;
       nullCount: number;
+      expectedNullCount: number;
       mismatches: unknown[];
       accuracy: number | null;
     } | null;
@@ -105,8 +106,10 @@ test('Chrome validates labeled answers and records diagnostics for every image f
     expect(fixture?.validation?.mismatches, `${name} contains wrong or missing answers`).toEqual([]);
     expect(fixture?.validation?.correct, `${name} answer count mismatch`).toBe(fixture?.validation?.compared);
     expect(fixture?.validation?.accuracy, `${name} must match every expected answer`).toBe(1);
-    const expectedNulls = name.startsWith('blank_sheet') || name.startsWith('sample_60_blank_half') ? 60 : 0;
-    expect(fixture?.validation?.nullCount, `${name} null-answer count differs from its answer key`).toBe(expectedNulls);
+    expect(
+      fixture?.validation?.nullCount,
+      `${name} null-answer count differs from the explicit answer key`,
+    ).toBe(fixture?.validation?.expectedNullCount);
   }
 
   console.log('OMR full diagnostic report:', JSON.stringify(scanReports));
