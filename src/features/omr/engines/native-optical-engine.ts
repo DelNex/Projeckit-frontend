@@ -246,11 +246,10 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
 
     let detectedRegions = markerResult.detectedRegions;
     let fiducialDetected = markerResult.allRegionsDetected;
-    let fallbackUsed = false;
 
     // STEP 2: RESILIENT GEOMETRY & MARKER FAILURE HANDLING
     // If NO regions could be detected at all, abort bubble analysis and report marker detection failure.
-    if (Object.keys(detectedRegions).length === 0) {
+    if (!markerResult.allRegionsDetected) {
       const primaryFailure = markerResult.failedRegions[0] || {
         regionId: 'ANSWERS',
         expectedMarkerCount: 4,
@@ -280,9 +279,6 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
       };
     }
 
-    if (!markerResult.allRegionsDetected) {
-      fallbackUsed = true;
-    }
 
     const { markMinFill, ambiguousDelta, highConfidenceMin } = template.thresholds;
 
@@ -338,8 +334,7 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
     };
     const isClearMark = (measurement: BubbleMeasurement) => cvMeasurements
       ? (measurement.fillRatio >= OMR_THRESHOLDS.openCv.clearMark.fillAndContrast.fillRatio &&
-        measurement.contrast >= OMR_THRESHOLDS.openCv.clearMark.fillAndContrast.contrast) ||
-        ('pixelDarkness' in measurement && measurement.pixelDarkness >= markMinFill)
+        measurement.contrast >= OMR_THRESHOLDS.openCv.clearMark.fillAndContrast.contrast)
       : measurement.fillRatio >= markMinFill;
     const isResidualMark = (measurement: BubbleMeasurement) => cvMeasurements
       ? measurement.fillRatio >= OMR_THRESHOLDS.openCv.residualInk.fillRatio &&
@@ -531,19 +526,19 @@ export class NativeOpticalEngineAdapter implements OmrEngineAdapter {
       detectedStudentLrn: options.hintStudentLrn || (detectedRollNumber ? `ROLL-${detectedRollNumber}` : null),
       detectedRollNumber,
       detectedAssessmentId: options.assessmentId || geometry.assessmentId,
-      overallConfidence: fallbackUsed ? Math.min(overallConfidence, 0.5) : overallConfidence,
+      overallConfidence,
       fiducialDetected,
-      fiducialConfidence: markerResult.overallMarkerConfidence || (fallbackUsed ? 0.45 : 1),
+      fiducialConfidence: markerResult.overallMarkerConfidence,
       items,
       itemStates,
       rawAnswers,
       normalizedAnswers,
-      hasAmbiguity: hasAmbiguity || rollAmbiguity || fallbackUsed,
+      hasAmbiguity: hasAmbiguity || rollAmbiguity,
       hasMultipleMarks: hasMultipleMarks || rollMultipleMarks,
       hasErasedMarks,
       openCvDiagnostics,
       thresholdProfileVersion: OMR_THRESHOLD_PROFILE_VERSION,
-      status: fallbackUsed || !cvMeasurements || hasErasedMarks || hasAmbiguity || hasMultipleMarks || rollMultipleMarks || rollAmbiguity ? 'VERIFICATION_REQUIRED' : status,
+      status: !cvMeasurements || hasErasedMarks || hasAmbiguity || hasMultipleMarks || rollMultipleMarks || rollAmbiguity ? 'VERIFICATION_REQUIRED' : status,
       errorCode: !markerResult.allRegionsDetected ? 'REGION_MARKER_DETECTION_FAILED' : undefined,
       failedRegion: markerResult.failedRegions[0],
       engineUsed: cvMeasurements ? 'kit-opencv.js' : 'kit-optical-native',
