@@ -28,7 +28,9 @@ test('Chrome processes every project image fixture and any supplied attachments'
     fiducialDetected: true,
     openCvDiagnostics: { status: 'used' },
   });
-  expect(report.accuracy).toBeGreaterThanOrEqual(0.95);
+  // This fixture has a complete reviewed answer key: partial accuracy is a failure.
+  expect(report.accuracy).toBe(1);
+  expect(report.correct).toBe(report.total);
   expect(pageErrors).toEqual([]);
 
   const fixturesDir = path.resolve('src/features/omr/__tests__/fixtures');
@@ -63,6 +65,11 @@ test('Chrome processes every project image fixture and any supplied attachments'
 
   expect(scanReports).toHaveLength(files.length);
   expect(scanReports.filter((item) => item.outcome === 'ERROR')).toEqual([]);
+  // Unknown-key fixtures are coverage-only; never report an invented accuracy for them.
+  for (const item of scanReports.filter((entry) => entry.compared == null)) {
+    expect(item.correct, `${item.name} has no reviewed answer key`).toBeNull();
+    expect(item.accuracy, `${item.name} must not claim unmeasured accuracy`).toBeNull();
+  }
   console.log('OMR image scan report:', JSON.stringify(scanReports.map(({ name, fiducialDetected, detectedItems, errorCode, failedRegion, status, openCv, correct, compared, accuracy, outcome }) => ({
     name, fiducialDetected, detectedItems, errorCode, failedRegion, status, openCv, correct, compared, accuracy, outcome,
   }))));
