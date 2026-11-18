@@ -19,24 +19,30 @@ function expectedFor(name: string): ExpectedAnswer[] | null {
 }
 
 function buildAnswerDiagnostics(result: Awaited<ReturnType<typeof processOmrScan>>, expected: ExpectedAnswer[] | null) {
-  const answers = result.items.map((item, index) => ({
-    question: item.itemNumber,
-    selected: item.selectedChoice,
-    expected: expected?.[index] ?? null,
-    hasExpected: Boolean(expected && index < expected.length),
-    state: item.state,
-    confidence: item.confidence,
-    scores: item.scores,
-  }));
+  const diagnosticCount = Math.max(result.items.length, expected?.length ?? 0);
+  const answers = Array.from({ length: diagnosticCount }, (_, index) => {
+    const item = result.items[index];
+    return {
+      question: index + 1,
+      selected: item?.selectedChoice ?? null,
+      expected: expected?.[index] ?? null,
+      hasExpected: Boolean(expected && index < expected.length),
+      state: item?.state ?? 'MISSING_ITEM',
+      confidence: item?.confidence ?? 0,
+      scores: item?.scores ?? null,
+    };
+  });
   const mismatches = expected
-    ? answers.filter((item) => item.hasExpected && item.selected !== expected[item.question - 1])
-      .map((item) => ({
-        question: item.question,
-        expected: expected[item.question - 1],
-        actual: item.selected,
-        state: item.state,
-        scores: item.scores,
-      }))
+    ? expected.flatMap((answer, index) => {
+      const item = answers[index];
+      return item && item.selected === answer ? [] : [{
+        question: index + 1,
+        expected: answer,
+        actual: item?.selected ?? null,
+        state: item?.state ?? 'MISSING_ITEM',
+        scores: item?.scores ?? null,
+      }];
+    })
     : [];
   const nullCount = result.normalizedAnswers.filter((answer) => answer === null).length;
   return {
