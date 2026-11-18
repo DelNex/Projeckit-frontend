@@ -46,6 +46,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: omr-mobile-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
-          path: .artifacts/omr-validation/omr-results.json
+          path: |
+            .artifacts/omr-validation/omr-results.json
+            src/features/omr/__tests__/fixtures/real_world_scan.png
           if-no-files-found: warn
           retention-days: 14
