@@ -18,7 +18,11 @@ export function isAnswerCorrect(
   itemStates?: Record<string | number, unknown>
 ): boolean {
   const state = normalizeAnswer(itemStates?.[String(itemNumber)] ?? itemStates?.[itemNumber - 1]);
-  if (state === 'ERASED_MARK' || state === 'MULTIPLE_MARK') return false;
+  // When a scan carries an explicit machine/review state, only a confirmed
+  // single mark is gradable. Never award points for an answer value attached
+  // to BLANK, AMBIGUOUS, MULTIPLE_MARK, ERASED_MARK, or an unknown state.
+  // Older/manual records without item-state metadata retain answer-only grading.
+  if (state && state !== 'MARKED') return false;
   const selected = getItemAnswer(answers, itemNumber);
   const correct = getItemAnswer(answerKey, itemNumber);
   return Boolean(selected && correct && selected === correct);
