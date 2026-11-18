@@ -23,18 +23,6 @@ test('Chrome validates labeled answers and records diagnostics for every image f
     error?: string;
   };
 
-  expect(report, `Browser decoded ${report.correct}/${report.total}; nulls=${report.nullCount}; OpenCV status: ${report.openCvDiagnostics?.status}`).toMatchObject({
-    outcome: 'PASS',
-    correct: 60,
-    total: 60,
-    nullCount: 0,
-    mismatches: [],
-    fiducialDetected: true,
-    openCvDiagnostics: { status: 'used' },
-  });
-  expect(report.accuracy).toBe(1);
-  expect(pageErrors).toEqual([]);
-
   const fixturesDir = path.resolve('src/features/omr/__tests__/fixtures');
   const projectImages = fs.readdirSync(fixturesDir)
     .filter((name) => /\.(png|jpe?g|webp|bmp|tiff?|svg)$/i.test(name))
@@ -86,9 +74,6 @@ test('Chrome validates labeled answers and records diagnostics for every image f
     scans: scanReports,
   }, null, 2) + '\n');
 
-  expect(scanReports).toHaveLength(files.length);
-  expect(scanReports.filter((item) => item.outcome === 'ERROR')).toEqual([]);
-
   const labeledFixtures = [
     'real_world_scan.png',
     'marked_60.png',
@@ -111,6 +96,23 @@ test('Chrome validates labeled answers and records diagnostics for every image f
       `${name} null-answer count differs from the explicit answer key`,
     ).toBe(fixture?.validation?.expectedNullCount);
   }
+
+  // Assert the primary real-world capture only after every fixture has been scanned
+  // and its complete diagnostic report has been persisted.
+  expect(report, `Browser decoded ${report.correct}/${report.total}; nulls=${report.nullCount}; OpenCV status: ${report.openCvDiagnostics?.status}`).toMatchObject({
+    outcome: 'PASS',
+    correct: 60,
+    total: 60,
+    nullCount: 0,
+    mismatches: [],
+    fiducialDetected: true,
+    openCvDiagnostics: { status: 'used' },
+  });
+  expect(report.accuracy).toBe(1);
+  expect(pageErrors).toEqual([]);
+
+  expect(scanReports).toHaveLength(files.length);
+  expect(scanReports.filter((item) => item.outcome === 'ERROR')).toEqual([]);
 
   console.log('OMR full diagnostic report:', JSON.stringify(scanReports));
 });
