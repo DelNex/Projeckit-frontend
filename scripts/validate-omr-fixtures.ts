@@ -33,6 +33,7 @@ async function main() {
     compared: number | null;
     correct: number | null;
   }> = [];
+  const failures: string[] = [];
 
   for (const name of imageNames) {
     const bytes = fs.readFileSync(path.join(fixturesDir, name));
@@ -41,24 +42,21 @@ async function main() {
     const template = createKitOmrTemplate({ itemCount: count, includeRollNumberGrid });
     const result = await engine.process(new Uint8Array(bytes), template);
 
-    assert.notEqual(result.errorCode, 'DECODE_FAILED', `${name}: image could not be decoded`);
+    if (result.errorCode === 'DECODE_FAILED') failures.push(`${name}: image could not be decoded`);
 
     if (result.fiducialDetected) {
-      assert.equal(result.items.length, count, `${name}: registered sheet returned an incomplete answer set`);
-      assert.equal(result.normalizedAnswers.length, count, `${name}: normalized answer count does not match the template`);
+      if (result.items.length !== count) failures.push(`${name}: registered sheet returned ${result.items.length}/${count} items`);
+      if (result.normalizedAnswers.length !== count) failures.push(`${name}: normalized answer count ${result.normalizedAnswers.length}/${count}`);
     } else {
-      assert.ok(
-        result.status === 'VERIFICATION_REQUIRED' || result.status === 'REJECTED',
-        `${name}: missing markers must be rejected or sent for review, got ${result.status}`,
-      );
+      if (result.status !== 'VERIFICATION_REQUIRED' && result.status !== 'REJECTED') failures.push(`${name}: missing markers produced unsafe status ${result.status}`);
     }
 
     const expected = expectedAnswers[name];
     let correct: number | null = null;
     if (expected) {
-      assert.equal(expected.length, count, `${name}: answer key length does not match its template`);
+      if (expected.length !== count) failures.push(`${name}: answer key length ${expected.length} does not match template ${count}`);
       const mismatches = expected.flatMap((answer, index) =>
-        result.normalizedAnswers[index] === answer ? [] : [{
+        (result.normalizedAnswers[index] ?? null) === answer ? [] : [{
           question: index + 1,
           expected: answer,
           actual: result.normalizedAnswers[index] ?? null,
@@ -67,17 +65,7 @@ async function main() {
         }],
       );
       correct = expected.length - mismatches.length;
-      assert.deepEqual(
-        mismatches,
-        [],
-        `${name}: expected answers did not match scanner output (including null answers). Diagnostics: ${JSON.stringify({
-          imageHash: result.imageHash,
-          fiducialDetected: result.fiducialDetected,
-          fiducialConfidence: result.fiducialConfidence,
-          openCvDiagnostics: result.openCvDiagnostics,
-          mismatches,
-        })}`,
-      );
+      if (mismatches.length) failures.push(`${name}: ${mismatches.length}/${expected.length} answer mismatches`);
     }
 
     results.push({
@@ -88,11 +76,20 @@ async function main() {
       nullCount: result.normalizedAnswers.filter((answer) => answer === null).length,
       compared: expected?.length ?? null,
       correct,
+      mismatches: expected ? expected.flatMap((answer, index) => (result.normalizedAnswers[index] ?? null) === answer ? [] : [{ question: index + 1, expected: answer, actual: result.normalizedAnswers[index] ?? null, state: result.items[index]?.state ?? 'MISSING_ITEM' }]) : null,
+      fiducialConfidence: result.fiducialConfidence,
+      openCvDiagnostics: result.openCvDiagnostics,
+      failedRegion: result.failedRegion,
+      errorCode: result.errorCode,
     });
   }
 
   console.log('OMR fixture diagnostic report:', JSON.stringify(results));
-  console.log(`OMR fixture validation passed: ${results.length} raster images; ${results.filter((result) => result.compared !== null).length} labeled images checked exactly`);
+  console.log(`OMR fixture validation summary: ${results.length} raster images; ${results.filter((result) => result.compared !== null).length} labeled images; ${results.reduce((sum, result) => sum + (result.correct ?? 0), 0)} correct answers across ${results.reduce((sum, result) => sum + (result.compared ?? 0), 0)} labeled answers.`);
+  if (failures.length) {
+    console.error('OMR fixture validation failures:', JSON.stringify(failures));
+    process.exitCode = 1;
+  }
 }
 
 main().catch((error) => {
