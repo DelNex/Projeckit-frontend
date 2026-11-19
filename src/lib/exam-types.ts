@@ -11,6 +11,12 @@ export type CognitiveDomain =
   | 'evaluating'
   | 'creating';
 
+export interface ExamSourceEvidence {
+  source_id: string;
+  part: number;
+  quote: string;
+}
+
 export interface ExamQuestion {
   item_number: number;
   competency_id: string;
@@ -24,6 +30,7 @@ export interface ExamQuestion {
   };
   correct_answer: 'A' | 'B' | 'C' | 'D';
   rationale: string;
+  source_evidence?: ExamSourceEvidence;
 }
 
 export interface TosBlueprintSlot {
@@ -196,6 +203,13 @@ export function validateExamQuestions(
       item?.explanation ||
       `Option ${rawAns} is the correct answer according to the lesson material.`
     ).trim();
+    const evidenceRaw = item?.source_evidence || item?.sourceEvidence;
+    const sourceEvidence = evidenceRaw && typeof evidenceRaw === 'object'
+      && typeof evidenceRaw.source_id === 'string'
+      && Number.isInteger(evidenceRaw.part) && evidenceRaw.part > 0
+      && typeof evidenceRaw.quote === 'string' && evidenceRaw.quote.trim()
+      ? { source_id: evidenceRaw.source_id, part: evidenceRaw.part, quote: evidenceRaw.quote.trim() }
+      : undefined;
 
     repairedQuestions.push({
       item_number: itemNum,
@@ -205,6 +219,7 @@ export function validateExamQuestions(
       options: formattedOptions,
       correct_answer: rawAns as 'A' | 'B' | 'C' | 'D',
       rationale,
+      ...(sourceEvidence ? { source_evidence: sourceEvidence } : {}),
     });
   });
 
