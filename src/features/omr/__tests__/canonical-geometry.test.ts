@@ -71,6 +71,12 @@ describe('Project KIT — Canonical Geometry Engine Tests', () => {
           );
         }
 
+        // Full-size barcode stays completely inside the section bar.
+        assert.ok(geom.layout.barcode.y >= geom.layout.sectionBar.topLineY);
+        assert.ok(geom.layout.barcode.y + geom.layout.barcode.height <= geom.layout.sectionBar.bottomLineY);
+        assert.strictEqual(geom.layout.barcode.height, tc.expectedFormat === 'HALF' ? 26 : 32);
+        assert.strictEqual(geom.layout.barcode.narrowBarWidth, tc.expectedFormat === 'HALF' ? 1.0 : 1.1);
+
         // Scanner safety minimums
         assert.ok(
           geom.layout.answerArea.bubbleRadius >= tc.minRadius - 0.05,
