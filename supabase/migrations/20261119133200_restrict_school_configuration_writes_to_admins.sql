@@ -282,11 +282,10 @@ BEGIN
     SELECT 1
     FROM public.profiles p
     WHERE p.id = auth.uid()
-      AND p.role = 'admin'
       AND p.status = 'approved'
       AND p.archived_at IS NULL
       AND (
-        p.tenant_id = target_tenant
+        (p.role = 'admin' AND p.tenant_id = target_tenant)
         OR p.is_platform_admin = true
       )
   ) THEN
