@@ -15,3 +15,21 @@ test('tenant security migration scopes profile reads and school configuration wr
   assert.match(sql, /archived_at IS NULL/);
   assert.match(sql, /CREATE TRIGGER trg_guard_grading_period_writes/);
 });
+
+
+const gradingPeriodGuardMigration = new URL('../../../../supabase/migrations/20261120000000_guard_grading_period_rpc_tenant_context.sql', import.meta.url);
+
+test('grading period SECURITY DEFINER RPCs reject callers without an approved tenant', async () => {
+  const sql = await readFile(gradingPeriodGuardMigration, 'utf8');
+  for (const functionName of ['get_grading_period_usage', 'restore_grading_period', 'set_current_grading_period']) {
+    const start = sql.indexOf(`CREATE OR REPLACE FUNCTION public.${functionName}`);
+    assert.notEqual(start, -1, `Missing replacement for ${functionName}`);
+    const end = sql.indexOf('$function$;', start);
+    assert.notEqual(end, -1, `Could not find end of ${functionName}`);
+    const definition = sql.slice(start, end);
+    const guard = definition.indexOf('IF caller_tenant IS NULL AND NOT public.is_platform_admin() THEN');
+    const targetLookup = definition.indexOf('SELECT * INTO target_period');
+    assert.ok(guard >= 0, `${functionName} must reject callers without approved tenant context`);
+    assert.ok(targetLookup < 0 || guard < targetLookup, `${functionName} must check tenant context before reading the target period`);
+  }
+});
