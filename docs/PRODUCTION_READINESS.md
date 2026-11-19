@@ -71,8 +71,8 @@ Before promoting this branch:
 2. Add authorized Gemini, OpenRouter, and Cloudflare credentials to Netlify if
    those fallback providers are required. Without them, Groq remains the only
    available provider.
-3. Ensure `CRON_SECRET` is configured for Netlify Functions/Runtime and is
-   marked as a secret in the Netlify UI.
+3. `CRON_SECRET` is already configured as a masked secret for the production
+   Netlify Functions/Runtime context. Keep it out of all `NEXT_PUBLIC_*` variables.
 4. Deploy a preview and verify authenticated school-admin settings, system
    logs, local OCR, exam queue recovery, and the scheduled worker.
 5. Promote to production only after the preview checks pass.
