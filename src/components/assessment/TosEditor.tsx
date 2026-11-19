@@ -1788,13 +1788,13 @@ export function TosEditor({
           if (isSampleDemo !== undefined) setIsSampleDemoExam(isSampleDemo);
 
           const targetAssessmentId = linkedAssessmentId || assessmentId;
-          if (targetAssessmentId && currentTosId) {
+          if (currentTosId) {
             try {
               const response = await fetch('/api/ai/save-exam', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  assessmentId: targetAssessmentId,
+                  ...(targetAssessmentId ? { assessmentId: targetAssessmentId } : {}),
                   tosId: currentTosId,
                   questions,
                   mode: 'draft',
@@ -1803,8 +1803,10 @@ export function TosEditor({
               });
               const result = await response.json().catch(() => ({}));
               if (!response.ok) throw new Error(result.error || 'Could not synchronize the generated answer key.');
+              const destinationAssessmentId = targetAssessmentId || result.assessmentIds?.[0];
+              if (!destinationAssessmentId) throw new Error('The exam was saved, but no linked assessment was returned for Item Analysis.');
               toast.success('Generated exam and answer key saved. Opening Item Analysis.');
-              router.push(`/assessments/${encodeURIComponent(targetAssessmentId)}?tab=results`);
+              router.push(`/assessments/${encodeURIComponent(destinationAssessmentId)}?tab=results`);
               return;
             } catch (error) {
               toast.error(error instanceof Error ? error.message : 'Could not save the generated answer key.');
