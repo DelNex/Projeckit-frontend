@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 
@@ -64,7 +65,7 @@ export async function logSystemEvent(input: SystemEventInput): Promise<void> {
       method: cleanText(input.method, 12),
       status: Number.isInteger(input.status) ? input.status : null,
       code: cleanText(input.code, 100),
-      request_id: cleanText(input.requestId, 120),
+      request_id: cleanText(input.requestId || randomUUID(), 120),
       metadata: input.metadata ? JSON.parse(JSON.stringify(input.metadata, (_key, value) => {
         if (typeof value === 'string') return cleanText(value, 240);
         return value;
