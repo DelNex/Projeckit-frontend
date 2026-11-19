@@ -151,6 +151,7 @@ export function TosEditor({
   const [newCode, setNewCode] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newDays, setNewDays] = useState<number>(4);
+  const [schoolCompetencies, setSchoolCompetencies] = useState<Array<{ id: string; code: string; description: string }>>([]);
 
   // UI / Async State
   const [loading, setLoading] = useState(true);
@@ -165,6 +166,21 @@ export function TosEditor({
   const [isLinkedWarningModalOpen, setIsLinkedWarningModalOpen] = useState(false);
   const [isZeroItemsWarningModalOpen, setIsZeroItemsWarningModalOpen] = useState(false);
   const [gradingPeriods, setGradingPeriods] = useState<Array<{ id: string; name: string; code: string }>>([]);
+
+  // Load reusable competencies shared by teachers in this school tenant.
+  useEffect(() => {
+    let active = true;
+    fetch('/api/competencies', { cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return response.json();
+      })
+      .then((data) => {
+        if (active && Array.isArray(data?.competencies)) setSchoolCompetencies(data.competencies);
+      })
+      .catch(() => { /* The TOS editor still works when the library migration is not yet applied. */ });
+    return () => { active = false; };
+  }, []);
 
   // 1. Fetch real TOS document from Supabase
   useEffect(() => {
@@ -529,6 +545,29 @@ export function TosEditor({
         }
       } catch (syncErr) {
         console.warn('Faculty sync notice:', syncErr);
+      }
+
+      // Store these entries in the tenant library so other teachers can reuse them.
+      try {
+        const libraryRows = rows.map((row) => ({ code: row.code, description: row.description }));
+        const libraryResponse = await fetch('/api/competencies', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ competencies: libraryRows }),
+        });
+        if (libraryResponse.ok) {
+          setSchoolCompetencies((previous) => {
+            const merged = [...previous];
+            for (const row of libraryRows) {
+              if (!merged.some((entry) => entry.code === row.code && entry.description === row.description)) {
+                merged.push({ id: `${row.code}-${merged.length}`, ...row });
+              }
+            }
+            return merged;
+          });
+        }
+      } catch (libraryError) {
+        console.warn('School competency library sync notice:', libraryError);
       }
 
       setSaveStatus('saved');
@@ -1451,12 +1490,19 @@ export function TosEditor({
                       <td className="px-2 py-2">
                         <input
                           type="text"
-                          placeholder="Type learning competency description..."
+                          list="school-competency-library"
+                          placeholder="Type or choose a saved school competency..."
                           value={newDesc}
                           onChange={(e) => setNewDesc(e.target.value)}
                           onKeyDown={(e) => e.key === 'Enter' && handleCommitInlineRow()}
                           className="w-full px-2 py-1 text-xs rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                         />
+                        <datalist id="school-competency-library">
+                          {schoolCompetencies.map((competency) => (
+                            <option key={competency.id} value={competency.description}>{competency.code}</option>
+                          ))}
+                        </datalist>
+                        <p className="mt-1 text-[10px] text-gray-400">Saved school competencies appear as suggestions.</p>
                       </td>
                       <td className="px-2 py-2 text-center">
                         <input
