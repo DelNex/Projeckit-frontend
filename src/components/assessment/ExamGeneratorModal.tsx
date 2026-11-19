@@ -82,7 +82,8 @@ export function ExamGeneratorModal({
   const [teacherInstructions, setTeacherInstructions] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [truncationNotice, setTruncationNotice] = useState<string | null>(null);\n  const [extractionProgress, setExtractionProgress] = useState('');
+  const [truncationNotice, setTruncationNotice] = useState<string | null>(null);
+  const [extractionProgress, setExtractionProgress] = useState('');
   const [chunkProgress, setChunkProgress] = useState<{
     completed: number;
     total: number;
@@ -178,7 +179,11 @@ export function ExamGeneratorModal({
       // Process documents locally; original files never leave this browser.
       if (selectedFiles.length > 0) {
         setCurrentStep('extracting');
-        setExtractionProgress('Starting local document extraction…');\n        const extractResult = await extractTextFromFiles(selectedFiles, {\n          onProgress: (progress) => setExtractionProgress(progress.message + ' (' + progress.fileIndex + '/' + progress.fileCount + ')'),\n        });\n        setExtractionProgress('Local extraction complete.');
+        setExtractionProgress('Starting local document extraction…');
+        const extractResult = await extractTextFromFiles(selectedFiles, {
+          onProgress: (progress) => setExtractionProgress(progress.message + ' (' + progress.fileIndex + '/' + progress.fileCount + ')'),
+        });
+        setExtractionProgress('Local extraction complete.');
         lessonDocuments = [...extractResult.documents, ...lessonDocuments];
         extractedLessonText = (extractResult.text + (extractedLessonText ? `\n\n${extractedLessonText}` : '')).trim();
 
