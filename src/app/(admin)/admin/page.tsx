@@ -12,6 +12,19 @@ interface AdminStats {
   primaryTenantName: string;
 }
 
+interface AiOpsSummary {
+  providersConfigured: string[];
+  queue: {
+    queued: number;
+    running: number;
+    needsAttention: number;
+    failedLast24Hours: number;
+    expiredLeases: number;
+    oldestQueuedAgeSeconds: number | null;
+  };
+  checkedAt: string;
+}
+
 export default function AdminConsolePage() {
   const [stats, setStats] = useState<AdminStats>({
     pendingTeachers: 0,
@@ -20,6 +33,8 @@ export default function AdminConsolePage() {
     primaryTenantName: '',
   });
   const [loading, setLoading] = useState(true);
+  const [aiOps, setAiOps] = useState<AiOpsSummary | null>(null);
+  const [aiOpsError, setAiOpsError] = useState(false);
   const supabase = createClient();
 
   useEffect(() => {
@@ -45,6 +60,13 @@ export default function AdminConsolePage() {
           .select('*', { count: 'exact', head: true });
 
         const firstTenant = tenantsData?.[0]?.name || 'School';
+        const aiOpsResponse = await fetch('/api/admin/ai-health', { cache: 'no-store' });
+        if (aiOpsResponse.ok) {
+          setAiOps(await aiOpsResponse.json() as AiOpsSummary);
+          setAiOpsError(false);
+        } else {
+          setAiOpsError(true);
+        }
 
         setStats({
           pendingTeachers: pendingCount || 0,
@@ -136,6 +158,49 @@ export default function AdminConsolePage() {
           );
         })}
       </div>
+
+      <section className="rounded-3xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-sm font-black text-gray-900 dark:text-white">AI generation operations</h2>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400">Queue and provider configuration diagnostics. Provider keys are never exposed.</p>
+          </div>
+          <span className="text-[10px] text-gray-400">
+            {aiOps ? 'Checked ' + new Date(aiOps.checkedAt).toLocaleTimeString() : 'Diagnostics unavailable'}
+          </span>
+        </div>
+        {aiOps ? (
+          <>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(aiOps.providersConfigured || []).map((provider) => (
+                <span key={provider} className="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-bold uppercase text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300">
+                  {provider} configured
+                </span>
+              ))}
+              {!aiOps.providersConfigured.length && <span className="text-[11px] text-amber-700 dark:text-amber-300">No AI provider is configured.</span>}
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              {[
+                ['Queued', aiOps.queue.queued],
+                ['Running', aiOps.queue.running],
+                ['Needs attention', aiOps.queue.needsAttention],
+                ['Failed · 24h', aiOps.queue.failedLast24Hours],
+                ['Expired leases', aiOps.queue.expiredLeases],
+                ['Oldest queued', aiOps.queue.oldestQueuedAgeSeconds === null ? '—' : Math.floor(aiOps.queue.oldestQueuedAgeSeconds / 60) + 'm'],
+              ].map(([label, value]) => (
+                <div key={String(label)} className="rounded-xl bg-gray-50 p-3 dark:bg-gray-800/60">
+                  <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400">{label}</p>
+                  <p className="mt-1 text-xl font-black tabular-nums text-gray-900 dark:text-white">{value}</p>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+            {aiOpsError ? 'The admin diagnostics endpoint could not be reached. Check the server and database connection.' : 'Loading AI queue diagnostics…'}
+          </p>
+        )}
+      </section>
     </div>
   );
 }
