@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -14,6 +15,9 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   if (!job) return NextResponse.json({ error: 'Exam generation job was not found.' }, { status: 404 });
   if (!['completed', 'partial'].includes(job.status)) return NextResponse.json({ error: 'The exam is not ready yet.' }, { status: 409 });
   const { data: tos, error } = await admin.from('tos_documents').select('questions').eq('id', job.tos_id).eq('tenant_id', profile.tenant_id).maybeSingle();
-  if (error || !tos) return NextResponse.json({ error: 'Could not reload saved exam questions.' }, { status: 503 });
+  if (error || !tos) {
+    await logSystemEvent({ severity: 'error', source: 'api.ai.exam-job-questions', message: error?.message || 'Could not reload saved exam questions.', method: 'GET', route: '/api/ai/exam-jobs/[id]/questions', code: 'EXAM_QUESTIONS_READ_FAILURE', tenantId: profile.tenant_id, userId: user.id });
+    return NextResponse.json({ error: 'Could not reload saved exam questions.' }, { status: 503 });
+  }
   return NextResponse.json({ questions: Array.isArray(tos.questions) ? tos.questions : [] }, { headers: { 'Cache-Control': 'no-store' } });
 }
