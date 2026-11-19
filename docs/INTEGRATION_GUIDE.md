@@ -38,7 +38,7 @@ Record the commit and deployment, database migration status, AI service URL/heal
 
 ## Exam AI provider routing and large lessons
 
-Exam generation uses the existing durable `exam_generation_jobs` queue. The database claim function provides per-job row locking and leases; the API also applies per-user hourly and per-school daily limits. Provider failover does not create a second queue. The current hosted worker still starts from individual web requests: it is not yet a global cross-provider concurrency scheduler or a continuously running queue consumer.
+Exam generation uses the existing durable `exam_generation_jobs` queue. The database claim function provides per-job row locking and leases; the API also applies per-user hourly and per-school daily limits. Provider failover does not create a second queue. A shared dispatcher now starts the oldest queued job from the least-loaded school. The database serializes claims and caps hosted exam work at four concurrent jobs globally and two per school. Enqueue requests and status polling both trigger dispatch, so queued work resumes when users revisit/poll their jobs; this is not yet an always-on worker that drains the queue after every browser closes.
 
 The server-side provider router supports these adapters when credentials are configured:
 
