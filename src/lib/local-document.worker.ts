@@ -2,7 +2,8 @@
 import JSZip from 'jszip';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 
-type WorkerRequest = { id: string; file: File };
+type OcrLanguages = 'eng' | 'eng+fil';
+type WorkerRequest = { id: string; file: File; ocrLanguages?: OcrLanguages };
 type WorkerResponse = { id: string; text?: string; error?: string };
 
 const workerScope = self as unknown as DedicatedWorkerGlobalScope;
@@ -11,9 +12,9 @@ const MIN_SELECTABLE_TEXT_CHARACTERS = 120;
 
 type OcrWorker = Awaited<ReturnType<typeof import('tesseract.js').createWorker>>;
 
-async function createLocalOcrWorker(): Promise<OcrWorker> {
+async function createLocalOcrWorker(languages: OcrLanguages): Promise<OcrWorker> {
   const { createWorker } = await import('tesseract.js');
-  return createWorker('eng+fil', 1, {
+  return createWorker(languages, 1, {
     workerPath: '/ocr/worker.min.js',
     workerBlobURL: false,
     corePath: '/ocr/core',
@@ -28,7 +29,7 @@ async function recognizePdfPage(page: pdfjs.PDFPageProxy, worker: OcrWorker): Pr
     throw new Error('This browser cannot render scanned PDF pages locally. Use a modern browser with OffscreenCanvas support.');
   }
   const baseViewport = page.getViewport({ scale: 1 });
-  const scale = Math.max(1.5, Math.min(2.5, 2600 / Math.max(baseViewport.width, baseViewport.height)));
+  const scale = Math.max(1.5, Math.min(2.0, 2200 / Math.max(baseViewport.width, baseViewport.height)));
   const viewport = page.getViewport({ scale });
   const canvas = new OffscreenCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
   const context = canvas.getContext('2d');
@@ -55,7 +56,7 @@ function normalizeText(text: string): string {
     .trim();
 }
 
-async function extractPdf(file: File): Promise<string> {
+async function extractPdf(file: File, ocrLanguages: OcrLanguages): Promise<string> {
   pdfjs.GlobalWorkerOptions.workerSrc = new URL(
     'pdfjs-dist/legacy/build/pdf.worker.min.mjs',
     import.meta.url
@@ -88,7 +89,7 @@ async function extractPdf(file: File): Promise<string> {
         let extractedText = pageText;
         let usedOcrPage = false;
         if (pageText.length < MIN_SELECTABLE_TEXT_CHARACTERS) {
-          if (!ocrWorker) ocrWorker = await createLocalOcrWorker();
+          if (!ocrWorker) ocrWorker = await createLocalOcrWorker(ocrLanguages);
           const recognized = await recognizePdfPage(page, ocrWorker);
           usedOcrPage = true;
           if (recognized.length > extractedText.length) extractedText = recognized;
@@ -149,9 +150,9 @@ async function extractPptx(file: File): Promise<string> {
   return slides.join('\n\n');
 }
 
-async function extract(file: File): Promise<string> {
+async function extract(file: File, ocrLanguages: OcrLanguages): Promise<string> {
   const extension = file.name.toLowerCase().split('.').pop();
-  if (extension === 'pdf') return extractPdf(file);
+  if (extension === 'pdf') return extractPdf(file, ocrLanguages);
   if (extension === 'docx') return extractDocx(file);
   if (extension === 'pptx') return extractPptx(file);
   if (extension === 'txt' || extension === 'md') return file.text();
@@ -159,9 +160,9 @@ async function extract(file: File): Promise<string> {
 }
 
 workerScope.onmessage = async (event: MessageEvent<WorkerRequest>) => {
-  const { id, file } = event.data;
+  const { id, file, ocrLanguages = 'eng' } = event.data;
   try {
-    const text = normalizeText(await extract(file));
+    const text = normalizeText(await extract(file, ocrLanguages));
     if (text.length > MAX_CHARACTERS) {
       throw new Error(`'${file.name}' contains more than 900,000 readable characters. Split it by chapter so no source content is silently discarded.`);
     }
