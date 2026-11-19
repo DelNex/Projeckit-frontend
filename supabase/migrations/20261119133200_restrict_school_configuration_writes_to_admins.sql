@@ -461,3 +461,20 @@ $function$;
 
 REVOKE ALL ON FUNCTION public.enqueue_groq_exam_generation_job(uuid, uuid, uuid, jsonb, text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.enqueue_groq_exam_generation_job(uuid, uuid, uuid, jsonb, text) TO service_role;
+
+-- Support the quota and lease scans without repeatedly scanning the full job
+-- history as the school grows.
+CREATE INDEX IF NOT EXISTS idx_exam_jobs_user_quota_window
+  ON public.exam_generation_jobs (created_by, created_at DESC)
+  WHERE status <> 'cancelled' AND (status <> 'failed' OR attempts > 0);
+
+CREATE INDEX IF NOT EXISTS idx_exam_jobs_tenant_quota_window
+  ON public.exam_generation_jobs (tenant_id, created_at DESC)
+  WHERE status <> 'cancelled' AND (status <> 'failed' OR attempts > 0);
+
+CREATE INDEX IF NOT EXISTS idx_exam_jobs_tenant_status
+  ON public.exam_generation_jobs (tenant_id, status, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_exam_jobs_running_lease
+  ON public.exam_generation_jobs (provider, lease_expires_at, created_at)
+  WHERE status = 'running';
