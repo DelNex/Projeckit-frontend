@@ -52,3 +52,30 @@ test('rejects empty or excessively large extracted lesson materials', () => {
     lessonChunks: [{ text: 'x'.repeat(200_001) }],
   }), /too large/i);
 });
+
+test('uses only the matching competency modules when every requested competency has a dedicated source', () => {
+  const messages = buildGroqMessages({
+    prompt: 'Create one question for COMP-A.',
+    slots: [{ item_number: 1, competency_id: 'COMP-A' }],
+    lessonChunks: [
+      { competencyId: 'COMP-A', text: 'Alpha module covers photosynthesis.' },
+      { competencyId: 'COMP-B', text: 'Beta module covers cellular respiration.' },
+    ],
+  });
+  assert.match(messages[1].content, /Alpha module covers photosynthesis/);
+  assert.doesNotMatch(messages[1].content, /Beta module covers cellular respiration/);
+});
+
+test('keeps shared uploaded sources when a requested competency has no dedicated module', () => {
+  const messages = buildGroqMessages({
+    prompt: 'Create questions for COMP-A and COMP-B.',
+    slots: [
+      { item_number: 1, competency_id: 'COMP-A' },
+      { item_number: 2, competency_id: 'COMP-B' },
+    ],
+    lessonChunks: [
+      { competencyId: 'COMP-A', text: 'Shared lesson facts about ecosystems.' },
+    ],
+  });
+  assert.match(messages[1].content, /Shared lesson facts about ecosystems/);
+});
