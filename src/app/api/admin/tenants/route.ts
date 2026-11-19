@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -145,6 +146,8 @@ export async function POST(request: Request) {
       tenant: tenantData,
     });
   } catch (err: any) {
+    await logSystemEvent({ severity: 'error', source: 'api.admin.tenants', message: err instanceof Error ? err.message : 'Request failed.', method: 'POST', route: '/api/admin/tenants', code: 'ADMIN_TENANTS_FAILURE' });
+
     console.error('[Admin API] Error in POST /api/admin/tenants:', err);
     return NextResponse.json(
       { error: 'Something went wrong while provisioning school tenant. Please try again.' },
