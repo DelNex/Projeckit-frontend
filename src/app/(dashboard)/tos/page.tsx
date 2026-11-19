@@ -36,7 +36,7 @@ import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 
 export default function TosPage() {
   const { toast } = useToast();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const tenant = useTenant();
 
   // Primary Data
@@ -57,7 +57,8 @@ export default function TosPage() {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let controller: AbortController | null = null;
     let hasActiveJobs = false;
-    const ids = tosList.map((tos) => tos.id).filter(Boolean).join(',');
+    // The open exam modal polls its own TOS job; exclude that TOS here to avoid duplicate status requests.
+    const ids = tosList.map((tos) => tos.id).filter((id) => Boolean(id) && id !== examModalTos?.id).join(',');
     if (!ids) return;
 
     const schedule = (delay: number) => {
@@ -117,7 +118,7 @@ export default function TosPage() {
       controller?.abort();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [tosList]);
+  }, [tosList, examModalTos?.id]);
 
   // Page Controls & Filters
   const [selectedSchoolYear, setSelectedSchoolYear] = useState<string>('');
