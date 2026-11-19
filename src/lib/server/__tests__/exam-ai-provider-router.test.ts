@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildGroqMessages, chooseNextExamJob } from '../groq-exam-worker';
+import { buildGroqMessages, chooseNextExamJob, chooseNextExamJobs } from '../groq-exam-worker';
 import { getConfiguredExamProviders } from '../exam-ai-provider-router';
 import { GroqExamJobProvider } from '../exam-ai-provider';
 
@@ -122,4 +122,25 @@ test('queue admission sends validated hourly and school quota limits to the atom
   assert.equal(rpcArgs.p_daily_limit, 100);
   assert.equal(result.reused, false);
   assert.equal(result.id, 'job-1');
+});
+
+
+test('worker dispatcher selects up to four distinct jobs without exceeding two per school', () => {
+  const queued = [
+    { id: 'a-1', tenant_id: 'school-a', created_at: '2026-01-01T00:00:00Z' },
+    { id: 'a-2', tenant_id: 'school-a', created_at: '2026-01-02T00:00:00Z' },
+    { id: 'a-3', tenant_id: 'school-a', created_at: '2026-01-03T00:00:00Z' },
+    { id: 'b-1', tenant_id: 'school-b', created_at: '2026-01-04T00:00:00Z' },
+    { id: 'c-1', tenant_id: 'school-c', created_at: '2026-01-05T00:00:00Z' },
+  ];
+  const selected = chooseNextExamJobs(queued, [], 4);
+  assert.equal(selected.length, 4);
+  assert.equal(new Set(selected.map((job) => job.id)).size, 4);
+  assert.ok(selected.filter((job) => job.tenant_id === 'school-a').length <= 2);
+  assert.equal(selected[0].id, 'a-1');
+  assert.equal(selected[1].id, 'b-1');
+  assert.equal(selected[2].id, 'c-1');
+
+  const limited = chooseNextExamJobs(queued, [{ tenant_id: 'school-a' }], 4);
+  assert.ok(limited.filter((job) => job.tenant_id === 'school-a').length <= 1);
 });
