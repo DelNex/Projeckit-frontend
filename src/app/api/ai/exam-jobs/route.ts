@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     const caller = await getCaller();
     if (caller.response) return caller.response;
     const raw = await request.text();
-    if (Buffer.byteLength(raw, 'utf8') > 1_800_000) return NextResponse.json({ error: 'Lesson text is too large to queue. Reduce the extracted text and try again.' }, { status: 413 });
+    if (Buffer.byteLength(raw, 'utf8') > 1_450_000) return NextResponse.json({ error: 'Serialized exam job is too large for the queue. Split the lesson material into smaller jobs and try again.' }, { status: 413 });
     const body = JSON.parse(raw) as { tosId?: string; lessonText?: string; lessonDocuments?: Array<{ name: string; text: string; competencyId?: string }>; teacherInstructions?: string; repairItemNumber?: number };
     if (!body.tosId) return NextResponse.json({ error: 'Choose a Table of Specifications before generating an exam.' }, { status: 400 });
     const { data: tos, error: tosError } = await caller.admin!.from('tos_documents').select('id,tenant_id,rows,target_items,questions').eq('id', body.tosId).eq('tenant_id', caller.profile!.tenant_id).maybeSingle();
