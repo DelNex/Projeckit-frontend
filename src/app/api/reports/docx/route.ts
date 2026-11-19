@@ -20,6 +20,7 @@ import {
 import { calculateItemChoiceDistributions, type ItemResponseScan } from '@/lib/item-response-analysis';
 import type { ExamQuestion } from '@/lib/exam-types';
 import { createExamPaperDocxBuffer } from '@/lib/server/exam-paper-export';
+import { createSimpleReportPdf } from '@/lib/server/simple-report-pdf';
 
 export const runtime = 'nodejs';
 
@@ -55,8 +56,18 @@ function getRelatedName(value: unknown): string {
 function responseHeaders(fileName: string): HeadersInit {
   return {
     'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'Content-Disposition': `attachment; filename="${fileName}"`,
+    'Content-Disposition': `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
     'Cache-Control': 'private, no-store, max-age=0',
+    'X-Content-Type-Options': 'nosniff',
+  };
+}
+
+function pdfResponseHeaders(fileName: string): HeadersInit {
+  return {
+    'Content-Type': 'application/pdf',
+    'Content-Disposition': `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+    'Cache-Control': 'private, no-store, max-age=0',
+    'X-Content-Type-Options': 'nosniff',
   };
 }
 
@@ -266,6 +277,23 @@ export async function GET(request: Request) {
         const sectionName = getRelatedName(assessment.sections) || assessmentResponses.find((row) => row.section_name)?.section_name || tos.section || 'Section';
         return calculateSectionTermMetrics(sectionName, assessmentResponses, Number(assessment.target_items || tos.target_items));
       });
+      if (url.searchParams.get('format') === 'pdf') {
+        const lines = [
+          `School: ${header.schoolName}`,
+          `Subject: ${header.subject} | Term: ${header.term} | S.Y.: ${header.schoolYear}`,
+          `Assessment: ${header.assessmentTitle}`,
+          `Prepared by: ${header.preparedBy}`,
+          '',
+          'SECTION | CASES | ITEMS | HIGHEST | LOWEST | MEAN | MPS',
+          ...metrics.map((row) => [
+            row.sectionName, row.cases, row.items, row.highest ?? '-', row.lowest ?? '-',
+            row.mean === null ? '-' : row.mean.toFixed(2),
+            row.mps === null ? '-' : `${row.mps.toFixed(2)}%`,
+          ].join(' | ')),
+        ];
+        const pdf = createSimpleReportPdf('TEST RESULTS', `${header.schoolName} | ${header.subject} | ${header.term} | S.Y. ${header.schoolYear}`, lines);
+        return new NextResponse(pdf, { headers: pdfResponseHeaders(`Test_Results_${baseName}.pdf`) });
+      }
       const buffer = await createTermResultsDocx(header, metrics);
       return new NextResponse(new Uint8Array(buffer), { headers: responseHeaders(`Test_Results_${baseName}.docx`) });
     }
@@ -302,6 +330,30 @@ export async function GET(request: Request) {
         masteryPct: responses.length ? (correct / responses.length) * 100 : 0,
       };
     });
+    if (url.searchParams.get('format') === 'pdf') {
+      const mostLearned = [...ranked].sort((a, b) => b.masteryPct - a.masteryPct);
+      const leastLearned = [...ranked].sort((a, b) => a.masteryPct - b.masteryPct);
+      const formatRows = (rows: LearnedItemRow[]) => rows.map((row) =>
+        `Item ${row.itemNumber} | ${row.competency} | ${row.correct}/${row.cases} correct | ${row.masteryPct.toFixed(1)}% mastery`
+      );
+      const lines = [
+        `School: ${header.schoolName}`,
+        `Subject: ${header.subject} | Term: ${header.term} | S.Y.: ${header.schoolYear}`,
+        `Assessment: ${header.assessmentTitle}`,
+        `Prepared by: ${header.preparedBy}`,
+        '',
+        'MOST LEARNED COMPETENCIES / ITEMS',
+        ...formatRows(mostLearned.slice(0, 10)),
+        '',
+        'LEAST LEARNED COMPETENCIES / ITEMS',
+        ...formatRows(leastLearned.slice(0, 10)),
+        '',
+        'COMPLETE ITEM MASTERY',
+        ...formatRows(ranked),
+      ];
+      const pdf = createSimpleReportPdf('MOST AND LEAST LEARNED', `${header.schoolName} | ${header.subject} | ${header.term} | S.Y. ${header.schoolYear}`, lines);
+      return new NextResponse(pdf, { headers: pdfResponseHeaders(`Most_Least_Learned_${baseName}.pdf`) });
+    }
     const buffer = await createMostLeastLearnedDocx(header, ranked);
     return new NextResponse(new Uint8Array(buffer), { headers: responseHeaders(`Most_Least_Learned_${baseName}.docx`) });
   } catch (error) {
