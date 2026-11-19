@@ -41,7 +41,7 @@ for (const name of coreFiles) {
 }
 
 for (const language of languages) {
-  const source = path.join(root, 'node_modules', '@tesseract.js-data', language, '4.0.0_best_int', language + '.traineddata.gz');
+  const source = path.join(root, 'node_modules', '@tesseract.js-data', language, '4.0.0', language + '.traineddata.gz');
   copied.push(await copyRequired(source, path.join(publicRoot, 'lang', language + '.traineddata.gz')));
 }
 
@@ -49,6 +49,7 @@ const manifest = {
   engine: 'tesseract.js',
   engineVersion: '7.0.0',
   coreVersion: '7.0.0',
+  modelSet: '4.0.0',
   languages,
   assets: copied,
   totalBytes: copied.reduce((total, item) => total + item.bytes, 0),
