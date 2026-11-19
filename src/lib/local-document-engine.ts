@@ -111,6 +111,7 @@ export async function getLocalDocumentCapacity(): Promise<LocalDocumentCapacity>
   };
 }
 
+type OcrLanguages = 'eng' | 'eng+fil';
 type ExtractionResponse = { id: string; text?: string; error?: string };
 let extractionWorker: Worker | null = null;
 const pendingExtractions = new Map<string, { resolve: (text: string) => void; reject: (error: Error) => void }>();
@@ -141,7 +142,7 @@ function getExtractionWorker(): Worker {
   return worker;
 }
 
-function extractInWorker(file: File): Promise<string> {
+function extractInWorker(file: File, ocrLanguages: OcrLanguages): Promise<string> {
   if (typeof Worker === 'undefined') {
     const extension = file.name.toLowerCase().split('.').pop();
     if (extension === 'txt' || extension === 'md') return file.text();
@@ -154,7 +155,7 @@ function extractInWorker(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     pendingExtractions.set(id, { resolve, reject });
     try {
-      getExtractionWorker().postMessage({ id, file });
+      getExtractionWorker().postMessage({ id, file, ocrLanguages });
     } catch (error) {
       pendingExtractions.delete(id);
       reject(error instanceof Error ? error : new Error('Could not start background document processing.'));
@@ -172,7 +173,7 @@ function assertTextLimit(text: string, fileName: string): string {
   return normalized;
 }
 
-export async function extractLocalDocument(file: File): Promise<{ name: string; text: string }> {
+export async function extractLocalDocument(file: File, options: { ocrLanguages?: OcrLanguages } = {}): Promise<{ name: string; text: string }> {
   const capacity = await getLocalDocumentCapacity();
   if (file.size > capacity.maxFileBytes) {
     throw new Error(
@@ -202,7 +203,7 @@ export async function extractLocalDocument(file: File): Promise<{ name: string; 
   }
 
   try {
-    const text = assertTextLimit(await extractInWorker(file), file.name);
+    const text = assertTextLimit(await extractInWorker(file, options.ocrLanguages || 'eng'), file.name);
     await saveCheckpoint({
       id,
       name: file.name,
