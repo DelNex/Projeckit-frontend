@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -28,6 +29,7 @@ export async function GET() {
     if (error) throw error;
     return NextResponse.json({ competencies: data || [] }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
+    await logSystemEvent({ severity: 'error', source: 'api.competencies', message: error instanceof Error ? error.message : 'Could not load the school competency library.', method: 'GET', route: '/api/competencies', code: 'COMPETENCIES_READ_FAILURE' });
     console.error('[competencies GET] Could not load school library:', error instanceof Error ? error.message : 'unknown error');
     return NextResponse.json({ error: 'Could not load the school competency library. Apply the tenant competency library migration and try again.' }, { status: 503 });
   }
@@ -51,6 +53,7 @@ export async function POST(request: Request) {
     if (error) throw error;
     return NextResponse.json({ saved: records.length });
   } catch (error) {
+    await logSystemEvent({ severity: 'error', source: 'api.competencies', message: error instanceof Error ? error.message : 'Could not save the school competency library.', method: 'POST', route: '/api/competencies', code: 'COMPETENCIES_WRITE_FAILURE' });
     console.error('[competencies POST] Could not save school library:', error instanceof Error ? error.message : 'unknown error');
     return NextResponse.json({ error: 'Could not save competencies to the school library. Apply the tenant competency library migration and try again.' }, { status: 503 });
   }
