@@ -140,7 +140,7 @@ export function ExamDraftEditor({
     setRegeneratingItem(q.item_number);
     try {
       await generationJob.start({ lessonText: lessonText || `${subjectTitle} ${q.competency_id}`, repairItemNumber: q.item_number });
-      toast.info(`Question ${q.item_number} was added to the Gemini helper queue.`);
+      toast.info(`Question ${q.item_number} was added to the Groq generation queue.`);
     } catch (err: any) {
       console.error('Failed to regenerate single item:', err);
       toast.error(friendlyError(err, `Could not regenerate question ${q.item_number}.`));
