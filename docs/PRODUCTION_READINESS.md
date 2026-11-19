@@ -65,9 +65,10 @@ they are not automatically copied wholesale into the application database.
 
 Before promoting this branch:
 
-1. Review and apply
-   `supabase/migrations/20261119133200_restrict_school_configuration_writes_to_admins.sql`
-   to the target Supabase project.
+1. Review and apply the pending migrations in timestamp order, including
+   `20261119133200_restrict_school_configuration_writes_to_admins.sql`,
+   `20261119140500_index_application_foreign_keys.sql`, and
+   `20261119150000_atomic_exam_generation_quotas.sql`, to the target Supabase project.
 2. Add authorized Gemini, OpenRouter, and Cloudflare credentials to Netlify if
    those fallback providers are required. Without them, Groq remains the only
    available provider.
@@ -103,9 +104,8 @@ The live advisor reported these items during the release audit:
 - Supabase reports leaked-password protection as disabled. This setting must
   be enabled in Supabase Auth settings; the available project connector does
   not expose that Auth setting for safe modification here.
-- The advisor flags 19 unindexed foreign keys. Most affected tables currently
-  have fewer than 20 estimated rows, so adding every index would add write and
-  storage overhead without measured benefit. The exam-job table is the
-  exception: it has accumulated over 124,000 sequential scans despite a small
-  current row estimate. The migration adds full foreign-key indexes plus
-  quota-window and worker-lease indexes for that hot path.
+- The advisor flags 19 unindexed foreign keys. The branch adds one index for each
+  flagged foreign key to avoid future join and referential-action scans as data
+  grows. The exam-job table is the immediate hot path: it has accumulated over
+  124,000 sequential scans despite a small current row estimate, so additional
+  quota-window, tenant-status, and worker-lease indexes are included.
