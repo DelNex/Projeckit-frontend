@@ -27,6 +27,10 @@ export async function GET() {
       admin.from('platform_settings').select('max_module_upload_cap_mb, max_scan_image_cap_mb').eq('id', 1).maybeSingle(),
     ]);
     if (settingsError || platformError) {
+      console.error('[admin/settings GET] Supabase settings query failed:', {
+        schoolSettingsError: settingsError?.message || null,
+        platformSettingsError: platformError?.message || null,
+      });
       return NextResponse.json({ error: 'Could not load school settings. Apply the latest settings migration.' }, { status: 503 });
     }
     const caps = {
