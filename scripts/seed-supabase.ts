@@ -23,7 +23,7 @@ if (!adminPassword) fail('ADMIN_PASSWORD is required.');
 if (adminPassword.length < 12) fail('ADMIN_PASSWORD must contain at least 12 characters.');
 if (!confirmedProjectRef) fail('CONFIRM_PROJECT_REF is required.');
 
-let projectRef: string;
+let projectRef = '';
 try {
   const parsed = new URL(supabaseUrl);
   if (!parsed.hostname.endsWith('.supabase.co')) fail('SUPABASE_URL must point to a Supabase project.');
@@ -32,7 +32,7 @@ try {
   fail('SUPABASE_URL is invalid.');
 }
 
-if (confirmedProjectRef !== projectRef!) {
+if (confirmedProjectRef !== projectRef) {
   fail('CONFIRM_PROJECT_REF does not match the project reference in SUPABASE_URL.');
 }
 
@@ -42,5 +42,5 @@ if (!dryRun) {
 
 console.log('[DRY-RUN PLAN]');
 console.log(demo ? 'Seed demo academic data' : 'Validate administrator bootstrap configuration');
-console.log('Target project reference: ' + projectRef!);
+console.log('Target project reference: ' + projectRef);
 console.log('No changes made to the database');
