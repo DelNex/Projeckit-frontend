@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizeHelperRequest, readHelperJson } from '@/lib/server/helper-auth';
@@ -17,6 +18,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     await admin.from('helper_status').upsert({ helper_id: body.helperId, state: 'busy', current_job_id: id, last_seen_at: new Date().toISOString() });
     return NextResponse.json({ accepted: true });
   } catch {
+    await logSystemEvent({ severity: 'error', source: 'api.helper.job-progress', message: 'Could not save job progress.', method: 'POST', route: '/api/helper/jobs/[id]/progress', code: 'HELPER_JOB_PROGRESS_FAILURE' });
     return NextResponse.json({ error: 'Could not save job progress.' }, { status: 503 });
   }
 }
