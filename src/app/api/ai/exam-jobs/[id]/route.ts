@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { after, NextResponse } from 'next/server';
 import { runGroqExamJob, runNextGroqExamJob } from '@/lib/server/groq-exam-worker';
 
@@ -62,7 +63,15 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       queuePosition = count.count || 1;
     }
     return NextResponse.json({ id: job.id, tosId: job.tos_id, status: job.status, progress: job.progress, error: job.error, resultSummary: job.result_summary, queuePosition }, { headers: { 'Cache-Control': 'no-store' } });
-  } catch {
+  } catch (error) {
+    await logSystemEvent({
+      severity: 'error',
+      source: 'api.ai.exam-job-status',
+      message: error instanceof Error ? error.message : 'Could not load exam generation status.',
+      code: 'EXAM_JOB_STATUS_FAILURE',
+      method: 'GET',
+      route: '/api/ai/exam-jobs/[id]',
+    });
     return NextResponse.json({ error: 'Could not load exam generation status.' }, { status: 503 });
   }
 }
@@ -78,7 +87,15 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
     if (error) throw error;
     await admin.from('exam_generation_jobs').update({ status: 'cancelled', error: 'Cancelled by the user.', finished_at: new Date().toISOString(), updated_at: new Date().toISOString(), payload: {}, claimed_by: null, lease_expires_at: null }).eq('parent_job_id', id).in('status', ['queued', 'running', 'needs_attention']);
     return NextResponse.json({ accepted: true, status: 'cancelled' });
-  } catch {
+  } catch (error) {
+    await logSystemEvent({
+      severity: 'error',
+      source: 'api.ai.exam-job-cancel',
+      message: error instanceof Error ? error.message : 'Could not cancel exam generation.',
+      code: 'EXAM_JOB_CANCEL_FAILURE',
+      method: 'POST',
+      route: '/api/ai/exam-jobs/[id]',
+    });
     return NextResponse.json({ error: 'Could not cancel exam generation.' }, { status: 503 });
   }
 }
