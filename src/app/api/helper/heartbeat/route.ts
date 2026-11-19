@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizeHelperRequest, readHelperJson } from '@/lib/server/helper-auth';
@@ -17,6 +18,7 @@ export async function POST(request: Request) {
     if (result.error) throw result.error;
     return NextResponse.json({ accepted: true });
   } catch {
+    await logSystemEvent({ severity: 'error', source: 'api.helper.heartbeat', message: 'Could not save helper status.', method: 'POST', route: '/api/helper/heartbeat', code: 'HELPER_HEARTBEAT_FAILURE' });
     return NextResponse.json({ error: 'Could not save helper status.' }, { status: 503 });
   }
 }
