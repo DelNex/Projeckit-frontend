@@ -24,6 +24,7 @@ Status: partially implemented; OCR and resumable recovery remain open.
 
 - [ ] Add a pinned, self-hosted browser OCR runtime with language assets and a Web Worker.
 - [ ] OCR image-only PDFs and photographs locally; preserve page number, reading order, text blocks, and confidence.
+- [x] Detect raster PDF pages with almost no selectable text and stop generation rather than silently feeding incomplete lesson content to AI. This is detection only; OCR processing is still pending.
 - [ ] Add cancellation, progress, memory guards, and low-confidence page review.
 - [x] Keep original documents in browser IndexedDB and process them locally; original file bytes are not uploaded to Supabase or sent to AI providers.
 - [x] Compress extracted lesson text in the browser with gzip before uploading it to the existing private `lesson-uploads` bucket.
