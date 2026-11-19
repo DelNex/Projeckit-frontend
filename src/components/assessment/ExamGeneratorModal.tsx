@@ -95,7 +95,7 @@ export function ExamGeneratorModal({
     setCurrentStep('done');
     setChunkProgress(null);
     toast.success(`Loaded ${generationJob.savedQuestions.length} saved exam questions.`);
-    onExamGeneratedRef.current(generationJob.savedQuestions, generatedTextRef.current, 'Groq AI', generationJob.job?.resultSummary?.missingItems || [], false);
+    onExamGeneratedRef.current(generationJob.savedQuestions, generatedTextRef.current, 'AI provider', generationJob.job?.resultSummary?.missingItems || [], false);
     onCloseRef.current();
   }, [generationJob.savedQuestions, generationJob.job?.id, generationJob.job?.status, generationJob.job?.resultSummary?.missingItems, toast]);
 
@@ -200,8 +200,8 @@ export function ExamGeneratorModal({
       generatedTextRef.current = extractedLessonText;
       const queued = await generationJob.start({ lessonDocuments, teacherInstructions: teacherInstructions.trim() || undefined });
       const label = queued.status === 'queued'
-        ? `Queued (position ${queued.queuePosition || 1}). Groq AI will process this exam in the background.`
-        : queued.status === 'running' ? 'Groq is already generating questions for this TOS.' : 'This TOS already has an AI job that needs attention.';
+        ? `Queued (position ${queued.queuePosition || 1}). The configured AI provider will process this exam in the background.`
+        : queued.status === 'running' ? 'An AI provider is already generating questions for this TOS.' : 'This TOS already has an AI job that needs attention.';
       setChunkProgress({ completed: 0, total: allSlots.length, label });
       setCurrentStep('generating');
     } catch (err: any) {
@@ -266,7 +266,7 @@ export function ExamGeneratorModal({
                   : generationJob.job?.status === 'queued'
                     ? `Queued (position ${generationJob.job.queuePosition || 1}). Groq AI will process this exam in the background. This is running in the background, you can leave this page.`
                     : generationJob.job?.status === 'running'
-                      ? `${generationJob.job.progress?.label || 'Groq is writing your exam.'} This is running in the background, you can leave this page.`
+                      ? `${generationJob.job.progress?.label || 'AI is writing your exam.'} This is running in the background, you can leave this page.`
                       : generationJob.job?.status === 'failed'
                         ? generationJob.job.error || 'Exam generation failed.'
                         : currentStep === 'generating' && chunkProgress ? chunkProgress.label : STEP_LABELS[currentStep]}
