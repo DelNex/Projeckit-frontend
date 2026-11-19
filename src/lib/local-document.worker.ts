@@ -33,7 +33,8 @@ async function recognizePdfPage(page: pdfjs.PDFPageProxy, worker: OcrWorker): Pr
   const context = canvas.getContext('2d');
   if (!context) throw new Error('Could not prepare a local canvas for scanned PDF OCR.');
   await page.render({ canvasContext: context as unknown as CanvasRenderingContext2D, viewport }).promise;
-  const result = await worker.recognize(canvas as unknown as HTMLCanvasElement);
+  const imageData = context.getImageData(0, 0, width, height);
+  const result = await worker.recognize(imageData);
   return String(result.data.text || '').trim();
 }
 
