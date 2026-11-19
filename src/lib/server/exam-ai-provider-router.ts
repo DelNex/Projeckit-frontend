@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 type ProviderId = 'groq' | 'openrouter' | 'gemini' | 'cloudflare';
 
 type ProviderConfig = {
@@ -140,7 +141,16 @@ export async function requestExamQuestionsFromProviders(
       continue;
     }
     try {
-      return await requestProvider(provider, messages, schema, Math.min(providerTimeoutMs, remainingMs - 1_000));
+      const result = await requestProvider(provider, messages, schema, Math.min(providerTimeoutMs, remainingMs - 1_000));
+      if (failures.length) {
+        await logSystemEvent({
+          severity: 'warning',
+          source: 'ai.provider.failover',
+          message: `Provider ${provider.id} succeeded after an earlier provider failed.`,
+          metadata: { successfulProvider: provider.id, previousFailures: failures.map((failure) => failure.slice(0, 180)) },
+        });
+      }
+      return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : `${provider.id} request failed`;
       failures.push(message.slice(0, 240));
@@ -150,5 +160,13 @@ export async function requestExamQuestionsFromProviders(
       if (!retryable) break;
     }
   }
-  throw new Error(`No configured AI provider could complete this batch. ${failures.join(' | ').slice(0, 700)}`);
+  const failureSummary = failures.join(' | ').slice(0, 700);
+  await logSystemEvent({
+    severity: 'error',
+    source: 'ai.provider.router',
+    message: 'All configured exam AI providers failed for a generation batch.',
+    code: 'AI_PROVIDER_EXHAUSTED',
+    metadata: { configuredProviders: providers.map((provider) => provider.id), failures: failureSummary },
+  });
+  throw new Error(`No configured AI provider could complete this batch. ${failureSummary}`);
 }
