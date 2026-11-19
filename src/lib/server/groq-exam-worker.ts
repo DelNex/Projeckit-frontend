@@ -62,6 +62,8 @@ const QUESTION_SCHEMA = {
 export function buildGroqMessages(payload: Record<string, any>) {
   const chunks = Array.isArray(payload.lessonChunks) ? payload.lessonChunks : [];
   const slots = Array.isArray(payload.slots) ? payload.slots : [];
+  const totalSourceCharacters = chunks.reduce((total: number, chunk: any) => total + String(chunk?.text || '').length, 0);
+  if (totalSourceCharacters > MAX_LESSON_CHARS) throw new Error(`The extracted lesson material exceeds ${MAX_LESSON_CHARS.toLocaleString()} characters. Split the material into smaller generation jobs.`);
   const slotCompetencies = [...new Set(slots.map((slot: any) => String(slot?.competency_id || '')).filter(Boolean))];
   const assignedChunks = chunks.filter((chunk: any) =>
     typeof chunk?.competencyId === 'string' && slotCompetencies.includes(chunk.competencyId)
