@@ -1,5 +1,37 @@
 import { createClient } from '@supabase/supabase-js';
 
+
+export class InvalidServiceKeyError extends Error {
+  code = 'INVALID_SERVICE_KEY';
+  constructor(message = 'SUPABASE_SERVICE_ROLE_KEY must be a Supabase server key for this project. Do not use an AI-provider key.') {
+    super(message);
+    this.name = 'InvalidServiceKeyError';
+  }
+}
+
+/** Reject common credential mix-ups before sending a request to Supabase. */
+export function validateSupabaseServiceKey(key: string): string {
+  if (/^gsk_/i.test(key)) {
+    throw new InvalidServiceKeyError('SUPABASE_SERVICE_ROLE_KEY contains a Groq API key (gsk_). Set the Supabase service_role/server key here and keep GROQ_API_KEY separate.');
+  }
+  if (/^sb_publishable_/i.test(key)) {
+    throw new InvalidServiceKeyError('SUPABASE_SERVICE_ROLE_KEY contains a public publishable key. Set the Supabase server key instead.');
+  }
+  if (key.startsWith('eyJ')) {
+    try {
+      const payload = key.split('.')[1];
+      const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+      if (claims.role !== 'service_role') {
+        throw new InvalidServiceKeyError('SUPABASE_SERVICE_ROLE_KEY is a Supabase JWT, but its role is not service_role.');
+      }
+    } catch (error) {
+      if (error instanceof InvalidServiceKeyError) throw error;
+      throw new InvalidServiceKeyError('SUPABASE_SERVICE_ROLE_KEY is not a valid Supabase service-role JWT.');
+    }
+  }
+  return key;
+}
+
 export class MissingServiceKeyError extends Error {
   code = 'MISSING_SERVICE_KEY';
   constructor(
@@ -23,7 +55,9 @@ export function createAdminClient() {
     throw new MissingServiceKeyError();
   }
 
-  return createClient(supabaseUrl, serviceRoleKey, {
+  const validatedServiceKey = validateSupabaseServiceKey(serviceRoleKey);
+
+  return createClient(supabaseUrl, validatedServiceKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
