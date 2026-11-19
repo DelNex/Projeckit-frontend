@@ -36,9 +36,12 @@ export default function AuditLogsPage() {
 
   const fetchLogs = async () => {
     setLoading(true);
+    setSystemLogsLoading(true);
     setError(null);
+    setSystemLogsError(null);
+
     try {
-      const { data, error: err } = await (supabase as any)
+      const { data, error: auditError } = await (supabase as any)
         .from('audit_logs')
         .select(`
           id,
@@ -51,19 +54,23 @@ export default function AuditLogsPage() {
         `)
         .order('created_at', { ascending: false })
         .limit(100);
-
-      if (err) throw err;
+      if (auditError) throw auditError;
       setLogs(data || []);
-      const systemResponse = await fetch('/api/admin/system-logs?limit=100', { cache: 'no-store' });
-      const systemResult = await systemResponse.json().catch(() => ({}));
-      if (!systemResponse.ok) throw new Error(systemResult.error || 'Failed to load system events.');
-      setSystemLogs(Array.isArray(systemResult.events) ? systemResult.events : []);
-      setSystemLogsError(null);
-    } catch (err: any) {
-      console.error('Failed to fetch audit logs:', err);
-      setError(err?.message || 'Failed to load audit logs from database');
+    } catch (cause: any) {
+      console.error('Failed to fetch audit logs:', cause);
+      setError(cause?.message || 'Failed to load audit logs from database');
     } finally {
       setLoading(false);
+    }
+
+    try {
+      const response = await fetch('/api/admin/system-logs?limit=100', { cache: 'no-store' });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Failed to load system events.');
+      setSystemLogs(Array.isArray(result.events) ? result.events : []);
+    } catch (cause) {
+      setSystemLogsError(cause instanceof Error ? cause.message : 'Failed to load system events.');
+    } finally {
       setSystemLogsLoading(false);
     }
   };
