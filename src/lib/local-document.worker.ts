@@ -69,6 +69,7 @@ async function extractPdf(file: File): Promise<string> {
   const pages: string[] = [];
   let characterCount = 0;
   let ocrWorker: OcrWorker | null = null;
+  let hasExtractedContent = false;
 
   try {
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
