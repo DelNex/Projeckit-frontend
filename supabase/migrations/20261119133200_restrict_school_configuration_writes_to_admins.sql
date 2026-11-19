@@ -196,12 +196,16 @@ CREATE TRIGGER trg_guard_grading_period_writes
 -- Enforce AI generation quotas inside the enqueue transaction. Route-level
 -- preflight checks improve UX, but only this locked database check prevents
 -- parallel requests from racing past per-user and per-school limits.
+DROP FUNCTION IF EXISTS public.enqueue_groq_exam_generation_job(uuid, uuid, uuid, jsonb, text);
+
 CREATE OR REPLACE FUNCTION public.enqueue_groq_exam_generation_job(
   p_tenant_id uuid,
   p_tos_id uuid,
   p_created_by uuid,
   p_payload jsonb,
-  p_job_kind text
+  p_job_kind text,
+  p_hourly_limit integer,
+  p_daily_limit integer
 )
 RETURNS TABLE(job_id uuid, created_at timestamptz, status text, created boolean)
 LANGUAGE plpgsql
@@ -211,8 +215,8 @@ AS $function$
 DECLARE
   existing public.exam_generation_jobs;
   created_job public.exam_generation_jobs;
-  hourly_limit integer;
-  daily_limit integer;
+  hourly_limit integer := GREATEST(1, LEAST(COALESCE(p_hourly_limit, 5), 1000));
+  daily_limit integer := GREATEST(1, LEAST(COALESCE(p_daily_limit, 100), 10000));
   hourly_count integer;
   daily_count integer;
 BEGIN
@@ -257,16 +261,6 @@ BEGIN
     RETURN;
   END IF;
 
-  SELECT
-    GREATEST(1, COALESCE(t.ai_hourly_user_limit, 5)),
-    GREATEST(1, COALESCE(t.ai_daily_school_limit, 100))
-  INTO hourly_limit, daily_limit
-  FROM public.tenants t
-  WHERE t.id = p_tenant_id;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'School was not found';
-  END IF;
-
   SELECT count(*)::integer INTO hourly_count
   FROM public.exam_generation_jobs j
   WHERE j.created_by = p_created_by
@@ -297,8 +291,8 @@ BEGIN
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.enqueue_groq_exam_generation_job(uuid, uuid, uuid, jsonb, text) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.enqueue_groq_exam_generation_job(uuid, uuid, uuid, jsonb, text) TO service_role;
+REVOKE ALL ON FUNCTION public.enqueue_groq_exam_generation_job(uuid, uuid, uuid, jsonb, text, integer, integer) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.enqueue_groq_exam_generation_job(uuid, uuid, uuid, jsonb, text, integer, integer) TO service_role;
 
 -- Support the quota and lease scans without repeatedly scanning the full job
 -- history as the school grows.
