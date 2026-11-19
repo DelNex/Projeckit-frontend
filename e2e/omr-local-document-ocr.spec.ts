@@ -28,8 +28,8 @@ test('extracts a scanned PDF with the locally bundled OCR runtime', async ({ pag
     return (await page.locator('p[role="alert"]').textContent())?.trim() || '';
   }, { timeout: 120_000 }).not.toBe('');
 
-  const errorCount = await page.getByRole('alert').count();
-  const extractionError = errorCount ? (await page.getByRole('alert').textContent())?.trim() || null : null;
+  const errorCount = await page.locator('p[role="alert"]').count();
+  const extractionError = errorCount ? (await page.locator('p[role="alert"]').textContent())?.trim() || null : null;
   expect(extractionError).toBeNull();
   const text = await output.textContent();
   expect((text || '').replace(/\[Page \d+\]/g, '').trim().length).toBeGreaterThan(20);
