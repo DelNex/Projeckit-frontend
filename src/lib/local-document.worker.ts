@@ -55,7 +55,6 @@ async function extractPdf(file: File): Promise<string> {
         pdfjs.OPS.paintImageXObject,
         pdfjs.OPS.paintInlineImageXObject,
         pdfjs.OPS.paintImageMaskXObject,
-        pdfjs.OPS.paintJpegXObject,
       ]);
       const imageOperatorCount = operatorList.fnArray.filter((operator) => imageOperators.has(operator)).length;
       if (isLikelyScannedPdfPage({ textLength: pageText.trim().length, imageOperatorCount })) {
