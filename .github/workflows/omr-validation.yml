@@ -50,6 +50,14 @@ jobs:
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder-publishable-key
           NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
         run: npm run test:omr:browser
+      - name: Upload Playwright failure context
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: omr-playwright-test-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Upload OMR browser diagnostics
         if: always()
         uses: actions/upload-artifact@v4
