@@ -158,15 +158,26 @@ export function chooseNextExamJob(queuedJobs: Array<{ id: string; tenant_id: str
 }
 
 export async function runNextGroqExamJob(admin = createAdminClient()): Promise<void> {
-  const { data: queuedJobs, error: queueError } = await admin
-    .from('exam_generation_jobs')
-    .select('id,tenant_id,created_at')
-    .eq('provider', 'groq_api')
-    .in('status', ['queued', 'needs_attention'])
-    .order('created_at', { ascending: true })
-    .limit(100);
-  if (queueError) throw new Error('Could not inspect the exam generation queue.');
-  if (!queuedJobs?.length) return;
+  const now = new Date().toISOString();
+  const [queuedResult, staleResult] = await Promise.all([
+    admin.from('exam_generation_jobs')
+      .select('id,tenant_id,created_at')
+      .eq('provider', 'groq_api')
+      .in('status', ['queued', 'needs_attention'])
+      .order('created_at', { ascending: true })
+      .limit(100),
+    admin.from('exam_generation_jobs')
+      .select('id,tenant_id,created_at')
+      .eq('provider', 'groq_api')
+      .eq('status', 'running')
+      .or(`lease_expires_at.is.null,lease_expires_at.lte.${now}`)
+      .order('created_at', { ascending: true })
+      .limit(100),
+  ]);
+  if (queuedResult.error || staleResult.error) throw new Error('Could not inspect the exam generation queue.');
+  const queuedJobs = [...(queuedResult.data || []), ...(staleResult.data || [])]
+    .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+  if (!queuedJobs.length) return;
 
   const tenantIds = [...new Set(queuedJobs.map((job: any) => job.tenant_id).filter(Boolean))];
   const now = new Date().toISOString();
