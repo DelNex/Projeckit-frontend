@@ -68,15 +68,15 @@ export function buildA4CompactPages(
     const cells = Array.from({ length: capacity }, (_, offset) => {
       const index = pageStart + offset;
       const content = index < safeCount ? renderSheet(index) : '';
-      return `<div class="omr-sheet-compact">${content}</div>`;
+      return `<div class="omr-sheet-compact" style="width:148mm;height:${sheetHeightMm}mm;overflow:hidden">${content}</div>`;
     }).join('');
     const horizontalCuts = Array.from({ length: safeRows - 1 }, (_, row) =>
-      `<div class="omr-compact-horizontal-cut" style="top:${((row + 1) * sheetHeightMm).toFixed(2)}mm"></div>`
+      `<div class="omr-compact-horizontal-cut" style="position:absolute;left:0;right:0;top:${((row + 1) * sheetHeightMm).toFixed(2)}mm;border-top:1px dashed #9CA3AF"></div>`
     ).join('');
     pages.push(`
-      <div class="omr-print-page-compact" style="--omr-compact-rows:${safeRows};--omr-compact-height:${sheetHeightMm}mm">
+      <div class="omr-print-page-compact" style="width:297mm;height:210mm;display:grid;grid-template-columns:148mm 148mm;grid-template-rows:repeat(${safeRows},${sheetHeightMm}mm);align-content:start;justify-content:space-between;position:relative;overflow:hidden;background:#fff">
         ${cells}
-        <div class="omr-compact-vertical-cut"></div>
+        <div class="omr-compact-vertical-cut" style="position:absolute;left:148.5mm;top:0;bottom:0;border-left:1px dashed #9CA3AF"></div>
         ${horizontalCuts}
       </div>
     `);
