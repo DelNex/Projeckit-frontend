@@ -142,6 +142,42 @@ async function requestGroqQuestions(payload: Record<string, any>, jobDeadline: n
  * validates/saves through the existing atomic finalizer, and processes repair
  * jobs without requiring the local Gemini browser helper.
  */
+/** Select the least-loaded tenant's oldest queued job before dispatching it. */
+export async function runNextGroqExamJob(admin = createAdminClient()): Promise<void> {
+  const { data: queuedJobs, error: queueError } = await admin
+    .from('exam_generation_jobs')
+    .select('id,tenant_id,created_at')
+    .eq('provider', 'groq_api')
+    .in('status', ['queued', 'needs_attention'])
+    .order('created_at', { ascending: true })
+    .limit(100);
+  if (queueError) throw new Error('Could not inspect the exam generation queue.');
+  if (!queuedJobs?.length) return;
+
+  const tenantIds = [...new Set(queuedJobs.map((job: any) => job.tenant_id).filter(Boolean))];
+  const now = new Date().toISOString();
+  const { data: activeJobs, error: activeError } = await admin
+    .from('exam_generation_jobs')
+    .select('tenant_id')
+    .eq('provider', 'groq_api')
+    .eq('status', 'running')
+    .gt('lease_expires_at', now)
+    .in('tenant_id', tenantIds);
+  if (activeError) throw new Error('Could not inspect active exam workers.');
+
+  const activeByTenant = new Map<string, number>();
+  for (const job of activeJobs || []) {
+    activeByTenant.set(job.tenant_id, (activeByTenant.get(job.tenant_id) || 0) + 1);
+  }
+  const nextJob = [...queuedJobs]
+    .filter((job: any) => (activeByTenant.get(job.tenant_id) || 0) < 2)
+    .sort((a: any, b: any) =>
+      (activeByTenant.get(a.tenant_id) || 0) - (activeByTenant.get(b.tenant_id) || 0)
+      || Date.parse(a.created_at) - Date.parse(b.created_at)
+    )[0];
+  if (nextJob) await runGroqExamJob(nextJob.id, admin);
+}
+
 export async function runGroqExamJob(jobId: string, admin = createAdminClient(), repairDepth = 0, jobDeadline = Date.now() + 50_000): Promise<void> {
   if (repairDepth > 2) throw new Error('Exam repair limit reached.');
   const workerId = `${WORKER_ID}:${randomUUID()}`;
