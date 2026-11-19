@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { buildExamPrompt, finalizeExamJob } from './exam-jobs';
 import type { TosBlueprintSlot } from '@/lib/exam-types';
 import { requestExamQuestionsFromProviders } from './exam-ai-provider-router';
+import { logSystemEvent } from './system-logger';
 
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 const DEFAULT_MODEL = 'openai/gpt-oss-120b';
@@ -250,7 +251,11 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
       await runGroqExamJob(result.repairJobId, admin, repairDepth + 1, jobDeadline);
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Groq exam generation failed.';
+    const message = error instanceof Error ? error.message : 'AI exam generation failed.';
+    await logSystemEvent({
+      severity: 'error', source: 'exam.generation-worker', code: 'EXAM_GENERATION_FAILED',
+      message, metadata: { jobId, repairDepth },
+    });
     const { data: failedOwnedJob } = await admin.from('exam_generation_jobs').update({
       status: 'failed',
       error: message.slice(0, 500),
