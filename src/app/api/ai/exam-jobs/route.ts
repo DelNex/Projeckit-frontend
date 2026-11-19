@@ -121,7 +121,7 @@ export async function GET(request: Request) {
     const admin = caller.admin!;
     await admin.rpc('expire_unserviceable_exam_jobs');
     await admin.rpc('cleanup_exam_job_payloads');
-    let query = admin.from('exam_generation_jobs').select('id,tos_id,status,progress,error,result_summary,created_at,updated_at,finished_at,created_by,job_kind,parent_job_id').eq('tenant_id', caller.profile!.tenant_id).order('created_at', { ascending: false });
+    let query = admin.from('exam_generation_jobs').select('id,tos_id,status,provider,progress,error,result_summary,created_at,updated_at,finished_at,created_by,job_kind,parent_job_id').eq('tenant_id', caller.profile!.tenant_id).eq('provider', 'groq_api').order('created_at', { ascending: false });
     if (tosId) query = query.eq('tos_id', tosId).limit(1);
     else query = query.in('tos_id', tosIds);
     const { data: jobs, error } = await query;
@@ -139,7 +139,7 @@ export async function GET(request: Request) {
     let job: any = jobs?.[0];
     if (!job) return NextResponse.json({ job: null }, { headers: { 'Cache-Control': 'no-store' } });
     if (job.parent_job_id) {
-      const { data: parent } = await admin.from('exam_generation_jobs').select('id,tos_id,status,progress,error,result_summary,created_at,updated_at,finished_at,created_by').eq('tenant_id', caller.profile!.tenant_id).eq('id', job.parent_job_id).maybeSingle();
+      const { data: parent } = await admin.from('exam_generation_jobs').select('id,tos_id,status,progress,error,result_summary,created_at,updated_at,finished_at,created_by').eq('tenant_id', caller.profile!.tenant_id).eq('provider', 'groq_api').eq('id', job.parent_job_id).maybeSingle();
       if (parent) job = parent;
     }
     const position = job.status === 'queued' ? await admin.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('provider', 'groq_api').eq('status', 'queued').lte('created_at', job.created_at) : null;
