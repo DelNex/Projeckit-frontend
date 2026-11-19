@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   buildGroqMessages,
+  chooseNextExamJobs,
   getExamBatchSize,
   splitExamSlotsIntoBatches,
 } from '../groq-exam-worker';
@@ -78,4 +79,44 @@ test('keeps shared uploaded sources when a requested competency has no dedicated
     ],
   });
   assert.match(messages[1].content, /Shared lesson facts about ecosystems/);
+});
+
+
+test('selects the least-loaded tenants first and never exceeds two active jobs per tenant', () => {
+  const queued = [
+    { id: 'a1', tenant_id: 'A', created_at: '2026-01-01T00:00:01.000Z' },
+    { id: 'b1', tenant_id: 'B', created_at: '2026-01-01T00:00:02.000Z' },
+    { id: 'c1', tenant_id: 'C', created_at: '2026-01-01T00:00:03.000Z' },
+    { id: 'a2', tenant_id: 'A', created_at: '2026-01-01T00:00:04.000Z' },
+    { id: 'b2', tenant_id: 'B', created_at: '2026-01-01T00:00:05.000Z' },
+    { id: 'c2', tenant_id: 'C', created_at: '2026-01-01T00:00:06.000Z' },
+  ];
+  const selected = chooseNextExamJobs(queued, [{ tenant_id: 'A' }], 4);
+
+  assert.deepEqual(selected.map((job) => job.id), ['b1', 'c1', 'a1', 'b2']);
+  const totals = new Map<string, number>();
+  for (const job of [{ tenant_id: 'A' }, ...selected]) {
+    totals.set(job.tenant_id, (totals.get(job.tenant_id) || 0) + 1);
+  }
+  assert.ok([...totals.values()].every((count) => count <= 2));
+});
+
+test('does not select another job for a tenant already at its active-job cap', () => {
+  const queued = [
+    { id: 'a1', tenant_id: 'A', created_at: '2026-01-01T00:00:01.000Z' },
+    { id: 'b1', tenant_id: 'B', created_at: '2026-01-01T00:00:02.000Z' },
+  ];
+  const selected = chooseNextExamJobs(queued, [{ tenant_id: 'A' }, { tenant_id: 'A' }], 4);
+  assert.deepEqual(selected.map((job) => job.id), ['b1']);
+});
+
+test('caps each dispatch at four jobs and handles an empty capacity safely', () => {
+  const queued = Array.from({ length: 8 }, (_, index) => ({
+    id: String(index + 1),
+    tenant_id: String(index + 1),
+    created_at: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+  }));
+  assert.equal(chooseNextExamJobs(queued, [], 99).length, 4);
+  assert.deepEqual(chooseNextExamJobs(queued, [], 0), []);
+  assert.deepEqual(chooseNextExamJobs(queued, [], -1), []);
 });
