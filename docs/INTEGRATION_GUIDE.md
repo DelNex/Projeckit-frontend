@@ -38,7 +38,7 @@ Record the commit and deployment, database migration status, AI service URL/heal
 
 ## Exam AI provider routing and large lessons
 
-Exam generation uses the existing durable `exam_generation_jobs` queue. The database claim function provides per-job row locking and leases; the API also applies per-user hourly and per-school daily limits. Provider failover does not create a second queue. A shared dispatcher now starts the oldest queued job from the least-loaded school. The database serializes claims and caps hosted exam work at four concurrent jobs globally and two per school. Enqueue requests and status polling both trigger dispatch, so queued work resumes when users revisit/poll their jobs; this is not yet an always-on worker that drains the queue after every browser closes.
+Exam generation uses the existing durable `exam_generation_jobs` queue. The database claim function provides per-job row locking and leases; the API also applies per-user hourly and per-school daily limits. Provider failover does not create a second queue. A shared dispatcher now starts the oldest queued job from the least-loaded school. The database serializes claims and caps hosted exam work at four concurrent jobs globally and two per school. Enqueue requests can start work immediately, while status polling is read-mostly and no longer runs queue cleanup on every request. A Netlify Scheduled Function now dispatches the durable queue every minute, including when all teacher browsers are closed. The scheduled function calls the authenticated `/api/internal/exam-worker` endpoint and uses `CRON_SECRET`; add the same random server-only secret to the Netlify Production environment before publishing this change. Scheduled Functions run only on published deploys, so verify the function shows a Scheduled badge after release.
 
 The server-side provider router supports these adapters when credentials are configured:
 
@@ -54,7 +54,7 @@ Local extraction now accepts up to 900,000 readable characters per generation jo
 ## Known operational constraints
 
 - The AI service needs to be reachable from the Next.js server and requires the same Supabase signing configuration to validate user tokens.
-- Scanned/image-only PDFs still require OCR or a text-based source. The local OCR engine is not yet integrated; do not treat image-only PDFs as supported until a pinned, self-hosted OCR runtime and language assets are added and tested.
+- Scanned/image-only PDFs are now routed through local Tesseract.js OCR in the browser worker. The worker, WASM core variants, and English traineddata are copied from pinned npm dependencies into same-origin `/ocr/` assets during build; no third-party OCR script or remote language-data CDN is loaded at runtime. OCR is currently English-only. Validate the scanned-PDF fixture and real phone scans in a browser before claiming full OCR accuracy.
 - OpenCV quality depends on camera and printing conditions. Calibration and a recorded validation dataset remain release tasks.
 - Retain separate, current lockfile-based SBOMs and review dependency audit findings before production deployment.
 
