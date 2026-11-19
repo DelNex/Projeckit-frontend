@@ -33,7 +33,7 @@ export async function captureRequestError(
     severity: 'error',
     source: 'next.request',
     message,
-    route: context.routePath || request.path,
+    route: context.routePath || request.path.split('?')[0],
     method: request.method,
     status: 500,
     requestId: getHeader(request.headers, 'x-nf-request-id')
