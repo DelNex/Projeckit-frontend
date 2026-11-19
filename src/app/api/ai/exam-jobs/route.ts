@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     if (documents.reduce((sum, doc) => sum + doc.text.length, 0) > 500_000) return NextResponse.json({ error: 'These lessons contain more than 500,000 characters. Split them into smaller uploads.' }, { status: 413 });
 
     const { data: activeJob, error: activeJobError } = await caller.admin!.from('exam_generation_jobs')
-      .select('id,status,created_at')
+      .select('id,status,created_at,provider')
       .eq('tenant_id', caller.profile!.tenant_id)
       .eq('tos_id', tos.id)
       .is('parent_job_id', null)
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       .maybeSingle();
     if (activeJobError) throw activeJobError;
     if (activeJob) {
-      if (['queued', 'needs_attention'].includes(activeJob.status)) {
+      if (activeJob.provider === 'groq_api' && ['queued', 'needs_attention'].includes(activeJob.status)) {
         after(async () => { try { await runGroqExamJob(activeJob.id, caller.admin!); } catch (error) { console.error('[Groq worker] Existing job processing failed:', error instanceof Error ? error.message : 'unknown error'); } });
       }
       const position = activeJob.status === 'queued'
