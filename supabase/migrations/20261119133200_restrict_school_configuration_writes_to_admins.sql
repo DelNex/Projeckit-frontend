@@ -1,6 +1,58 @@
 -- Restrict school-wide configuration writes to approved tenant administrators.
 -- Tenant members retain read access for normal teaching workflows.
 
+-- Archived accounts must not retain tenant or administrator privileges.
+CREATE OR REPLACE FUNCTION public.get_current_tenant_id()
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $function$
+  SELECT p.tenant_id
+  FROM public.profiles p
+  WHERE p.id = (SELECT auth.uid())
+    AND p.status = 'approved'
+    AND p.archived_at IS NULL
+  LIMIT 1;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.is_current_user_admin()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $function$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = (SELECT auth.uid())
+      AND p.role = 'admin'
+      AND p.status = 'approved'
+      AND p.archived_at IS NULL
+  );
+$function$;
+
+CREATE OR REPLACE FUNCTION public.is_platform_admin()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $function$
+  SELECT COALESCE(
+    (
+      SELECT p.is_platform_admin
+      FROM public.profiles p
+      WHERE p.id = (SELECT auth.uid())
+        AND p.status = 'approved'
+        AND p.archived_at IS NULL
+    ),
+    false
+  );
+$function$;
+
 -- Optimize and tighten profile RLS. The previous SELECT policy used
 -- is_current_user_admin() without a tenant predicate, allowing any school
 -- administrator to read profiles from every school.
