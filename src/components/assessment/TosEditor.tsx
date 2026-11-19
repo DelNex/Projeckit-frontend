@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { createClient } from '@/lib/supabase/client';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { useToast } from '@/components/ui/toast';
@@ -26,8 +27,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTenant } from '@/context/TenantContext';
 import { ExamQuestion } from '@/lib/exam-types';
-import { ExamGeneratorModal } from './ExamGeneratorModal';
-import { ExamDraftEditor } from './ExamDraftEditor';
+const ExamGeneratorModal = dynamic(
+  () => import('./ExamGeneratorModal').then((module) => module.ExamGeneratorModal),
+  { ssr: false, loading: () => null },
+);
+const ExamDraftEditor = dynamic(
+  () => import('./ExamDraftEditor').then((module) => module.ExamDraftEditor),
+  { ssr: false, loading: () => null },
+);
 import {
   calculateTos,
   BloomLevel,
