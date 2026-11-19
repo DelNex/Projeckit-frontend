@@ -22,14 +22,14 @@ export async function POST(request: Request) {
     if (caller.response) return caller.response;
     const raw = await request.text();
     if (Buffer.byteLength(raw, 'utf8') > 1_800_000) return NextResponse.json({ error: 'Lesson text is too large to queue. Reduce the extracted text and try again.' }, { status: 413 });
-    const body = JSON.parse(raw) as { tosId?: string; lessonText?: string; lessonDocuments?: Array<{ name: string; text: string }>; teacherInstructions?: string; repairItemNumber?: number };
+    const body = JSON.parse(raw) as { tosId?: string; lessonText?: string; lessonDocuments?: Array<{ name: string; text: string; competencyId?: string }>; teacherInstructions?: string; repairItemNumber?: number };
     if (!body.tosId) return NextResponse.json({ error: 'Choose a Table of Specifications before generating an exam.' }, { status: 400 });
     const { data: tos, error: tosError } = await caller.admin!.from('tos_documents').select('id,tenant_id,rows,target_items,questions').eq('id', body.tosId).eq('tenant_id', caller.profile!.tenant_id).maybeSingle();
     if (tosError || !tos) return NextResponse.json({ error: 'The Table of Specifications was not found in your school.' }, { status: 404 });
     const teacherInstructions = typeof body.teacherInstructions === 'string' ? body.teacherInstructions.trim() : '';
     if (teacherInstructions.length > 4000) return NextResponse.json({ error: 'Teacher instructions must be 4,000 characters or fewer.' }, { status: 400 });
     const documents = Array.isArray(body.lessonDocuments) ? body.lessonDocuments : body.lessonText?.trim() ? [{ name: 'Lesson materials', text: body.lessonText }] : [];
-    if (!documents.length || documents.some((doc) => !doc || typeof doc.name !== 'string' || typeof doc.text !== 'string')) return NextResponse.json({ error: 'Upload or extract lesson text before generating an exam.' }, { status: 400 });
+    if (!documents.length || documents.some((doc) => !doc || typeof doc.name !== 'string' || typeof doc.text !== 'string' || (doc.competencyId !== undefined && typeof doc.competencyId !== 'string'))) return NextResponse.json({ error: 'Upload or extract lesson text before generating an exam.' }, { status: 400 });
     if (documents.reduce((sum, doc) => sum + doc.text.length, 0) > 200_000) return NextResponse.json({ error: 'These lessons contain more than 200,000 characters for one generation job. Split the material into smaller uploads or generate a smaller exam.' }, { status: 413 });
 
     const { data: activeJob, error: activeJobError } = await caller.admin!.from('exam_generation_jobs')
