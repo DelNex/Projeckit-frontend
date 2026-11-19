@@ -72,9 +72,9 @@ export function buildGroqMessages(payload: Record<string, any>) {
   // retain all uploaded material as shared context rather than silently dropping it.
   const selectedChunks = everySlotHasDedicatedMaterial ? assignedChunks : chunks;
   const lessonText = selectedChunks.map((chunk: any) => {
-    const competencyLabel = typeof chunk?.competencyId === 'string' ? `[TOS competency ${chunk.competencyId}]\\n` : '';
+    const competencyLabel = typeof chunk?.competencyId === 'string' ? `[TOS competency ${chunk.competencyId}]\n` : '';
     return `${competencyLabel}${String(chunk?.text || '')}`;
-  }).filter((text: string) => text.trim()).join('\\n\\n');
+  }).filter((text: string) => text.trim()).join('\n\n');
   if (!lessonText.trim()) throw new Error('The uploaded lesson material contains no readable text.');
   if (lessonText.length > MAX_LESSON_CHARS) {
     throw new Error(`The extracted lesson material is too large for the free AI generation route (${MAX_LESSON_CHARS.toLocaleString()} characters maximum). Split the material into smaller files and try again.`);
