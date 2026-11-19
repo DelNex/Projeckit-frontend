@@ -16,7 +16,7 @@ export async function GET() {
     const limits = await getUploadLimits(createAdminClient(), profile.tenant_id);
     return NextResponse.json(limits, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
-    console.error('[settings/limits GET]', error);
+    console.error('[settings/limits GET]', error instanceof Error ? error.message : 'unknown error');
     return NextResponse.json({ error: 'Could not load upload limits.' }, { status: 503 });
   }
 }
