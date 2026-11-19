@@ -7,6 +7,35 @@ type WorkerResponse = { id: string; text?: string; error?: string };
 
 const workerScope = self as unknown as DedicatedWorkerGlobalScope;
 const MAX_CHARACTERS = 900_000;
+const MIN_SELECTABLE_TEXT_CHARACTERS = 120;
+
+type OcrWorker = Awaited<ReturnType<typeof import('tesseract.js').createWorker>>;
+
+async function createLocalOcrWorker(): Promise<OcrWorker> {
+  const { createWorker } = await import('tesseract.js');
+  return createWorker('eng', 1, {
+    workerPath: '/ocr/worker.min.js',
+    corePath: '/ocr/core',
+    langPath: '/ocr/lang',
+    cachePath: 'projectkit-local-ocr',
+    cacheMethod: 'write',
+  });
+}
+
+async function recognizePdfPage(page: pdfjs.PDFPageProxy, worker: OcrWorker): Promise<string> {
+  if (typeof OffscreenCanvas === 'undefined') {
+    throw new Error('This browser cannot render scanned PDF pages locally. Use a modern browser with OffscreenCanvas support.');
+  }
+  const baseViewport = page.getViewport({ scale: 1 });
+  const scale = Math.max(1.5, Math.min(2.5, 2600 / Math.max(baseViewport.width, baseViewport.height)));
+  const viewport = page.getViewport({ scale });
+  const canvas = new OffscreenCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Could not prepare a local canvas for scanned PDF OCR.');
+  await page.render({ canvasContext: context as unknown as CanvasRenderingContext2D, viewport }).promise;
+  const result = await worker.recognize(canvas);
+  return String(result.data.text || '').trim();
+}
 
 function normalizeText(text: string): string {
   const seen = new Set<string>();
@@ -39,30 +68,48 @@ async function extractPdf(file: File): Promise<string> {
   const pdf = await task.promise;
   const pages: string[] = [];
   let characterCount = 0;
+  let ocrWorker: OcrWorker | null = null;
+  let scannedPages = 0;
 
   try {
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
       const page = await pdf.getPage(pageNumber);
-      const content = await page.getTextContent();
-      const pageText = content.items.map((item) => {
-        if (!('str' in item)) return '';
-        return `${item.str}${'hasEOL' in item && item.hasEOL ? '\n' : ' '}`;
-      }).join('');
-      const section = `[Page ${pageNumber}]\n${pageText.trim()}`;
-      characterCount += section.length;
-      if (characterCount > MAX_CHARACTERS) {
-        throw new Error(`'${file.name}' exceeds the 900,000-character AI source limit. Split it by chapter before generating an exam.`);
+      try {
+        const content = await page.getTextContent();
+        const pageText = content.items.map((item) => {
+          if (!('str' in item)) return '';
+          return `${item.str}${'hasEOL' in item && item.hasEOL ? '\\n' : ' '}`;
+        }).join('').trim();
+
+        // Image-only pages usually contain no selectable text. A very small
+        // amount of text can be a footer/header over a scanned page, so OCR
+        // those pages too instead of silently treating them as complete.
+        let extractedText = pageText;
+        if (pageText.length < MIN_SELECTABLE_TEXT_CHARACTERS) {
+          if (!ocrWorker) ocrWorker = await createLocalOcrWorker();
+          const recognized = await recognizePdfPage(page, ocrWorker);
+          scannedPages += 1;
+          if (recognized.length > extractedText.length) extractedText = recognized;
+        }
+
+        const section = `[Page ${pageNumber}]${scannedPages ? ' [local OCR checked]' : ''}\\n${extractedText}`;
+        characterCount += section.length;
+        if (characterCount > MAX_CHARACTERS) {
+          throw new Error(`'${file.name}' exceeds the 900,000-character AI source limit. Split it by chapter before generating an exam.`);
+        }
+        pages.push(section);
+      } finally {
+        page.cleanup();
       }
-      pages.push(section);
-      page.cleanup();
     }
   } finally {
+    if (ocrWorker) await ocrWorker.terminate();
     await pdf.destroy();
   }
 
-  const text = pages.join('\n\n').trim();
-  if (!text) {
-    throw new Error(`No selectable text was found in '${file.name}'. It may be a scanned PDF; OCR support is required before this file can be used.`);
+  const text = pages.join('\\n\\n').trim();
+  if (!text.replace(/\\[Page \\d+\\]/g, '').trim()) {
+    throw new Error(`No readable text could be extracted from '${file.name}'. The PDF may be blank, encrypted, or too low-quality for local OCR.`);
   }
   return text;
 }
