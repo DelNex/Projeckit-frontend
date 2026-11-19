@@ -16,7 +16,7 @@ export class GroqExamJobProvider implements ExamAiProvider {
   readonly id = 'groq_api' as const;
 
   async enqueue(admin: any, input: QueueExamJobInput): Promise<{ id: string; createdAt: string; status: string; reused: boolean }> {
-    const { data, error } = await admin.rpc('enqueue_exam_generation_job', {
+    const { data, error } = await admin.rpc('enqueue_groq_exam_generation_job', {
       p_tenant_id: input.tenantId,
       p_tos_id: input.tosId,
       p_created_by: input.createdBy,
