@@ -87,7 +87,7 @@ async function requestProvider(provider: ProviderConfig, messages: Array<{ role:
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents: [{ role: 'user', parts: [{ text: user }] }],
-        generationConfig: { responseMimeType: 'application/json', temperature: 0.2, maxOutputTokens: 8192 },
+        generationConfig: { responseMimeType: 'application/json', responseJsonSchema: schema, temperature: 0.2, maxOutputTokens: 8192 },
       }),
       signal: timeout, cache: 'no-store',
     });
@@ -95,7 +95,7 @@ async function requestProvider(provider: ProviderConfig, messages: Array<{ role:
     const accountId = process.env.CLOUDFLARE_ACCOUNT_ID!;
     response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/run/${provider.model.split('/').map((part) => encodeURIComponent(part).replace(/%40/gi, '@')).join('/')}`, {
       method: 'POST', headers: { Authorization: `Bearer ${provider.key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages, max_tokens: 8192, temperature: 0.2 }),
+      body: JSON.stringify({ messages, max_tokens: 8192, temperature: 0.2, response_format: { type: 'json_schema', json_schema: schema } }),
       signal: timeout, cache: 'no-store',
     });
   } else {
