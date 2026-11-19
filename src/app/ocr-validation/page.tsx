@@ -1,4 +1,6 @@
 import { notFound } from 'next/navigation';
+
+export const dynamic = 'force-dynamic';
 import { OcrValidationClient } from './validation-client';
 
 /** Development-only browser integration page; never exposed in production. */
