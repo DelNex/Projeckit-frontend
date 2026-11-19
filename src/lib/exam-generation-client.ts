@@ -103,7 +103,7 @@ export function useExamGenerationJob(tosId: string | undefined) {
   const start = useCallback(async (input: { lessonText?: string; lessonDocuments?: Array<{ name: string; text: string }>; repairItemNumber?: number }) => {
     if (!tosId) throw new Error('A TOS is required to start exam generation.');
     if (job && ['queued', 'running', 'needs_attention'].includes(job.status)) throw new Error('This TOS already has an active generation job. Cancel or resolve it before starting another.');
-    if (helperState === 'offline' || helperState === 'needs_attention') throw new Error('The Gemini helper is unavailable. No job was created. Start the helper and try again.');
+    if (helperState === 'offline' || helperState === 'needs_attention') throw new Error('Groq AI is unavailable. Configure GROQ_API_KEY on the server, then try again.');
     setIsStarting(true); setSavedQuestions(null); setLoadError(null);
     try {
       const response = await fetch('/api/ai/exam-jobs', {
