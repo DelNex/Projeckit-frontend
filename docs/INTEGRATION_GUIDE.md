@@ -38,7 +38,7 @@ Record the commit and deployment, database migration status, AI service URL/heal
 
 ## Exam AI provider routing and large lessons
 
-Exam generation uses the existing durable `exam_generation_jobs` queue. The database claim function remains responsible for leases, retries, and tenant-fair job claiming; provider failover does not create a second queue.
+Exam generation uses the existing durable `exam_generation_jobs` queue. The database claim function provides per-job row locking and leases; the API also applies per-user hourly and per-school daily limits. Provider failover does not create a second queue. The current hosted worker still starts from individual web requests: it is not yet a global cross-provider concurrency scheduler or a continuously running queue consumer.
 
 The server-side provider router supports these adapters when credentials are configured:
 
@@ -47,7 +47,7 @@ The server-side provider router supports these adapters when credentials are con
 - Gemini: `GEMINI_API_KEY`, optional `GEMINI_MODEL`
 - Cloudflare Workers AI: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, optional `CLOUDFLARE_MODEL`
 
-Set `AI_PROVIDER_ORDER=groq,openrouter,gemini,cloudflare` to choose the failover order. Only providers with server-side credentials are eligible. Never put these keys in `NEXT_PUBLIC_*` variables or browser code. The router skips a provider during its rate-limit cooldown and falls back on retryable provider errors; it does not create accounts, rotate identities, or bypass quotas. Review each provider's current pricing, rate limits, and data-use terms before enabling it. Do not send student records or other personal information to a provider unless the school's data-processing rules permit it.
+Set `AI_PROVIDER_ORDER=groq,openrouter,gemini,cloudflare` to choose the failover order. Only providers with server-side credentials are eligible. Never put these keys in `NEXT_PUBLIC_*` variables or browser code. The router skips a provider during its in-process rate-limit cooldown and falls back on retryable provider errors; it does not create accounts, rotate identities, or bypass quotas. Cooldowns are process-local, so they are not a substitute for a shared global rate-limit ledger. Review each provider's current pricing, rate limits, and data-use terms before enabling it. Do not send student records or other personal information to a provider unless the school's data-processing rules permit it.
 
 Local extraction now accepts up to 900,000 readable characters per generation job, subject to the existing 1.5 MB serialized queue-payload limit. Text is stored as bounded lesson sections in the durable job. For each question batch, the worker ranks sections against the requested TOS competency and sends at most eight relevant sections / 120,000 characters to the model. If no section matches, it samples across the document instead of repeatedly sending only the first pages. This is lexical retrieval, not semantic search; teachers must still review generated questions against the source.
 
