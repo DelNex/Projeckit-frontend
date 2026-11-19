@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import { test } from 'node:test';
-import { deleteCompressedLessonSource, readCompressedLessonDocuments } from '../lesson-source-storage';
+import { cleanupStaleLessonSourcesForUser, deleteCompressedLessonSource, readCompressedLessonDocuments } from '../lesson-source-storage';
 import type { LessonSourceManifest } from '@/lib/lesson-source';
 
 const ownerId = 'user-123';
@@ -72,6 +72,46 @@ test('rejects a manifest whose declared character count was changed', async () =
   const { compressed, manifest } = fixture({ charCount: 999 });
   const { admin } = mockAdmin(compressed);
   await assert.rejects(readCompressedLessonDocuments(admin, manifest, ownerId), /character count/i);
+});
+
+
+test('stale cleanup removes abandoned uploads but protects active job sources', async () => {
+  const removed: string[][] = [];
+  const admin = {
+    storage: {
+      from() {
+        return {
+          async list(path: string) {
+            assert.equal(path, ownerId + '/lesson-imports');
+            return {
+              data: [
+                { name: 'old.json.gz', created_at: '2026-11-17T00:00:00.000Z' },
+                { name: 'active.json.gz', created_at: '2026-11-17T00:00:00.000Z' },
+                { name: 'fresh.json.gz', created_at: '2026-11-19T11:30:00.000Z' },
+                { name: 'nested/file.json.gz', created_at: '2026-11-17T00:00:00.000Z' },
+              ],
+              error: null,
+            };
+          },
+          async remove(paths: string[]) {
+            removed.push(paths);
+            return { data: [], error: null };
+          },
+        };
+      },
+    },
+  };
+  const active = new Set([ownerId + '/lesson-imports/active.json.gz']);
+  const result = await cleanupStaleLessonSourcesForUser(
+    admin,
+    ownerId,
+    active,
+    Date.parse('2026-11-19T12:00:00.000Z'),
+    24 * 60 * 60 * 1000
+  );
+  assert.equal(result.scanned, 4);
+  assert.equal(result.deleted, 1);
+  assert.deepEqual(removed, [[ownerId + '/lesson-imports/old.json.gz']]);
 });
 
 test('deletes only a validated user-owned lesson source path', async () => {
