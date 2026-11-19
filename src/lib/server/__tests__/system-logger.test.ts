@@ -9,7 +9,7 @@ test('system diagnostics include request context and redact secrets', async () =
   try {
     await logSystemEvent({
       severity: 'error', source: 'exam.generate', code: 'EXAM_QUEUE_FAILED',
-      message: 'request failed api_key=do-not-print-this',
+      message: 'request failed api_key=do-not-print-this Bearer bearer-secret-value',
       method: 'POST', route: '/api/ai/exam-jobs?token=private', requestId: 'request-test-1',
       metadata: { provider: 'groq', authorization: 'Bearer private-token', count: 3 },
     });
@@ -17,7 +17,7 @@ test('system diagnostics include request context and redact secrets', async () =
   assert.match(output, /EXAM_QUEUE_FAILED/);
   assert.match(output, /request-test-1/);
   assert.match(output, /REDACTED/);
-  assert.doesNotMatch(output, /do-not-print-this|private-token|token=private/);
+  assert.doesNotMatch(output, /do-not-print-this|bearer-secret-value|private-token|token=private/);
 });
 
 test('diagnostics do not throw for unsupported metadata', async () => {
