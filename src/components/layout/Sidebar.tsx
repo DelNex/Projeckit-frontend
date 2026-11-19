@@ -43,12 +43,13 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
   useEffect(() => {
     async function checkPlatformAdmin() {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
+        const { data: claimsResult } = await supabase.auth.getClaims();
+        const userId = claimsResult?.claims?.sub;
+        if (userId) {
           const { data: profile } = await supabase
             .from('profiles')
             .select('role,status,archived_at,is_platform_admin')
-            .eq('id', user.id)
+            .eq('id', userId)
             .maybeSingle();
           const approvedAdmin = profile?.status === 'approved' && !profile.archived_at && (profile.role === 'admin' || profile.is_platform_admin);
           setIsTenantAdmin(Boolean(approvedAdmin));
