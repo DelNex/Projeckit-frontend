@@ -171,7 +171,7 @@ workerScope.onmessage = async (event: MessageEvent<WorkerRequest>) => {
   } catch (error) {
     const response: WorkerResponse = {
       id,
-      error: error instanceof Error ? error.message : 'Document extraction failed.',
+      error: error instanceof Error ? error.message : String(error || 'Document extraction failed.'),
     };
     workerScope.postMessage(response);
   }
