@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -81,6 +82,8 @@ export async function POST(request: Request) {
       message: 'Deletion code has been reset. A new code can now be configured.',
     });
   } catch (err: any) {
+    await logSystemEvent({ severity: 'error', source: 'api.admin.deletion-code-reset', message: err instanceof Error ? err.message : 'Request failed.', method: 'POST', route: '/api/admin/deletion-code/reset', code: 'ADMIN_DELETION_CODE_RESET_FAILURE' });
+
     console.error('[POST /api/admin/deletion-code/reset] Error:', err);
     return NextResponse.json(
       { error: 'Failed to reset deletion code.' },
