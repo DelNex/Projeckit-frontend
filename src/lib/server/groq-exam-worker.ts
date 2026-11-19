@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { buildExamPrompt, finalizeExamJob } from './exam-jobs';
+import type { TosBlueprintSlot } from '@/lib/exam-types';
 
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 const DEFAULT_MODEL = 'openai/gpt-oss-120b';
@@ -145,7 +146,7 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
 
   try {
     const payload = claimed.payload || {};
-    const slots = Array.isArray(payload.slots) ? payload.slots : [];
+    const slots = (Array.isArray(payload.slots) ? payload.slots : []) as TosBlueprintSlot[];
     if (!slots.length) throw new Error('The exam job has no valid TOS blueprint slots.');
 
     // Adapt the batch size to exam size: one request for small exams, then
