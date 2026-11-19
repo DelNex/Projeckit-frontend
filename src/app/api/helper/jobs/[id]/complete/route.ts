@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizeHelperRequest, readHelperJson } from '@/lib/server/helper-auth';
@@ -23,6 +24,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     await admin.from('helper_status').upsert({ helper_id: body.helperId, state: 'idle', current_job_id: null, last_seen_at: new Date().toISOString() });
     return NextResponse.json({ ...result, ...(savedItemNumbers.length ? { savedItemNumbers } : {}) });
   } catch (error) {
+    await logSystemEvent({ severity: 'error', source: 'api.helper.job-complete', message: error instanceof Error ? error.message : 'Request failed.', method: 'POST', route: '/api/helper/jobs/[id]/complete', code: 'HELPER_JOB_COMPLETE_FAILURE' });
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not save generated exam questions.' }, { status: 500 });
   }
 }
