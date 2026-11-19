@@ -134,7 +134,7 @@ describe('Compact canonical OMR geometry', () => {
       learnerName: 'Compact Student',
       studentId: 'a4091b00-0000-0000-0000-000000000000',
     });
-    assert.strictEqual((compactSvg.match(/<rect id="ANSWERS\\.(?:TL|TR|BL|BR)"/g) || []).length, 4);
+    assert.strictEqual((compactSvg.match(/<rect id="ANSWERS\.(?:TL|TR|BL|BR)"/g) || []).length, 4);
     assert.match(compactSvg, /class="omr-barcode"/);
   });
 });
