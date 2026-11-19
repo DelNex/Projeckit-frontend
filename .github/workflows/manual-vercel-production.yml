@@ -1,0 +1,73 @@
+name: Manual Vercel production deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_production:
+        description: Deploy the current main commit to the live Project KIT domain
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: projectkit-vercel-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main' && inputs.confirm_production == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    env:
+      VERCEL_ORG_ID: team_eGPeGdZoGQfvmRClsACkhRvW
+      VERCEL_PROJECT_ID: prj_kS4yzgdZqFYtR5kxpqU6viwyVv1F
+      VERCEL_CLI_VERSION: 66.2.0
+    steps:
+      - name: Check out the selected main commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npm run typecheck
+
+      - name: Run complete test suite
+        run: npm test
+
+      - name: Install pinned Vercel CLI
+        run: npm install --global "vercel@66.2.0"
+
+      - name: Link the verified Vercel project
+        run: |
+          mkdir -p .vercel
+          node -e 'require("node:fs").writeFileSync(".vercel/project.json", JSON.stringify({ orgId: process.env.VERCEL_ORG_ID, projectId: process.env.VERCEL_PROJECT_ID }, null, 2))'
+
+      - name: Pull production environment
+        run: vercel pull --yes --environment=production
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build with production environment
+        run: vercel build --prod
+
+      - name: Deploy the tested build to production
+        run: vercel deploy --prebuilt --prod
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: Verify production domain responds
+        run: curl --fail --silent --show-error --retry 10 --retry-delay 6 --retry-all-errors https://projeckit.vercel.app/ -o /dev/null
