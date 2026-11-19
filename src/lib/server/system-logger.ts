@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient } from '@/lib/supabase/server';
 
 export type SystemEventInput = {
   severity?: 'error' | 'warning' | 'info';
@@ -26,6 +27,32 @@ function cleanText(value: unknown, max = 500): string | null {
 /** Best-effort server-side logging. Logging failures must never break the request. */
 export async function logSystemEvent(input: SystemEventInput): Promise<void> {
   try {
+    let tenantId = input.tenantId || null;
+    let userId = input.userId || null;
+
+    // API-route failures should be visible to the affected school's admins.
+    // Resolve the authenticated request context when callers did not supply it;
+    // background scheduler events safely remain unscoped.
+    if (!tenantId || !userId) {
+      try {
+        const supabase = await createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          userId ||= user.id;
+          if (!tenantId) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('tenant_id')
+              .eq('id', user.id)
+              .maybeSingle();
+            tenantId = profile?.tenant_id || null;
+          }
+        }
+      } catch {
+        // Logging must also work for scheduled jobs without browser sessions.
+      }
+    }
+
     const admin = createAdminClient();
     const severity = input.severity || 'error';
     const action = severity === 'warning' ? 'SYSTEM_WARNING' : severity === 'info' ? 'SYSTEM_INFO' : 'SYSTEM_ERROR';
@@ -44,8 +71,8 @@ export async function logSystemEvent(input: SystemEventInput): Promise<void> {
       })) : {},
     };
     const { error } = await admin.from('audit_logs').insert({
-      tenant_id: input.tenantId || null,
-      user_id: input.userId || null,
+      tenant_id: tenantId,
+      user_id: userId,
       action,
       device: 'server',
       details,
