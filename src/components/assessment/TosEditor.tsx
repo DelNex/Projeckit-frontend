@@ -587,6 +587,10 @@ export function TosEditor({
 
   const handleCommitInlineRow = () => {
     if (!newDesc.trim()) return;
+    if (rows.length >= 200) {
+      toast.error('A TOS can contain up to 200 competencies.');
+      return;
+    }
 
     const rowId = Date.now().toString();
     const newRow: TosCompetencyRow = {
@@ -628,6 +632,10 @@ export function TosEditor({
   const handleBulkDuplicate = () => {
     const toDuplicate = rows.filter((r) => selectedIds.has(r.id));
     if (toDuplicate.length === 0) return;
+    if (rows.length + toDuplicate.length > 200) {
+      toast.error('A TOS can contain up to 200 competencies.');
+      return;
+    }
 
     const cloned: TosCompetencyRow[] = toDuplicate.map((r) => ({
       ...r,
