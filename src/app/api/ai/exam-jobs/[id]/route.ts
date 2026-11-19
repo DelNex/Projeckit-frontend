@@ -5,6 +5,7 @@ export const maxDuration = 60;
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { jobBelongsToTenant } from '@/lib/server/exam-jobs';
+import { logSystemEvent } from '@/lib/server/system-logger';
 
 async function scopedJob(id: string) {
   const supabase = await createClient();
@@ -20,7 +21,8 @@ async function scopedJob(id: string) {
   return { job, admin };
 }
 
-export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
+  const requestId = request.headers.get('x-request-id') || request.headers.get('x-nf-request-id') || null;
   try {
     const { id } = await context.params;
     const result = await scopedJob(id);
@@ -62,8 +64,13 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       queuePosition = count.count || 1;
     }
     return NextResponse.json({ id: job.id, tosId: job.tos_id, status: job.status, progress: job.progress, error: job.error, resultSummary: job.result_summary, queuePosition }, { headers: { 'Cache-Control': 'no-store' } });
-  } catch {
-    return NextResponse.json({ error: 'Could not load exam generation status.' }, { status: 503 });
+  } catch (error) {
+    await logSystemEvent({
+      severity: 'error', source: 'exam.jobs.status', code: 'EXAM_JOB_STATUS_FAILED',
+      message: error instanceof Error ? error.message : 'Unknown exam status error',
+      method: 'GET', route: '/api/ai/exam-jobs/:id', requestId,
+    });
+    return NextResponse.json({ error: 'Could not load exam generation status.', requestId }, { status: 503 });
   }
 }
 
