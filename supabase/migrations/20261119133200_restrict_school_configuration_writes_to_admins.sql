@@ -61,7 +61,7 @@ DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
 DROP POLICY IF EXISTS "Users can view profiles in their own tenant" ON public.profiles;
 
 CREATE POLICY "Tenant members can view profiles"
-  ON public.profiles FOR SELECT TO public
+  ON public.profiles FOR SELECT TO authenticated
   USING (
     tenant_id = (SELECT public.get_current_tenant_id())
     OR id = (SELECT auth.uid())
@@ -69,7 +69,7 @@ CREATE POLICY "Tenant members can view profiles"
   );
 
 CREATE POLICY "Tenant admins can insert profiles"
-  ON public.profiles FOR INSERT TO public
+  ON public.profiles FOR INSERT TO authenticated
   WITH CHECK (
     (
       tenant_id = (SELECT public.get_current_tenant_id())
@@ -79,7 +79,7 @@ CREATE POLICY "Tenant admins can insert profiles"
   );
 
 CREATE POLICY "Users and tenant admins can update profiles"
-  ON public.profiles FOR UPDATE TO public
+  ON public.profiles FOR UPDATE TO authenticated
   USING (
     id = (SELECT auth.uid())
     OR (
@@ -98,7 +98,7 @@ CREATE POLICY "Users and tenant admins can update profiles"
   );
 
 CREATE POLICY "Tenant admins can delete profiles"
-  ON public.profiles FOR DELETE TO public
+  ON public.profiles FOR DELETE TO authenticated
   USING (
     (
       tenant_id = (SELECT public.get_current_tenant_id())
@@ -107,14 +107,10 @@ CREATE POLICY "Tenant admins can delete profiles"
     OR (SELECT public.is_platform_admin())
   );
 
--- Preserve teacher audit-event writes while avoiding per-row auth function calls.
+-- Direct audit writes are administrator-only. System service-role writes
+-- continue to bypass RLS and are not exposed to teacher sessions.
 DROP POLICY IF EXISTS "Admins can insert audit logs" ON public.audit_logs;
-CREATE POLICY "Tenant members can insert own audit events"
-  ON public.audit_logs FOR INSERT TO authenticated
-  WITH CHECK (
-    tenant_id = (SELECT public.get_current_tenant_id())
-    AND user_id = (SELECT auth.uid())
-  );
+DROP POLICY IF EXISTS "Tenant members can insert own audit events" ON public.audit_logs;
 
 -- Cache the caller identity once per statement and exclude archived accounts.
 DROP POLICY IF EXISTS "Approved tenant members can read exam generation jobs" ON public.exam_generation_jobs;
@@ -448,6 +444,7 @@ CREATE POLICY "Tenant admins can delete grading periods"
 -- Only approved administrators may insert audit rows directly. Server-side
 -- service-role operations continue to write through the service-role client.
 DROP POLICY IF EXISTS "Admins can insert audit logs" ON public.audit_logs;
+DROP POLICY IF EXISTS "Tenant members can insert own audit events" ON public.audit_logs;
 CREATE POLICY "Tenant admins can insert audit logs"
   ON public.audit_logs FOR INSERT TO authenticated
   WITH CHECK (
