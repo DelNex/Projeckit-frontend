@@ -17,6 +17,19 @@ describe('Personalized A5 OMR print layout', () => {
     classSize: 30,
   });
 
+  it('keeps each personalized barcode full-size and inside the section bar', () => {
+    const svg = renderOmrMasterSvg(geometry, {
+      learnerName: 'Maria Santos',
+      studentId: 'a4091b00-0000-0000-0000-000000000000',
+    });
+    assert.equal(geometry.layout.barcode.height, 26);
+    assert.equal(geometry.layout.barcode.narrowBarWidth, 1);
+    assert.ok(geometry.layout.barcode.y >= geometry.layout.sectionBar.topLineY);
+    assert.ok(geometry.layout.barcode.y + geometry.layout.barcode.height <= geometry.layout.sectionBar.bottomLineY);
+    assert.match(svg, /class="omr-barcode"/);
+    assert.doesNotMatch(svg, /class="omr-barcode"[\s\S]*?<text/);
+  });
+
   it('prints two named students on one A4 landscape page with A5 sheet geometry', () => {
     assert.deepStrictEqual(A5_TWO_UP_PRINT_SIZE, {
       pageWidthMm: 297,
