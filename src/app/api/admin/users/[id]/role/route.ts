@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -153,6 +154,7 @@ export async function POST(
       },
     });
   } catch (err: any) {
+    await logSystemEvent({ severity: 'error', source: 'api.admin.user-role', message: err instanceof Error ? err.message : 'Request failed.', method: 'PATCH', route: '/api/admin/users/[id]/role', code: 'ADMIN_USER_ROLE_FAILURE' });
     console.error('[Admin API] Error in role update route:', err);
     return NextResponse.json(
       { error: 'Something went wrong while updating user role. Please try again.' },
