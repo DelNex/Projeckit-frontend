@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   FileSpreadsheet,
@@ -18,9 +19,18 @@ import { friendlyError } from '@/lib/errors';
 import { getPhilippineSchoolYear } from '@/lib/academic-calendar';
 import { TosDocument, STANDARD_EXAM_TYPES } from '@/types/tos';
 import { TosCard } from '@/features/tos/components/TosCard';
-import { TosCreateEditModal } from '@/features/tos/components/TosCreateEditModal';
-import { TosViewModal } from '@/features/tos/components/TosViewModal';
-import { TosExamModal } from '@/features/tos/components/TosExamModal';
+const TosCreateEditModal = dynamic(
+  () => import('@/features/tos/components/TosCreateEditModal').then((module) => module.TosCreateEditModal),
+  { ssr: false, loading: () => null },
+);
+const TosViewModal = dynamic(
+  () => import('@/features/tos/components/TosViewModal').then((module) => module.TosViewModal),
+  { ssr: false, loading: () => null },
+);
+const TosExamModal = dynamic(
+  () => import('@/features/tos/components/TosExamModal').then((module) => module.TosExamModal),
+  { ssr: false, loading: () => null },
+);
 import { SchemaHealthBanner } from '@/features/tos/components/SchemaHealthBanner';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 
