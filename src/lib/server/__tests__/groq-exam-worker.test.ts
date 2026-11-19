@@ -50,7 +50,7 @@ test('rejects empty or excessively large extracted lesson materials', () => {
   assert.throws(() => buildGroqMessages({
     prompt: 'Create questions.',
     lessonChunks: [{ text: 'x'.repeat(900_001) }],
-  }), /too large/i);
+  }), /exceeds 900,000 characters/i);
 });
 
 test('uses only the matching competency modules when every requested competency has a dedicated source', () => {
