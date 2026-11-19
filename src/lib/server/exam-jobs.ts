@@ -65,7 +65,7 @@ export function verifySourceEvidence(
     || typeof item.quote !== 'string') return false;
   const quote = item.quote.trim();
   if (quote.length < 12 || quote.length > 500) return false;
-  const normalize = (value: string) => value.toLocaleLowerCase().replace(/\\s+/g, ' ').trim();
+  const normalize = (value: string) => value.toLocaleLowerCase().replace(/\s+/g, ' ').trim();
   const chunk = sourceChunks.find((candidate, index) => {
     const sourceId = candidate.sourceId || 'source-' + (index + 1);
     return sourceId === item.source_id && Number(candidate.part) === item.part;
