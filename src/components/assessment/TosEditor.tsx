@@ -391,7 +391,7 @@ export function TosEditor({
     });
 
     const itemsMismatch = totalAllocatedItems !== targetItems;
-    const countMismatch = rows.length < 1 || rows.length > 4;
+    const countMismatch = rows.length < 1;
     const totalErrors = rowIssues + (itemsMismatch ? 1 : 0) + (countMismatch ? 1 : 0);
 
     return {
@@ -405,10 +405,6 @@ export function TosEditor({
   }, [rows, displayRows, targetItems]);
 
   const handleSaveTos = async (confirmedWarning: boolean = false) => {
-    if (rows.length > 4) {
-      toast.error('A TOS can have up to 4 learning competencies. Please reduce competencies to 4 before saving.');
-      return;
-    }
     if (rows.length < 1) {
       toast.error('A TOS must have at least 1 learning competency.');
       return;
@@ -551,11 +547,6 @@ export function TosEditor({
   const handleCommitInlineRow = () => {
     if (!newDesc.trim()) return;
 
-    if (rows.length >= 4) {
-      toast.error('A TOS can have up to 4 learning competencies.');
-      return;
-    }
-
     const rowId = Date.now().toString();
     const newRow: TosCompetencyRow = {
       id: rowId,
@@ -597,11 +588,6 @@ export function TosEditor({
     const toDuplicate = rows.filter((r) => selectedIds.has(r.id));
     if (toDuplicate.length === 0) return;
 
-    if (rows.length + toDuplicate.length > 4) {
-      toast.error('A TOS can have up to 4 learning competencies.');
-      return;
-    }
-
     const cloned: TosCompetencyRow[] = toDuplicate.map((r) => ({
       ...r,
       id: `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -631,7 +617,7 @@ export function TosEditor({
     );
   }
 
-  const isOverCompetencyLimit = rows.length > 4;
+  const isOverCompetencyLimit = false;
 
   return (
     <div className="space-y-4 pb-8 min-w-0">
@@ -1186,7 +1172,7 @@ export function TosEditor({
                         <FileSpreadsheet className="h-8 w-8 text-gray-300 dark:text-gray-600" />
                         <p className="text-xs font-semibold">No learning competencies added yet.</p>
                         <p className="text-[11px] max-w-sm text-gray-400">
-                          Click &quot;Edit Worksheet&quot; to begin adding up to 4 learning competencies and days taught.
+                          Click &quot;Edit Worksheet&quot; to begin adding learning competencies and days taught.
                         </p>
                       </div>
                     </td>
@@ -1454,15 +1440,9 @@ export function TosEditor({
                   );
                 })}
 
-                {/* C1, C3: Inline Add Row (disabled when 4 reached) */}
+                {/* Add as many competency rows as the saved TOS requires. */}
                 {isEditing && (
-                  rows.length >= 4 ? (
-                    <tr className="bg-gray-50/50 dark:bg-gray-800/20 border-t border-gray-200 dark:border-gray-700">
-                      <td colSpan={14} className="px-4 py-3 text-center text-xs text-gray-500 italic">
-                        A Table of Specifications can have up to 4 learning competencies. Delete or remove one to add another.
-                      </td>
-                    </tr>
-                  ) : (
+                  (
                     <tr className="bg-emerald-50/40 dark:bg-emerald-950/10 border-t-2 border-dashed border-emerald-300 dark:border-emerald-800">
                       <td className="px-3 py-2 text-center">
                         <button
@@ -1516,7 +1496,6 @@ export function TosEditor({
                         </button>
                       </td>
                     </tr>
-                  )
                 )}
               </tbody>
 
@@ -1793,7 +1772,7 @@ export function TosEditor({
               <div className="p-3 bg-blue-50/50 dark:bg-blue-950/20 rounded-xl border border-blue-200 dark:border-blue-900">
                 <h4 className="font-bold text-blue-700 dark:text-blue-400 mb-1">1. Days Taught &amp; Competency Limit</h4>
                 <p>
-                  Enter the actual instructional days spent per competency (up to 4 competencies). The total days and proportional percentages are computed automatically.
+                  Enter the actual instructional days spent per competency. The total days and proportional percentages are computed automatically.
                 </p>
               </div>
 
