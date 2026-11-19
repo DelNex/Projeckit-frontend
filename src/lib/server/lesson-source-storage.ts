@@ -84,3 +84,46 @@ export async function deleteCompressedLessonSource(admin: any, manifest: unknown
   const { error } = await admin.storage.from(LESSON_SOURCE_BUCKET).remove([manifest.storagePath]);
   if (error) throw error;
 }
+
+/**
+ * Remove abandoned source uploads for one user. Active jobs are protected by
+ * their manifest path; cleanup runs when that user next starts generation.
+ */
+export async function cleanupStaleLessonSourcesForUser(
+  admin: any,
+  ownerId: string,
+  activePaths: Set<string> = new Set(),
+  nowMs = Date.now(),
+  maxAgeMs = 24 * 60 * 60 * 1000
+): Promise<{ scanned: number; deleted: number }> {
+  if (!ownerId) return { scanned: 0, deleted: 0 };
+  const prefix = ownerId + '/lesson-imports';
+  try {
+    const { data, error } = await admin.storage.from(LESSON_SOURCE_BUCKET).list(prefix, {
+      limit: 1000,
+      sortBy: { column: 'created_at', order: 'asc' },
+    });
+    if (error || !Array.isArray(data)) return { scanned: 0, deleted: 0 };
+
+    const cutoff = nowMs - maxAgeMs;
+    const stalePaths = data
+      .filter((file: any) => {
+        if (!file || typeof file.name !== 'string' || !file.name.endsWith('.json.gz')
+          || file.name.includes('/') || file.name.includes('..')) return false;
+        const fullPath = prefix + '/' + file.name;
+        if (activePaths.has(fullPath)) return false;
+        const createdAt = Date.parse(file.created_at || file.updated_at || '');
+        return Number.isFinite(createdAt) && createdAt < cutoff;
+      })
+      .map((file: any) => prefix + '/' + file.name);
+
+    if (!stalePaths.length) return { scanned: data.length, deleted: 0 };
+    const { error: removeError } = await admin.storage.from(LESSON_SOURCE_BUCKET).remove(stalePaths);
+    if (removeError) return { scanned: data.length, deleted: 0 };
+    return { scanned: data.length, deleted: stalePaths.length };
+  } catch {
+    // Cleanup is best-effort and must never block exam generation.
+    return { scanned: 0, deleted: 0 };
+  }
+}
+
