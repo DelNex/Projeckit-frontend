@@ -5,7 +5,6 @@ on:
     branches: ["perf/**"]
     paths:
       - "package.json"
-      - "package-lock.json"
   workflow_dispatch:
 
 concurrency:
