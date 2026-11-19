@@ -95,7 +95,7 @@ test('Gemini receives the same strict JSON schema as the other providers', async
       assert.equal(body.generationConfig.responseMimeType, 'application/json');
       assert.deepEqual(body.generationConfig.responseJsonSchema, schema);
       return new Response(JSON.stringify({
-        candidates: [{ content: { parts: [{ text: JSON.stringify({ questions: [{ item_number: 1 }] })] } }],
+        candidates: [{ content: { parts: [{ text: JSON.stringify({ questions: [{ item_number: 1 }] }) }] } }],
       }), { status: 200, headers: { 'content-type': 'application/json' } });
     }) as typeof fetch;
     const { requestExamQuestionsFromProviders } = await import('../exam-ai-provider-router');
