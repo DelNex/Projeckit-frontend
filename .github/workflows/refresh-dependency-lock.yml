@@ -36,4 +36,5 @@ jobs:
             exit 0
           fi
           git commit -m "build: sync npm lockfile"
+          git pull --rebase origin "$GITHUB_REF_NAME"
           git push
