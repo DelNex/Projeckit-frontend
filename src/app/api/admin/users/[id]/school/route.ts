@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -138,6 +139,7 @@ export async function POST(
       },
     });
   } catch (err: any) {
+    await logSystemEvent({ severity: 'error', source: 'api.admin.user-school', message: err instanceof Error ? err.message : 'Request failed.', method: 'PATCH', route: '/api/admin/users/[id]/school', code: 'ADMIN_USER_SCHOOL_FAILURE' });
     console.error('[Admin API] Error in school assignment route:', err);
     return NextResponse.json(
       { error: 'Something went wrong while assigning the school. Please try again.' },
