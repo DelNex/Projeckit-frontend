@@ -203,7 +203,7 @@ export function ExamGeneratorModal({
       const queued = await generationJob.start({ lessonDocuments });
       const label = queued.status === 'queued'
         ? `Queued (position ${queued.queuePosition || 1}). Groq AI will process this exam in the background.`
-        : queued.status === 'running' ? 'Groq is already generating questions for this TOS.' : 'This TOS already has a job that needs helper attention.';
+        : queued.status === 'running' ? 'Groq is already generating questions for this TOS.' : 'This TOS already has an AI job that needs attention.';
       setChunkProgress({ completed: 0, total: allSlots.length, label });
       setCurrentStep('generating');
     } catch (err: any) {
@@ -275,7 +275,7 @@ export function ExamGeneratorModal({
               </span>
               {generationJob.helperState === 'offline'
                 ? <span className="rounded-full border border-slate-300 px-2 py-1 text-[10px] text-slate-600">Groq AI offline</span>
-                : <span className="rounded-full border border-emerald-300 px-2 py-1 text-[10px] text-emerald-700">Helper {generationJob.helperState.replace('_', ' ')}</span>}
+                : <span className="rounded-full border border-emerald-300 px-2 py-1 text-[10px] text-emerald-700">Groq {generationJob.helperState.replace('_', ' ')}</span>}
               {['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')
                 ? <button type="button" onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="rounded-lg border border-rose-200 px-2 py-1 text-[10px] font-semibold text-rose-700">Cancel</button>
                 : ['completed', 'partial', 'failed', 'cancelled'].includes(generationJob.job?.status || '') ? null : <Loader2 className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />}
