@@ -4,6 +4,10 @@ on:
   push:
     branches: ["perf/production-api-lazy-loading"]
 
+concurrency:
+  group: dependency-lock-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
