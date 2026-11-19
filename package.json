@@ -37,7 +37,8 @@
     "react-dom": "^19.0.0",
     "tailwind-merge": "^3.0.1",
     "tesseract.js": "7.0.0",
-    "@tesseract.js-data/eng": "1.0.0"
+    "@tesseract.js-data/eng": "1.0.0",
+    "@tesseract.js-data/fil": "1.0.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.1",
