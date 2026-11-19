@@ -1,7 +1,12 @@
 import { updateSession } from '@/lib/supabase/middleware';
-import { type NextRequest } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
+  // The scheduled worker has its own constant-time CRON_SECRET check and does
+  // not use browser sessions. Avoid a redundant Supabase auth check on every tick.
+  if (request.nextUrl.pathname === '/api/internal/exam-worker') {
+    return NextResponse.next({ request });
+  }
   return await updateSession(request);
 }
 
