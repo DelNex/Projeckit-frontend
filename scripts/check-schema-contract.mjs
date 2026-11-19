@@ -95,7 +95,7 @@ if (fs.existsSync(databaseTypesPath)) {
       const char = source[i];
       const previous = source[i - 1];
       if (quote) {
-        if (char === quote && previous !== '\\\\') quote = null;
+        if (char === quote && previous !== '\\') quote = null;
         continue;
       }
       if (char === "'" || char === '"' || char === '`') {
@@ -108,12 +108,12 @@ if (fs.existsSync(databaseTypesPath)) {
     return -1;
   }
 
-  const tablesMatch = /Tables\\s*:\\s*\\{/.exec(typesSource);
+  const tablesMatch = /Tables\s*:\s*\{/.exec(typesSource);
   if (tablesMatch) {
     const tablesOpen = typesSource.indexOf('{', tablesMatch.index);
     const tablesClose = matchingBrace(typesSource, tablesOpen);
     const tablesBody = tablesClose >= 0 ? typesSource.slice(tablesOpen + 1, tablesClose) : '';
-    const tableHeader = /^\\s*([a-zA-Z0-9_]+)\\s*:\\s*\\{/gm;
+    const tableHeader = /^\s*([a-zA-Z0-9_]+)\s*:\s*\{/gm;
     let tableMatch;
 
     while ((tableMatch = tableHeader.exec(tablesBody)) !== null) {
@@ -122,14 +122,14 @@ if (fs.existsSync(databaseTypesPath)) {
       const tableClose = matchingBrace(tablesBody, tableOpen);
       if (tableClose < 0) continue;
       const tableBody = tablesBody.slice(tableOpen + 1, tableClose);
-      const rowMatch = /\\bRow\\s*:\\s*\\{/.exec(tableBody);
+      const rowMatch = /\bRow\s*:\s*\{/.exec(tableBody);
       if (!rowMatch) continue;
 
       const rowOpen = tableBody.indexOf('{', rowMatch.index);
       const rowClose = matchingBrace(tableBody, rowOpen);
       if (rowClose < 0) continue;
       const rowBody = tableBody.slice(rowOpen + 1, rowClose);
-      const columns = [...rowBody.matchAll(/^\\s*([a-zA-Z0-9_]+)\\??\\s*:/gm)]
+      const columns = [...rowBody.matchAll(/^\s*([a-zA-Z0-9_]+)\??\s*:/gm)]
         .map((match) => match[1].toLowerCase());
 
       if (!schema.has(tableName)) schema.set(tableName, new Set());
@@ -250,7 +250,7 @@ for (const filePath of sourceFiles) {
         const ch = chain[endIdx];
         const prev = chain[endIdx - 1];
         if (inString) {
-          if (ch === inString && prev !== '\\') inString = null;
+          if (ch === inString && prev !== '\') inString = null;
         } else if (ch === '"' || ch === "'" || ch === '`') {
           inString = ch;
         } else if (ch === '(') {
@@ -270,7 +270,7 @@ for (const filePath of sourceFiles) {
         const ch = rawArgStr[i];
         const prev = i > 0 ? rawArgStr[i - 1] : '';
         if (argInStr) {
-          if (ch === argInStr && prev !== '\\') argInStr = null;
+          if (ch === argInStr && prev !== '\') argInStr = null;
         } else if (ch === '"' || ch === "'" || ch === '`') {
           argInStr = ch;
         } else if (ch === '(') argDepthP++;
@@ -298,7 +298,7 @@ for (const filePath of sourceFiles) {
         const prev = i > 0 ? argStr[i - 1] : '';
 
         if (strQuote) {
-          if (c === strQuote && prev !== '\\') strQuote = null;
+          if (c === strQuote && prev !== '\') strQuote = null;
           continue;
         }
         if (c === '"' || c === "'" || c === '`') {
