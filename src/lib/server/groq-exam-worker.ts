@@ -2,10 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { buildExamPrompt, finalizeExamJob } from './exam-jobs';
 import type { TosBlueprintSlot } from '@/lib/exam-types';
+import { requestExamQuestionsFromProviders } from './exam-ai-provider-router';
 
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 const DEFAULT_MODEL = 'openai/gpt-oss-120b';
-const MAX_LESSON_CHARS = 200_000;
+const MAX_LESSON_CHARS = 900_000;
 const WORKER_ID = 'project-kit-groq-worker';
 
 export function getExamBatchSize(itemCount: number): number {
@@ -70,11 +71,46 @@ export function buildGroqMessages(payload: Record<string, any>) {
   // When every requested competency has its own module, avoid sending unrelated
   // modules to the model. If any requested competency lacks a dedicated file,
   // retain all uploaded material as shared context rather than silently dropping it.
-  const selectedChunks = everySlotHasDedicatedMaterial ? assignedChunks : chunks;
-  const lessonText = selectedChunks.map((chunk: any) => {
+  const sourceChunks = everySlotHasDedicatedMaterial ? assignedChunks : chunks;
+  const queryText = slots.map((slot: any) => [
+    slot?.competency_code, slot?.competency_description, slot?.cognitive_level, slot?.competencyId,
+  ].filter(Boolean).join(' ')).join(' ') + ' ' + String(payload.teacherInstructions || '');
+  const terms = [...new Set((queryText.toLowerCase().match(/[a-z0-9]{3,}/g) || [])
+    .filter((term: string) => !['the', 'and', 'for', 'with', 'from', 'into', 'that', 'this', 'are', 'was', 'were', 'use', 'using'].includes(term)))];
+  const ranked = sourceChunks.map((chunk: any, index: number) => {
+    const text = String(chunk?.text || '');
+    const lower = text.toLowerCase();
+    let score = 0;
+    for (const term of terms) {
+      let position = -1;
+      while ((position = lower.indexOf(term, position + 1)) !== -1) score += 1;
+    }
+    if (typeof chunk?.competencyId === 'string' && slotCompetencies.includes(chunk.competencyId)) score += 100;
+    return { chunk, index, score };
+  });
+  const MAX_CONTEXT_CHUNKS = 8;
+  const MAX_CONTEXT_CHARACTERS = 120_000;
+  let selected = ranked.filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, MAX_CONTEXT_CHUNKS);
+  if (!selected.length) {
+    const count = Math.min(MAX_CONTEXT_CHUNKS, ranked.length);
+    selected = Array.from({ length: count }, (_, index) =>
+      ranked[Math.floor(index * (ranked.length - 1) / Math.max(1, count - 1))]
+    );
+  }
+  selected.sort((a, b) => a.index - b.index);
+  let usedCharacters = 0;
+  const lessonText = selected.map(({ chunk }: any) => {
+    const text = String(chunk?.text || '').trim();
+    const remaining = MAX_CONTEXT_CHARACTERS - usedCharacters;
+    if (remaining <= 0) return '';
+    const excerpt = text.length > remaining ? text.slice(0, remaining) : text;
+    usedCharacters += excerpt.length;
     const competencyLabel = typeof chunk?.competencyId === 'string' ? `[TOS competency ${chunk.competencyId}]\n` : '';
-    return `${competencyLabel}${String(chunk?.text || '')}`;
-  }).filter((text: string) => text.trim()).join('\n\n');
+    const sectionLabel = Number.isFinite(Number(chunk?.part)) ? `[Source section ${chunk.part}/${chunk.parts || '?'}]\n` : '';
+    return `${competencyLabel}${sectionLabel}${excerpt}`;
+  }).filter(Boolean).join('\n\n');
   if (!lessonText.trim()) throw new Error('The uploaded lesson material contains no readable text.');
   if (lessonText.length > MAX_LESSON_CHARS) {
     throw new Error(`The extracted lesson material is too large for the free AI generation route (${MAX_LESSON_CHARS.toLocaleString()} characters maximum). Split the material into smaller files and try again.`);
@@ -96,46 +132,7 @@ export function buildGroqMessages(payload: Record<string, any>) {
 }
 
 async function requestGroqQuestions(payload: Record<string, any>): Promise<string> {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) throw new Error('Groq is not configured. Add GROQ_API_KEY to the server environment before generating exams.');
-  const model = process.env.GROQ_MODEL || DEFAULT_MODEL;
-  const response = await fetch(GROQ_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      messages: buildGroqMessages(payload),
-      temperature: 0.2,
-      reasoning_effort: 'low',
-      max_completion_tokens: 8192,
-      response_format: {
-        type: 'json_schema',
-        json_schema: { name: 'project_kit_exam_questions', strict: true, schema: QUESTION_SCHEMA },
-      },
-    }),
-    signal: AbortSignal.timeout(18_000),
-    cache: 'no-store',
-  });
-
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    if (response.status === 429) throw new Error('Groq free-tier rate limit reached. Wait for the limit to reset, then retry. Your existing exam was not changed.');
-    if (response.status === 401 || response.status === 403) throw new Error('Groq rejected the server API key. Replace GROQ_API_KEY in the server environment.');
-    throw new Error(`Groq exam generation failed (${response.status}): ${String(result?.error?.message || 'The AI provider returned an error.').slice(0, 240)}`);
-  }
-
-  const choice = result?.choices?.[0];
-  if (choice?.finish_reason === 'length') throw new Error('Groq reached its output-token limit. The exam batch was not saved; reduce the batch size or lesson material and retry.');
-  if (choice?.message?.refusal) throw new Error('Groq refused to generate this exam content. Review the lesson material and try again.');
-  const content = choice?.message?.content;
-  if (typeof content !== 'string' || !content.trim()) throw new Error('Groq returned an empty response. The existing exam was not changed.');
-  let parsed: any;
-  try { parsed = JSON.parse(content); } catch { throw new Error('Groq returned invalid structured output. The existing exam was not changed.'); }
-  if (!parsed || !Array.isArray(parsed.questions)) throw new Error('Groq response did not contain a questions array.');
-  return JSON.stringify(parsed.questions);
+  return requestExamQuestionsFromProviders(buildGroqMessages(payload), QUESTION_SCHEMA as unknown as Record<string, unknown>);
 }
 
 /**
