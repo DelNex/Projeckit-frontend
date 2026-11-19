@@ -7,11 +7,11 @@ This note records how the running application is wired today and the boundaries 
 - **Next.js website:** pages, user-facing workflows, file exports, and server API routes.
 - **Supabase:** sign-in, school and learner data, scan records, answer keys, saved assessments, storage, and row-level access rules.
 - **NestJS AI service:** the authenticated Copilot chat, streaming, status information, and lesson-material indexing endpoints. It is not the API for assessments or student records.
-- **Helper worker:** asynchronous exam generation jobs claimed from the website's durable job queue. A helper being offline must leave a visible failed or queued state that can be retried safely.
+- **Hosted exam worker:** asynchronous exam generation jobs claimed from the durable Supabase queue and executed on the Next.js server.
 
-Use browser Supabase clients only for signed-in user work covered by RLS. Keep the service-role key in server code and derive each request's school/tenant from the validated profile; never accept a tenant identifier as authority from a browser form. Next.js server routes are the boundary for privileged reports, administration, file generation, and background job transitions.
+Use browser Supabase clients only for signed-in user work covered by RLS. `SUPABASE_SERVICE_ROLE_KEY` must be the actual privileged key for the same Supabase project; it is not interchangeable with `GROQ_API_KEY` or any other AI-provider credential. Keep it in server code only and derive each request's school/tenant from the validated profile; never accept a tenant identifier as authority from a browser form. Next.js server routes are the boundary for privileged reports, administration, file generation, and background job transitions.
 
-The AI Copilot uses `/api/backend/ai/*`, a same-origin Next.js proxy. The proxy validates the Supabase session, rejects cross-site writes, forwards only the bearer token to the Nest service, and allows only the four AI endpoints that the website needs. Configure `BACKEND_API_BASE_URL` in the web server environment. The old browser-visible `NEXT_PUBLIC_API_BASE_URL` value is supported as a compatibility fallback only; new deployments should use the server-only setting.
+The AI Copilot uses `/api/backend/ai/*`, a same-origin Next.js proxy. The proxy validates the Supabase session, rejects cross-site writes, forwards only the bearer token to the Nest service, and allows only the four AI endpoints that the website needs. Configure `BACKEND_API_BASE_URL` in the web server environment. Production requires a valid HTTPS URL; it never falls back to localhost or a browser-visible `NEXT_PUBLIC_API_BASE_URL`. Production also requires `NEXT_PUBLIC_APP_URL` to be a valid HTTPS origin.
 
 ## Main school workflow
 
@@ -57,3 +57,12 @@ Local extraction now accepts up to 900,000 readable characters per generation jo
 - Scanned/image-only PDFs still require OCR or a text-based source. The local OCR engine is not yet integrated; do not treat image-only PDFs as supported until a pinned, self-hosted OCR runtime and language assets are added and tested.
 - OpenCV quality depends on camera and printing conditions. Calibration and a recorded validation dataset remain release tasks.
 - Retain separate, current lockfile-based SBOMs and review dependency audit findings before production deployment.
+
+
+## Production environment sanity check
+
+- `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` identify the Supabase project used by browser/session clients.
+- `SUPABASE_SERVICE_ROLE_KEY` must be that same project's privileged server key. If Supabase gateway logs report `UNAUTHORIZED_INVALID_API_KEY` with a `gsk_` prefix, the Groq key has been placed in the Supabase variable by mistake; replace it with the correct Supabase server key.
+- `GROQ_API_KEY` is only for Groq model requests. It must never be copied into `SUPABASE_SERVICE_ROLE_KEY`.
+- `BACKEND_API_BASE_URL` must point to the NestJS backend over HTTPS in production. `NEXT_PUBLIC_APP_URL` must be the public HTTPS site origin.
+- The OMR camera, print, TOS, student-import and DOCX-export modules are loaded on demand. Exam-status polling pauses in hidden tabs and backs off while no generation is active.
