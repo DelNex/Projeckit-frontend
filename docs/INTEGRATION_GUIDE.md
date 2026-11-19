@@ -54,7 +54,7 @@ Local extraction now accepts up to 900,000 readable characters per generation jo
 ## Known operational constraints
 
 - The AI service needs to be reachable from the Next.js server and requires the same Supabase signing configuration to validate user tokens.
-- Scanned/image-only PDFs are now routed through local Tesseract.js OCR in the browser worker. The worker, WASM core variants, and English traineddata are copied from pinned npm dependencies into same-origin `/ocr/` assets during build; no third-party OCR script or remote language-data CDN is loaded at runtime. OCR currently bundles English and Filipino language data. Validate the scanned-PDF fixture and real phone scans in a browser before claiming full OCR accuracy.
+- Scanned/image-only PDFs are now routed through local Tesseract.js OCR in the browser worker. The worker, WASM core variants, and English traineddata are copied from pinned npm dependencies into same-origin `/ocr/` assets during build; no third-party OCR script or remote language-data CDN is loaded at runtime. OCR currently bundles English and Filipino language data. The Playwright fixture verifies that the local runtime processes a scanned PDF and makes no third-party requests; it is a smoke test, not a labeled OCR accuracy benchmark. Add scanned pages with known expected text before claiming recognition accuracy. Validate the scanned-PDF fixture and real phone scans in a browser before claiming full OCR accuracy.
 - OpenCV quality depends on camera and printing conditions. Calibration and a recorded validation dataset remain release tasks.
 - Retain separate, current lockfile-based SBOMs and review dependency audit findings before production deployment.
 
