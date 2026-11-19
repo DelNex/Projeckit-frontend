@@ -30,7 +30,8 @@ and a deployment is promoted.
   as server-only environment variables; never use `NEXT_PUBLIC_*` for API keys.
 - The scheduled Netlify function dispatches queued work every minute, including
   when all teacher browsers are closed. It is scheduled processing, not a
-  permanently running process.
+  permanently running process. `EXAM_SCHEDULER_ENABLED=true` is configured in
+  the production Functions/Runtime context; preview contexts remain disabled.
 - Each scheduler tick dispatches up to four worker invocations. Database claims
   enforce a global concurrency ceiling and a per-school ceiling.
 - Enqueue operations are idempotent for an active TOS job. The new migration
@@ -73,7 +74,9 @@ Before promoting this branch:
    those fallback providers are required. Without them, Groq remains the only
    available provider.
 3. `CRON_SECRET` is already configured as a masked secret for the production
-   Netlify Functions/Runtime context. Keep it out of all `NEXT_PUBLIC_*` variables.
+   Netlify Functions/Runtime context, and `EXAM_SCHEDULER_ENABLED=true` is set
+   for production only. Both take effect on the next deployment containing the
+   scheduled function. Keep secrets out of all `NEXT_PUBLIC_*` variables.
 4. Deploy a preview and verify authenticated school-admin settings, system
    logs, local OCR, exam queue recovery, and the scheduled worker.
 5. Promote to production only after the preview checks pass.
