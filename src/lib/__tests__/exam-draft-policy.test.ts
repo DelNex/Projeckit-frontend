@@ -27,5 +27,5 @@ test('autosave uses the atomic draft RPC and does not synchronize answer keys', 
   assert.match(autosave, /rpc\('save_exam_draft'/);
   assert.match(autosave, /p_expected_updated_at/);
   assert.doesNotMatch(autosave, /answer_keys/);
-  assert.match(route, /status: 409/);
+  assert.match(route, /status: conflict \? 409 : 400/);
 });
