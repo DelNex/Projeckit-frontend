@@ -128,8 +128,6 @@ export async function GET(request: Request) {
     const tosIds = (params.get('tosIds') || '').split(',').filter(Boolean).slice(0, 100);
     if (!tosId && !tosIds.length) return NextResponse.json({ error: 'tosId or tosIds is required.' }, { status: 400 });
     const admin = caller.admin!;
-    await admin.rpc('expire_unserviceable_exam_jobs');
-    await admin.rpc('cleanup_exam_job_payloads');
     let query = admin.from('exam_generation_jobs').select('id,tos_id,status,provider,progress,error,result_summary,created_at,updated_at,finished_at,created_by,job_kind,parent_job_id').eq('tenant_id', caller.profile!.tenant_id).eq('provider', 'groq_api').order('created_at', { ascending: false });
     if (tosId) query = query.eq('tos_id', tosId).limit(1);
     else query = query.in('tos_id', tosIds);
