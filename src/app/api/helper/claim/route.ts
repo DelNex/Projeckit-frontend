@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizeHelperRequest, readHelperJson } from '@/lib/server/helper-auth';
 
@@ -13,9 +14,11 @@ export async function POST(request: Request) {
     const { data, error } = await admin.rpc('claim_exam_job', { p_helper_id: body.helperId, p_lease_seconds: 120 });
     if (error) throw error;
     const job = Array.isArray(data) ? data[0] || null : data || null;
-    await admin.from('helper_status').upsert({ helper_id: body.helperId, state: job ? 'busy' : 'idle', current_job_id: job?.id || null, last_seen_at: new Date().toISOString() });
+    const heartbeat = await admin.from('helper_status').upsert({ helper_id: body.helperId, state: job ? 'busy' : 'idle', current_job_id: job?.id || null, last_seen_at: new Date().toISOString() });
+    if (heartbeat.error) throw heartbeat.error;
     return NextResponse.json({ job: job ? { id: job.id, jobKind: job.job_kind, parentJobId: job.parent_job_id, repairRound: job.repair_round, attempt: job.attempts, payload: job.payload } : null }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
+    await logSystemEvent({ severity: 'error', source: 'api.helper.claim', message: error instanceof Error ? error.message : 'Request failed.', method: 'POST', route: '/api/helper/claim', code: 'HELPER_CLAIM_FAILURE', requestId: request.headers.get('x-request-id') });
     console.error('[helper claim] Failed to claim a job.');
     return NextResponse.json({ error: 'Could not claim a queued job.' }, { status: 503 });
   }
