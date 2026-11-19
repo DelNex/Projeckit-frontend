@@ -179,9 +179,16 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
     const responseText = JSON.stringify(generatedQuestions);
     const { error: validationProgressError } = await admin.from('exam_generation_jobs').update({
       progress: { stage: 'validating', label: 'Validating answers, choices, competencies and duplicates', completedChunks: batches.length, totalChunks: batches.length },
-      lease_expires_at: new Date(Date.now() + 55_000).toISOString(),
+      lease_expires_at: new Date(Date.now() + 75_000).toISOString(),
       updated_at: new Date().toISOString(),
-    }).eq('id', jobId).eq('claimed_by', WORKER_ID);
+    }).eq('id', jobId).eq('claimed_by', workerId);
+    if (validationProgressError) throw new Error('The Groq worker lost its exam job lease before validation.');
+
+    const { data: ownership, error: ownershipError } = await admin.from('exam_generation_jobs')
+      .select('id,status,claimed_by')
+      .eq('id', jobId)
+      .maybeSingle();
+    if (ownershipError || ownership?.status !== 'running' || ownership.claimed_by !== workerId) return;
 
     const result = await finalizeExamJob(jobId, responseText, admin);
     if (result.status === 'running' && typeof result.repairJobId === 'string') {
