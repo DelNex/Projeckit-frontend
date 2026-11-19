@@ -13,8 +13,70 @@ CREATE POLICY "Approved tenant members can view grading periods"
     OR (SELECT public.is_platform_admin())
   );
 
-CREATE POLICY "Tenant admins can manage grading periods"
-  ON public.grading_periods FOR ALL TO authenticated
+CREATE POLICY "Tenant admins can insert grading periods"
+  ON public.grading_periods FOR INSERT TO authenticated
+  WITH CHECK (
+    (
+      tenant_id = (SELECT public.get_current_tenant_id())
+      AND EXISTS (
+        SELECT 1 FROM public.profiles p
+        WHERE p.id = (SELECT auth.uid())
+          AND p.tenant_id = grading_periods.tenant_id
+          AND p.role = 'admin'
+          AND p.status = 'approved'
+          AND p.archived_at IS NULL
+      )
+    )
+    OR (SELECT public.is_platform_admin())
+  )
+  WITH CHECK (
+    (
+      tenant_id = (SELECT public.get_current_tenant_id())
+      AND EXISTS (
+        SELECT 1 FROM public.profiles p
+        WHERE p.id = (SELECT auth.uid())
+          AND p.tenant_id = grading_periods.tenant_id
+          AND p.role = 'admin'
+          AND p.status = 'approved'
+          AND p.archived_at IS NULL
+      )
+    )
+    OR (SELECT public.is_platform_admin())
+  );
+
+CREATE POLICY "Tenant admins can insert grading periods"
+  ON public.grading_periods FOR INSERT TO authenticated
+  WITH CHECK (
+    (
+      tenant_id = (SELECT public.get_current_tenant_id())
+      AND EXISTS (
+        SELECT 1 FROM public.profiles p
+        WHERE p.id = (SELECT auth.uid())
+          AND p.tenant_id = grading_periods.tenant_id
+          AND p.role = 'admin'
+          AND p.status = 'approved'
+          AND p.archived_at IS NULL
+      )
+    )
+    OR (SELECT public.is_platform_admin())
+  )
+  WITH CHECK (
+    (
+      tenant_id = (SELECT public.get_current_tenant_id())
+      AND EXISTS (
+        SELECT 1 FROM public.profiles p
+        WHERE p.id = (SELECT auth.uid())
+          AND p.tenant_id = grading_periods.tenant_id
+          AND p.role = 'admin'
+          AND p.status = 'approved'
+          AND p.archived_at IS NULL
+      )
+    )
+    OR (SELECT public.is_platform_admin())
+  );
+
+CREATE POLICY "Tenant admins can update grading periods"
+  ON public.grading_periods FOR UPDATE TO authenticated
   USING (
     (
       tenant_id = (SELECT public.get_current_tenant_id())
@@ -30,6 +92,23 @@ CREATE POLICY "Tenant admins can manage grading periods"
     OR (SELECT public.is_platform_admin())
   )
   WITH CHECK (
+    (
+      tenant_id = (SELECT public.get_current_tenant_id())
+      AND EXISTS (
+        SELECT 1 FROM public.profiles p
+        WHERE p.id = (SELECT auth.uid())
+          AND p.tenant_id = grading_periods.tenant_id
+          AND p.role = 'admin'
+          AND p.status = 'approved'
+          AND p.archived_at IS NULL
+      )
+    )
+    OR (SELECT public.is_platform_admin())
+  );
+
+CREATE POLICY "Tenant admins can delete grading periods"
+  ON public.grading_periods FOR DELETE TO authenticated
+  USING (
     (
       tenant_id = (SELECT public.get_current_tenant_id())
       AND EXISTS (
