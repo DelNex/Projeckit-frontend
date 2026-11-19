@@ -6,7 +6,7 @@ type WorkerRequest = { id: string; file: File };
 type WorkerResponse = { id: string; text?: string; error?: string };
 
 const workerScope = self as unknown as DedicatedWorkerGlobalScope;
-const MAX_CHARACTERS = 200_000;
+const MAX_CHARACTERS = 900_000;
 
 function normalizeText(text: string): string {
   const seen = new Set<string>();
@@ -51,7 +51,7 @@ async function extractPdf(file: File): Promise<string> {
       const section = `[Page ${pageNumber}]\n${pageText.trim()}`;
       characterCount += section.length;
       if (characterCount > MAX_CHARACTERS) {
-        throw new Error(`'${file.name}' exceeds the 200,000-character AI source limit. Split it by chapter before generating an exam.`);
+        throw new Error(`'${file.name}' exceeds the 900,000-character AI source limit. Split it by chapter before generating an exam.`);
       }
       pages.push(section);
       page.cleanup();
@@ -113,7 +113,7 @@ workerScope.onmessage = async (event: MessageEvent<WorkerRequest>) => {
   try {
     const text = normalizeText(await extract(file));
     if (text.length > MAX_CHARACTERS) {
-      throw new Error(`'${file.name}' contains more than 200,000 readable characters. Split it by chapter so no source content is silently discarded.`);
+      throw new Error(`'${file.name}' contains more than 900,000 readable characters. Split it by chapter so no source content is silently discarded.`);
     }
     if (!text) throw new Error(`No readable text was found in '${file.name}'.`);
     const response: WorkerResponse = { id, text };
