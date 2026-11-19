@@ -138,7 +138,7 @@ async function requestGroqQuestions(payload: Record<string, any>, jobDeadline: n
 }
 
 /**
- * Claims one durable exam job, generates through Groq on the hosted server,
+ * Claims one durable exam job, generates through configured server-side AI providers,
  * validates/saves through the existing atomic finalizer, and processes repair
  * jobs without requiring the local Gemini browser helper.
  */
