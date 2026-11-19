@@ -1,15 +1,21 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { useToast } from '@/components/ui/toast';
 import { useTenant } from '@/context/TenantContext';
-import {
-    createKitOmrTemplate,
-    generateCanonicalGeometry,
-    OmrCameraModal,
-    OmrPrintModal,
-    OmrScanResult,
-} from '@/features/omr';
+import { createKitOmrTemplate } from '@/features/omr/templates/template-builder';
+import { generateCanonicalGeometry } from '@/features/omr/geometry/canonical-geometry';
+import type { OmrScanResult } from '@/features/omr/types';
+
+const OmrCameraModal = dynamic(
+  () => import('@/features/omr/components/OmrCameraModal').then((module) => module.OmrCameraModal),
+  { ssr: false, loading: () => null },
+);
+const OmrPrintModal = dynamic(
+  () => import('@/features/omr/components/OmrPrintModal').then((module) => module.OmrPrintModal),
+  { ssr: false, loading: () => null },
+);
 import { uploadScanImage } from '@/features/omr/storage';
 import { friendlyError } from '@/lib/errors';
 import { getPhilippineSchoolYear } from '@/lib/academic-calendar';
