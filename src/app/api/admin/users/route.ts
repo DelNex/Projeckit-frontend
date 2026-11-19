@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient, MissingServiceKeyError } from '@/lib/supabase/admin';
@@ -460,6 +461,8 @@ export async function GET(request: Request) {
       auth_data_warning: authWarning,
     });
   } catch (err: any) {
+    await logSystemEvent({ severity: 'error', source: 'api.admin.users', message: err instanceof Error ? err.message : 'Request failed.', method: 'GET', route: '/api/admin/users', code: 'ADMIN_USERS_FAILURE' });
+
     console.error('[admin/users GET] Unexpected error:', err);
 
     if (err instanceof MissingServiceKeyError || err?.code === 'MISSING_SERVICE_KEY') {
