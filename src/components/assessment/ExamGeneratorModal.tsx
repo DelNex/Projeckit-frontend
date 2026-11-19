@@ -71,6 +71,8 @@ export function ExamGeneratorModal({
   const generatedTextRef = useRef('');
   const handledJobRef = useRef<string | null>(null);
   const startingRef = useRef(false);
+  const cancelingRef = useRef(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const onExamGeneratedRef = useRef(onExamGenerated);
   const onCloseRef = useRef(onClose);
   onExamGeneratedRef.current = onExamGenerated;
@@ -113,6 +115,20 @@ export function ExamGeneratorModal({
   }, [generationJob.job?.id, generationJob.job?.status, generationJob.job?.error]);
 
   if (!isOpen) return null;
+
+  const handleCancelGeneration = async () => {
+    if (cancelingRef.current) return;
+    cancelingRef.current = true;
+    setIsCancelling(true);
+    try {
+      await generationJob.cancel();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not cancel exam generation.');
+    } finally {
+      cancelingRef.current = false;
+      setIsCancelling(false);
+    }
+  };
 
   const handleFilesSelect = async (files: FileList | File[]) => {
     const validExts = ['.pdf', '.docx', '.pptx', '.txt', '.md'];
@@ -284,7 +300,7 @@ export function ExamGeneratorModal({
                 ? <span className="rounded-full border border-slate-300 px-2 py-1 text-[10px] text-slate-600">AI providers offline</span>
                 : <span className="rounded-full border border-emerald-300 px-2 py-1 text-[10px] text-emerald-700">AI {generationJob.helperState.replace('_', ' ')}</span>}
               {['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')
-                ? <button type="button" onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="rounded-lg border border-rose-200 px-2 py-1 text-[10px] font-semibold text-rose-700">Cancel</button>
+                ? <button type="button" onClick={() => void handleCancelGeneration()} disabled={isCancelling} className="rounded-lg border border-rose-200 px-2 py-1 text-[10px] font-semibold text-rose-700 disabled:opacity-50">{isCancelling ? 'Cancelling…' : 'Cancel'}</button>
                 : ['completed', 'partial', 'failed', 'cancelled'].includes(generationJob.job?.status || '') ? null : <Loader2 className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />}
             </div>
 
@@ -321,7 +337,7 @@ export function ExamGeneratorModal({
           <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-300 flex items-center gap-2">
             <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
             <span>{errorMsg}</span>
-            {generationJob.job?.status === 'needs_attention' && <button type="button" onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="ml-auto shrink-0 rounded-lg border border-rose-300 px-2 py-1 font-semibold">Clear job</button>}
+            {generationJob.job?.status === 'needs_attention' && <button type="button" onClick={() => void handleCancelGeneration()} disabled={isCancelling} className="ml-auto shrink-0 rounded-lg border border-rose-300 px-2 py-1 font-semibold disabled:opacity-50">{isCancelling ? 'Clearing…' : 'Clear job'}</button>}
           </div>
         )}
 
