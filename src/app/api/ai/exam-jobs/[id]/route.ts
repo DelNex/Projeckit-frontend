@@ -14,8 +14,6 @@ async function scopedJob(id: string) {
   const { data: profile } = await supabase.from('profiles').select('tenant_id,status,archived_at').eq('id', user.id).maybeSingle();
   if (!profile || profile.status !== 'approved' || profile.archived_at || !profile.tenant_id) return { response: NextResponse.json({ error: 'Your account does not have access to this job.' }, { status: 403 }) };
   const admin = createAdminClient();
-  await admin.rpc('expire_unserviceable_exam_jobs');
-  await admin.rpc('cleanup_exam_job_payloads');
   const { data: job, error } = await admin.from('exam_generation_jobs').select('id,tos_id,status,provider,lease_expires_at,progress,error,result_summary,created_at,updated_at,finished_at,created_by,tenant_id').eq('id', id).eq('tenant_id', profile.tenant_id).eq('provider', 'groq_api').maybeSingle();
   if (error || !jobBelongsToTenant(job, profile.tenant_id)) return { response: NextResponse.json({ error: 'Exam generation job was not found.' }, { status: 404 }) };
   return { job, admin };
@@ -49,14 +47,20 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       }
     }
 
-    after(async () => {
-      try {
-        if (recoveryJobId) await runGroqExamJob(recoveryJobId, admin);
-        else await runNextGroqExamJob(admin);
-      } catch (error) {
-        console.error('[Exam worker] Status-poll dispatch failed:', error instanceof Error ? error.message : 'unknown error');
-      }
-    });
+    const queuedNeedsDispatch = ['queued', 'needs_attention'].includes(job.status)
+      && Date.now() - Date.parse(job.updated_at) >= 15_000;
+    // Status polling is read-mostly. Dispatch only when a queued job has
+    // stopped progressing or a running lease is actually expired.
+    if (recoveryJobId || queuedNeedsDispatch) {
+      after(async () => {
+        try {
+          if (recoveryJobId) await runGroqExamJob(recoveryJobId, admin);
+          else await runNextGroqExamJob(admin);
+        } catch (error) {
+          console.error('[Exam worker] Recovery dispatch failed:', error instanceof Error ? error.message : 'unknown error');
+        }
+      });
+    }
     let queuePosition: number | null = null;
     if (job.status === 'queued') {
       const count = await admin.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('provider', 'groq_api').eq('status', 'queued').lte('created_at', job.created_at);
