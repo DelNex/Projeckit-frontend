@@ -24,7 +24,7 @@ export function projectTosItems(
 ): TosProjectedItem[] {
   if (!Number.isInteger(totalItems) || totalItems <= 0) return [];
 
-  const rows = sourceRows.slice(0, 4);
+  const rows = sourceRows;
   if (rows.length === 0) return [];
 
   const competencies = rows.map((row, index) => {

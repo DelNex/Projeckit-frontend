@@ -30,7 +30,7 @@ import {
   renderOmrMasterSvg,
   VisibleHeaderFields,
 } from '../rendering/svg-renderer';
-import { A5_TWO_UP_PRINT_SIZE, buildA5TwoUpPages } from '../rendering/personalized-print-layout';
+import { A5_TWO_UP_PRINT_SIZE, buildA5TwoUpPages, buildA4CompactPages, getA4CompactLayout } from '../rendering/personalized-print-layout';
 
 export interface OmrPrintModalStudent {
   id: string;
@@ -108,8 +108,18 @@ export function OmrPrintModal({
   }, [students, assessment?.section, geometry?.config?.section]);
 
   const isHalfSheet = geometry?.sheetFormat === 'HALF';
+
+  // The assessment's canonical geometry already contains the compact height.
+  // Printing and scanning therefore use the exact same bubble coordinates.
+  const printGeometry = geometry;
+  const compactLayout = isHalfSheet && printGeometry && printGeometry.page.height < 794
+    ? getA4CompactLayout(printGeometry.page.height)
+    : { sheetHeightMm: A5_TWO_UP_PRINT_SIZE.sheetHeightMm, rowsPerPage: 1, sheetsPerPage: 2 };
+  const compactRowsPerPage = compactLayout.rowsPerPage;
+  const compactSheetHeightMm = compactLayout.sheetHeightMm;
+  const sheetsPerPage = compactLayout.sheetsPerPage;
   const totalPages = isHalfSheet
-    ? Math.max(1, Math.ceil(activeLearners.length / 2))
+    ? Math.max(1, Math.ceil(activeLearners.length / sheetsPerPage))
     : Math.max(1, activeLearners.length);
 
   useEffect(() => {
@@ -126,11 +136,11 @@ export function OmrPrintModal({
     return {
       learnerName: student.name,
       lrn: student.lrn || undefined,
-      section: assessment?.section || geometry.config.section,
+      section: assessment?.section || printGeometry.config.section,
       examDate,
-      subject: assessment?.subject || geometry.config.subject,
-      term: assessment?.term || geometry.config.term,
-      assessmentTitle: assessment?.title || geometry.config.title,
+      subject: assessment?.subject || printGeometry.config.subject,
+      term: assessment?.term || printGeometry.config.term,
+      assessmentTitle: assessment?.title || printGeometry.config.title,
       teacherName: teacherName || undefined,
       schoolName: schoolName || undefined,
       region: region || undefined,
@@ -155,7 +165,7 @@ export function OmrPrintModal({
   const previewSvgLeft = useMemo(() => {
     if (!geometry) return '';
     if (printMode === 'blank') {
-      return renderOmrMasterSvg(geometry, blankSheetData);
+      return renderOmrMasterSvg(printGeometry, blankSheetData);
     }
     const sIdx = isHalfSheet ? currentPageIdx * 2 : currentPageIdx;
     const student = activeLearners[sIdx] || null;
@@ -173,7 +183,7 @@ export function OmrPrintModal({
     return renderOmrMasterSvg(geometry, getStudentPersonalizedData(student, sIdx));
   }, [geometry, printMode, currentPageIdx, isHalfSheet, activeLearners, examDate, visibleFields, assessment, teacherName, schoolName, region, division, logoData, totalPoints]);
 
-  if (!isOpen || !geometry) return null;
+  if (!isOpen || !geometry || !printGeometry) return null;
 
   const toggleField = (field: keyof VisibleHeaderFields) => {
     setVisibleFields((prev) => ({
@@ -186,8 +196,22 @@ export function OmrPrintModal({
     let pagesHtml = '';
 
     if (isHalfSheet) {
-      // 2 half sheets side by side on A4 landscape (1123 x 794)
-      if (printMode === 'blank') {
+      // Smaller exams use compact sheets tiled into the unused page area.
+      // 60-item sheets continue through the original A5 two-up path unchanged.
+      if (compactRowsPerPage > 1) {
+        if (printMode === 'personalized' && activeLearners.length === 0) {
+          alert('No enrolled active learners found for this section.');
+          return;
+        }
+        const sheetCount = printMode === 'blank' ? sheetsPerPage : activeLearners.length;
+        pagesHtml = buildA4CompactPages(sheetCount, compactRowsPerPage, compactSheetHeightMm, (index) => {
+          if (printMode === 'blank') return renderOmrMasterSvg(printGeometry, blankSheetData);
+          const student = activeLearners[index];
+          return student
+            ? renderOmrMasterSvg(printGeometry, getStudentPersonalizedData(student, index))
+            : '';
+        });
+      } else if (printMode === 'blank') {
         const svg = renderOmrMasterSvg(geometry, blankSheetData);
         pagesHtml = `
           <div class="omr-print-page-landscape">
@@ -263,10 +287,29 @@ export function OmrPrintModal({
         break-after: page;
         background: #ffffff;
       }
-      .omr-print-page-landscape:last-child {
+      .omr-print-page-landscape:last-child,
+      .omr-print-page-compact:last-child {
         page-break-after: auto;
         break-after: auto;
       }
+      .omr-print-page-compact {
+        width: 297mm;
+        height: 210mm;
+        display: grid;
+        grid-template-columns: 148mm 148mm;
+        grid-template-rows: repeat(var(--omr-compact-rows), var(--omr-compact-height));
+        align-content: start;
+        justify-content: space-between;
+        position: relative;
+        overflow: hidden;
+        page-break-after: always;
+        break-after: page;
+        background: #ffffff;
+      }
+      .omr-sheet-compact { width: 148mm; height: var(--omr-compact-height); overflow: hidden; }
+      .omr-sheet-compact svg { width: 100%; height: 100%; display: block; }
+      .omr-compact-vertical-cut { position: absolute; left: 148.5mm; top: 0; bottom: 0; border-left: 1px dashed #9CA3AF; }
+      .omr-compact-horizontal-cut { position: absolute; left: 0; right: 0; border-top: 1px dashed #9CA3AF; }
       .omr-sheet-half {
         width: ${A5_TWO_UP_PRINT_SIZE.sheetWidthMm}mm;
         height: ${A5_TWO_UP_PRINT_SIZE.sheetHeightMm}mm;
@@ -374,7 +417,11 @@ export function OmrPrintModal({
 
               {/* Format Badge */}
               <span className="rounded-md bg-gray-800 px-2 py-0.5 text-[11px] font-mono font-medium text-gray-300 border border-gray-700">
-                {isHalfSheet ? 'A5 Half (2 per A4 Landscape)' : 'A4 Full Sheet'}
+                {isHalfSheet
+                  ? compactRowsPerPage > 1
+                    ? `Compact Half · ${sheetsPerPage} per A4 Landscape`
+                    : 'A5 Half (2 per A4 Landscape)'
+                  : 'A4 Full Sheet'}
               </span>
             </div>
 
@@ -477,10 +524,14 @@ export function OmrPrintModal({
               <span className="font-semibold text-gray-300">Previewing Page:</span>
               <span className="font-bold text-emerald-400">
                 {isHalfSheet ? (
-                  <>
-                    Sheets #{currentPageIdx * 2 + 1}
-                    {activeLearners[currentPageIdx * 2 + 1] ? ` & #${currentPageIdx * 2 + 2}` : ''}
-                  </>
+                  compactRowsPerPage > 1 ? (
+                    <>Sheets #{currentPageIdx * sheetsPerPage + 1}–#{Math.min((currentPageIdx + 1) * sheetsPerPage, activeLearners.length)} of {activeLearners.length}</>
+                  ) : (
+                    <>
+                      Sheets #{currentPageIdx * 2 + 1}
+                      {activeLearners[currentPageIdx * 2 + 1] ? ` & #${currentPageIdx * 2 + 2}` : ''}
+                    </>
+                  )
                 ) : (
                   <>Sheet #{currentPageIdx + 1} — {activeLearners[currentPageIdx]?.name}</>
                 )}
@@ -516,7 +567,27 @@ export function OmrPrintModal({
         {/* Modal Body: Preview Container */}
         <div className="flex-1 min-h-0 overflow-auto bg-gray-950">
           <div className="p-4 sm:p-8 flex justify-center">
-            {isHalfSheet ? (
+            {isHalfSheet && compactRowsPerPage > 1 ? (
+              <div
+                className="relative bg-white rounded-lg shadow-2xl shrink-0 overflow-hidden"
+                style={{ width: 1123, height: 794 }}
+                dangerouslySetInnerHTML={{
+                  __html: buildA4CompactPages(
+                    printMode === 'blank'
+                      ? sheetsPerPage
+                      : Math.max(0, Math.min(sheetsPerPage, activeLearners.length - currentPageIdx * sheetsPerPage)),
+                    compactRowsPerPage,
+                    compactSheetHeightMm,
+                    (offset) => {
+                      if (printMode === 'blank') return renderOmrMasterSvg(printGeometry, blankSheetData);
+                      const studentIndex = currentPageIdx * sheetsPerPage + offset;
+                      const student = activeLearners[studentIndex];
+                      return student ? renderOmrMasterSvg(printGeometry, getStudentPersonalizedData(student, studentIndex)) : '';
+                    }
+                  )
+                }}
+              />
+            ) : isHalfSheet ? (
               /* A4 Landscape 2-Up Container (1123 x 794) */
               <div
                 className="relative bg-white rounded-lg shadow-2xl shrink-0 flex flex-row justify-between overflow-hidden"
@@ -552,7 +623,7 @@ export function OmrPrintModal({
           <span>↕ Scroll to view full page preview</span>
           <span className="font-mono">
             {isHalfSheet
-              ? 'A4 Landscape (1123 × 794 px) · 2 A5 Sheets / Page'
+              ? (compactRowsPerPage > 1 ? `A4 Landscape · ${sheetsPerPage} compact sheets / page` : 'A4 Landscape (1123 × 794 px) · 2 A5 Sheets / Page')
               : 'A4 Portrait (794 × 1123 px) · 1 Sheet / Page'}
             {printMode === 'personalized' && ` · ${activeLearners.length} Learners (${totalPages} Pages)`}
           </span>

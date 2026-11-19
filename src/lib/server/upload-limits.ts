@@ -3,7 +3,7 @@ export interface UploadLimits {
   maxScanImageMb: number;
 }
 
-const DEFAULT_LIMITS: UploadLimits = { maxModuleUploadMb: 60, maxScanImageMb: 15 };
+const DEFAULT_LIMITS: UploadLimits = { maxModuleUploadMb: 100, maxScanImageMb: 15 };
 const cache = new Map<string, { expiresAt: number; limits: UploadLimits }>();
 const CACHE_MS = 60_000;
 

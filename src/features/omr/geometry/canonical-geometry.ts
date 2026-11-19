@@ -161,8 +161,34 @@ export function generateCanonicalGeometry(rawConfig: AssessmentOmrConfig): Canon
   const itemCount = rawConfig.itemCount;
   const classSize = rawConfig.classSize;
 
+  // The same canonical geometry is used by printing and scanning. For smaller
+  // HALF forms, calculate a compact physical height here (not only in the
+  // print modal) so the scanner receives exactly the geometry that was printed.
+  const requestedFormat: 'HALF' | 'FULL' = rawConfig.sheetFormat || (itemCount <= 60 ? 'HALF' : 'FULL');
+  if (requestedFormat === 'HALF' && itemCount < 60 && !rawConfig.pageHeight && !(rawConfig as AssessmentOmrConfig & { includeRollNumberGrid?: boolean }).includeRollNumberGrid) {
+    const base = generateCanonicalGeometry({
+      ...rawConfig,
+      sheetFormat: 'HALF',
+      pageWidth: rawConfig.pageWidth || 559,
+      pageHeight: 794,
+    });
+    const rowsPerColumn = base.layout.answerArea.rowsPerCol;
+    const baseAnswerY = base.layout.answerArea.y;
+    const shiftedSectionBottom = base.layout.sectionBar.bottomLineY;
+    const contentCursorY = Math.max(0, 4 * shiftedSectionBottom - 3 * (baseAnswerY - 8));
+    const compactHeight = Math.ceil(
+      23 + contentCursorY + 8 + 26 + 16 + 19 * Math.max(0, rowsPerColumn - 1) + 2
+    );
+    return generateCanonicalGeometry({
+      ...rawConfig,
+      sheetFormat: 'HALF',
+      pageWidth: base.page.width,
+      pageHeight: compactHeight,
+    });
+  }
+
   // Initial format decision: HALF for <= 60 items, FULL for 61..90 items
-  let sheetFormat: 'HALF' | 'FULL' = rawConfig.sheetFormat || (itemCount <= 60 ? 'HALF' : 'FULL');
+  let sheetFormat: 'HALF' | 'FULL' = requestedFormat;
 
   // Internal layout planner to support automatic fallback
   function computeLayoutMetrics(format: 'HALF' | 'FULL') {
@@ -172,7 +198,7 @@ export function generateCanonicalGeometry(rawConfig: AssessmentOmrConfig): Canon
 
     // Margins ensuring bottom empty space is strictly <= 3% of sheet height
     // Half: 23px / 794px = 2.89% <= 3%. Full: 28px / 1123px = 2.49% <= 3%.
-    const bottomMargin = isHalf ? 23 : 28;
+    const bottomMargin = isHalf ? Math.min(23, pageHeight * 0.03) : 28;
     const answerAreaBottomY = pageHeight - bottomMargin;
     const markerSize = isHalf ? 14 : 16;
 
@@ -521,15 +547,18 @@ export function generateCanonicalGeometry(rawConfig: AssessmentOmrConfig): Canon
   const yearSectionLineStartX = yearSectionLabelX + 75;
   const yearSectionLineEndX = isHalf ? 485 : 690;
 
-  // Keep the barcode right-aligned while leaving enough width for its fixed 15-character payload.
+  // Place the full-size barcode inside the section bar's right side. The old
+  // title-block position crossed the subject and school-year text on short
+  // forms. Keep the physical bar thickness and height unchanged for scanning.
   const barcodeNarrowBarWidth = isHalf ? 1.0 : 1.1;
-  const barcodeCharacterCount = 17; // Code 39 start/stop characters plus Kxxxxxx-xxxxxx
+  const barcodeCharacterCount = 16; // Code 39 start/stop plus K + 6 assessment hex + '-' + 6 student hex
   const barcodeUnitWidth = 6 + 3 * 2.2 + 1; // six narrow elements, three wide elements, and the gap
   const barcodeWidth = barcodeCharacterCount * barcodeUnitWidth * barcodeNarrowBarWidth;
+  const barcodeHeight = isHalf ? 26 : 32;
   const barcode = {
     x: answerAreaX + answerAreaWidth - barcodeWidth - 8,
-    y: Math.round(subjectY - (isHalf ? 4 : 6)),
-    height: isHalf ? 26 : 32,
+    y: Math.round(sectionTopLineY + (sectionBottomLineY - sectionTopLineY - barcodeHeight) / 2),
+    height: barcodeHeight,
     narrowBarWidth: barcodeNarrowBarWidth,
     wideBarRatio: 2.2,
   };

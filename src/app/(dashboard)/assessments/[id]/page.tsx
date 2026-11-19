@@ -915,6 +915,32 @@ export default function AssessmentWorkspacePage({
       };
     });
 
+    const competencyGroups = new Map<string, typeof rows>();
+    for (const item of rows) {
+      const groupKey = item.code + '::' + item.description;
+      const group = competencyGroups.get(groupKey) || [];
+      group.push(item);
+      competencyGroups.set(groupKey, group);
+    }
+    const competencyBreakdown = Array.from(competencyGroups.entries()).map(([key, competencyItems]) => {
+      const totalCorrect = competencyItems.reduce((sum, item) => sum + item.Ri, 0);
+      const possible = competencyItems.length * N;
+      const masteryPct = possible > 0 ? Math.round((totalCorrect / possible) * 1000) / 10 : null;
+      const weakItems = competencyItems.filter((item) => item.pIndex < 0.6).map((item) => item.itemNumber);
+      return {
+        key,
+        code: competencyItems[0]?.code || 'COMPETENCY',
+        description: competencyItems[0]?.description || 'Learning competency',
+        itemCount: competencyItems.length,
+        masteryPct,
+        weakItems,
+        recommendation: masteryPct === null ? 'Awaiting verified scans'
+          : masteryPct < 60 ? 'Prioritize reteaching'
+          : masteryPct < 75 ? 'Monitor progress'
+          : 'On track',
+      };
+    });
+
     return {
       N,
       rows,
@@ -928,6 +954,7 @@ export default function AssessmentWorkspacePage({
       avgP,
       avgD,
       domainBreakdown,
+      competencyBreakdown,
     };
   }, [tosDoc, scanResults, answers, itemCount, assessment.classSize, isEditingIa, tempDraftRi, customRi, choicesList, studentsList]);
 
@@ -1433,7 +1460,7 @@ export default function AssessmentWorkspacePage({
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-right text-gray-400 text-[11px]">
-                                {new Date(s.created_at).toLocaleTimeString()}
+                                {s.created_at ? new Date(s.created_at).toLocaleTimeString() : '—'}
                               </td>
                             </tr>
                           );
@@ -1616,6 +1643,45 @@ export default function AssessmentWorkspacePage({
                     </div>
                   ))}
                 </div>
+              </div>
+
+              <div className="p-4 sm:p-5 bg-white dark:bg-gray-900 rounded-2xl sm:rounded-3xl border border-gray-200 dark:border-gray-800 shadow-xs space-y-3 min-w-0">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">Competency mastery and learning gaps</h3>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                    Based on processed, graded scans only. Rescans are deduplicated per learner.
+                  </p>
+                </div>
+                {itemAnalysisStats.competencyBreakdown.length ? (
+                  <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                    {itemAnalysisStats.competencyBreakdown.map((competency) => (
+                      <div key={competency.key} className="rounded-xl border border-gray-100 bg-gray-50/70 p-3 dark:border-gray-800 dark:bg-gray-800/40">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">{competency.code} · {competency.itemCount} items</p>
+                            <p className="mt-1 text-xs font-semibold text-gray-900 dark:text-white">{competency.description}</p>
+                          </div>
+                          <span className={`shrink-0 text-sm font-black tabular-nums ${competency.masteryPct === null ? 'text-gray-400' : competency.masteryPct < 60 ? 'text-amber-600 dark:text-amber-400' : competency.masteryPct < 75 ? 'text-blue-600 dark:text-blue-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                            {competency.masteryPct === null ? '—' : competency.masteryPct + '%'}
+                          </span>
+                        </div>
+                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                          <div className="h-full rounded-full bg-current" style={{ width: (competency.masteryPct ?? 0) + '%' }} />
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-[10px] font-semibold text-gray-500 dark:text-gray-400">{competency.recommendation}</span>
+                          {competency.weakItems.length > 0 && (
+                            <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                              Review items {competency.weakItems.map((item) => '#' + item).join(', ')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500">No TOS competency rows are available for this assessment.</p>
+                )}
               </div>
 
               {/* Minimal Non-Overflowing Table Card */}

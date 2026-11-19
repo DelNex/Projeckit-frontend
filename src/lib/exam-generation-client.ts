@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ExamQuestion } from '@/lib/exam-types';
 import { invalidateClientQueryCache } from '@/lib/supabase/client';
+import { uploadCompressedLessonDocuments, removeCompressedLessonSourceFromBrowser } from '@/lib/lesson-source-upload';
 
 export type ExamJobStatus = 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'cancelled' | 'needs_attention';
 export interface ExamGenerationJob {
@@ -100,25 +101,44 @@ export function useExamGenerationJob(tosId: string | undefined) {
     };
   }, [tosId, refreshHelperStatus, refreshJob]);
 
-  const start = useCallback(async (input: { lessonText?: string; lessonDocuments?: Array<{ name: string; text: string }>; repairItemNumber?: number }) => {
+  const start = useCallback(async (input: { lessonText?: string; lessonDocuments?: Array<{ name: string; text: string; competencyId?: string }>; teacherInstructions?: string; repairItemNumber?: number }) => {
     if (!tosId) throw new Error('A TOS is required to start exam generation.');
     if (job && ['queued', 'running', 'needs_attention'].includes(job.status)) throw new Error('This TOS already has an active generation job. Cancel or resolve it before starting another.');
-    if (helperState === 'offline' || helperState === 'needs_attention') throw new Error('The Gemini helper is unavailable. No job was created. Start the helper and try again.');
+    const documents = input.lessonDocuments?.length
+      ? input.lessonDocuments
+      : input.lessonText?.trim()
+        ? [{ name: 'Lesson materials', text: input.lessonText }]
+        : [];
+    if (!documents.length) throw new Error('Extract at least one lesson document before generating an exam.');
     setIsStarting(true); setSavedQuestions(null); setLoadError(null);
+    let sourceManifest: Awaited<ReturnType<typeof uploadCompressedLessonDocuments>> | null = null;
+    let keepSource = false;
     try {
+      sourceManifest = await uploadCompressedLessonDocuments(documents);
       const response = await fetch('/api/ai/exam-jobs', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tosId, ...input }), cache: 'no-store',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tosId,
+          sourceManifest,
+          teacherInstructions: input.teacherInstructions,
+          repairItemNumber: input.repairItemNumber,
+        }),
+        cache: 'no-store',
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'Could not queue exam generation.');
+      keepSource = !data.reused;
       invalidateClientQueryCache();
       startedAt.current = Date.now();
       setJob({ id: data.id, status: data.status, queuePosition: data.queuePosition || null });
       void refreshHelperStatus();
       return data as { id: string; status: ExamJobStatus; queuePosition: number };
-    } finally { setIsStarting(false); }
-  }, [tosId, job, helperState, refreshHelperStatus]);
+    } finally {
+      if (sourceManifest && !keepSource) await removeCompressedLessonSourceFromBrowser(sourceManifest);
+      setIsStarting(false);
+    }
+  }, [tosId, job, refreshHelperStatus]);
 
   const cancel = useCallback(async () => {
     if (!job || !['queued', 'running', 'needs_attention'].includes(job.status)) return;

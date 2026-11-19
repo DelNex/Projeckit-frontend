@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { authorizeHelperRequest } from '../helper-auth';
-import { finalizeExamJob, jobBelongsToTenant } from '../exam-jobs';
+import { finalizeExamJob, jobBelongsToTenant, verifySourceEvidence } from '../exam-jobs';
 
 const slots = [
   { item_number: 1, competency_id: 'C1', competency_code: 'C1', competency_description: 'First competency', cognitive_level: 'remembering' as const },
@@ -99,6 +99,56 @@ test('failed generation does not call the atomic question-save operation', async
   assert.equal(writes.some((write) => write.method === 'rpc'), false);
 });
 
+
+test('source evidence must quote the exact supplied source section', () => {
+  const chunks = [{
+    source: 'Lesson material',
+    sourceId: 'source-1',
+    part: 2,
+    parts: 3,
+    text: 'Photosynthesis converts sunlight into chemical energy in green plants.',
+  }];
+  assert.equal(verifySourceEvidence({
+    source_id: 'source-1', part: 2, quote: 'converts sunlight into chemical energy',
+  }, chunks), true);
+  assert.equal(verifySourceEvidence({
+    source_id: 'source-1', part: 2, quote: 'plants convert water into glucose',
+  }, chunks), false);
+  assert.equal(verifySourceEvidence({
+    source_id: 'source-2', part: 2, quote: 'converts sunlight into chemical energy',
+  }, chunks), false);
+  assert.equal(verifySourceEvidence({
+    source_id: 'source-1', part: 3, quote: 'converts sunlight into chemical energy',
+  }, chunks), false);
+});
+
+test('finalizer queues repair when a new question has unsupported source evidence', async () => {
+  const sourceChunks = [{
+    source: 'Lesson material', sourceId: 'source-1', part: 1, parts: 1,
+    text: 'Photosynthesis converts light energy into chemical energy.',
+  }];
+  const job = {
+    id: 'job-evidence', tenant_id: 'tenant-a', tos_id: 'tos-a', created_by: 'user-a',
+    status: 'running', job_kind: 'full', repair_round: 0,
+    payload: { slots, requireEvidence: true, lessonChunks: sourceChunks, prompt: 'write' },
+  };
+  const { admin, writes } = createAdminMock(job);
+  const valid = {
+    ...question(slots[0]),
+    source_evidence: { source_id: 'source-1', part: 1, quote: 'converts light energy into chemical energy' },
+  };
+  const unsupported = {
+    ...question(slots[1]),
+    source_evidence: { source_id: 'source-1', part: 1, quote: 'plants absorb blue light to make proteins' },
+  };
+  const result = await finalizeExamJob('job-evidence', JSON.stringify([valid, unsupported]), admin, sourceChunks);
+  assert.equal(result.status, 'running');
+  assert.deepEqual(result.missingItems, [2]);
+  const child = writes.find((write) => write.table === 'exam_generation_jobs' && write.method === 'insert')?.value;
+  assert.deepEqual(child.payload.slots.map((slot: any) => slot.item_number), [2]);
+  assert.equal(child.payload.partialQuestions[0].source_evidence.quote, valid.source_evidence.quote);
+});
+
 test('helper routes reject missing and incorrect bearer tokens', () => {
   const old = process.env.GEMINI_HELPER_TOKEN;
   process.env.GEMINI_HELPER_TOKEN = 'x'.repeat(64);
@@ -116,10 +166,12 @@ test('job tenant check prevents a tenant from reading another school job', () =>
   assert.equal(jobBelongsToTenant({ tenant_id: 'tenant-b' }, 'tenant-a'), false);
 });
 
-test('claim function uses row locking, leases, retries and tenant fairness ordering', async () => {
-  const migration = await readFile(new URL('../../../../../supabase/migrations/20260908000032_exam_generation_jobs.sql', import.meta.url), 'utf8');
-  assert.match(migration, /FOR UPDATE OF j SKIP LOCKED/);
-  assert.match(migration, /lease_expires_at <= now\(\).*attempts < j\.max_attempts/s);
-  assert.match(migration, /active_for_tenant|SELECT count\(\*\).*active/s);
-  assert.match(migration, /attempts = j\.attempts \+ 1/);
+test('claim function uses row locking, leases, retries and tenant concurrency limits', async () => {
+  const migration = await readFile(new URL('../../../../supabase/migrations/20261119115522_multi_provider_exam_dispatch_limits.sql', import.meta.url), 'utf8');
+  assert.match(migration, /FOR UPDATE SKIP LOCKED/i);
+  assert.match(migration, /lease_expires_at is not null and lease_expires_at <= now\(\)/i);
+  assert.match(migration, /pg_advisory_xact_lock/);
+  assert.match(migration, /global_active >= 4/);
+  assert.match(migration, /tenant_active >= 2/);
+  assert.match(migration, /attempts = attempts \+ 1/);
 });

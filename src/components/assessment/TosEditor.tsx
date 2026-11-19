@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useTenant } from '@/context/TenantContext';
 import { ExamQuestion } from '@/lib/exam-types';
 import { ExamGeneratorModal } from './ExamGeneratorModal';
@@ -89,6 +90,7 @@ export function TosEditor({
   onSaveSuccess,
 }: TosEditorProps) {
   const supabase = createClient();
+  const router = useRouter();
   const { toast } = useToast();
   const { tenantName, userDisplayName } = useTenant();
 
@@ -149,6 +151,7 @@ export function TosEditor({
   const [newCode, setNewCode] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newDays, setNewDays] = useState<number>(4);
+  const [schoolCompetencies, setSchoolCompetencies] = useState<Array<{ id: string; code: string; description: string }>>([]);
 
   // UI / Async State
   const [loading, setLoading] = useState(true);
@@ -163,6 +166,21 @@ export function TosEditor({
   const [isLinkedWarningModalOpen, setIsLinkedWarningModalOpen] = useState(false);
   const [isZeroItemsWarningModalOpen, setIsZeroItemsWarningModalOpen] = useState(false);
   const [gradingPeriods, setGradingPeriods] = useState<Array<{ id: string; name: string; code: string }>>([]);
+
+  // Load reusable competencies shared by teachers in this school tenant.
+  useEffect(() => {
+    let active = true;
+    fetch('/api/competencies', { cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return response.json();
+      })
+      .then((data) => {
+        if (active && Array.isArray(data?.competencies)) setSchoolCompetencies(data.competencies);
+      })
+      .catch(() => { /* The TOS editor still works when the library migration is not yet applied. */ });
+    return () => { active = false; };
+  }, []);
 
   // 1. Fetch real TOS document from Supabase
   useEffect(() => {
@@ -391,7 +409,7 @@ export function TosEditor({
     });
 
     const itemsMismatch = totalAllocatedItems !== targetItems;
-    const countMismatch = rows.length < 1 || rows.length > 4;
+    const countMismatch = rows.length < 1;
     const totalErrors = rowIssues + (itemsMismatch ? 1 : 0) + (countMismatch ? 1 : 0);
 
     return {
@@ -405,10 +423,6 @@ export function TosEditor({
   }, [rows, displayRows, targetItems]);
 
   const handleSaveTos = async (confirmedWarning: boolean = false) => {
-    if (rows.length > 4) {
-      toast.error('A TOS can have up to 4 learning competencies. Please reduce competencies to 4 before saving.');
-      return;
-    }
     if (rows.length < 1) {
       toast.error('A TOS must have at least 1 learning competency.');
       return;
@@ -533,6 +547,29 @@ export function TosEditor({
         console.warn('Faculty sync notice:', syncErr);
       }
 
+      // Store these entries in the tenant library so other teachers can reuse them.
+      try {
+        const libraryRows = rows.map((row) => ({ code: row.code, description: row.description }));
+        const libraryResponse = await fetch('/api/competencies', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ competencies: libraryRows }),
+        });
+        if (libraryResponse.ok) {
+          setSchoolCompetencies((previous) => {
+            const merged = [...previous];
+            for (const row of libraryRows) {
+              if (!merged.some((entry) => entry.code === row.code && entry.description === row.description)) {
+                merged.push({ id: `${row.code}-${merged.length}`, ...row });
+              }
+            }
+            return merged;
+          });
+        }
+      } catch (libraryError) {
+        console.warn('School competency library sync notice:', libraryError);
+      }
+
       setSaveStatus('saved');
       setLastSavedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       setIsEditing(false);
@@ -550,9 +587,8 @@ export function TosEditor({
 
   const handleCommitInlineRow = () => {
     if (!newDesc.trim()) return;
-
-    if (rows.length >= 4) {
-      toast.error('A TOS can have up to 4 learning competencies.');
+    if (rows.length >= 200) {
+      toast.error('A TOS can contain up to 200 competencies.');
       return;
     }
 
@@ -596,9 +632,8 @@ export function TosEditor({
   const handleBulkDuplicate = () => {
     const toDuplicate = rows.filter((r) => selectedIds.has(r.id));
     if (toDuplicate.length === 0) return;
-
-    if (rows.length + toDuplicate.length > 4) {
-      toast.error('A TOS can have up to 4 learning competencies.');
+    if (rows.length + toDuplicate.length > 200) {
+      toast.error('A TOS can contain up to 200 competencies.');
       return;
     }
 
@@ -631,24 +666,8 @@ export function TosEditor({
     );
   }
 
-  const isOverCompetencyLimit = rows.length > 4;
-
   return (
     <div className="space-y-4 pb-8 min-w-0">
-      {/* ── C3 Alert Banner for Legacy Documents with >4 Competencies ── */}
-      {isOverCompetencyLimit && (
-        <div className="rounded-2xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 p-4 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-3">
-          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <p className="font-bold">
-              Competency Limit Notice: This TOS contains {rows.length} learning competencies.
-            </p>
-            <p>
-              Under updated DepEd assessment guidelines, a Table of Specifications can have up to 4 learning competencies. Please reduce to 4 or fewer before saving changes.
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* ── Top Bar: Status, Actions, View Switcher ── */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-3.5 sm:p-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs min-w-0">
@@ -744,7 +763,7 @@ export function TosEditor({
             <div className="flex items-center gap-2">
               <button
                 onClick={() => handleSaveTos(false)}
-                disabled={saving || isOverCompetencyLimit}
+                disabled={saving}
                 className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-xs transition flex items-center gap-1.5 shrink-0"
               >
                 {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
@@ -1115,7 +1134,7 @@ export function TosEditor({
                   <span>
                     Validation Alert: {totals.rowIssues > 0 && `${totals.rowIssues} row issue(s)`}
                     {totals.itemsStatus !== 'valid' && ` · Items: ${totals.totalAllocatedItems}/${targetItems}`}
-                    {isOverCompetencyLimit && ' · Max 4 competencies exceeded'}
+                    
                   </span>
                 </div>
               )}
@@ -1186,7 +1205,7 @@ export function TosEditor({
                         <FileSpreadsheet className="h-8 w-8 text-gray-300 dark:text-gray-600" />
                         <p className="text-xs font-semibold">No learning competencies added yet.</p>
                         <p className="text-[11px] max-w-sm text-gray-400">
-                          Click &quot;Edit Worksheet&quot; to begin adding up to 4 learning competencies and days taught.
+                          Click &quot;Edit Worksheet&quot; to begin adding learning competencies and days taught.
                         </p>
                       </div>
                     </td>
@@ -1454,16 +1473,9 @@ export function TosEditor({
                   );
                 })}
 
-                {/* C1, C3: Inline Add Row (disabled when 4 reached) */}
+                {/* Add as many competency rows as the saved TOS requires. */}
                 {isEditing && (
-                  rows.length >= 4 ? (
-                    <tr className="bg-gray-50/50 dark:bg-gray-800/20 border-t border-gray-200 dark:border-gray-700">
-                      <td colSpan={14} className="px-4 py-3 text-center text-xs text-gray-500 italic">
-                        A Table of Specifications can have up to 4 learning competencies. Delete or remove one to add another.
-                      </td>
-                    </tr>
-                  ) : (
-                    <tr className="bg-emerald-50/40 dark:bg-emerald-950/10 border-t-2 border-dashed border-emerald-300 dark:border-emerald-800">
+                  <tr className="bg-emerald-50/40 dark:bg-emerald-950/10 border-t-2 border-dashed border-emerald-300 dark:border-emerald-800">
                       <td className="px-3 py-2 text-center">
                         <button
                           onClick={handleCommitInlineRow}
@@ -1486,12 +1498,19 @@ export function TosEditor({
                       <td className="px-2 py-2">
                         <input
                           type="text"
-                          placeholder="Type learning competency description..."
+                          list="school-competency-library"
+                          placeholder="Type or choose a saved school competency..."
                           value={newDesc}
                           onChange={(e) => setNewDesc(e.target.value)}
                           onKeyDown={(e) => e.key === 'Enter' && handleCommitInlineRow()}
                           className="w-full px-2 py-1 text-xs rounded-lg border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                         />
+                        <datalist id="school-competency-library">
+                          {schoolCompetencies.map((competency) => (
+                            <option key={competency.id} value={competency.description}>{competency.code}</option>
+                          ))}
+                        </datalist>
+                        <p className="mt-1 text-[10px] text-gray-400">Saved school competencies appear as suggestions.</p>
                       </td>
                       <td className="px-2 py-2 text-center">
                         <input
@@ -1516,7 +1535,6 @@ export function TosEditor({
                         </button>
                       </td>
                     </tr>
-                  )
                 )}
               </tbody>
 
@@ -1762,12 +1780,38 @@ export function TosEditor({
         targetItems={targetItems}
         tosRows={rows}
         subjectTitle={subject}
-        onExamGenerated={(questions, text, source, missingItems, isSampleDemo) => {
+        onExamGenerated={async (questions, text, source, missingItems, isSampleDemo) => {
           setGeneratedQuestions(questions);
           setLessonTextState(text);
           if (source) setExamSource(source);
           if (missingItems) setExamMissingItems(missingItems);
           if (isSampleDemo !== undefined) setIsSampleDemoExam(isSampleDemo);
+
+          const targetAssessmentId = linkedAssessmentId || assessmentId;
+          if (currentTosId) {
+            try {
+              const response = await fetch('/api/ai/save-exam', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  ...(targetAssessmentId ? { assessmentId: targetAssessmentId } : {}),
+                  tosId: currentTosId,
+                  questions,
+                  mode: 'draft',
+                  syncAnswerKey: true,
+                }),
+              });
+              const result = await response.json().catch(() => ({}));
+              if (!response.ok) throw new Error(result.error || 'Could not synchronize the generated answer key.');
+              const destinationAssessmentId = targetAssessmentId || result.assessmentIds?.[0];
+              if (!destinationAssessmentId) throw new Error('The exam was saved, but no linked assessment was returned for Item Analysis.');
+              toast.success('Generated exam and answer key saved. Opening Item Analysis.');
+              router.push(`/assessments/${encodeURIComponent(destinationAssessmentId)}?tab=results`);
+              return;
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : 'Could not save the generated answer key.');
+            }
+          }
           setViewMode('exam');
         }}
       />
@@ -1793,7 +1837,7 @@ export function TosEditor({
               <div className="p-3 bg-blue-50/50 dark:bg-blue-950/20 rounded-xl border border-blue-200 dark:border-blue-900">
                 <h4 className="font-bold text-blue-700 dark:text-blue-400 mb-1">1. Days Taught &amp; Competency Limit</h4>
                 <p>
-                  Enter the actual instructional days spent per competency (up to 4 competencies). The total days and proportional percentages are computed automatically.
+                  Enter the actual instructional days spent per competency. The total days and proportional percentages are computed automatically.
                 </p>
               </div>
 

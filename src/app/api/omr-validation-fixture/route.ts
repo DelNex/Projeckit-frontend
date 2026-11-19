@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 
 export async function GET() {
-  if (process.env.NODE_ENV !== 'development') {
+  if (process.env.NODE_ENV !== 'development' && process.env.OMR_BROWSER_VALIDATION !== 'true') {
     return new NextResponse(null, { status: 404 });
   }
 

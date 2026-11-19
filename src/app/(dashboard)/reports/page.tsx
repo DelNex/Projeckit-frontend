@@ -128,11 +128,17 @@ export default function ReportsPage() {
                         </a>
                         {linkedAssessment && (
                           <>
-                            <a href={`/api/reports/docx?type=test-results&tosId=${encodeURIComponent(doc.id)}`} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-blue-200 px-3 text-xs font-bold text-blue-700 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-300 dark:hover:bg-blue-950/30">
+                            <a download href={`/api/reports/docx?type=test-results&tosId=${encodeURIComponent(doc.id)}`} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-blue-200 px-3 text-xs font-bold text-blue-700 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-300 dark:hover:bg-blue-950/30">
                               <ArrowDownToLine className="h-4 w-4" /> Test results DOCX
                             </a>
-                            <a href={`/api/reports/docx?type=most-least-learned&tosId=${encodeURIComponent(doc.id)}`} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-violet-200 px-3 text-xs font-bold text-violet-700 hover:bg-violet-50 dark:border-violet-900 dark:text-violet-300 dark:hover:bg-violet-950/30">
+                            <a download href={`/api/reports/docx?type=test-results&format=pdf&tosId=${encodeURIComponent(doc.id)}`} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-blue-200 px-3 text-xs font-bold text-blue-700 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-300 dark:hover:bg-blue-950/30">
+                              <ArrowDownToLine className="h-4 w-4" /> Test results PDF
+                            </a>
+                            <a download href={`/api/reports/docx?type=most-least-learned&tosId=${encodeURIComponent(doc.id)}`} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-violet-200 px-3 text-xs font-bold text-violet-700 hover:bg-violet-50 dark:border-violet-900 dark:text-violet-300 dark:hover:bg-violet-950/30">
                               <ArrowDownToLine className="h-4 w-4" /> Most/least learned DOCX
+                            </a>
+                            <a download href={`/api/reports/docx?type=most-least-learned&format=pdf&tosId=${encodeURIComponent(doc.id)}`} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-violet-200 px-3 text-xs font-bold text-violet-700 hover:bg-violet-50 dark:border-violet-900 dark:text-violet-300 dark:hover:bg-violet-950/30">
+                              <ArrowDownToLine className="h-4 w-4" /> Most/least learned PDF
                             </a>
                           </>
                         )}

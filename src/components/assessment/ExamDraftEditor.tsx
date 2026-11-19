@@ -140,7 +140,7 @@ export function ExamDraftEditor({
     setRegeneratingItem(q.item_number);
     try {
       await generationJob.start({ lessonText: lessonText || `${subjectTitle} ${q.competency_id}`, repairItemNumber: q.item_number });
-      toast.info(`Question ${q.item_number} was added to the Gemini helper queue.`);
+      toast.info(`Question ${q.item_number} was added to the Groq generation queue.`);
     } catch (err: any) {
       console.error('Failed to regenerate single item:', err);
       toast.error(friendlyError(err, `Could not regenerate question ${q.item_number}.`));
@@ -482,6 +482,23 @@ export function ExamDraftEditor({
                 <div className="rounded-xl bg-gray-50 dark:bg-gray-800/40 p-2.5 text-[11px] text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-gray-800/60">
                   <span className="font-bold text-gray-700 dark:text-gray-300">Rationale: </span>
                   {q.rationale}
+                </div>
+              )}
+
+              {/* Exact lesson evidence returned with the generated item */}
+              {q.source_evidence ? (
+                <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-2.5 text-[11px] text-blue-900 dark:border-blue-900/40 dark:bg-blue-950/20 dark:text-blue-200">
+                  <div className="mb-1 flex flex-wrap items-center gap-2 font-bold">
+                    <span>Source evidence</span>
+                    <span className="rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] dark:bg-blue-900/60">
+                      {q.source_evidence.source_id} · Section {q.source_evidence.part}
+                    </span>
+                  </div>
+                  <p className="leading-relaxed">“{q.source_evidence.quote}”</p>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-2.5 text-[11px] text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
+                  No source quote is attached. Verify this item manually against the lesson before approving it.
                 </div>
               )}
             </div>

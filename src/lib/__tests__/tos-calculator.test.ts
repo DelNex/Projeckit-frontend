@@ -184,7 +184,7 @@ describe('TOS Deterministic Math & Allocation Engine', () => {
     assert.strictEqual(expectedItem - 1, 30);
   });
 
-  it('rejects invalid inputs (0 items, 0 days, >4 competencies)', () => {
+  it('rejects invalid items and days but accepts more than four competencies', () => {
     const invalidDays: TosCompetencyInput[] = [
       { id: 'c1', description: 'Comp 1', daysTaught: 0 },
     ];
@@ -197,7 +197,10 @@ describe('TOS Deterministic Math & Allocation Engine', () => {
       { id: 'c4', description: '4', daysTaught: 2 },
       { id: 'c5', description: '5', daysTaught: 2 },
     ];
-    assert.strictEqual(calculateTos(fiveComps, 50).isValid, false);
+    const fiveResult = calculateTos(fiveComps, 50);
+    assert.strictEqual(fiveResult.isValid, true);
+    assert.strictEqual(fiveResult.rows.length, 5);
+    assert.strictEqual(fiveResult.totalAllocatedItems, 50);
 
     const zeroItems: TosCompetencyInput[] = [
       { id: 'c1', description: '1', daysTaught: 2 },

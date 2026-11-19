@@ -11,6 +11,7 @@ type SaveExamBody = {
   autosave?: boolean;
   expectedUpdatedAt?: string | null;
   overwrite?: boolean;
+  syncAnswerKey?: boolean;
 };
 
 export async function POST(request: Request) {
@@ -135,7 +136,7 @@ export async function POST(request: Request) {
       answers,
       updated_at: new Date().toISOString(),
     }));
-    if (mode === 'approve') {
+    if (mode === 'approve' || body.syncAnswerKey === true) {
       const { error: keyError } = await admin.from('answer_keys').upsert(keyRows, { onConflict: 'assessment_id' });
       if (keyError) return NextResponse.json({ error: `Questions saved, but the answer key could not be synchronized: ${keyError.message}` }, { status: 500 });
     }

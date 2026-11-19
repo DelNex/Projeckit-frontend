@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { buildTosBlueprintSlots } from '@/lib/exam-types';
 import { useExamGenerationJob } from '@/lib/exam-generation-client';
-import { getClientUploadLimits } from '@/lib/upload-limits-client';
+import { getLocalDocumentCapacity } from '@/lib/local-document-engine';
 
 interface ExamGeneratorModalProps {
   isOpen: boolean;
@@ -48,7 +48,7 @@ type GenerationStep =
 
 const STEP_LABELS: Record<GenerationStep, string> = {
   idle: 'Ready to start',
-  uploading: 'Uploading lesson file(s)...',
+  uploading: 'Preparing local lesson file(s)...',
   extracting: 'Extracting text from document(s)...',
   analyzing: 'Analyzing lesson coverage against TOS...',
   generating: 'Writing questions from your lesson...',
@@ -79,9 +79,11 @@ export function ExamGeneratorModal({
   const [currentStep, setCurrentStep] = useState<GenerationStep>('idle');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [pastedText, setPastedText] = useState('');
+  const [teacherInstructions, setTeacherInstructions] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [truncationNotice, setTruncationNotice] = useState<string | null>(null);
+  const [extractionProgress, setExtractionProgress] = useState('');
   const [chunkProgress, setChunkProgress] = useState<{
     completed: number;
     total: number;
@@ -94,7 +96,7 @@ export function ExamGeneratorModal({
     setCurrentStep('done');
     setChunkProgress(null);
     toast.success(`Loaded ${generationJob.savedQuestions.length} saved exam questions.`);
-    onExamGeneratedRef.current(generationJob.savedQuestions, generatedTextRef.current, 'Gemini helper queue', generationJob.job?.resultSummary?.missingItems || [], false);
+    onExamGeneratedRef.current(generationJob.savedQuestions, generatedTextRef.current, 'Groq AI', generationJob.job?.resultSummary?.missingItems || [], false);
     onCloseRef.current();
   }, [generationJob.savedQuestions, generationJob.job?.id, generationJob.job?.status, generationJob.job?.resultSummary?.missingItems, toast]);
 
@@ -102,7 +104,7 @@ export function ExamGeneratorModal({
     if (!generationJob.job || !['failed', 'cancelled', 'needs_attention'].includes(generationJob.job.status)) return;
     setCurrentStep('idle');
     if (generationJob.job.status === 'failed') setErrorMsg(generationJob.job.error || 'Exam generation failed. You can try again.');
-    if (generationJob.job.status === 'needs_attention') setErrorMsg('The Gemini helper needs attention. Resolve the helper issue, clear this paused job, then retry.');
+    if (generationJob.job.status === 'needs_attention') setErrorMsg('The AI generation job needs attention. Clear the paused job and retry.');
   }, [generationJob.job?.id, generationJob.job?.status, generationJob.job?.error]);
 
   if (!isOpen) return null;
@@ -117,7 +119,7 @@ export function ExamGeneratorModal({
     }
 
     const validFiles: File[] = [];
-    const limits = await getClientUploadLimits();
+    const capacity = await getLocalDocumentCapacity();
     for (const file of incoming) {
       const lowerName = file.name.toLowerCase();
       const isValid = validExts.some((ext) => lowerName.endsWith(ext));
@@ -127,8 +129,8 @@ export function ExamGeneratorModal({
         return;
       }
 
-      if (file.size > limits.maxModuleUploadMb * 1024 * 1024) {
-        toast.error(`This file is ${Math.ceil(file.size / (1024 * 1024))} MB. The limit for your school is ${limits.maxModuleUploadMb} MB.`);
+      if (file.size > capacity.maxFileBytes) {
+        toast.error(`This file is ${Math.ceil(file.size / (1024 * 1024))} MB. This device can currently process files up to ${capacity.maxFileMb} MB.`);
         return;
       }
 
@@ -174,13 +176,14 @@ export function ExamGeneratorModal({
       : [];
 
     try {
-      // Step 1: Uploading
+      // Process documents locally; original files never leave this browser.
       if (selectedFiles.length > 0) {
-        setCurrentStep('uploading');
-
-        // Step 2: Extracting text on server
         setCurrentStep('extracting');
-        const extractResult = await extractTextFromFiles(selectedFiles);
+        setExtractionProgress('Starting local document extraction…');
+        const extractResult = await extractTextFromFiles(selectedFiles, {
+          onProgress: (progress) => setExtractionProgress(progress.message + ' (' + progress.fileIndex + '/' + progress.fileCount + ')'),
+        });
+        setExtractionProgress('Local extraction complete.');
         lessonDocuments = [...extractResult.documents, ...lessonDocuments];
         extractedLessonText = (extractResult.text + (extractedLessonText ? `\n\n${extractedLessonText}` : '')).trim();
 
@@ -200,10 +203,10 @@ export function ExamGeneratorModal({
       const allSlots = buildTosBlueprintSlots(tosRows, Number(targetItems) || 50);
       if (!tosId) throw new Error('Save this Table of Specifications before generating an exam.');
       generatedTextRef.current = extractedLessonText;
-      const queued = await generationJob.start({ lessonDocuments });
+      const queued = await generationJob.start({ lessonDocuments, teacherInstructions: teacherInstructions.trim() || undefined });
       const label = queued.status === 'queued'
-        ? `Queued (position ${queued.queuePosition || 1}). Starts when the Gemini helper is available.`
-        : queued.status === 'running' ? 'Gemini is already generating questions for this TOS.' : 'This TOS already has a job that needs helper attention.';
+        ? `Queued (position ${queued.queuePosition || 1}). Groq AI will process this exam in the background.`
+        : queued.status === 'running' ? 'Groq is already generating questions for this TOS.' : 'This TOS already has an AI job that needs attention.';
       setChunkProgress({ completed: 0, total: allSlots.length, label });
       setCurrentStep('generating');
     } catch (err: any) {
@@ -264,18 +267,18 @@ export function ExamGeneratorModal({
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-blue-900 dark:text-blue-300">
                 {generationJob.job?.status === 'needs_attention'
-                  ? 'The Gemini helper needs a person to sign in or confirm on the helper computer. Tell your administrator.'
+                  ? 'The AI generation job needs attention. Review the error and retry.'
                   : generationJob.job?.status === 'queued'
-                    ? `Queued (position ${generationJob.job.queuePosition || 1}). Starts when the Gemini helper is available. This is running in the background, you can leave this page.`
+                    ? `Queued (position ${generationJob.job.queuePosition || 1}). Groq AI will process this exam in the background. This is running in the background, you can leave this page.`
                     : generationJob.job?.status === 'running'
-                      ? `${generationJob.job.progress?.label || 'Gemini is writing your exam.'} This is running in the background, you can leave this page.`
+                      ? `${generationJob.job.progress?.label || 'Groq is writing your exam.'} This is running in the background, you can leave this page.`
                       : generationJob.job?.status === 'failed'
                         ? generationJob.job.error || 'Exam generation failed.'
-                        : currentStep === 'generating' && chunkProgress ? chunkProgress.label : STEP_LABELS[currentStep]}
+                        : currentStep === 'generating' && chunkProgress ? chunkProgress.label : currentStep === 'extracting' && extractionProgress ? extractionProgress : STEP_LABELS[currentStep]}
               </span>
               {generationJob.helperState === 'offline'
-                ? <span className="rounded-full border border-slate-300 px-2 py-1 text-[10px] text-slate-600">Helper offline</span>
-                : <span className="rounded-full border border-emerald-300 px-2 py-1 text-[10px] text-emerald-700">Helper {generationJob.helperState.replace('_', ' ')}</span>}
+                ? <span className="rounded-full border border-slate-300 px-2 py-1 text-[10px] text-slate-600">Groq AI offline</span>
+                : <span className="rounded-full border border-emerald-300 px-2 py-1 text-[10px] text-emerald-700">AI {generationJob.helperState.replace('_', ' ')}</span>}
               {['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')
                 ? <button type="button" onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="rounded-lg border border-rose-200 px-2 py-1 text-[10px] font-semibold text-rose-700">Cancel</button>
                 : ['completed', 'partial', 'failed', 'cancelled'].includes(generationJob.job?.status || '') ? null : <Loader2 className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />}
@@ -284,7 +287,7 @@ export function ExamGeneratorModal({
             {/* Stepper Dots */}
             <div className="flex items-center justify-between gap-1">
               {[
-                { key: 'uploading', label: 'Upload' },
+                { key: 'uploading', label: 'Prepare locally' },
                 { key: 'extracting', label: 'Extract' },
                 { key: 'analyzing', label: 'Analyze' },
                 { key: 'generating', label: 'Generate' },
@@ -318,8 +321,8 @@ export function ExamGeneratorModal({
           </div>
         )}
 
-        {generationJob.helperState === 'offline' && <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">Gemini helper is offline. Generation is disabled and no new job will be queued until it is available.</div>}
-        {generationJob.helperState === 'needs_attention' && generationJob.job?.status !== 'needs_attention' && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">Gemini helper needs attention. Resolve the prompt on the helper computer before starting another generation.</div>}
+        {generationJob.helperState === 'offline' && <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">AI generation is unavailable. Configure at least one server-side provider: Groq, OpenRouter, Gemini, or Cloudflare.</div>}
+        {generationJob.helperState === 'needs_attention' && generationJob.job?.status !== 'needs_attention' && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">An earlier AI generation job needs attention. Resolve or cancel it before starting another generation.</div>}
 
         {truncationNotice && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300 flex items-center gap-2">
@@ -328,7 +331,7 @@ export function ExamGeneratorModal({
           </div>
         )}
 
-        {/* Upload Dropzone (Disabled when generating) */}
+        {/* Local document selection (Disabled when generating) */}
         {!isGenerating && (
           <div className="space-y-4">
             <div
@@ -348,7 +351,7 @@ export function ExamGeneratorModal({
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept=".pdf,.docx,.pptx,.txt,.md"
+                accept=".pdf,.docx,.pptx,.txt,.md,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff"
                 onChange={(e) => {
                   if (e.target.files && e.target.files.length > 0) {
                     handleFilesSelect(e.target.files);
@@ -360,10 +363,10 @@ export function ExamGeneratorModal({
               <div className="space-y-1.5">
                 <UploadCloud className="mx-auto h-8 w-8 text-blue-500" />
                 <p className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                  Drop your lesson materials here, or <span className="text-blue-600 underline">browse</span>
+                  Choose lesson materials from this device, or <span className="text-blue-600 underline">browse</span>
                 </p>
                 <p className="text-[11px] text-gray-400">
-                  Supports PDF, DOCX, PPTX, or TXT (up to 5 files; your school’s file limit is loaded when you select files)
+                  Supports PDF, DOCX, PPTX, TXT, or Markdown (up to 5 files). Original files stay on this device; only compressed extracted text is uploaded.
                 </p>
               </div>
             </div>
@@ -412,6 +415,22 @@ export function ExamGeneratorModal({
                 </div>
               </div>
             )}
+
+            {/* Optional teacher guidance, separate from the source material. */}
+            <div>
+              <label className="mb-1 block text-[11px] font-bold text-gray-700 dark:text-gray-300">
+                Teacher instructions (optional)
+              </label>
+              <textarea
+                rows={2}
+                maxLength={4000}
+                placeholder="Example: Use practical classroom scenarios, keep the language suitable for Grade 8, and avoid questions that require facts not covered in the module."
+                value={teacherInstructions}
+                onChange={(e) => setTeacherInstructions(e.target.value)}
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 p-2.5 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+              />
+              <p className="mt-1 text-[10px] text-gray-400">Used as extra guidance alongside the TOS and uploaded lesson materials.</p>
+            </div>
 
             {/* Optional Paste Area */}
             <div>

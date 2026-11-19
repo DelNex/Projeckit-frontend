@@ -87,6 +87,20 @@ export function TosCreateEditModal({
       daysTaught: 5,
     },
   ]);
+  const [schoolCompetencies, setSchoolCompetencies] = useState<Array<{ id: string; code: string; description: string }>>([]);
+
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let active = true;
+    fetch('/api/competencies', { cache: 'no-store' })
+      .then(async (response) => response.ok ? response.json() : null)
+      .then((data) => {
+        if (active && Array.isArray(data?.competencies)) setSchoolCompetencies(data.competencies);
+      })
+      .catch(() => { /* The form remains usable if the school library migration is pending. */ });
+    return () => { active = false; };
+  }, [isOpen]);
 
   // Proponent Title Extension
   const [teacherName, setTeacherName] = useState(currentUser.displayName || '');
@@ -140,7 +154,7 @@ export function TosCreateEditModal({
       // Competencies
       if (Array.isArray(existingTos.rows) && existingTos.rows.length > 0) {
         setCompetencies(
-          existingTos.rows.slice(0, 4).map((r, i) => ({
+          existingTos.rows.map((r, i) => ({
             id: String(i + 1),
             description: r.description || '',
             daysTaught: Number(r.daysTaught || r.days) || 1,
@@ -193,7 +207,7 @@ export function TosCreateEditModal({
 
   const handleAddCompetency = () => {
     setCompetencies((current) => {
-      if (current.length >= 4) return current;
+      if (current.length >= 200) return current;
       return [...current, {
         id: String(Date.now()),
         description: '',
@@ -258,6 +272,30 @@ export function TosCreateEditModal({
 
     try {
       await onSave(payload);
+      try {
+        const libraryRows = competencies.map((row, index) => ({
+          code: `COMP-${index + 1}`,
+          description: row.description.trim(),
+        }));
+        const response = await fetch('/api/competencies', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ competencies: libraryRows }),
+        });
+        if (response.ok) {
+          setSchoolCompetencies((previous) => {
+            const merged = [...previous];
+            for (const row of libraryRows) {
+              if (!merged.some((entry) => entry.code === row.code && entry.description === row.description)) {
+                merged.push({ id: `${row.code}-${merged.length}`, ...row });
+              }
+            }
+            return merged;
+          });
+        }
+      } catch (libraryError) {
+        console.warn('School competency library sync notice:', libraryError);
+      }
       onClose();
     } catch (err: any) {
       console.error('Failed to save Table of Specifications:', {
@@ -588,7 +626,7 @@ export function TosCreateEditModal({
               <div className="flex items-center justify-between">
                 <div>
                   <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                    Learning Competencies (1 to 4) <span className="text-rose-500">*</span>
+                    Learning Competencies <span className="text-rose-500">*</span>
                   </h4>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     Enter each competency and Days Taught. Project KIT computes items live via largest-remainder math.
@@ -598,19 +636,13 @@ export function TosCreateEditModal({
                 <button
                   type="button"
                   onClick={handleAddCompetency}
-                  disabled={competencies.length >= 4}
+                  disabled={competencies.length >= 200}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded-xl hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>Add Competency</span>
                 </button>
               </div>
-
-              {competencies.length >= 4 && (
-                <div className="text-[11px] font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 p-2 rounded-xl border border-amber-200 dark:border-amber-800">
-                  A TOS can have up to 4 learning competencies.
-                </div>
-              )}
 
               {/* Table of Competencies */}
               <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
@@ -636,6 +668,7 @@ export function TosCreateEditModal({
                             <input
                               type="text"
                               value={comp.description}
+                              list="tos-school-competency-library"
                               onChange={(e) => handleCompetencyChange(index, 'description', e.target.value)}
                               placeholder="Example: Implement column aliases using SQL"
                               className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-2.5 py-1.5 focus:ring-2 focus:ring-emerald-500 outline-none"
@@ -713,6 +746,12 @@ export function TosCreateEditModal({
                 {isEditingTeacher ? 'Done' : 'Edit Title'}
               </button>
             </div>
+
+            <datalist id="tos-school-competency-library">
+              {schoolCompetencies.map((competency) => (
+                <option key={competency.id} value={competency.description}>{competency.code}</option>
+              ))}
+            </datalist>
 
             {/* Footer Buttons */}
             <div className="pt-2">

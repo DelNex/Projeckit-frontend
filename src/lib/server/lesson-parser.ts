@@ -3,7 +3,7 @@
  * Robust text extraction for PDF, DOCX, PPTX, and TXT/MD files.
  *
  * Enforces:
- * - Max 60 MB per file (files are uploaded directly to Supabase Storage)
+ * - Max 100 MB per file (files are uploaded directly to Supabase Storage)
  * - Max 5 files
  * - Max 500,000 characters total after cleaning
  * - Minimum 300 readable characters per document
@@ -14,7 +14,7 @@ import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 import * as mammoth from 'mammoth';
 import JSZip from 'jszip';
 
-export const MAX_FILE_SIZE_BYTES = 60 * 1024 * 1024; // 60 MB
+export const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
 export const MAX_FILES_COUNT = 5;
 export const MAX_TOTAL_CHARS = 500000;
 export const MIN_READABLE_CHARS = 300;

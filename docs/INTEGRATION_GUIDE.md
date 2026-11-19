@@ -36,9 +36,71 @@ Before a production release, run the frontend test suite, TypeScript check, prod
 
 Record the commit and deployment, database migration status, AI service URL/health, and a small OMR validation sample for every release. Validate clean marks, faint marks, erased marks, multiple marks, rotation/cropping, glare, and low-resolution images. Keep the machine reading, confidence/reason, teacher correction, and final saved response separately auditable. Do not promise perfect camera recognition; ambiguous marks require teacher review.
 
+## Exam AI provider routing and large lessons
+
+Exam generation uses the existing durable `exam_generation_jobs` queue. The database claim function provides per-job row locking and leases; the API also applies per-user hourly and per-school daily limits. Provider failover does not create a second queue. A shared dispatcher now starts the oldest queued job from the least-loaded school. The database serializes claims and caps hosted exam work at four concurrent jobs globally and two per school. Enqueue requests and status polling both trigger dispatch, so queued work resumes when users revisit/poll their jobs; this is not yet an always-on worker that drains the queue after every browser closes.
+
+The server-side provider router supports these adapters when credentials are configured:
+
+- Groq: `GROQ_API_KEY`, optional `GROQ_MODEL`
+- OpenRouter: `OPENROUTER_API_KEY`, optional `OPENROUTER_MODEL`
+- Gemini: `GEMINI_API_KEY`, optional `GEMINI_MODEL`
+- Cloudflare Workers AI: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, optional `CLOUDFLARE_MODEL`
+
+Set `AI_PROVIDER_ORDER=groq,openrouter,gemini,cloudflare` to choose the failover order. Only providers with server-side credentials are eligible. Never put these keys in `NEXT_PUBLIC_*` variables or browser code. The router skips a provider during its in-process rate-limit cooldown and falls back on retryable provider errors; it does not create accounts, rotate identities, or bypass quotas. Cooldowns are process-local, so they are not a substitute for a shared global rate-limit ledger. Review each provider's current pricing, rate limits, and data-use terms before enabling it. Do not send student records or other personal information to a provider unless the school's data-processing rules permit it.
+
+Original PDF/DOCX/PPTX/TXT/Markdown files are processed in the browser and remain in local IndexedDB; the original file bytes are not uploaded to Supabase or sent to an AI provider. The browser gzip-compresses only the extracted text and uploads that object to the existing private `lesson-uploads` bucket under the signed-in user's folder. New job rows contain a versioned manifest, object path, byte counts, character/document counts, and SHA-256 hash rather than the lesson text itself. The server validates the owner-scoped path, downloads the private object with the service-role client, checks its size/hash, decompresses it with an output-size cap, and reconstructs the lesson sections in the worker. The browser limits compressed lesson payloads to 6 MB, so this text-only transfer stays below the TUS resumable-upload threshold; original large documents stay local. Objects are removed when a job completes, fails terminally, or is cancelled. If a browser closes after upload but before job creation, the next generation request from that user removes objects older than 24 hours while preserving paths referenced by active jobs.
+
+The worker ranks sections against the requested TOS competency and sends at most eight relevant sections / 120,000 characters to the model. Each new generated question must cite a source ID, section number, and exact quote. The server verifies the quote against the actual retrieved section; unsupported questions are sent through the repair flow rather than silently accepted. This is lexical retrieval, not semantic search; teachers must still review generated questions against the source.
+
 ## Known operational constraints
 
 - The AI service needs to be reachable from the Next.js server and requires the same Supabase signing configuration to validate user tokens.
-- Scanned/image-only PDFs have no selectable text and cannot be indexed by text extraction alone; OCR or a text-based source is needed.
+- Scanned/image-only PDFs still require OCR or a text-based source. The local OCR engine is not yet integrated; do not treat image-only PDFs as supported until a pinned, self-hosted OCR runtime and language assets are added and tested.
 - OpenCV quality depends on camera and printing conditions. Calibration and a recorded validation dataset remain release tasks.
 - Retain separate, current lockfile-based SBOMs and review dependency audit findings before production deployment.
+
+
+## Scheduled exam queue dispatch
+
+The authenticated endpoint `POST /api/internal/ai/dispatch` lets a trusted scheduler process one queued Groq exam job even when no teacher has the application open. It accepts either `Authorization: Bearer <secret>` or `x-cron-secret: <secret>`. The secret must be at least 32 characters and is compared using a constant-time byte comparison. The endpoint is server-only, returns no queue payload, and relies on the existing database claim/lease RPC to prevent duplicate workers.
+
+Configure `AI_DISPATCH_CRON_SECRET` in the Netlify environment for the branch deployment. Use a randomly generated value of at least 32 characters. Store the same value in Supabase Vault as `projectkit_ai_dispatch_secret_branch15`; do not put it in SQL source, browser variables, or Git. Supabase Cron can then call the Netlify branch URL every minute using `pg_cron` and `pg_net`. Keep the schedule disabled until the Netlify variable and Vault secret are both configured.
+
+Example Supabase SQL after enabling `pg_cron`, `pg_net`, and Vault:
+
+```sql
+select vault.create_secret('https://YOUR-BRANCH-NETLIFY-HOST', 'projectkit_app_url');
+select vault.create_secret('YOUR_RANDOM_32_PLUS_CHARACTER_SECRET', 'projectkit_ai_dispatch_secret_branch15');
+
+select cron.schedule(
+  'projectkit-ai-dispatch',
+  '* * * * *',
+  $$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'projectkit_app_url')
+      || '/api/internal/ai/dispatch',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || (
+        select decrypted_secret from vault.decrypted_secrets
+        where name = 'projectkit_ai_dispatch_secret_branch15'
+      )
+    ),
+    body := jsonb_build_object('source', 'supabase-cron')
+  );
+  $$
+);
+```
+
+Replace the host with the branch deployment's HTTPS hostname. Do not use the main production alias for this temporary test. Check `cron.job_run_details` and Netlify function logs after enabling. To stop dispatching, unschedule the job from Supabase Cron. The dispatcher processes at most one job per invocation; it does not increase the existing provider or database concurrency limits.
+
+## Error capture
+
+`src/instrumentation.ts` exports Next.js `onRequestError` for unhandled server-side errors. It dynamically loads the Node-only structured logger only in the Node runtime, includes the request/route context and error digest, and must never replace the original application error if logging fails. Route handlers should continue logging expected failures at their boundaries with their richer tenant and job context.
+
+## Large-document and OCR roadmap
+
+The current browser extraction path supports text-based PDF, DOCX, PPTX, TXT, and Markdown. Image-only PDFs are not supported yet. Do not advertise OCR support until a self-hosted browser OCR runtime, language assets, worker lifecycle, cancellation, page-level confidence, and real-device tests are included.
+
+For large documents, the next architecture step is private object storage with short-lived signed upload URLs and resumable TUS uploads, plus a small database manifest containing tenant ownership, source hash, page/chunk metadata, and object paths. Keep source files private and avoid embedding extracted lesson text in job rows. Supabase recommends TUS resumable uploads for files larger than 6 MB and unstable networks. Chunking and retrieval should be introduced with migration/backfill tests before changing the existing queue payload contract.

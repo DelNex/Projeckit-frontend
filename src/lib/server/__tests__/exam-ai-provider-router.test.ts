@@ -1,0 +1,186 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { buildGroqMessages, chooseNextExamJob } from '../groq-exam-worker';
+import { getConfiguredExamProviders } from '../exam-ai-provider-router';
+
+test('exam context retrieval prefers lesson sections relevant to the requested competency', () => {
+  const payload = {
+    slots: [{ item_number: 1, competency_id: 'BIO-1', competency_code: 'BIO-1', competency_description: 'Explain photosynthesis in plants', cognitive_level: 'understanding' }],
+    lessonChunks: [
+      { source: 'Lesson material', part: 1, parts: 10, text: 'The water cycle describes evaporation and precipitation.' },
+      { source: 'Lesson material', part: 2, parts: 10, text: 'Photosynthesis converts light energy into chemical energy in green plants.' },
+      { source: 'Lesson material', part: 3, parts: 10, text: 'The solar system contains planets, moons, and asteroids.' },
+    ],
+    prompt: 'Write one question.',
+  };
+  const messages = buildGroqMessages(payload);
+  assert.match(messages[1].content, /Photosynthesis converts light energy/);
+  assert.doesNotMatch(messages[1].content, /solar system contains planets/);
+  assert.match(messages[1].content, /Source ID source-2; section 2\/10/);
+});
+
+test('provider registry exposes only providers with server-side credentials', () => {
+  const names = ['GROQ_API_KEY', 'OPENROUTER_API_KEY', 'GEMINI_API_KEY', 'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'AI_PROVIDER_ORDER'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  try {
+    for (const name of names) delete process.env[name];
+    assert.deepEqual(getConfiguredExamProviders(), []);
+    process.env.AI_PROVIDER_ORDER = 'toString,gemini,groq,openrouter,cloudflare';
+    process.env.GEMINI_API_KEY = 'test-gemini-key';
+    process.env.GROQ_API_KEY = 'test-groq-key';
+    process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
+    process.env.CLOUDFLARE_API_TOKEN = 'test-cloudflare-token';
+    process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account';
+    assert.deepEqual(getConfiguredExamProviders(), ['gemini', 'groq', 'openrouter', 'cloudflare']);
+  } finally {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
+test('falls back from a rate-limited provider and parses the next provider response', async () => {
+  const names = ['OPENROUTER_API_KEY', 'GEMINI_API_KEY', 'AI_PROVIDER_ORDER'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  let calls = 0;
+  try {
+    process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
+    process.env.GEMINI_API_KEY = 'test-gemini-key';
+    process.env.AI_PROVIDER_ORDER = 'openrouter,gemini';
+    global.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      calls += 1;
+      if (calls === 1) {
+        return new Response(JSON.stringify({ error: { message: 'rate limited' } }), {
+          status: 429,
+          headers: { 'content-type': 'application/json', 'retry-after': '60' },
+        });
+      }
+      assert.match(String(_input), /generativelanguage\.googleapis\.com/);
+      assert.equal(new Headers(init?.headers).get('x-goog-api-key'), 'test-gemini-key');
+      return new Response(JSON.stringify({
+        candidates: [{ content: { parts: [{ text: JSON.stringify({ questions: [{ item_number: 1 }] }) }] } }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+
+    const { requestExamQuestionsFromProviders } = await import('../exam-ai-provider-router');
+    const result = await requestExamQuestionsFromProviders(
+      [{ role: 'user', content: 'Create one question.' }],
+      { type: 'object', properties: { questions: { type: 'array' } } },
+    );
+    assert.deepEqual(JSON.parse(result), [{ item_number: 1 }]);
+    assert.equal(calls, 2);
+  } finally {
+    global.fetch = originalFetch;
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
+
+test('Gemini receives the same strict JSON schema as the other providers', async () => {
+  const names = ['GEMINI_API_KEY', 'AI_PROVIDER_ORDER'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  const schema = { type: 'object', properties: { questions: { type: 'array' } }, required: ['questions'] };
+  try {
+    process.env.GEMINI_API_KEY = 'test-gemini-key';
+    process.env.AI_PROVIDER_ORDER = 'gemini';
+    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      assert.match(String(input), /generativelanguage\.googleapis\.com/);
+      const body = JSON.parse(String(init?.body));
+      assert.equal(body.generationConfig.responseMimeType, 'application/json');
+      assert.deepEqual(body.generationConfig.responseJsonSchema, schema);
+      return new Response(JSON.stringify({
+        candidates: [{ content: { parts: [{ text: JSON.stringify({ questions: [{ item_number: 1 }] }) }] } }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    const { requestExamQuestionsFromProviders } = await import('../exam-ai-provider-router');
+    await requestExamQuestionsFromProviders([{ role: 'user', content: 'Create one item.' }], schema);
+  } finally {
+    global.fetch = originalFetch;
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
+test('queue dispatcher prefers the least-loaded school, then the oldest job', () => {
+  const queued = [
+    { id: 'a-old', tenant_id: 'school-a', created_at: '2026-01-01T00:00:00Z' },
+    { id: 'b-old', tenant_id: 'school-b', created_at: '2026-01-02T00:00:00Z' },
+    { id: 'c-new', tenant_id: 'school-c', created_at: '2026-01-03T00:00:00Z' },
+    { id: 'a-new', tenant_id: 'school-a', created_at: '2026-01-04T00:00:00Z' },
+  ];
+  const active = [{ tenant_id: 'school-a' }, { tenant_id: 'school-a' }, { tenant_id: 'school-b' }];
+  assert.equal(chooseNextExamJob(queued, active)?.id, 'c-new');
+  assert.equal(chooseNextExamJob(queued.slice(1), [{ tenant_id: 'school-b' }])?.id, 'c-new');
+  assert.equal(chooseNextExamJob(queued, [{ tenant_id: 'school-a' }, { tenant_id: 'school-a' }, { tenant_id: 'school-b' }, { tenant_id: 'school-b' }, { tenant_id: 'school-c' }, { tenant_id: 'school-c' }]), undefined);
+});
+
+test('Groq adapter uses the configured chat endpoint and parses structured question JSON', async () => {
+  const names = ['GROQ_API_KEY', 'GROQ_MODEL', 'AI_PROVIDER_ORDER'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  try {
+    process.env.GROQ_API_KEY = 'test-groq-key';
+    process.env.GROQ_MODEL = 'openai/gpt-oss-120b';
+    process.env.AI_PROVIDER_ORDER = 'groq';
+    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      assert.equal(String(input), 'https://api.groq.com/openai/v1/chat/completions');
+      assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer test-groq-key');
+      const body = JSON.parse(String(init?.body));
+      assert.equal(body.model, 'openai/gpt-oss-120b');
+      assert.equal(body.response_format.type, 'json_schema');
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({ questions: [{ item_number: 1 }] }) } }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    const { requestExamQuestionsFromProviders } = await import('../exam-ai-provider-router');
+    const result = await requestExamQuestionsFromProviders([{ role: 'user', content: 'Create one item.' }], { type: 'object' });
+    assert.deepEqual(JSON.parse(result), [{ item_number: 1 }]);
+  } finally {
+    global.fetch = originalFetch;
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
+test('Cloudflare adapter preserves the model path and parses Workers AI response output', async () => {
+  const names = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_MODEL', 'AI_PROVIDER_ORDER'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  try {
+    process.env.CLOUDFLARE_API_TOKEN = 'test-cloudflare-token';
+    process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account';
+    process.env.CLOUDFLARE_MODEL = '@cf/meta/llama-3.1-8b-instruct';
+    process.env.AI_PROVIDER_ORDER = 'cloudflare';
+    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      assert.equal(String(input), 'https://api.cloudflare.com/client/v4/accounts/test-account/ai/run/@cf/meta/llama-3.1-8b-instruct');
+      assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer test-cloudflare-token');
+      const body = JSON.parse(String(init?.body));
+      assert.ok(Array.isArray(body.messages));
+      assert.equal(body.response_format.type, 'json_schema');
+      assert.deepEqual(body.response_format.json_schema, { type: 'object' });
+      return new Response(JSON.stringify({
+        success: true,
+        result: { response: JSON.stringify({ questions: [{ item_number: 2 }] }) },
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    const { requestExamQuestionsFromProviders } = await import('../exam-ai-provider-router');
+    const result = await requestExamQuestionsFromProviders([{ role: 'user', content: 'Create one item.' }], { type: 'object' });
+    assert.deepEqual(JSON.parse(result), [{ item_number: 2 }]);
+  } finally {
+    global.fetch = originalFetch;
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});

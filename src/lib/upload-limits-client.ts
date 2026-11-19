@@ -5,7 +5,7 @@ export interface ClientUploadLimits {
   maxScanImageMb: number;
 }
 
-const FALLBACK: ClientUploadLimits = { maxModuleUploadMb: 60, maxScanImageMb: 15 };
+const FALLBACK: ClientUploadLimits = { maxModuleUploadMb: 100, maxScanImageMb: 15 };
 let cached: { expiresAt: number; limits: ClientUploadLimits } | undefined;
 
 export function invalidateClientUploadLimits() {

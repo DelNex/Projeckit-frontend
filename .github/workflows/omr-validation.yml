@@ -2,7 +2,7 @@ name: OMR mobile calibration
 
 on:
   push:
-    branches: [main, "fix/**"]
+    branches: [main, "fix/**", "feat/**"]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -36,6 +36,7 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder-publishable-key
           NEXT_PUBLIC_APP_URL: https://example.vercel.app
+          OMR_BROWSER_VALIDATION: 'true'
           SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
         run: npm run build
       - name: Install Playwright Chromium
@@ -49,6 +50,7 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder-publishable-key
           NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
+          OMR_BROWSER_VALIDATION: 'true'
         run: npm run test:omr:browser
       - name: Upload OMR browser diagnostics
         if: always()

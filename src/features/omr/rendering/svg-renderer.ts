@@ -207,7 +207,7 @@ export function renderOmrMasterSvg(
       height: layout.barcode.height,
       narrowBarWidth: layout.barcode.narrowBarWidth,
       wideBarRatio: layout.barcode.wideBarRatio,
-      showText: true,
+      showText: false,
     });
     svgElements += barcodeSvg;
   } else if (geometry.rollNumberGrid && geometry.rollNumberGrid.length > 0) {
@@ -253,7 +253,9 @@ export function renderOmrMasterSvg(
   svgElements += `  <line x1="${sb.x1}" y1="${sb.topLineY}" x2="${sb.x2}" y2="${sb.topLineY}" stroke="#000000" stroke-width="1"/>\n`;
   svgElements += `  <text x="${sb.x1 + 2}" y="${sb.titleY}" font-family="sans-serif" font-size="8" font-weight="900" fill="#111827">${sectionBarTitle}</text>\n`;
   svgElements += `  <text x="${sb.x1 + 2}" y="${sb.instructionsY}" font-family="sans-serif" font-size="7" font-style="italic" fill="#4B5563">${sectionInstructions}</text>\n`;
-  svgElements += `  <text x="${sb.x2}" y="${sb.formCodeY}" font-family="monospace" font-size="7.5" font-weight="bold" text-anchor="end" fill="#6B7280">${escapeXml(config.formCode)}</text>\n`;
+  if (!(isPersonalized && personalized?.studentId)) {
+    svgElements += `  <text x="${sb.x2}" y="${sb.formCodeY}" font-family="monospace" font-size="7.5" font-weight="bold" text-anchor="end" fill="#6B7280">${escapeXml(config.formCode)}</text>\n`;
+  }
   svgElements += `  <line x1="${sb.x1}" y1="${sb.bottomLineY}" x2="${sb.x2}" y2="${sb.bottomLineY}" stroke="#000000" stroke-width="0.75"/>\n`;
 
   // =========================================================================

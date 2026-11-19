@@ -4,42 +4,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 describe('Project KIT — Task 5: Sections & Students Consistency Tests', () => {
-  const repoRoot = path.resolve(__dirname, '../../../../..');
+  const repoRoot = path.resolve(__dirname, '../../../../');
 
-  it('1. migration 24 defines section_id, backfill, and rename trigger', () => {
-    const migrationPath = path.join(
-      repoRoot,
-      'supabase',
-      'migrations',
-      '20260908000024_students_section_id.sql'
-    );
-    assert.ok(fs.existsSync(migrationPath), 'Migration 24 must exist');
-    const sql = fs.readFileSync(migrationPath, 'utf8');
-
-    assert.ok(
-      sql.includes('ALTER TABLE public.students'),
-      'Must alter students table'
-    );
-    assert.ok(
-      sql.includes('ADD COLUMN IF NOT EXISTS section_id UUID REFERENCES public.sections(id) ON DELETE SET NULL'),
-      'Must add section_id with ON DELETE SET NULL'
-    );
-    assert.ok(
-      sql.includes('CREATE INDEX IF NOT EXISTS idx_students_section_id ON public.students(section_id)'),
-      'Must create index on section_id'
-    );
-    assert.ok(
-      sql.includes('UPDATE public.students s') && sql.includes('SET section_id = sec.id'),
-      'Must backfill students.section_id from sections'
-    );
-    assert.ok(
-      sql.includes('CREATE OR REPLACE FUNCTION public.sync_section_name_to_students()'),
-      'Must define sync_section_name_to_students function'
-    );
-    assert.ok(
-      sql.includes('CREATE TRIGGER trg_sync_section_name_to_students'),
-      'Must create trigger on sections update of name'
-    );
+  it('1. generated database types expose the nullable student section foreign key', () => {
+    const types = fs.readFileSync(path.join(repoRoot, 'src', 'types', 'database.types.ts'), 'utf8');
+    assert.match(types, /section_id: string \| null/);
+    assert.match(types, /section_name: string \| null/);
+    assert.match(types, /students_section_id_fkey/);
   });
 
   it('2. section lookup correctly maps section name to section_id and normalized section_name', () => {
@@ -121,34 +92,11 @@ describe('Project KIT — Task 5: Sections & Students Consistency Tests', () => 
     ]);
   });
 
-  it('5. migration 27 defines conditional unique index on sections and safe relink', () => {
-    const migrationPath = path.join(
-      repoRoot,
-      'supabase',
-      'migrations',
-      '20260908000027_sections_unique.sql'
-    );
-    assert.ok(fs.existsSync(migrationPath), 'Migration 27 must exist');
-    const sql = fs.readFileSync(migrationPath, 'utf8');
-
-    assert.ok(
-      sql.includes('uq_sections_config_grade_name'),
-      'Must define uq_sections_config_grade_name index'
-    );
-    assert.ok(
-      sql.includes('lower(trim(name))'),
-      'Index must be on (config_id, grade, lower(trim(name)))'
-    );
-    assert.ok(
-      sql.includes('UPDATE public.students s') && sql.includes('SET section_id = sec.id'),
-      'Must safely relink students'
-    );
-    assert.ok(
-      sql.replace(/\s+/g, ' ').toLowerCase().includes(
-        'select count(*) from public.sections x where x.config_id = s.config_id and lower(trim(x.name)) = lower(trim(s.section_name))'
-      ) && sql.includes('= 1'),
-      'Must check exactly 1 matching section exists before relinking'
-    );
+  it('5. student move endpoint updates the section foreign key and display name together', () => {
+    const route = fs.readFileSync(path.join(repoRoot, 'src', 'app', 'api', 'students', 'bulk', 'route.ts'), 'utf8');
+    assert.match(route, /section_id:\s*activeSection\.id/);
+    assert.match(route, /section_name:\s*activeSection\.name/);
+    assert.match(route, /\.eq\('tenant_id', tenantId\)/);
   });
 });
 

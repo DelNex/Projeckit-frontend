@@ -80,6 +80,65 @@ for (const file of migrationFiles) {
   }
 }
 
+// 1b. The repository currently keeps the original schema snapshot in
+// src/types/database.types.ts while supabase/migrations contains incremental
+// changes only. Use the generated Row types as the baseline, then overlay SQL
+// migrations so newly added migration columns are still checked.
+const databaseTypesPath = path.resolve(__dirname, '../src/types/database.types.ts');
+if (fs.existsSync(databaseTypesPath)) {
+  const typesSource = fs.readFileSync(databaseTypesPath, 'utf8');
+
+  function matchingBrace(source, openIndex) {
+    let depth = 0;
+    let quote = null;
+    for (let i = openIndex; i < source.length; i++) {
+      const char = source[i];
+      const previous = source[i - 1];
+      if (quote) {
+        if (char === quote && previous !== '\\') quote = null;
+        continue;
+      }
+      if (char === "'" || char === '"' || char === '`') {
+        quote = char;
+        continue;
+      }
+      if (char === '{') depth++;
+      else if (char === '}' && --depth === 0) return i;
+    }
+    return -1;
+  }
+
+  const tablesMatch = /Tables\s*:\s*\{/.exec(typesSource);
+  if (tablesMatch) {
+    const tablesOpen = typesSource.indexOf('{', tablesMatch.index);
+    const tablesClose = matchingBrace(typesSource, tablesOpen);
+    const tablesBody = tablesClose >= 0 ? typesSource.slice(tablesOpen + 1, tablesClose) : '';
+    const tableHeader = /^\s*([a-zA-Z0-9_]+)\s*:\s*\{/gm;
+    let tableMatch;
+
+    while ((tableMatch = tableHeader.exec(tablesBody)) !== null) {
+      const tableName = tableMatch[1].toLowerCase();
+      const tableOpen = tablesBody.indexOf('{', tableMatch.index);
+      const tableClose = matchingBrace(tablesBody, tableOpen);
+      if (tableClose < 0) continue;
+      const tableBody = tablesBody.slice(tableOpen + 1, tableClose);
+      const rowMatch = /\bRow\s*:\s*\{/.exec(tableBody);
+      if (!rowMatch) continue;
+
+      const rowOpen = tableBody.indexOf('{', rowMatch.index);
+      const rowClose = matchingBrace(tableBody, rowOpen);
+      if (rowClose < 0) continue;
+      const rowBody = tableBody.slice(rowOpen + 1, rowClose);
+      const columns = [...rowBody.matchAll(/^\s*([a-zA-Z0-9_]+)\??\s*:/gm)]
+        .map((match) => match[1].toLowerCase());
+
+      if (!schema.has(tableName)) schema.set(tableName, new Set());
+      for (const column of columns) schema.get(tableName).add(column);
+      tableHeader.lastIndex = tableClose + 1;
+    }
+  }
+}
+
 // 2. Scan frontend/src
 const srcDir = path.resolve(__dirname, '../src');
 

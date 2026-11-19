@@ -14,7 +14,8 @@
     "report:opencv-bundle": "node scripts/report-opencv-bundle.mjs",
     "build:consolidated": "node ../scripts/build-consolidated.mjs",
     "test": "node scripts/check-schema-contract.mjs && node node_modules/tsx/dist/cli.mjs --test \"src/**/__tests__/*.test.ts\"",
-    "test:omr:browser": "playwright test --config=playwright.omr.config.ts"
+    "test:omr:browser": "playwright test --config=playwright.omr.config.ts",
+    "postinstall": "node scripts/copy-ocr-assets.mjs"
   },
   "dependencies": {
     "@armghan3071/omrchecker": "file:./packages/armghan3071-omrchecker-1.0.2.tgz",
@@ -30,9 +31,13 @@
     "mammoth": "^1.13.0",
     "next": "15.5.28",
     "pdf-parse": "1.1.1",
+    "pdfjs-dist": "4.10.38",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "tailwind-merge": "^3.0.1"
+    "tailwind-merge": "^3.0.1",
+    "@tesseract.js-data/eng": "1.0.0",
+    "@tesseract.js-data/tgl": "1.0.0",
+    "tesseract.js": "7.0.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.1",

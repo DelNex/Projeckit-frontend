@@ -1,12 +1,15 @@
 /**
- * Project KIT — Client Lesson Text Extractor Bridge
- * Uploads lesson files directly to private Supabase Storage, then asks the
- * authenticated server endpoint to extract them without passing file bytes
- * through the hosting platform's API request-size limit.
+ * Project KIT — Local-first lesson text extraction.
+ *
+ * Files are processed in the browser and checkpointed in IndexedDB. Only
+ * extracted lesson text is sent to the authenticated exam-generation API.
+ * Original documents are never uploaded to Supabase Storage.
  */
-
-import { createClient } from '@/lib/supabase/client';
-import { getClientUploadLimits } from '@/lib/upload-limits-client';
+import {
+  extractLocalDocument,
+  LOCAL_DOCUMENT_MAX_CHARACTERS,
+  type LocalDocumentProgress,
+} from '@/lib/local-document-engine';
 
 export interface LessonExtractionClientResult {
   text: string;
@@ -17,80 +20,58 @@ export interface LessonExtractionClientResult {
   notice?: string;
 }
 
-/**
- * Extracts readable lesson text from a single file by posting to the server extractor.
- */
+export type LessonExtractionProgress = LocalDocumentProgress & {
+  fileIndex: number;
+  fileCount: number;
+  fileName: string;
+};
+
 export async function extractTextFromFile(file: File): Promise<string> {
   const result = await extractTextFromFiles([file]);
   return result.text;
 }
 
-/**
- * Extracts readable lesson text from multiple files via the server extractor.
- */
-export async function extractTextFromFiles(files: File[]): Promise<LessonExtractionClientResult> {
-  if (!files || files.length === 0) {
-    throw new Error('No files selected for text extraction.');
-  }
-
-  // Pre-check basic client-side limits
-  if (files.length > 5) {
-    throw new Error('Maximum 5 files allowed per upload.');
-  }
-
-  const limits = await getClientUploadLimits();
-  for (const file of files) {
-    if (file.size > limits.maxModuleUploadMb * 1024 * 1024) {
-      throw new Error(`This file is ${Math.ceil(file.size / (1024 * 1024))} MB. The limit for your school is ${limits.maxModuleUploadMb} MB.`);
-    }
-  }
+export async function extractTextFromFiles(
+  files: File[],
+  options?: { onProgress?: (progress: LessonExtractionProgress) => void }
+): Promise<LessonExtractionClientResult> {
+  if (!files?.length) throw new Error('No files selected for text extraction.');
+  if (files.length > 5) throw new Error('Maximum 5 files allowed per upload.');
 
   const documents: Array<{ name: string; text: string }> = [];
+  const lowConfidence: Array<{ name: string; pages: number[] }> = [];
   let totalCharacters = 0;
 
-  // Parse and return one document at a time. This keeps long uploads bounded and
-  // preserves document boundaries for the sequential Gemini helper.
-  for (const file of files) {
-    const supabase = createClient();
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) throw new Error('Sign in again before uploading lesson materials.');
-
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-180) || 'lesson-material';
-    const storagePath = `${authData.user.id}/lesson-imports/${crypto.randomUUID()}/${safeName}`;
-    const { error: uploadError } = await supabase.storage
-      .from('lesson-uploads')
-      .upload(storagePath, file, { contentType: file.type || 'application/octet-stream', upsert: false });
-    if (uploadError) throw new Error(`Could not upload '${file.name}': ${uploadError.message}`);
-
-    let response: Response;
-    try {
-      response = await fetch('/api/ai/extract-lesson-text', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storagePath, name: file.name }),
-      });
-    } catch (error) {
-      await supabase.storage.from('lesson-uploads').remove([storagePath]);
-      throw error;
-    }
-    const data = await response.json().catch(() => null);
-    await supabase.storage.from('lesson-uploads').remove([storagePath]);
-    if (!data) throw new Error(`The server returned an invalid extraction response for '${file.name}'.`);
-    if (!response.ok) throw new Error(data.error || `Failed to extract text from ${file.name}.`);
-
-    const extracted = Array.isArray(data.documents) ? data.documents : data.files;
-    const document = extracted?.[0];
-    if (!document || typeof document.text !== 'string') {
-      throw new Error(`The text extractor returned no readable content for ${file.name}.`);
-    }
+  // Sequential extraction avoids loading several large documents into memory at once.
+  for (const [index, file] of files.entries()) {
+    const document = await extractLocalDocument(file, {
+      onProgress: (value) => options?.onProgress?.({
+        ...value,
+        fileIndex: index + 1,
+        fileCount: files.length,
+        fileName: file.name,
+      }),
+    });
     totalCharacters += document.text.length;
-    if (totalCharacters > 500000) {
-      throw new Error('These documents contain more than 500,000 characters. Split them into smaller uploads so no lesson content is dropped.');
+    if (totalCharacters > LOCAL_DOCUMENT_MAX_CHARACTERS) {
+      throw new Error(
+        'These documents contain more than 900,000 readable characters. Split them into smaller chapter groups so no source content is silently dropped.'
+      );
     }
-    documents.push({ name: document.name || file.name, text: document.text });
+    documents.push({ name: document.name, text: document.text });
+    if (document.lowConfidencePages.length) {
+      lowConfidence.push({ name: document.name, pages: document.lowConfidencePages });
+    }
   }
 
-  const text = documents.map((document) => `--- ${document.name} ---\n${document.text}`).join('\n\n');
+  const text = documents
+    .map((document) => '--- ' + document.name + ' ---\n' + document.text)
+    .join('\n\n');
+  const notice = lowConfidence.length
+    ? 'OCR completed, but some pages may need teacher review: ' +
+      lowConfidence.map((item) => item.name + ' (page(s) ' + item.pages.join(', ') + ')').join('; ') +
+      '. Check these pages against the original before generating an exam.'
+    : undefined;
 
   return {
     text,
@@ -98,5 +79,6 @@ export async function extractTextFromFiles(files: File[]): Promise<LessonExtract
     charCount: totalCharacters,
     filesProcessed: documents.length,
     truncated: false,
+    ...(notice ? { notice } : {}),
   };
 }

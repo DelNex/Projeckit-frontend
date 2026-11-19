@@ -17,15 +17,15 @@ test('projects a complete contiguous exam allocation using days taught', () => {
   assert.ok(new Set(items.map((item) => item.domain)).size > 1);
 });
 
-test('limits projection to four competencies and handles legacy rows without days', () => {
+test('projects all competencies and handles legacy rows without days', () => {
   const items = projectTosItems([
     { code: 'LC1', description: 'Understand concepts', days: 1 },
     { code: 'LC2', description: 'Apply concepts', days_taught: 1 },
     { code: 'LC3', description: 'Evaluate evidence', daysTaught: 1 },
     { code: 'LC4', description: 'Create a solution', daysTaught: 1 },
-    { code: 'LC5', description: 'Ignore beyond supported limit', daysTaught: 100 },
+    { code: 'LC5', description: 'Build an integrated project', daysTaught: 1 },
   ], 8);
 
   assert.equal(items.length, 8);
-  assert.deepEqual(Array.from(new Set(items.map((item) => item.code))), ['LC1', 'LC2', 'LC3', 'LC4']);
+  assert.deepEqual(Array.from(new Set(items.map((item) => item.code))), ['LC1', 'LC2', 'LC3', 'LC4', 'LC5']);
 });

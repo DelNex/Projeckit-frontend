@@ -21,8 +21,8 @@ type BrowserReport = {
   answers?: BrowserAnswer[];
   error?: string;
   inputParity?: {
-    cameraBlob?: { passed?: boolean; detectedItems?: number; accuracy?: number };
-    uploadFile?: { passed?: boolean; detectedItems?: number; accuracy?: number };
+    cameraBlob?: { passed?: boolean; detectedItems?: number; accuracy?: number; mimeType?: string };
+    uploadFile?: { passed?: boolean; detectedItems?: number; accuracy?: number; mimeType?: string };
     sameAnswers?: boolean;
   };
 };

@@ -210,7 +210,10 @@ export function OmrCameraModal({
       if (!active || recognitionBusyRef.current || !videoRef.current || videoRef.current.readyState < 2) return;
       recognitionBusyRef.current = true;
       try {
-        const blob = await captureFrame({ quality: 0.9, maxWidth: 1600, maxHeight: 1600 });
+        // Live alignment is only a preview. Use a smaller frame to avoid
+        // repeatedly running the full-resolution bubble pipeline on phones.
+        // The frame saved for scoring is captured at full OMR resolution below.
+        const blob = await captureFrame({ quality: 0.72, maxWidth: 960, maxHeight: 960 });
         if (!blob || !active) return;
         const result = await processOmrScan(blob, template, { assessmentId });
         if (!active) return;
@@ -222,8 +225,16 @@ export function OmrCameraModal({
         else stableFrames = reliable ? 1 : 0;
         previousSignature = reliable ? signature : '';
         if (stableFrames >= 2) {
-          setReadyFrame(blob);
-          setStatusMessage('Sheet and answers detected. Capture this frame to lock it and review.');
+          const fullResolutionFrame = await captureFrame({
+            quality: 0.92,
+            maxWidth: MAX_OMR_IMAGE_EDGE,
+            maxHeight: MAX_OMR_IMAGE_EDGE,
+          });
+          if (!active) return;
+          if (fullResolutionFrame) {
+            setReadyFrame(fullResolutionFrame);
+            setStatusMessage('Sheet and answers detected. Capture this frame to review.');
+          }
         }
       } catch {
         // A partial or out-of-frame sheet is expected while positioning.
@@ -231,7 +242,7 @@ export function OmrCameraModal({
         recognitionBusyRef.current = false;
       }
     };
-    const timer = window.setInterval(() => void inspectFrame(), 1200);
+    const timer = window.setInterval(() => void inspectFrame(), 1000);
     void inspectFrame();
     return () => { active = false; window.clearInterval(timer); };
   }, [isOpen, phase, cameraState.isStreaming, readyFrame, captureFrame, assessmentId, template]);
@@ -245,7 +256,7 @@ export function OmrCameraModal({
 
     let active = true;
     const interval = setInterval(async () => {
-      if (!active || !videoRef.current || videoRef.current.videoWidth === 0) return;
+      if (!active || recognitionBusyRef.current || !videoRef.current || videoRef.current.videoWidth === 0) return;
       try {
         const metrics = await analyzeDocumentQuality(videoRef.current);
         if (!active) return;
@@ -257,7 +268,7 @@ export function OmrCameraModal({
       } catch {
         // Fallback silently if frame cannot be grabbed
       }
-    }, 450);
+    }, 700);
 
     return () => {
       active = false;

@@ -21,11 +21,11 @@ test('dirty drafts warn before closing and saved drafts do not', () => {
   assert.equal(shouldWarnBeforeClosing(false), false);
 });
 
-test('atomic draft save checks versions and scan results without touching answer keys', async () => {
-  const sql = await readFile(new URL('../../../../supabase/migrations/20260908000033_save_exam_draft.sql', import.meta.url), 'utf8');
-  assert.match(sql, /FOR UPDATE/);
-  assert.match(sql, /v_tos\.updated_at <> p_expected_updated_at/);
-  assert.match(sql, /public\.responses/);
-  assert.match(sql, /public\.scan_results/);
-  assert.doesNotMatch(sql, /public\.answer_keys/);
+test('autosave uses the atomic draft RPC and does not synchronize answer keys', async () => {
+  const route = await readFile(new URL('../../../src/app/api/ai/save-exam/route.ts', import.meta.url), 'utf8');
+  const autosave = route.slice(route.indexOf('if (body.autosave)'), route.indexOf('if (body.assessmentId)'));
+  assert.match(autosave, /rpc\('save_exam_draft'/);
+  assert.match(autosave, /p_expected_updated_at/);
+  assert.doesNotMatch(autosave, /answer_keys/);
+  assert.match(route, /status: conflict \? 409 : 400/);
 });

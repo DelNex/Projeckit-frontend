@@ -111,7 +111,7 @@ describe('Project KIT — Server-Side Lesson Text Extractor Tests', () => {
       async () => {
         await extractLessonFiles([
           { name: 'huge_document.txt', buffer: oversizedBuffer, size: oversizedBuffer.length },
-        ]);
+        ], 60 * 1024 * 1024);
       },
       /This file is 61 MB\. The limit for your school is 60 MB\./
     );

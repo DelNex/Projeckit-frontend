@@ -1,8 +1,14 @@
 import { notFound } from 'next/navigation';
 import { OmrBrowserValidation } from './validation-client';
+import { LocalOcrValidation } from './ocr-validation-client';
 
-/** Development-only route used by the Chrome OMR integration test. */
+/**
+ * Private test harness route. It is available in development and in the
+ * explicitly opted-in browser-validation build only.
+ */
 export default function OmrValidationPage() {
-  if (process.env.NODE_ENV !== 'development') notFound();
-  return <OmrBrowserValidation />;
+  const validationEnabled = process.env.NODE_ENV === 'development'
+    || process.env.OMR_BROWSER_VALIDATION === 'true';
+  if (!validationEnabled) notFound();
+  return <><OmrBrowserValidation /><LocalOcrValidation /></>;
 }

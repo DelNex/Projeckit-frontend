@@ -24,9 +24,9 @@ export default function AdminSettingsPage() {
   const [loading, setLoading] = useState(false);
   const [defaultPassingMps, setDefaultPassingMps] = useState(60.0);
   const [allowPublicRegistration, setAllowPublicRegistration] = useState(true);
-  const [maxModuleUploadMb, setMaxModuleUploadMb] = useState(60);
+  const [maxModuleUploadMb, setMaxModuleUploadMb] = useState(100);
   const [maxScanImageMb, setMaxScanImageMb] = useState(15);
-  const [platformCaps, setPlatformCaps] = useState({ module: 60, scan: 30 });
+  const [platformCaps, setPlatformCaps] = useState({ module: 100, scan: 30 });
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [canEditSettings, setCanEditSettings] = useState(false);
@@ -307,7 +307,7 @@ export default function AdminSettingsPage() {
             className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
           />
           <span className="mt-1 block text-[11px] text-gray-400">
-            Allowed range: 1–{platformCaps.module} MB. Platform cap: {platformCaps.module} MB. Larger files also depend on your Supabase plan and hosting limits.
+            Allowed range: 1–{platformCaps.module} MB. Platform cap: {platformCaps.module} MB. Supabase Free currently has a 50 MB global ceiling; 100 MB uploads require a paid Supabase plan.
           </span>
         </div>
 
