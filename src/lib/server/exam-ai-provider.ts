@@ -24,7 +24,16 @@ export class GroqExamJobProvider implements ExamAiProvider {
       p_job_kind: input.jobKind,
     });
     const row = Array.isArray(data) ? data[0] : data;
-    if (error || !row) throw new Error('Could not queue exam generation. Please try again.');
+    if (error) {
+      if (error.message?.includes('EXAM_HOURLY_LIMIT_REACHED')) {
+        throw new Error('EXAM_HOURLY_LIMIT_REACHED');
+      }
+      if (error.message?.includes('EXAM_DAILY_LIMIT_REACHED')) {
+        throw new Error('EXAM_DAILY_LIMIT_REACHED');
+      }
+      throw new Error('Could not queue exam generation. Please try again.');
+    }
+    if (!row) throw new Error('Could not queue exam generation. Please try again.');
     return { id: row.job_id, createdAt: row.created_at, status: row.status, reused: !row.created };
   }
 }
