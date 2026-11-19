@@ -143,6 +143,19 @@ async function requestGroqQuestions(payload: Record<string, any>, jobDeadline: n
  * jobs without requiring the local Gemini browser helper.
  */
 /** Select the least-loaded tenant's oldest queued job before dispatching it. */
+export function chooseNextExamJob(queuedJobs: Array<{ id: string; tenant_id: string; created_at: string }>, activeJobs: Array<{ tenant_id: string }>) {
+  const activeByTenant = new Map<string, number>();
+  for (const job of activeJobs) {
+    activeByTenant.set(job.tenant_id, (activeByTenant.get(job.tenant_id) || 0) + 1);
+  }
+  return [...queuedJobs]
+    .filter((job) => (activeByTenant.get(job.tenant_id) || 0) < 2)
+    .sort((a, b) =>
+      (activeByTenant.get(a.tenant_id) || 0) - (activeByTenant.get(b.tenant_id) || 0)
+      || Date.parse(a.created_at) - Date.parse(b.created_at)
+    )[0];
+}
+
 export async function runNextGroqExamJob(admin = createAdminClient()): Promise<void> {
   const { data: queuedJobs, error: queueError } = await admin
     .from('exam_generation_jobs')
@@ -165,16 +178,7 @@ export async function runNextGroqExamJob(admin = createAdminClient()): Promise<v
     .in('tenant_id', tenantIds);
   if (activeError) throw new Error('Could not inspect active exam workers.');
 
-  const activeByTenant = new Map<string, number>();
-  for (const job of activeJobs || []) {
-    activeByTenant.set(job.tenant_id, (activeByTenant.get(job.tenant_id) || 0) + 1);
-  }
-  const nextJob = [...queuedJobs]
-    .filter((job: any) => (activeByTenant.get(job.tenant_id) || 0) < 2)
-    .sort((a: any, b: any) =>
-      (activeByTenant.get(a.tenant_id) || 0) - (activeByTenant.get(b.tenant_id) || 0)
-      || Date.parse(a.created_at) - Date.parse(b.created_at)
-    )[0];
+  const nextJob = chooseNextExamJob(queuedJobs as any, activeJobs || []);
   if (nextJob) await runGroqExamJob(nextJob.id, admin);
 }
 
