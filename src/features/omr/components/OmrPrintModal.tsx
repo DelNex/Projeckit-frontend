@@ -520,10 +520,14 @@ export function OmrPrintModal({
               <span className="font-semibold text-gray-300">Previewing Page:</span>
               <span className="font-bold text-emerald-400">
                 {isHalfSheet ? (
-                  <>
-                    Sheets #{currentPageIdx * 2 + 1}
-                    {activeLearners[currentPageIdx * 2 + 1] ? ` & #${currentPageIdx * 2 + 2}` : ''}
-                  </>
+                  compactRowsPerPage > 1 ? (
+                    <>Sheets #{currentPageIdx * sheetsPerPage + 1}–#{Math.min((currentPageIdx + 1) * sheetsPerPage, activeLearners.length)} of {activeLearners.length}</>
+                  ) : (
+                    <>
+                      Sheets #{currentPageIdx * 2 + 1}
+                      {activeLearners[currentPageIdx * 2 + 1] ? ` & #${currentPageIdx * 2 + 2}` : ''}
+                    </>
+                  )
                 ) : (
                   <>Sheet #{currentPageIdx + 1} — {activeLearners[currentPageIdx]?.name}</>
                 )}
