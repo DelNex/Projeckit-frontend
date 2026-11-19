@@ -1,8 +1,12 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { ColumnDef, DataTable } from '@/components/ui/data-table';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
-import { BulkAddStudentsModal } from '@/components/students/BulkAddStudentsModal';
+const BulkAddStudentsModal = dynamic(
+  () => import('@/components/students/BulkAddStudentsModal').then((module) => module.BulkAddStudentsModal),
+  { ssr: false, loading: () => null },
+);
 import { useToast } from '@/components/ui/toast';
 import { friendlyError } from '@/lib/errors';
 import { getTenantContext } from '@/lib/tenant-context';
