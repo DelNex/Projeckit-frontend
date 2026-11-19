@@ -47,6 +47,12 @@ export default function TosPage() {
   const [availableSchoolYears, setAvailableSchoolYears] = useState<string[]>([]);
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
 
+  // Modal States
+  const [isCreateEditOpen, setIsCreateEditOpen] = useState(false);
+  const [editingTos, setEditingTos] = useState<TosDocument | null>(null);
+  const [viewingTos, setViewingTos] = useState<TosDocument | null>(null);
+  const [examModalTos, setExamModalTos] = useState<TosDocument | null>(null);
+
   useEffect(() => {
     if (tosList.length === 0) {
       setActiveExamJobTos(new Set());
@@ -132,12 +138,6 @@ export default function TosPage() {
   const [schemaHealthy, setSchemaHealthy] = useState(true);
   const [missingColumns, setMissingColumns] = useState<string[]>([]);
   const [schemaError, setSchemaError] = useState<string | null>(null);
-
-  // Modal States
-  const [isCreateEditOpen, setIsCreateEditOpen] = useState(false);
-  const [editingTos, setEditingTos] = useState<TosDocument | null>(null);
-  const [viewingTos, setViewingTos] = useState<TosDocument | null>(null);
-  const [examModalTos, setExamModalTos] = useState<TosDocument | null>(null);
 
   // Delete State
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
