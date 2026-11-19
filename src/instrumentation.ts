@@ -1,31 +1,31 @@
-import { logSystemEvent } from '@/lib/server/system-logger';
-
-type RequestErrorContext = {
-  routerKind: string;
-  routePath: string;
-  routeType: string;
-  renderSource?: string;
-};
-
+/**
+ * Runtime-aware Next.js request instrumentation.
+ * Keep Node-only observability dependencies out of Edge bundles.
+ */
 export async function onRequestError(
-  error: Error,
-  request: Request,
-  context: RequestErrorContext
+  error: unknown,
+  request: {
+    path: string;
+    method: string;
+    headers: Record<string, string | string[]>;
+  },
+  context: {
+    routerKind?: string;
+    routePath?: string;
+    routeType?: string;
+    renderSource?: string;
+    renderType?: string;
+    revalidateReason?: string;
+  },
 ) {
-  await logSystemEvent({
-    severity: 'error',
-    source: 'next.request',
-    message: error?.message || 'Unhandled server request error.',
-    route: context.routePath,
-    method: request.method,
-    status: 500,
-    requestId: request.headers.get('x-nf-request-id')
-      || request.headers.get('x-vercel-id')
-      || request.headers.get('x-request-id'),
-    metadata: {
-      routerKind: context.routerKind,
-      routeType: context.routeType,
-      renderSource: context.renderSource || null,
-    },
-  });
+  if (process.env.NEXT_RUNTIME !== 'nodejs') return;
+  try {
+    const { captureRequestError } = await import('./instrumentation-node');
+    await captureRequestError(error, request, context);
+  } catch (loggingError) {
+    console.error(
+      '[instrumentation] Could not persist an unhandled request error:',
+      loggingError instanceof Error ? loggingError.message : 'unknown error',
+    );
+  }
 }
