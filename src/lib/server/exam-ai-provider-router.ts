@@ -54,7 +54,7 @@ async function readProviderResponse(response: Response, provider: ProviderId): P
     }
     const detail = String(body?.error?.message || body?.message || body?.errors?.[0]?.message || 'Provider request failed').slice(0, 180);
     throw Object.assign(new Error(`${provider} returned HTTP ${response.status}: ${detail}`), {
-      retryable: response.status === 408 || response.status === 429 || response.status >= 500 || response.status === 401 || response.status === 403,
+      retryable: response.status === 408 || response.status === 429 || response.status >= 500 || response.status === 400 || response.status === 401 || response.status === 403 || response.status === 404,
     });
   }
 
