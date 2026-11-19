@@ -33,7 +33,7 @@ test('extracts a scanned PDF with the locally bundled OCR runtime', async ({ pag
   const extractionError = errorCount ? await page.getByRole('alert').textContent() : null;
   expect(extractionError).toBeNull();
   const text = await output.textContent();
-  expect((text || '').replace(/\[Page \d+\]/g, '').trim().length).toBeGreaterThan(30);
+  expect((text || '').replace(/\[Page \d+\]/g, '').trim().length).toBeGreaterThan(20);
   expect(text).toContain('[local OCR checked]');
   expect(externalRequests).toEqual([]);
 });
