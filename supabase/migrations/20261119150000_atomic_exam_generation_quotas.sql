@@ -3,6 +3,7 @@
 -- friendly errors; this RPC is the authoritative atomic quota gate.
 
 DROP FUNCTION IF EXISTS public.enqueue_groq_exam_generation_job(uuid, uuid, uuid, jsonb, text);
+DROP FUNCTION IF EXISTS public.enqueue_groq_exam_generation_job(uuid, uuid, uuid, jsonb, text, integer, integer);
 
 CREATE FUNCTION public.enqueue_groq_exam_generation_job(
   p_tenant_id uuid,
@@ -31,7 +32,7 @@ BEGIN
     RAISE EXCEPTION 'Tenant, TOS, and creator are required.';
   END IF;
 
-  IF p_job_kind NOT IN ('full', 'repair') THEN
+  IF p_job_kind IS NULL OR p_job_kind NOT IN ('full', 'repair') THEN
     RAISE EXCEPTION 'Invalid exam job kind.';
   END IF;
 
