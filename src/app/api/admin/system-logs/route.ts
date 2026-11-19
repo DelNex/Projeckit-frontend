@@ -18,7 +18,7 @@ export async function GET(request: Request) {
       .eq('id', user.id)
       .maybeSingle();
 
-    if (profileError || !profile || profile.role !== 'admin' || profile.status !== 'approved' || profile.archived_at) {
+    if (profileError || !profile || (profile.role !== 'admin' && !profile.is_platform_admin) || profile.status !== 'approved' || profile.archived_at) {
       return NextResponse.json({ error: 'Approved administrator access is required.' }, { status: 403 });
     }
 
