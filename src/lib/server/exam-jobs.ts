@@ -56,7 +56,7 @@ function slotsFromJob(job: any): TosBlueprintSlot[] {
 async function auditFinishedJob(admin: any, job: any, status: string, count: number) {
   await admin.from('audit_logs').insert({
     tenant_id: job.tenant_id, user_id: job.created_by, action: 'AI_EXAM_GENERATION',
-    details: { job_id: job.id, item_count: count, target_items: slotsFromJob(job).length, status, source: 'groq_api' },
+    details: { job_id: job.id, item_count: count, target_items: slotsFromJob(job).length, status, source: 'provider_router' },
   });
 }
 
@@ -129,7 +129,7 @@ export async function finalizeExamJob(jobId: string, responseText: string, admin
   }
 
   if (!questions.length) {
-    const failureText = 'Groq did not return valid exam questions. Your existing TOS exam was kept; review the generation error and try again.';
+    const failureText = 'No configured AI provider returned valid exam questions. Your existing TOS exam was kept; review the generation error and try again.';
     const { data: finishedRoot } = await admin.from('exam_generation_jobs').update({ status: 'failed', error: failureText, finished_at: new Date().toISOString(), updated_at: new Date().toISOString(), payload: {} }).eq('id', rootId).eq('status', 'running').select('id').maybeSingle();
     if (rootId !== jobId) await admin.from('exam_generation_jobs').update({ status: 'failed', error: failureText, finished_at: new Date().toISOString(), updated_at: new Date().toISOString(), payload: {} }).eq('id', jobId).eq('status', 'running');
     if (finishedRoot) await auditFinishedJob(admin, root, 'failed', 0);
