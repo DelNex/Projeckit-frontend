@@ -88,12 +88,13 @@ describe('Compact A4 OMR printing', () => {
 
 
 describe('Compact canonical OMR geometry', () => {
-  const makeGeometry = (itemCount: number) => generateCanonicalGeometry({
+  const makeGeometry = (itemCount: number, pageHeight?: number) => generateCanonicalGeometry({
     assessmentId: `compact-${itemCount}`,
     itemCount,
     classSize: 40,
     title: 'Quarter 1 Test',
     subject: 'Mathematics',
+    ...(pageHeight ? { pageHeight } : {}),
   });
 
   it('preserves the original 60-item A5 physical geometry', () => {
@@ -103,15 +104,11 @@ describe('Compact canonical OMR geometry', () => {
   });
 
   it('shortens a 10-item form enough to fit additional students per page', () => {
-    const base = makeGeometry(10);
+    const base = makeGeometry(10, 794);
+    const compact = makeGeometry(10);
     const compactHeight = getCompactOmrPageHeight(base);
-    const compact = generateCanonicalGeometry({
-      ...base.config,
-      sheetFormat: 'HALF',
-      pageWidth: base.page.width,
-      pageHeight: compactHeight,
-    });
     const layout = getA4CompactLayout(compact.page.height);
+    assert.strictEqual(compact.page.height, compactHeight);
     assert.ok(compact.page.height < 794);
     assert.ok(layout.sheetsPerPage > 2);
     assert.strictEqual(compact.layout.answerArea.markerSize, base.layout.answerArea.markerSize);
