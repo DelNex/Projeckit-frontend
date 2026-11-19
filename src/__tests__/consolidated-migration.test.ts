@@ -38,7 +38,7 @@ describe('Project KIT — Consolidated Migrations Parity Tests', () => {
     );
   });
 
-  it('2. committed consolidated_migrations_14_to_20.sql matches generated output exactly', { skip: !generators }, () => {
+  it('2. committed consolidated_migrations_14_to_20.sql matches generated output exactly', { skip: !hasGenerator }, async () => {
     const committedFilePath = path.join(
       repoRoot,
       'supabase',
