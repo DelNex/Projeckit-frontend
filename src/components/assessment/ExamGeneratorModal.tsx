@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { buildTosBlueprintSlots } from '@/lib/exam-types';
 import { useExamGenerationJob } from '@/lib/exam-generation-client';
-import { getClientUploadLimits } from '@/lib/upload-limits-client';
+import { getLocalDocumentCapacity } from '@/lib/local-document-engine';
 
 interface ExamGeneratorModalProps {
   isOpen: boolean;
@@ -48,7 +48,7 @@ type GenerationStep =
 
 const STEP_LABELS: Record<GenerationStep, string> = {
   idle: 'Ready to start',
-  uploading: 'Uploading lesson file(s)...',
+  uploading: 'Preparing local lesson file(s)...',
   extracting: 'Extracting text from document(s)...',
   analyzing: 'Analyzing lesson coverage against TOS...',
   generating: 'Writing questions from your lesson...',
@@ -118,7 +118,7 @@ export function ExamGeneratorModal({
     }
 
     const validFiles: File[] = [];
-    const limits = await getClientUploadLimits();
+    const capacity = await getLocalDocumentCapacity();
     for (const file of incoming) {
       const lowerName = file.name.toLowerCase();
       const isValid = validExts.some((ext) => lowerName.endsWith(ext));
@@ -128,8 +128,8 @@ export function ExamGeneratorModal({
         return;
       }
 
-      if (file.size > limits.maxModuleUploadMb * 1024 * 1024) {
-        toast.error(`This file is ${Math.ceil(file.size / (1024 * 1024))} MB. The limit for your school is ${limits.maxModuleUploadMb} MB.`);
+      if (file.size > capacity.maxFileBytes) {
+        toast.error(`This file is ${Math.ceil(file.size / (1024 * 1024))} MB. This device can currently process files up to ${capacity.maxFileMb} MB.`);
         return;
       }
 
@@ -175,11 +175,8 @@ export function ExamGeneratorModal({
       : [];
 
     try {
-      // Step 1: Uploading
+      // Process documents locally; original files never leave this browser.
       if (selectedFiles.length > 0) {
-        setCurrentStep('uploading');
-
-        // Step 2: Extracting text on server
         setCurrentStep('extracting');
         const extractResult = await extractTextFromFiles(selectedFiles);
         lessonDocuments = [...extractResult.documents, ...lessonDocuments];
@@ -364,7 +361,7 @@ export function ExamGeneratorModal({
                   Drop your lesson materials here, or <span className="text-blue-600 underline">browse</span>
                 </p>
                 <p className="text-[11px] text-gray-400">
-                  Supports PDF, DOCX, PPTX, or TXT (up to 5 files; your school’s file limit is loaded when you select files)
+                  Supports PDF, DOCX, PPTX, TXT, or Markdown (up to 5 files; local device capacity is checked automatically)
                 </p>
               </div>
             </div>
