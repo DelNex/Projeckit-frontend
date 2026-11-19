@@ -4,6 +4,8 @@ export interface QueueExamJobInput {
   createdBy: string;
   payload: Record<string, unknown>;
   jobKind: 'full' | 'repair';
+  hourlyLimit: number;
+  dailyLimit: number;
 }
 
 export interface ExamAiProvider {
@@ -22,6 +24,8 @@ export class GroqExamJobProvider implements ExamAiProvider {
       p_created_by: input.createdBy,
       p_payload: input.payload,
       p_job_kind: input.jobKind,
+      p_hourly_limit: input.hourlyLimit,
+      p_daily_limit: input.dailyLimit,
     });
     const row = Array.isArray(data) ? data[0] : data;
     if (error) {
