@@ -24,6 +24,7 @@ export function useExamGenerationJob(tosId: string | undefined) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const startedAt = useRef(0);
   const loadedQuestionsForJob = useRef<string | null>(null);
+  const startInFlight = useRef(false);
   const alive = useRef(true);
 
   const refreshHelperStatus = useCallback(async () => {
@@ -116,7 +117,9 @@ export function useExamGenerationJob(tosId: string | undefined) {
 
   const start = useCallback(async (input: { lessonText?: string; lessonDocuments?: Array<{ name: string; text: string; competencyId?: string }>; teacherInstructions?: string; repairItemNumber?: number }) => {
     if (!tosId) throw new Error('A TOS is required to start exam generation.');
+    if (startInFlight.current) throw new Error('Exam generation is already being submitted. Please wait.');
     if (job && ['queued', 'running', 'needs_attention'].includes(job.status)) throw new Error('This TOS already has an active generation job. Cancel or resolve it before starting another.');
+    startInFlight.current = true;
     setIsStarting(true); setSavedQuestions(null); loadedQuestionsForJob.current = null; setLoadError(null);
     try {
       const response = await fetch('/api/ai/exam-jobs', {
@@ -130,7 +133,7 @@ export function useExamGenerationJob(tosId: string | undefined) {
       setJob({ id: data.id, status: data.status, queuePosition: data.queuePosition || null });
       void refreshHelperStatus();
       return data as { id: string; status: ExamJobStatus; queuePosition: number };
-    } finally { setIsStarting(false); }
+    } finally { startInFlight.current = false; setIsStarting(false); }
   }, [tosId, job, helperState, refreshHelperStatus]);
 
   const cancel = useCallback(async () => {
