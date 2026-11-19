@@ -260,6 +260,27 @@ CREATE POLICY "Tenant admins can delete grading periods"
     OR (SELECT public.is_platform_admin())
   );
 
+-- Only approved administrators may insert audit rows directly. Server-side
+-- service-role operations continue to write through the service-role client.
+DROP POLICY IF EXISTS "Admins can insert audit logs" ON public.audit_logs;
+CREATE POLICY "Tenant admins can insert audit logs"
+  ON public.audit_logs FOR INSERT TO authenticated
+  WITH CHECK (
+    (
+      tenant_id = (SELECT public.get_current_tenant_id())
+      AND user_id = (SELECT auth.uid())
+      AND EXISTS (
+        SELECT 1 FROM public.profiles p
+        WHERE p.id = (SELECT auth.uid())
+          AND p.tenant_id = audit_logs.tenant_id
+          AND p.role = 'admin'
+          AND p.status = 'approved'
+          AND p.archived_at IS NULL
+      )
+    )
+    OR (SELECT public.is_platform_admin())
+  );
+
 -- Audit records are administrator-only; teachers must not read other
 -- staff activity, IP metadata, or administrative event details.
 DROP POLICY IF EXISTS "Tenant isolation for audit_logs" ON public.audit_logs;
