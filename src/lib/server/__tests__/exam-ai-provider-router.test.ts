@@ -80,6 +80,35 @@ test('falls back from a rate-limited provider and parses the next provider respo
   }
 });
 
+
+test('Gemini receives the same strict JSON schema as the other providers', async () => {
+  const names = ['GEMINI_API_KEY', 'AI_PROVIDER_ORDER'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  const schema = { type: 'object', properties: { questions: { type: 'array' } }, required: ['questions'] };
+  try {
+    process.env.GEMINI_API_KEY = 'test-gemini-key';
+    process.env.AI_PROVIDER_ORDER = 'gemini';
+    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      assert.match(String(input), /generativelanguage\.googleapis\.com/);
+      const body = JSON.parse(String(init?.body));
+      assert.equal(body.generationConfig.responseMimeType, 'application/json');
+      assert.deepEqual(body.generationConfig.responseJsonSchema, schema);
+      return new Response(JSON.stringify({
+        candidates: [{ content: { parts: [{ text: JSON.stringify({ questions: [{ item_number: 1 }] })] } }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    const { requestExamQuestionsFromProviders } = await import('../exam-ai-provider-router');
+    await requestExamQuestionsFromProviders([{ role: 'user', content: 'Create one item.' }], schema);
+  } finally {
+    global.fetch = originalFetch;
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
 test('queue dispatcher prefers the least-loaded school, then the oldest job', () => {
   const queued = [
     { id: 'a-old', tenant_id: 'school-a', created_at: '2026-01-01T00:00:00Z' },
@@ -137,6 +166,8 @@ test('Cloudflare adapter preserves the model path and parses Workers AI response
       assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer test-cloudflare-token');
       const body = JSON.parse(String(init?.body));
       assert.ok(Array.isArray(body.messages));
+      assert.equal(body.response_format.type, 'json_schema');
+      assert.deepEqual(body.response_format.json_schema, { type: 'object' });
       return new Response(JSON.stringify({
         success: true,
         result: { response: JSON.stringify({ questions: [{ item_number: 2 }] }) },
