@@ -1,3 +1,5 @@
+import { logSystemEvent } from './system-logger';
+
 type ProviderId = 'groq' | 'openrouter' | 'gemini' | 'cloudflare';
 
 type ProviderConfig = {
@@ -19,7 +21,8 @@ function providerConfigs(): ProviderConfig[] {
   };
   const requested = (process.env.AI_PROVIDER_ORDER || 'groq,openrouter,gemini,cloudflare')
     .split(',').map((item) => item.trim().toLowerCase()).filter(Boolean) as ProviderId[];
-  const order = [...new Set(requested.filter((id) => id in env))];
+  const allowed = new Set<ProviderId>(['groq', 'openrouter', 'gemini', 'cloudflare']);
+  const order = [...new Set(requested.filter((id): id is ProviderId => allowed.has(id)))];
   return order.map((id) => env[id]).filter((item): item is ProviderConfig => Boolean(item));
 }
 
@@ -54,7 +57,8 @@ async function readProviderResponse(response: Response, provider: ProviderId): P
     }
     const detail = String(body?.error?.message || body?.message || body?.errors?.[0]?.message || 'Provider request failed').slice(0, 180);
     throw Object.assign(new Error(`${provider} returned HTTP ${response.status}: ${detail}`), {
-      retryable: response.status === 408 || response.status === 429 || response.status >= 500 || response.status === 400 || response.status === 401 || response.status === 403 || response.status === 404,
+      status: response.status,
+      retryable: response.status === 400 || response.status === 401 || response.status === 403 || response.status === 404 || response.status === 408 || response.status === 409 || response.status === 422 || response.status === 429 || response.status >= 500,
     });
   }
 
@@ -89,7 +93,7 @@ async function requestProvider(provider: ProviderConfig, messages: Array<{ role:
     });
   } else if (provider.id === 'cloudflare') {
     const accountId = process.env.CLOUDFLARE_ACCOUNT_ID!;
-    response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/run/${encodeURIComponent(provider.model)}`, {
+    response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/run/${provider.model.split('/').map((part) => encodeURIComponent(part).replace(/%40/gi, '@')).join('/')}`, {
       method: 'POST', headers: { Authorization: `Bearer ${provider.key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages, max_tokens: 8192, temperature: 0.2 }),
       signal: timeout, cache: 'no-store',
@@ -143,10 +147,17 @@ export async function requestExamQuestionsFromProviders(
       return await requestProvider(provider, messages, schema, Math.min(providerTimeoutMs, remainingMs - 1_000));
     } catch (error) {
       const message = error instanceof Error ? error.message : `${provider.id} request failed`;
-      failures.push(message.slice(0, 240));
+      const status = Number((error as Error & { status?: number }).status) || null;
       const retryable = Boolean((error as Error & { retryable?: boolean }).retryable)
         || error instanceof SyntaxError
         || /timeout|fetch failed|network|returned no questions/i.test(message);
+      failures.push(`${provider.id}${status ? ` HTTP ${status}` : ''}: ${retryable ? 'retryable failure' : 'non-retryable failure'}`);
+      await logSystemEvent({
+        severity: retryable ? 'warn' : 'error', source: 'exam.provider-router',
+        code: status === 429 ? 'AI_PROVIDER_RATE_LIMITED' : status ? 'AI_PROVIDER_HTTP_ERROR' : 'AI_PROVIDER_REQUEST_FAILED',
+        message: 'An AI provider could not complete an exam batch.',
+        metadata: { provider: provider.id, status, retryable, attempt: failures.length },
+      });
       if (!retryable) break;
     }
   }
