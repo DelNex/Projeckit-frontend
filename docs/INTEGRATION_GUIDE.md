@@ -63,13 +63,13 @@ Local extraction now accepts up to 900,000 readable characters per generation jo
 
 The authenticated endpoint `POST /api/internal/ai/dispatch` lets a trusted scheduler process one queued Groq exam job even when no teacher has the application open. It accepts either `Authorization: Bearer <secret>` or `x-cron-secret: <secret>`. The secret must be at least 32 characters and is compared using a constant-time byte comparison. The endpoint is server-only, returns no queue payload, and relies on the existing database claim/lease RPC to prevent duplicate workers.
 
-Configure `AI_DISPATCH_CRON_SECRET` in the Netlify environment for the branch deployment. Use a randomly generated value of at least 32 characters. Store the same value in Supabase Vault as `projectkit_ai_dispatch_secret`; do not put it in SQL source, browser variables, or Git. Supabase Cron can then call the Netlify branch URL every minute using `pg_cron` and `pg_net`. Keep the schedule disabled until the Netlify variable and Vault secret are both configured.
+Configure `AI_DISPATCH_CRON_SECRET` in the Netlify environment for the branch deployment. Use a randomly generated value of at least 32 characters. Store the same value in Supabase Vault as `projectkit_ai_dispatch_secret_branch15`; do not put it in SQL source, browser variables, or Git. Supabase Cron can then call the Netlify branch URL every minute using `pg_cron` and `pg_net`. Keep the schedule disabled until the Netlify variable and Vault secret are both configured.
 
 Example Supabase SQL after enabling `pg_cron`, `pg_net`, and Vault:
 
 ```sql
 select vault.create_secret('https://YOUR-BRANCH-NETLIFY-HOST', 'projectkit_app_url');
-select vault.create_secret('YOUR_RANDOM_32_PLUS_CHARACTER_SECRET', 'projectkit_ai_dispatch_secret');
+select vault.create_secret('YOUR_RANDOM_32_PLUS_CHARACTER_SECRET', 'projectkit_ai_dispatch_secret_branch15');
 
 select cron.schedule(
   'projectkit-ai-dispatch',
@@ -82,7 +82,7 @@ select cron.schedule(
       'Content-Type', 'application/json',
       'Authorization', 'Bearer ' || (
         select decrypted_secret from vault.decrypted_secrets
-        where name = 'projectkit_ai_dispatch_secret'
+        where name = 'projectkit_ai_dispatch_secret_branch15'
       )
     ),
     body := jsonb_build_object('source', 'supabase-cron')
