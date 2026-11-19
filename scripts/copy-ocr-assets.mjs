@@ -13,17 +13,11 @@ await copyFile(workerSource, path.join(publicRoot, 'worker.min.js'));
 await copyFile(languageSource, path.join(publicRoot, 'lang', 'eng.traineddata.gz'));
 
 const coreFiles = await readdir(coreSource);
-const requiredCoreFiles = [
-  'tesseract-core.wasm.js',
-  'tesseract-core-simd.wasm.js',
-  'tesseract-core-lstm.wasm.js',
-  'tesseract-core-simd-lstm.wasm.js',
-];
-for (const file of requiredCoreFiles) {
-  if (!coreFiles.includes(file)) throw new Error(`Missing required local OCR runtime: ${file}`);
-  await copyFile(path.join(coreSource, file), path.join(publicRoot, 'core', file));
+const runtimeFiles = coreFiles.filter((name) => /^tesseract-core.*\\.(?:js|wasm)$/.test(name));
+if (!runtimeFiles.some((name) => name.endsWith('.wasm.js'))) {
+  throw new Error('The installed Tesseract.js core package has no browser runtime files.');
 }
-for (const file of coreFiles.filter((name) => name.endsWith('.wasm'))) {
+for (const file of runtimeFiles) {
   await copyFile(path.join(coreSource, file), path.join(publicRoot, 'core', file));
 }
 console.log('Bundled Tesseract worker, English traineddata, and WASM core locally.');
