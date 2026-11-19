@@ -27,7 +27,7 @@ describe('Project KIT — Frontend Environment Validation Layer', () => {
   });
 
   it('requires NEXT_PUBLIC_APP_URL instead of silently falling back to localhost', () => {
-    process.env.NODE_ENV = 'production';
+    (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://ptrpguoyqdkkhnhaepiq.supabase.co';
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_test123';
     delete process.env.NEXT_PUBLIC_APP_URL;
@@ -36,7 +36,7 @@ describe('Project KIT — Frontend Environment Validation Layer', () => {
   });
 
   it('rejects localhost and non-HTTPS public URLs in production', () => {
-    process.env.NODE_ENV = 'production';
+    (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://ptrpguoyqdkkhnhaepiq.supabase.co';
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_test123';
     process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
@@ -45,7 +45,7 @@ describe('Project KIT — Frontend Environment Validation Layer', () => {
   });
 
   it('returns the configured HTTPS origin in production', () => {
-    process.env.NODE_ENV = 'production';
+    (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://ptrpguoyqdkkhnhaepiq.supabase.co';
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_test123';
     process.env.NEXT_PUBLIC_APP_URL = 'https://projectket.netlify.app/dashboard';
@@ -57,7 +57,7 @@ describe('Project KIT — Frontend Environment Validation Layer', () => {
   });
 
   it('allows localhost HTTP only in development', () => {
-    process.env.NODE_ENV = 'development';
+    (process.env as Record<string, string | undefined>).NODE_ENV = 'development';
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://ptrpguoyqdkkhnhaepiq.supabase.co';
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_test123';
     process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
