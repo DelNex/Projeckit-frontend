@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -187,6 +188,7 @@ export async function POST(request: Request) {
       results,
     });
   } catch (err: any) {
+    await logSystemEvent({ severity: 'error', source: 'api.admin.users-restore', message: err instanceof Error ? err.message : 'Request failed.', method: 'POST', route: '/api/admin/users/restore', code: 'ADMIN_USERS_RESTORE_FAILURE' });
     console.error('[POST /api/admin/users/restore] Unexpected error:', err);
     return NextResponse.json(
       { error: 'An unexpected error occurred while restoring accounts.' },
