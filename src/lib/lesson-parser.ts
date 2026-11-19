@@ -21,7 +21,7 @@ export async function extractTextFromFile(file: File): Promise<string> {
   return result.text;
 }
 
-export async function extractTextFromFiles(files: File[]): Promise<LessonExtractionClientResult> {
+export async function extractTextFromFiles(files: File[], options: { ocrLanguages?: 'eng' | 'eng+fil' } = {}): Promise<LessonExtractionClientResult> {
   if (!files?.length) throw new Error('No files selected for text extraction.');
   if (files.length > 5) throw new Error('Maximum 5 files allowed per upload.');
 
@@ -30,7 +30,7 @@ export async function extractTextFromFiles(files: File[]): Promise<LessonExtract
 
   // Sequential extraction avoids loading several large documents into memory at once.
   for (const file of files) {
-    const document = await extractLocalDocument(file);
+    const document = await extractLocalDocument(file, options);
     totalCharacters += document.text.length;
     if (totalCharacters > LOCAL_DOCUMENT_MAX_CHARACTERS) {
       throw new Error(
