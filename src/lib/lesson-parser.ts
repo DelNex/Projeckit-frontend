@@ -1,12 +1,11 @@
 /**
- * Project KIT — Client Lesson Text Extractor Bridge
- * Uploads lesson files directly to private Supabase Storage, then asks the
- * authenticated server endpoint to extract them without passing file bytes
- * through the hosting platform's API request-size limit.
+ * Project KIT — Local-first lesson text extraction.
+ *
+ * Files are processed in the browser and checkpointed in IndexedDB. Only
+ * extracted lesson text is sent to the authenticated exam-generation API.
+ * Original documents are never uploaded to Supabase Storage.
  */
-
-import { createClient } from '@/lib/supabase/client';
-import { getClientUploadLimits } from '@/lib/upload-limits-client';
+import { extractLocalDocument, LOCAL_DOCUMENT_MAX_CHARACTERS } from '@/lib/local-document-engine';
 
 export interface LessonExtractionClientResult {
   text: string;
@@ -17,80 +16,33 @@ export interface LessonExtractionClientResult {
   notice?: string;
 }
 
-/**
- * Extracts readable lesson text from a single file by posting to the server extractor.
- */
 export async function extractTextFromFile(file: File): Promise<string> {
   const result = await extractTextFromFiles([file]);
   return result.text;
 }
 
-/**
- * Extracts readable lesson text from multiple files via the server extractor.
- */
 export async function extractTextFromFiles(files: File[]): Promise<LessonExtractionClientResult> {
-  if (!files || files.length === 0) {
-    throw new Error('No files selected for text extraction.');
-  }
-
-  // Pre-check basic client-side limits
-  if (files.length > 5) {
-    throw new Error('Maximum 5 files allowed per upload.');
-  }
-
-  const limits = await getClientUploadLimits();
-  for (const file of files) {
-    if (file.size > limits.maxModuleUploadMb * 1024 * 1024) {
-      throw new Error(`This file is ${Math.ceil(file.size / (1024 * 1024))} MB. The limit for your school is ${limits.maxModuleUploadMb} MB.`);
-    }
-  }
+  if (!files?.length) throw new Error('No files selected for text extraction.');
+  if (files.length > 5) throw new Error('Maximum 5 files allowed per upload.');
 
   const documents: Array<{ name: string; text: string }> = [];
   let totalCharacters = 0;
 
-  // Parse and return one document at a time. This keeps long uploads bounded and
-  // preserves document boundaries for the sequential Gemini helper.
+  // Sequential extraction avoids loading several large documents into memory at once.
   for (const file of files) {
-    const supabase = createClient();
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData.user) throw new Error('Sign in again before uploading lesson materials.');
-
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-180) || 'lesson-material';
-    const storagePath = `${authData.user.id}/lesson-imports/${crypto.randomUUID()}/${safeName}`;
-    const { error: uploadError } = await supabase.storage
-      .from('lesson-uploads')
-      .upload(storagePath, file, { contentType: file.type || 'application/octet-stream', upsert: false });
-    if (uploadError) throw new Error(`Could not upload '${file.name}': ${uploadError.message}`);
-
-    let response: Response;
-    try {
-      response = await fetch('/api/ai/extract-lesson-text', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storagePath, name: file.name }),
-      });
-    } catch (error) {
-      await supabase.storage.from('lesson-uploads').remove([storagePath]);
-      throw error;
-    }
-    const data = await response.json().catch(() => null);
-    await supabase.storage.from('lesson-uploads').remove([storagePath]);
-    if (!data) throw new Error(`The server returned an invalid extraction response for '${file.name}'.`);
-    if (!response.ok) throw new Error(data.error || `Failed to extract text from ${file.name}.`);
-
-    const extracted = Array.isArray(data.documents) ? data.documents : data.files;
-    const document = extracted?.[0];
-    if (!document || typeof document.text !== 'string') {
-      throw new Error(`The text extractor returned no readable content for ${file.name}.`);
-    }
+    const document = await extractLocalDocument(file);
     totalCharacters += document.text.length;
-    if (totalCharacters > 500000) {
-      throw new Error('These documents contain more than 500,000 characters. Split them into smaller uploads so no lesson content is dropped.');
+    if (totalCharacters > LOCAL_DOCUMENT_MAX_CHARACTERS) {
+      throw new Error(
+        'These documents contain more than 200,000 readable characters. Split them into smaller chapter groups so no source content is silently dropped.'
+      );
     }
-    documents.push({ name: document.name || file.name, text: document.text });
+    documents.push(document);
   }
 
-  const text = documents.map((document) => `--- ${document.name} ---\n${document.text}`).join('\n\n');
+  const text = documents
+    .map((document) => `--- ${document.name} ---\n${document.text}`)
+    .join('\n\n');
 
   return {
     text,
