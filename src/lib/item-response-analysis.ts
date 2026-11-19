@@ -2,8 +2,8 @@ export interface ItemResponseScan {
   id: string;
   student_id: string | null;
   detected_roll_number: number | null;
-  status: string;
-  created_at: string;
+  status: string | null;
+  created_at: string | null;
   normalized_answers?: unknown;
   raw_answers?: unknown;
 }
@@ -55,13 +55,13 @@ export function readScanAnswers(scan: Pick<ItemResponseScan, 'normalized_answers
 
 /** Keep the newest graded scan per identified learner so reshoots do not inflate the counts. */
 export function deduplicateItemScans<T extends ItemResponseScan>(scans: T[]): T[] {
-  const sorted = [...scans].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  const sorted = [...scans].sort((a, b) => Date.parse(b.created_at || '') - Date.parse(a.created_at || ''));
   const seen = new Set<string>();
   const latest: T[] = [];
   for (const scan of sorted) {
     // Only confirmed, scored sheets are evidence for learning reports. Pending
     // and review-required scans remain visible in the scanner for correction.
-    if (!['PROCESSED', 'GRADED', 'EVALUATED'].includes(String(scan.status).toUpperCase())) continue;
+    if (!['PROCESSED', 'GRADED', 'EVALUATED'].includes(String(scan.status || '').toUpperCase())) continue;
     const identity = scan.student_id
       ? `student:${scan.student_id}`
       : scan.detected_roll_number !== null
