@@ -70,6 +70,7 @@ export function ExamGeneratorModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const generatedTextRef = useRef('');
   const handledJobRef = useRef<string | null>(null);
+  const startingRef = useRef(false);
   const onExamGeneratedRef = useRef(onExamGenerated);
   const onCloseRef = useRef(onClose);
   onExamGeneratedRef.current = onExamGenerated;
@@ -101,6 +102,7 @@ export function ExamGeneratorModal({
 
   useEffect(() => {
     if (!generationJob.job || !['failed', 'cancelled', 'needs_attention'].includes(generationJob.job.status)) return;
+    startingRef.current = false;
     setCurrentStep('idle');
     if (generationJob.job.status === 'failed') setErrorMsg(generationJob.job.error || 'Exam generation failed. You can try again.');
     if (generationJob.job.status === 'needs_attention') setErrorMsg('The AI generation job needs attention. Clear the paused job and retry.');
@@ -162,11 +164,13 @@ export function ExamGeneratorModal({
   };
 
   const handleStartGeneration = async () => {
+    if (startingRef.current || generationJob.isStarting || isGenerating) return;
     if (selectedFiles.length === 0 && !pastedText.trim()) {
       toast.error('Please upload a lesson document or paste lesson content.');
       return;
     }
 
+    startingRef.current = true;
     setErrorMsg(null);
     setTruncationNotice(null);
     let extractedLessonText = pastedText.trim();
@@ -205,6 +209,7 @@ export function ExamGeneratorModal({
       setChunkProgress({ completed: 0, total: allSlots.length, label });
       setCurrentStep('generating');
     } catch (err: any) {
+      startingRef.current = false;
       console.error('Exam generation failed:', err);
       setErrorMsg(err.message || 'Generation failed.');
       setCurrentStep('idle');
