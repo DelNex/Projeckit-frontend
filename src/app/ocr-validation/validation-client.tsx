@@ -35,7 +35,7 @@ export function OcrValidationClient() {
       />
       {loading && <p role="status">Extracting text locally…</p>}
       {error && <p role="alert">{error}</p>}
-      <pre data-testid="ocr-result" className="max-h-[60vh] overflow-auto whitespace-pre-wrap rounded-lg border p-4 text-xs">{result}</pre>
+      <pre id="ocr-result" data-testid="ocr-result" className="max-h-[60vh] overflow-auto whitespace-pre-wrap rounded-lg border p-4 text-xs">{result}</pre>
     </main>
   );
 }
