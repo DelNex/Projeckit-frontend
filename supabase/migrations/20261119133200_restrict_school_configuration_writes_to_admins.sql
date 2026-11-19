@@ -119,17 +119,6 @@ CREATE POLICY "Tenant members can insert own audit events"
     AND user_id = (SELECT auth.uid())
   );
 
--- Tenant administrators must not gain cross-tenant profile visibility.
--- The old SELECT policy OR-ed is_current_user_admin() without a tenant check.
-DROP POLICY IF EXISTS "Users can view profiles in their own tenant" ON public.profiles;
-CREATE POLICY "Users can view profiles in their own tenant"
-  ON public.profiles FOR SELECT TO authenticated
-  USING (
-    tenant_id = (SELECT public.get_current_tenant_id())
-    OR id = (SELECT auth.uid())
-    OR (SELECT public.is_platform_admin())
-  );
-
 -- Audit records are administrator-only; teachers must not read other
 -- staff activity, IP metadata, or administrative event details.
 DROP POLICY IF EXISTS "Tenant isolation for audit_logs" ON public.audit_logs;
@@ -193,107 +182,6 @@ CREATE TRIGGER trg_guard_grading_period_writes
   BEFORE INSERT OR UPDATE OR DELETE ON public.grading_periods
   FOR EACH ROW EXECUTE FUNCTION public.guard_grading_period_writes();
 
--- Enforce AI generation quotas inside the enqueue transaction. Route-level
--- preflight checks improve UX, but only this locked database check prevents
--- parallel requests from racing past per-user and per-school limits.
-DROP FUNCTION IF EXISTS public.enqueue_groq_exam_generation_job(uuid, uuid, uuid, jsonb, text);
-
-CREATE OR REPLACE FUNCTION public.enqueue_groq_exam_generation_job(
-  p_tenant_id uuid,
-  p_tos_id uuid,
-  p_created_by uuid,
-  p_payload jsonb,
-  p_job_kind text,
-  p_hourly_limit integer,
-  p_daily_limit integer
-)
-RETURNS TABLE(job_id uuid, created_at timestamptz, status text, created boolean)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public', 'pg_temp'
-AS $function$
-DECLARE
-  existing public.exam_generation_jobs;
-  created_job public.exam_generation_jobs;
-  hourly_limit integer := GREATEST(1, LEAST(COALESCE(p_hourly_limit, 5), 1000));
-  daily_limit integer := GREATEST(1, LEAST(COALESCE(p_daily_limit, 100), 10000));
-  hourly_count integer;
-  daily_count integer;
-BEGIN
-  IF p_job_kind NOT IN ('full', 'repair') THEN
-    RAISE EXCEPTION 'Invalid exam job kind';
-  END IF;
-
-  -- Serialize quota accounting per user and per tenant. A retry for the same
-  -- TOS returns the already-active job before consuming another quota slot.
-  PERFORM pg_advisory_xact_lock(hashtextextended('exam-job-user:' || p_created_by::text, 0));
-  PERFORM pg_advisory_xact_lock(hashtextextended('exam-job-tenant:' || p_tenant_id::text, 0));
-
-  IF NOT EXISTS (
-    SELECT 1 FROM public.profiles p
-    WHERE p.id = p_created_by
-      AND p.tenant_id = p_tenant_id
-      AND p.status = 'approved'
-      AND p.archived_at IS NULL
-  ) THEN
-    RAISE EXCEPTION 'The requesting user is not an active member of this school.'
-      USING ERRCODE = '42501';
-  END IF;
-
-  PERFORM 1 FROM public.tos_documents
-  WHERE id = p_tos_id AND tenant_id = p_tenant_id
-  FOR UPDATE;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'TOS was not found in this school';
-  END IF;
-
-  SELECT j.* INTO existing
-  FROM public.exam_generation_jobs j
-  WHERE j.tos_id = p_tos_id
-    AND j.parent_job_id IS NULL
-    AND j.provider = 'groq_api'
-    AND j.status IN ('queued', 'running', 'needs_attention')
-  ORDER BY j.created_at DESC
-  LIMIT 1;
-
-  IF FOUND THEN
-    RETURN QUERY SELECT existing.id, existing.created_at, existing.status, false;
-    RETURN;
-  END IF;
-
-  SELECT count(*)::integer INTO hourly_count
-  FROM public.exam_generation_jobs j
-  WHERE j.created_by = p_created_by
-    AND j.status <> 'cancelled'
-    AND (j.status <> 'failed' OR j.attempts > 0)
-    AND j.created_at >= now() - interval '1 hour';
-
-  IF hourly_count >= hourly_limit THEN
-    RAISE EXCEPTION 'EXAM_HOURLY_LIMIT_REACHED';
-  END IF;
-
-  SELECT count(*)::integer INTO daily_count
-  FROM public.exam_generation_jobs j
-  WHERE j.tenant_id = p_tenant_id
-    AND j.status <> 'cancelled'
-    AND (j.status <> 'failed' OR j.attempts > 0)
-    AND j.created_at >= now() - interval '24 hours';
-
-  IF daily_count >= daily_limit THEN
-    RAISE EXCEPTION 'EXAM_DAILY_LIMIT_REACHED';
-  END IF;
-
-  INSERT INTO public.exam_generation_jobs(tenant_id, tos_id, created_by, payload, provider, job_kind)
-  VALUES (p_tenant_id, p_tos_id, p_created_by, p_payload, 'groq_api', p_job_kind)
-  RETURNING * INTO created_job;
-
-  RETURN QUERY SELECT created_job.id, created_job.created_at, created_job.status, true;
-END;
-$function$;
-
-REVOKE ALL ON FUNCTION public.enqueue_groq_exam_generation_job(uuid, uuid, uuid, jsonb, text, integer, integer) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.enqueue_groq_exam_generation_job(uuid, uuid, uuid, jsonb, text, integer, integer) TO service_role;
-
 -- Support the quota and lease scans without repeatedly scanning the full job
 -- history as the school grows.
 CREATE INDEX IF NOT EXISTS idx_exam_jobs_user_quota_window
@@ -311,9 +199,3 @@ CREATE INDEX IF NOT EXISTS idx_exam_jobs_running_lease
   ON public.exam_generation_jobs (provider, lease_expires_at, created_at)
   WHERE status = 'running';
 
--- Full (non-partial) foreign-key indexes also support cascades and joins for
--- every job row, including cancelled and failed history.
-CREATE INDEX IF NOT EXISTS idx_exam_generation_jobs_created_by
-  ON public.exam_generation_jobs (created_by);
-CREATE INDEX IF NOT EXISTS idx_exam_generation_jobs_tenant_id
-  ON public.exam_generation_jobs (tenant_id);
