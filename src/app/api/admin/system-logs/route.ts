@@ -40,7 +40,45 @@ export async function GET(request: Request) {
 
     const { data, error } = await query;
     if (error) throw error;
-    return NextResponse.json({ events: data || [] }, { headers: { 'Cache-Control': 'no-store' } });
+
+    // Include durable generation failures as well as application-level events.
+    // This makes earlier failed jobs visible even if they predate the new logger.
+    let failedJobsQuery = admin.from('exam_generation_jobs')
+      .select('id,tenant_id,created_by,status,provider,error,updated_at')
+      .in('status', ['failed', 'needs_attention'])
+      .order('updated_at', { ascending: false })
+      .limit(limit);
+    if (!profile.is_platform_admin && profile.tenant_id) {
+      failedJobsQuery = failedJobsQuery.eq('tenant_id', profile.tenant_id);
+    }
+    const { data: failedJobs, error: failedJobsError } = await failedJobsQuery;
+    if (failedJobsError) throw failedJobsError;
+
+    const jobEvents = (failedJobs || []).map((job: any) => ({
+      id: `job-${job.id}`,
+      tenant_id: job.tenant_id,
+      user_id: job.created_by,
+      action: job.status === 'failed' ? 'EXAM_GENERATION_FAILED' : 'EXAM_GENERATION_NEEDS_ATTENTION',
+      ip: null,
+      device: 'server',
+      details: {
+        severity: job.status === 'failed' ? 'error' : 'warning',
+        source: 'exam.worker',
+        message: job.error || 'Exam generation requires administrator review.',
+        jobId: job.id,
+        provider: job.provider,
+        status: job.status,
+      },
+      created_at: job.updated_at,
+    }));
+
+    const byId = new Map<string, any>();
+    for (const event of [...(data || []), ...jobEvents]) byId.set(event.id, event);
+    const events = [...byId.values()]
+      .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+      .slice(0, limit);
+
+    return NextResponse.json({ events }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     console.error('[admin/system-logs GET]', error instanceof Error ? error.message : 'unknown error');
     return NextResponse.json({ error: 'Could not load system events.' }, { status: 500 });
