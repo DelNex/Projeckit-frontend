@@ -33,7 +33,7 @@ async function recognizePdfPage(page: pdfjs.PDFPageProxy, worker: OcrWorker): Pr
   const context = canvas.getContext('2d');
   if (!context) throw new Error('Could not prepare a local canvas for scanned PDF OCR.');
   await page.render({ canvasContext: context as unknown as CanvasRenderingContext2D, viewport }).promise;
-  const result = await worker.recognize(canvas);
+  const result = await worker.recognize(canvas as unknown as HTMLCanvasElement);
   return String(result.data.text || '').trim();
 }
 
@@ -85,10 +85,12 @@ async function extractPdf(file: File): Promise<string> {
         // amount of text can be a footer/header over a scanned page, so OCR
         // those pages too instead of silently treating them as complete.
         let extractedText = pageText;
+        let usedOcrPage = false;
         if (pageText.length < MIN_SELECTABLE_TEXT_CHARACTERS) {
           if (!ocrWorker) ocrWorker = await createLocalOcrWorker();
           const recognized = await recognizePdfPage(page, ocrWorker);
           scannedPages += 1;
+          usedOcrPage = true;
           if (recognized.length > extractedText.length) extractedText = recognized;
         }
 
