@@ -24,7 +24,7 @@ Status: OCR runtime and browser integration implemented; cancellation, in-app re
 
 - [x] Add a pinned, self-hosted browser OCR runtime (Tesseract.js 7.0.0) with local WebAssembly core, English/Tagalog language assets, and a Web Worker.
 - [x] OCR image-only PDF pages and photographs locally; preserve PDF page numbers, extracted text, and page-level confidence flags.
-- [x] Detect raster PDF pages with almost no selectable text and stop generation rather than silently feeding incomplete lesson content to AI. This is detection only; OCR processing is still pending.
+- [x] Detect raster PDF pages with almost no selectable text and stop generation rather than silently feeding incomplete lesson content to AI. OCR processing now runs locally; this detector routes likely scans into the OCR path.
 - [x] Report extraction/OCR progress, cap PDF render buffers at 12 megapixels, and terminate OCR workers after each document.\n- [x] Flag low-confidence pages and show a teacher review notice before exam generation.\n- [ ] Add user-triggered cancellation and an in-app preview/review workflow for low-confidence pages.
 - [x] Keep original documents in browser IndexedDB and process them locally; original file bytes are not uploaded to Supabase or sent to AI providers.
 - [x] Compress extracted lesson text in the browser with gzip before uploading it to the existing private `lesson-uploads` bucket.
