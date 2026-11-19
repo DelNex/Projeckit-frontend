@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
@@ -201,6 +202,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ error: 'Unhandled action' }, { status: 400 });
   } catch (err: any) {
+    await logSystemEvent({ severity: 'error', source: 'api.sections.bulk', message: err instanceof Error ? err.message : 'Request failed.', method: 'POST', route: '/api/sections/bulk', code: 'SECTIONS_BULK_FAILURE' });
     console.error('Server error in sections bulk route:', err);
     return NextResponse.json(
       { error: err?.message || 'Server error processing section bulk action.' },
