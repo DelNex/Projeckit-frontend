@@ -6,6 +6,7 @@ import {
   validateExamQuestions,
 } from '@/lib/exam-types';
 import { randomizeAndBalanceExamQuestions } from '@/lib/exam-randomizer';
+import { deleteCompressedLessonSource } from './lesson-source-storage';
 
 export interface LessonChunk { source: string; part: number; parts: number; text: string; competencyId?: string }
 
@@ -132,7 +133,10 @@ export async function finalizeExamJob(jobId: string, responseText: string, admin
     const failureText = 'No configured AI provider returned valid exam questions. Your existing TOS exam was kept; review the generation error and try again.';
     const { data: finishedRoot } = await admin.from('exam_generation_jobs').update({ status: 'failed', error: failureText, finished_at: new Date().toISOString(), updated_at: new Date().toISOString(), payload: {} }).eq('id', rootId).eq('status', 'running').select('id').maybeSingle();
     if (rootId !== jobId) await admin.from('exam_generation_jobs').update({ status: 'failed', error: failureText, finished_at: new Date().toISOString(), updated_at: new Date().toISOString(), payload: {} }).eq('id', jobId).eq('status', 'running');
-    if (finishedRoot) await auditFinishedJob(admin, root, 'failed', 0);
+    if (finishedRoot) {
+      await auditFinishedJob(admin, root, 'failed', 0);
+      if (root.payload?.sourceManifest) await deleteCompressedLessonSource(admin, root.payload.sourceManifest, root.created_by).catch(() => undefined);
+    }
     return { accepted: false, status: 'failed', missingItems: expectedSlots.map((slot) => slot.item_number) };
   }
 
@@ -149,7 +153,10 @@ export async function finalizeExamJob(jobId: string, responseText: string, admin
     finished_at: new Date().toISOString(), updated_at: new Date().toISOString(), payload: {},
   }).eq('id', rootId).eq('status', 'running').select('id').maybeSingle();
   if (jobId !== rootId) await admin.from('exam_generation_jobs').update({ status: 'completed', result_summary: { parentJobId: rootId }, finished_at: new Date().toISOString(), payload: {} }).eq('id', jobId).eq('status', 'running');
-  if (finishedRoot) await auditFinishedJob(admin, root, finalStatus, shuffled.length);
+  if (finishedRoot) {
+    await auditFinishedJob(admin, root, finalStatus, shuffled.length);
+    if (root.payload?.sourceManifest) await deleteCompressedLessonSource(admin, root.payload.sourceManifest, root.created_by).catch(() => undefined);
+  }
   return { accepted: true, status: finalStatus, ...summary };
 }
 
