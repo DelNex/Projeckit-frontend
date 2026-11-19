@@ -155,6 +155,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, assessmentIds, mode, updatedAt: new Date().toISOString() });
   } catch (error: any) {
+    await logSystemEvent({ severity: 'error', source: 'api.ai.save-exam', message: error instanceof Error ? error.message : 'Request failed.', method: 'POST', route: '/api/ai/save-exam', code: 'SAVE_EXAM_FAILURE' });
     console.error('[SaveExam] Failed to persist exam questions:', error);
     return NextResponse.json({ error: error?.message || 'Failed to save exam questions.' }, { status: 500 });
   }
