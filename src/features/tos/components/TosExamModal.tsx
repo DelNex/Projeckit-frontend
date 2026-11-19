@@ -37,6 +37,7 @@ interface CompetencyMaterial {
   files: Array<{ name: string; text: string }>;
   isUploading: boolean;
   error?: string;
+  progress?: string;
 }
 
 export function TosExamModal({
@@ -169,6 +170,7 @@ export function TosExamModal({
           ...prev[competencyId],
           files: [...(prev[competencyId]?.files || []), ...extractedFiles],
           isUploading: false,
+          progress: extraction.notice,
         },
       }));
 
@@ -423,7 +425,7 @@ export function TosExamModal({
                   Learning Materials by Competency
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Choose lesson presentations or references from this device (PDF, DOCX, PPTX, TXT, Markdown). Files are extracted locally; each competency generates questions from its own materials.
+                  Choose lesson presentations, scanned PDFs, or photos from this device (PDF, DOCX, PPTX, TXT, Markdown, PNG, JPG, WebP). Files are extracted locally; each competency generates questions from its own materials.
                 </p>
               </div>
 
