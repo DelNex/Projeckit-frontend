@@ -282,7 +282,7 @@ export function ExamGeneratorModal({
             {/* Stepper Dots */}
             <div className="flex items-center justify-between gap-1">
               {[
-                { key: 'uploading', label: 'Upload' },
+                { key: 'uploading', label: 'Prepare locally' },
                 { key: 'extracting', label: 'Extract' },
                 { key: 'analyzing', label: 'Analyze' },
                 { key: 'generating', label: 'Generate' },
@@ -326,7 +326,7 @@ export function ExamGeneratorModal({
           </div>
         )}
 
-        {/* Upload Dropzone (Disabled when generating) */}
+        {/* Local document selection (Disabled when generating) */}
         {!isGenerating && (
           <div className="space-y-4">
             <div
@@ -358,7 +358,7 @@ export function ExamGeneratorModal({
               <div className="space-y-1.5">
                 <UploadCloud className="mx-auto h-8 w-8 text-blue-500" />
                 <p className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                  Drop your lesson materials here, or <span className="text-blue-600 underline">browse</span>
+                  Choose lesson materials from this device, or <span className="text-blue-600 underline">browse</span>
                 </p>
                 <p className="text-[11px] text-gray-400">
                   Supports PDF, DOCX, PPTX, TXT, or Markdown (up to 5 files; local device capacity is checked automatically)
