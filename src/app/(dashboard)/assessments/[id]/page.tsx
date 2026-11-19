@@ -1433,7 +1433,7 @@ export default function AssessmentWorkspacePage({
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-right text-gray-400 text-[11px]">
-                                {new Date(s.created_at).toLocaleTimeString()}
+                                {s.created_at ? new Date(s.created_at).toLocaleTimeString() : '—'}
                               </td>
                             </tr>
                           );
