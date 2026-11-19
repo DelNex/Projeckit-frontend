@@ -79,6 +79,7 @@ export function ExamGeneratorModal({
   const [currentStep, setCurrentStep] = useState<GenerationStep>('idle');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [pastedText, setPastedText] = useState('');
+  const [teacherInstructions, setTeacherInstructions] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [truncationNotice, setTruncationNotice] = useState<string | null>(null);
@@ -200,7 +201,7 @@ export function ExamGeneratorModal({
       const allSlots = buildTosBlueprintSlots(tosRows, Number(targetItems) || 50);
       if (!tosId) throw new Error('Save this Table of Specifications before generating an exam.');
       generatedTextRef.current = extractedLessonText;
-      const queued = await generationJob.start({ lessonDocuments });
+      const queued = await generationJob.start({ lessonDocuments, teacherInstructions: teacherInstructions.trim() || undefined });
       const label = queued.status === 'queued'
         ? `Queued (position ${queued.queuePosition || 1}). Groq AI will process this exam in the background.`
         : queued.status === 'running' ? 'Groq is already generating questions for this TOS.' : 'This TOS already has an AI job that needs attention.';
@@ -412,6 +413,22 @@ export function ExamGeneratorModal({
                 </div>
               </div>
             )}
+
+            {/* Optional teacher guidance, separate from the source material. */}
+            <div>
+              <label className="mb-1 block text-[11px] font-bold text-gray-700 dark:text-gray-300">
+                Teacher instructions (optional)
+              </label>
+              <textarea
+                rows={2}
+                maxLength={4000}
+                placeholder="Example: Use practical classroom scenarios, keep the language suitable for Grade 8, and avoid questions that require facts not covered in the module."
+                value={teacherInstructions}
+                onChange={(e) => setTeacherInstructions(e.target.value)}
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 p-2.5 text-xs text-gray-900 outline-none focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white"
+              />
+              <p className="mt-1 text-[10px] text-gray-400">Used as extra guidance alongside the TOS and uploaded lesson materials.</p>
+            </div>
 
             {/* Optional Paste Area */}
             <div>
