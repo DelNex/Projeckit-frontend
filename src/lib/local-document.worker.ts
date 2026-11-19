@@ -83,15 +83,15 @@ async function extractPptx(file: File): Promise<string> {
   for (const [index, path] of paths.entries()) {
     const xml = await archive.file(path)?.async('text');
     if (!xml) continue;
-    const text = Array.from(xml.matchAll(/<a:t(?:\\s[^>]*)?>([\\s\\S]*?)<\\/a:t>/g))
+    const text = Array.from(xml.matchAll(/<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/g))
       .map((match) => (match[1] || '')
         .replace(/&amp;/g, '&')
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"')
         .replace(/&apos;/g, "'")
-        .replace(/&#(\\d+);/g, (_entity, value) => String.fromCodePoint(Number(value)))
-        .replace(/&#x([\\da-f]+);/gi, (_entity, value) => String.fromCodePoint(parseInt(value, 16))))
+        .replace(/&#(\d+);/g, (_entity, value) => String.fromCodePoint(Number(value)))
+        .replace(/&#x([\da-f]+);/gi, (_entity, value) => String.fromCodePoint(parseInt(value, 16))))
       .filter(Boolean)
       .join(' ');
     if (text.trim()) slides.push(`[Slide ${index + 1}]\n${text}`);
