@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import path from 'node:path';
 
 test('extracts a scanned PDF with the locally bundled OCR runtime', async ({ page }) => {
-  test.setTimeout(150_000);
+  test.setTimeout(90_000);
   const externalRequests: string[] = [];
   page.on('console', (message) => {
     if (message.type() === 'error') console.log('[ocr browser console]', message.text());
@@ -26,7 +26,7 @@ test('extracts a scanned PDF with the locally bundled OCR runtime', async ({ pag
     const extracted = (await output.textContent())?.trim();
     if (extracted) return extracted;
     return (await page.locator('p[role="alert"]').textContent())?.trim() || '';
-  }, { timeout: 120_000 }).not.toBe('');
+  }, { timeout: 60_000 }).not.toBe('');
 
   const errorCount = await page.getByRole('alert').count();
   const extractionError = errorCount ? (await page.getByRole('alert').textContent())?.trim() || null : null;
