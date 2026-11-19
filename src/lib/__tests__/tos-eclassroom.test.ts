@@ -23,13 +23,13 @@ describe('Project KIT — TOS E-ClassRoom Redesign Tests', () => {
       assert.ok(msg.includes('migrations'));
     });
 
-    it('maps P0001 custom trigger error to the exact business message', () => {
+    it('preserves custom database validation messages', () => {
       const err = {
         code: 'P0001',
-        message: 'A TOS can have up to 4 learning competencies. Current count: 5',
+        message: 'A competency must have a valid description.',
       };
       const msg = friendlyError(err);
-      assert.strictEqual(msg, 'A TOS can have up to 4 learning competencies. Current count: 5');
+      assert.strictEqual(msg, 'A competency must have a valid description.');
     });
 
     it('maps 23505 unique violation to friendly message', () => {
