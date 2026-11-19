@@ -1,4 +1,6 @@
 import { notFound } from 'next/navigation';
+
+export const dynamic = 'force-dynamic';
 import { OmrBrowserValidation } from './validation-client';
 
 /** Development-only route used by the Chrome OMR integration test. */
