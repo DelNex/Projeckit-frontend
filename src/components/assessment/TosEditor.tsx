@@ -617,24 +617,8 @@ export function TosEditor({
     );
   }
 
-  const isOverCompetencyLimit = false;
-
   return (
     <div className="space-y-4 pb-8 min-w-0">
-      {/* ── C3 Alert Banner for Legacy Documents with >4 Competencies ── */}
-      {isOverCompetencyLimit && (
-        <div className="rounded-2xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 p-4 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-3">
-          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <p className="font-bold">
-              Competency Limit Notice: This TOS contains {rows.length} learning competencies.
-            </p>
-            <p>
-              Under updated DepEd assessment guidelines, a Table of Specifications can have up to 4 learning competencies. Please reduce to 4 or fewer before saving changes.
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* ── Top Bar: Status, Actions, View Switcher ── */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-3.5 sm:p-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xs min-w-0">
@@ -1101,7 +1085,7 @@ export function TosEditor({
                   <span>
                     Validation Alert: {totals.rowIssues > 0 && `${totals.rowIssues} row issue(s)`}
                     {totals.itemsStatus !== 'valid' && ` · Items: ${totals.totalAllocatedItems}/${targetItems}`}
-                    {isOverCompetencyLimit && ' · Max 4 competencies exceeded'}
+                    
                   </span>
                 </div>
               )}
