@@ -7,6 +7,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { buildExamPrompt, buildSlotsFromTos, toLessonChunks } from '@/lib/server/exam-jobs';
 import { getExamAiProvider } from '@/lib/server/exam-ai-provider';
 import { getConfiguredExamProviders } from '@/lib/server/exam-ai-provider-router';
+import { logSystemEvent } from '@/lib/server/system-logger';
 
 async function getCaller() {
   const supabase = await createClient();
@@ -18,6 +19,7 @@ async function getCaller() {
 }
 
 export async function POST(request: Request) {
+  const requestId = request.headers.get('x-request-id') || request.headers.get('x-nf-request-id') || crypto.randomUUID();
   try {
     const caller = await getCaller();
     if (caller.response) return caller.response;
@@ -104,9 +106,13 @@ export async function POST(request: Request) {
     const { count } = await caller.admin!.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('provider', 'groq_api').eq('status', 'queued').lte('created_at', job.createdAt);
     return NextResponse.json({ id: job.id, status: job.status, reused: job.reused, queuePosition: job.status === 'queued' ? count || 1 : null }, { status: 202, headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
-    if (error instanceof SyntaxError) return NextResponse.json({ error: 'The request must be valid JSON.' }, { status: 400 });
-    console.error('[exam-jobs POST] Could not create a generation job.');
-    return NextResponse.json({ error: 'Could not queue exam generation. Please try again.' }, { status: 500 });
+    if (error instanceof SyntaxError) return NextResponse.json({ error: 'The request must be valid JSON.', requestId }, { status: 400 });
+    await logSystemEvent({
+      severity: 'error', source: 'exam.jobs.create', code: 'EXAM_JOB_CREATE_FAILED',
+      message: error instanceof Error ? error.message : 'Unknown exam job creation error',
+      method: 'POST', route: '/api/ai/exam-jobs', requestId,
+    });
+    return NextResponse.json({ error: 'Could not queue exam generation. Please try again.', requestId }, { status: 500 });
   }
 }
 
