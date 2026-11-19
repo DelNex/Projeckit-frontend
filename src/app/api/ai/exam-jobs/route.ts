@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { buildExamPrompt, buildSlotsFromTos, toLessonChunks } from '@/lib/server/exam-jobs';
 import { getExamAiProvider } from '@/lib/server/exam-ai-provider';
+import { getConfiguredExamProviders } from '@/lib/server/exam-ai-provider-router';
 
 async function getCaller() {
   const supabase = await createClient();
@@ -60,7 +61,6 @@ export async function POST(request: Request) {
       .eq('tos_id', tos.id)
       .is('parent_job_id', null)
       .eq('status', 'failed')
-      .ilike('error', '%Groq%')
       .gte('updated_at', retryAfter)
       .order('updated_at', { ascending: false })
       .limit(1)
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     if (recentFailureError) throw recentFailureError;
     if (recentFailure) return NextResponse.json({ error: 'The last AI generation for this TOS failed. Check the error and wait two minutes before retrying; the existing exam was not changed.' }, { status: 429 });
 
-    if (!process.env.GROQ_API_KEY) return NextResponse.json({ error: 'Groq AI is not configured. Add GROQ_API_KEY to the server environment.' }, { status: 503 });
+    if (!getConfiguredExamProviders().length) return NextResponse.json({ error: 'No exam AI provider is configured. Add at least one server-side provider key.' }, { status: 503 });
 
     const [tenant, hourly, daily] = await Promise.all([
       caller.admin!.from('tenants').select('ai_hourly_user_limit,ai_daily_school_limit').eq('id', caller.profile!.tenant_id).maybeSingle(),
