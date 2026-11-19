@@ -24,5 +24,5 @@ test('exam queue migration serializes quota checks before inserting jobs', async
   assert.doesNotMatch(migration, /Tenant admins can insert audit logs/);
   assert.match(migration, /p_hourly_limit integer/);
   assert.match(migration, /p_daily_limit integer/);
-  assert.match(migration, /enqueue_groq_exam_generation_job\\(uuid, uuid, uuid, jsonb, text, integer, integer\\)/);
+  assert.match(migration, /enqueue_groq_exam_generation_job\(uuid, uuid, uuid, jsonb, text, integer, integer\)/);
 });
