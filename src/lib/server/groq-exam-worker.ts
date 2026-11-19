@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { finalizeExamJob } from './exam-jobs';
+import { buildExamPrompt, finalizeExamJob } from './exam-jobs';
 
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 const DEFAULT_MODEL = 'openai/gpt-oss-120b';
@@ -126,9 +126,46 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
   if (!claimed) return; // Another worker, a cancellation, or a completed job won the race.
 
   try {
-    const responseText = await requestGroqQuestions(claimed.payload || {});
+    const payload = claimed.payload || {};
+    const slots = Array.isArray(payload.slots) ? payload.slots : [];
+    if (!slots.length) throw new Error('The exam job has no valid TOS blueprint slots.');
+
+    // Adapt the batch size to exam size: one request for small exams, then
+    // larger batches for longer exams to control response size and retries.
+    const batchSize = slots.length <= 20 ? slots.length : slots.length <= 60 ? 20 : 30;
+    const batches: any[][] = [];
+    for (let offset = 0; offset < slots.length; offset += batchSize) {
+      batches.push(slots.slice(offset, offset + batchSize));
+    }
+
+    const generatedQuestions: any[] = [];
+    for (let index = 0; index < batches.length; index++) {
+      const batchSlots = batches[index];
+      const batchPayload = {
+        ...payload,
+        slots: batchSlots,
+        prompt: buildExamPrompt(batchSlots),
+      };
+      const responseText = await requestGroqQuestions(batchPayload);
+      const batchQuestions = JSON.parse(responseText);
+      if (!Array.isArray(batchQuestions)) throw new Error('Groq returned an invalid question batch.');
+      generatedQuestions.push(...batchQuestions);
+
+      await admin.from('exam_generation_jobs').update({
+        progress: {
+          stage: 'generating',
+          label: `Generated ${Math.min((index + 1) * batchSize, slots.length)} of ${slots.length} questions`,
+          completedChunks: index + 1,
+          totalChunks: batches.length,
+        },
+        lease_expires_at: new Date(Date.now() + 55_000).toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq('id', jobId).eq('claimed_by', WORKER_ID);
+    }
+
+    const responseText = JSON.stringify(generatedQuestions);
     await admin.from('exam_generation_jobs').update({
-      progress: { stage: 'validating', label: 'Validating answers, choices, competencies and duplicates', completedChunks: 1, totalChunks: 1 },
+      progress: { stage: 'validating', label: 'Validating answers, choices, competencies and duplicates', completedChunks: batches.length, totalChunks: batches.length },
       lease_expires_at: new Date(Date.now() + 55_000).toISOString(),
       updated_at: new Date().toISOString(),
     }).eq('id', jobId).eq('claimed_by', WORKER_ID);
