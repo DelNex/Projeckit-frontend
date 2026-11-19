@@ -172,7 +172,7 @@ export function generateCanonicalGeometry(rawConfig: AssessmentOmrConfig): Canon
 
     // Margins ensuring bottom empty space is strictly <= 3% of sheet height
     // Half: 23px / 794px = 2.89% <= 3%. Full: 28px / 1123px = 2.49% <= 3%.
-    const bottomMargin = isHalf ? 23 : 28;
+    const bottomMargin = isHalf ? Math.min(23, pageHeight * 0.03) : 28;
     const answerAreaBottomY = pageHeight - bottomMargin;
     const markerSize = isHalf ? 14 : 16;
 
