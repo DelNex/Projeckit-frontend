@@ -81,3 +81,31 @@ The production branch and live database are not changed by this branch's CI
 runs. A green GitHub build does not by itself prove live authenticated
 connectivity, provider failover, or scheduled execution; those require a
 deployed preview with real credentials.
+
+## Supabase advisor review
+
+The live advisor reported these items during the release audit:
+
+- The previous profile SELECT policy called `is_current_user_admin()` without
+  a tenant condition. Because that helper returns true for any approved school
+  administrator, it could expose profiles across schools. The migration
+  replaces it with same-tenant access plus explicit platform-admin access.
+- Tenant and administrator helper functions previously ignored
+  `archived_at`. The migration makes archived accounts lose tenant and
+  administrator helper privileges.
+- Grading-period SECURITY DEFINER RPCs remain callable by authenticated users
+  because the existing UI uses them. The migration adds an administrator-only
+  database trigger as a second enforcement layer; client-side checks alone are
+  not trusted.
+- `tenant_competencies` has RLS enabled without client policies intentionally:
+  its data is accessed through the authenticated, tenant-scoped
+  `/api/competencies` route using the server service client.
+- Supabase reports leaked-password protection as disabled. This setting must
+  be enabled in Supabase Auth settings; the available project connector does
+  not expose that Auth setting for safe modification here.
+- The advisor flags 19 unindexed foreign keys. Most affected tables currently
+  have fewer than 20 estimated rows, so adding every index would add write and
+  storage overhead without measured benefit. The exam-job table is the
+  exception: it has accumulated over 124,000 sequential scans despite a small
+  current row estimate. The migration adds full foreign-key indexes plus
+  quota-window and worker-lease indexes for that hot path.
