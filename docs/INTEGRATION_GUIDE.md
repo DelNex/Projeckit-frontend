@@ -61,7 +61,7 @@ Local extraction now accepts up to 900,000 readable characters per generation jo
 
 ## School administration access
 
-School-wide academic configuration (school year, grading periods, sections, subjects, and audit history) is restricted to approved school administrators. Teachers retain read access needed by their teaching workflows, but cannot mutate school-wide configuration or read administrative audit logs. The database migration `20261119133200_restrict_school_configuration_writes_to_admins.sql` must be applied before promoting this release; it replaces the old tenant-wide write policies and adds a database trigger as defense in depth.
+School-wide academic configuration (school year, grading periods, sections, subjects, and audit history) is restricted to approved school administrators. Teachers retain read access needed by their teaching workflows, but cannot mutate school-wide configuration or read administrative audit logs. The database migrations `20261119133200_restrict_school_configuration_writes_to_admins.sql` and `20261119140500_index_application_foreign_keys.sql` must be applied in version order before promoting this release. The first replaces over-broad tenant-wide permissions and adds a grading-period write guard; the second adds indexes for the 19 unindexed application foreign keys reported by the Supabase performance advisor.
 
 ## Production environment sanity check
 
