@@ -260,6 +260,26 @@ CREATE POLICY "Tenant admins can delete grading periods"
     OR (SELECT public.is_platform_admin())
   );
 
+-- Audit records are administrator-only; teachers must not read other
+-- staff activity, IP metadata, or administrative event details.
+DROP POLICY IF EXISTS "Tenant isolation for audit_logs" ON public.audit_logs;
+CREATE POLICY "Tenant admins can read audit logs"
+  ON public.audit_logs FOR SELECT TO authenticated
+  USING (
+    (
+      tenant_id = (SELECT public.get_current_tenant_id())
+      AND EXISTS (
+        SELECT 1 FROM public.profiles p
+        WHERE p.id = (SELECT auth.uid())
+          AND p.tenant_id = public.audit_logs.tenant_id
+          AND p.role = 'admin'
+          AND p.status = 'approved'
+          AND p.archived_at IS NULL
+      )
+    )
+    OR (SELECT public.is_platform_admin())
+  );
+
 -- Defense in depth for SECURITY DEFINER grading-period RPCs. The caller's
 -- JWT identity is retained inside those functions, so non-admin calls fail.
 CREATE OR REPLACE FUNCTION public.guard_grading_period_writes()
