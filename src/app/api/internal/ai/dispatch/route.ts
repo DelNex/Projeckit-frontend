@@ -20,7 +20,7 @@ export async function POST(request: Request) {
 
   try {
     await runNextGroqExamJob();
-    return NextResponse.json({ ok: true, dispatched: true }, {
+    return NextResponse.json({ ok: true, workerInvocation: 'completed' }, {
       status: 200,
       headers: { 'Cache-Control': 'no-store' },
     });
