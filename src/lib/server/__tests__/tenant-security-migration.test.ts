@@ -17,7 +17,7 @@ test('tenant security migration scopes profile reads and school configuration wr
 });
 
 
-const gradingPeriodGuardMigration = new URL('../../../../supabase/migrations/20261120000000_guard_grading_period_rpc_tenant_context.sql', import.meta.url);
+const gradingPeriodGuardMigration = new URL('../../../../supabase/migrations/20261119235748_guard_grading_period_rpc_tenant_context.sql', import.meta.url);
 
 test('grading period SECURITY DEFINER RPCs reject callers without an approved tenant', async () => {
   const sql = await readFile(gradingPeriodGuardMigration, 'utf8');
