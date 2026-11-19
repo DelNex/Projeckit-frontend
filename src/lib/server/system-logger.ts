@@ -25,6 +25,22 @@ function cleanText(value: unknown, max = 500): string | null {
     .slice(0, max);
 }
 
+function cleanMetadata(value: unknown, depth = 0): unknown {
+  if (depth > 4) return '[TRUNCATED]';
+  if (typeof value === 'string') return cleanText(value, 240);
+  if (value === null || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (Array.isArray(value)) return value.slice(0, 30).map((item) => cleanMetadata(item, depth + 1));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .slice(0, 40)
+        .filter(([key]) => !/(authorization|cookie|password|secret|token|api[_-]?key|service[_-]?role)/i.test(key))
+        .map(([key, item]) => [cleanText(key, 80) || 'field', cleanMetadata(item, depth + 1)])
+    );
+  }
+  return null;
+}
+
 /** Best-effort server-side logging. Logging failures must never break the request. */
 export async function logSystemEvent(input: SystemEventInput): Promise<void> {
   try {
@@ -67,10 +83,7 @@ export async function logSystemEvent(input: SystemEventInput): Promise<void> {
       status: Number.isInteger(input.status) ? input.status : null,
       code: cleanText(input.code, 100),
       request_id: cleanText(input.requestId || crypto.randomUUID(), 120),
-      metadata: input.metadata ? JSON.parse(JSON.stringify(input.metadata, (_key, value) => {
-        if (typeof value === 'string') return cleanText(value, 240);
-        return value;
-      })) : {},
+      metadata: input.metadata ? cleanMetadata(input.metadata) : {},
     };
     const { error } = await admin.from('audit_logs').insert({
       tenant_id: tenantId,
