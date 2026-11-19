@@ -25,7 +25,7 @@ test('extracts a scanned PDF with the locally bundled OCR runtime', async ({ pag
   await expect.poll(async () => {
     const extracted = (await output.textContent())?.trim();
     if (extracted) return extracted;
-    return (await page.getByRole('alert').textContent())?.trim() || '';
+    return (await page.locator('p[role="alert"]').textContent())?.trim() || '';
   }, { timeout: 120_000 }).not.toBe('');
 
   const errorCount = await page.getByRole('alert').count();
