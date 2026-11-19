@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const publicRoot = path.join(root, 'public', 'ocr');
 const coreSource = path.join(root, 'node_modules', 'tesseract.js-core');
+const apiSource = path.join(root, 'node_modules', 'tesseract.js', 'dist', 'tesseract.min.js');
 const workerSource = path.join(root, 'node_modules', 'tesseract.js', 'dist', 'worker.min.js');
 const languages = ['eng', 'tgl'];
 
@@ -20,6 +21,7 @@ async function copyRequired(source, destination) {
 
 await mkdir(path.join(publicRoot, 'core'), { recursive: true });
 const copied = [];
+copied.push(await copyRequired(apiSource, path.join(publicRoot, 'tesseract.min.js')));
 copied.push(await copyRequired(workerSource, path.join(publicRoot, 'worker.min.js')));
 
 const coreFiles = (await readdir(coreSource))
