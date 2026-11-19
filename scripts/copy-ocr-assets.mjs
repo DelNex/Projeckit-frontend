@@ -13,7 +13,7 @@ await copyFile(workerSource, path.join(publicRoot, 'worker.min.js'));
 await copyFile(languageSource, path.join(publicRoot, 'lang', 'eng.traineddata.gz'));
 
 const coreFiles = await readdir(coreSource);
-const runtimeFiles = coreFiles.filter((name) => /^tesseract-core.*\\.(?:js|wasm)$/.test(name));
+const runtimeFiles = coreFiles.filter((name) => /^tesseract-core.*\.(?:js|wasm)$/.test(name));
 if (!runtimeFiles.some((name) => name.endsWith('.wasm.js'))) {
   throw new Error('The installed Tesseract.js core package has no browser runtime files.');
 }
