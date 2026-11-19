@@ -130,9 +130,6 @@ export function validateTosInputs(
   if (!competencies || competencies.length === 0) {
     return { valid: false, error: 'A TOS must have at least 1 learning competency.' };
   }
-  if (competencies.length > 4) {
-    return { valid: false, error: 'A TOS can have up to 4 learning competencies.' };
-  }
   if (totalItems <= 0) {
     return { valid: false, error: 'Total items must be greater than 0.' };
   }
