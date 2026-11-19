@@ -44,4 +44,6 @@ test('exam queue migration serializes quota checks before inserting jobs', async
   assert.match(securityMigration, /Tenant admins can insert grading periods/);
   assert.match(securityMigration, /Tenant admins can update school settings/);
   assert.match(securityMigration, /Approved tenant members can read exam generation jobs/);
+  assert.match(securityMigration, /CREATE TRIGGER trg_guard_grading_period_writes/);
+  assert.match(securityMigration, /COALESCE\(auth\.role\(\), ''\) NOT IN \('anon', 'authenticated'\)/);
 });
