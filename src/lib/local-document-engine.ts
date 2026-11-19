@@ -93,7 +93,8 @@ export async function getLocalDocumentCapacity(): Promise<LocalDocumentCapacity>
     if (typeof estimate?.quota === 'number') {
       availableBytes = Math.max(0, estimate.quota - (estimate.usage || 0));
     }
-    if (navigator.storage?.persist) await navigator.storage.persist();
+    // Request persistent storage without blocking the extraction pipeline.
+    if (navigator.storage?.persist) void navigator.storage.persist().catch(() => undefined);
   } catch {
     // Storage estimates and persistent-storage permission are optional browser APIs.
   }
