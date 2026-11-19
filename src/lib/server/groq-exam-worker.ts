@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { buildExamPrompt, finalizeExamJob } from './exam-jobs';
+import { buildExamPrompt, finalizeExamJob, toLessonChunks } from './exam-jobs';
+import { deleteCompressedLessonSource, readCompressedLessonDocuments } from './lesson-source-storage';
 import type { TosBlueprintSlot } from '@/lib/exam-types';
 import { requestExamQuestionsFromProviders } from './exam-ai-provider-router';
 import { logSystemEvent } from './system-logger';
@@ -195,8 +196,14 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
   if (claimError) throw new Error('Could not claim the Groq exam generation job.');
   if (!claimed) return; // Another worker, a cancellation, or a completed job won the race.
 
+  const payload = claimed.payload || {};
   try {
-    const payload = claimed.payload || {};
+    const sourceDocuments = payload.sourceManifest
+      ? await readCompressedLessonDocuments(admin, payload.sourceManifest, claimed.created_by)
+      : null;
+    const lessonChunks = sourceDocuments ? toLessonChunks(sourceDocuments) : (Array.isArray(payload.lessonChunks) ? payload.lessonChunks : []);
+    if (!lessonChunks.length) throw new Error('The exam job has no readable lesson source. Upload the lesson materials again.');
+    const generationPayload = { ...payload, lessonChunks };
     const slots = (Array.isArray(payload.slots) ? payload.slots : []) as TosBlueprintSlot[];
     if (!slots.length) throw new Error('The exam job has no valid TOS blueprint slots.');
 
@@ -209,7 +216,7 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
     for (let index = 0; index < batches.length; index++) {
       const batchSlots = batches[index];
       const batchPayload = {
-        ...payload,
+        ...generationPayload,
         slots: batchSlots,
         prompt: buildExamPrompt(batchSlots),
       };
@@ -265,6 +272,9 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
       claimed_by: null,
       lease_expires_at: null,
     }).eq('id', jobId).eq('claimed_by', workerId).in('status', ['running', 'queued']).select('id').maybeSingle();
+    if (failedOwnedJob && payload.sourceManifest) {
+      await deleteCompressedLessonSource(admin, payload.sourceManifest, claimed.created_by).catch(() => undefined);
+    }
     if (failedOwnedJob && claimed.parent_job_id) {
       await admin.from('exam_generation_jobs').update({
         status: 'failed',
