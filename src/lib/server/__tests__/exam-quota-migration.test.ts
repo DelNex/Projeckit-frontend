@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
-const migrationPath = new URL('../../../../supabase/migrations/20261119150000_atomic_exam_generation_quotas.sql', import.meta.url);
+const migrationPath = new URL('../../../../supabase/migrations/20261119233515_atomic_exam_generation_quotas.sql', import.meta.url);
 
 test('atomic quota migration serializes admission and validates tenant ownership', async () => {
   const sql = await readFile(migrationPath, 'utf8');
