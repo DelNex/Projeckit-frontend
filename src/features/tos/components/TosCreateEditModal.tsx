@@ -108,6 +108,7 @@ export function TosCreateEditModal({
 
   // Status & Errors
   const [saving, setSaving] = useState(false);
+  const saveInFlightRef = useRef(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [technicalDetails, setTechnicalDetails] = useState<TechnicalErrorDetails | null>(null);
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
@@ -266,6 +267,8 @@ export function TosCreateEditModal({
   };
 
   const executeSave = async (payload: any) => {
+    if (saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
     setSaving(true);
     setFormError(null);
     setTechnicalDetails(null);
@@ -312,6 +315,7 @@ export function TosCreateEditModal({
         setTechnicalDetails(extractTechnicalError(err));
       }
     } finally {
+      saveInFlightRef.current = false;
       setSaving(false);
     }
   };
