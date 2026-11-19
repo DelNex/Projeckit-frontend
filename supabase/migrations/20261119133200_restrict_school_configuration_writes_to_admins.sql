@@ -501,7 +501,7 @@ AS $function$
 DECLARE
   target_tenant uuid;
 BEGIN
-  IF auth.uid() IS NULL THEN
+  IF COALESCE(auth.role(), '') NOT IN ('anon', 'authenticated') THEN
     IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
     RETURN NEW;
   END IF;
