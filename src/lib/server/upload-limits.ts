@@ -36,7 +36,13 @@ export async function getUploadLimits(admin: any, tenantId: string, now = Date.n
     admin.from('school_settings').select('max_module_upload_mb, max_scan_image_mb').eq('tenant_id', tenantId).maybeSingle(),
     admin.from('platform_settings').select('max_module_upload_cap_mb, max_scan_image_cap_mb').eq('id', 1).maybeSingle(),
   ]);
-  if (settingsError || platformError) throw new Error('Could not load school upload limits.');
+  if (settingsError || platformError) {
+    console.error('[upload limits] Supabase query failed:', {
+      schoolSettingsError: settingsError?.message || null,
+      platformSettingsError: platformError?.message || null,
+    });
+    throw new Error('Could not load school upload limits.');
+  }
   const limits = normalizeUploadLimits(settings, platform);
   cache.set(tenantId, { expiresAt: now + CACHE_MS, limits });
   return limits;
