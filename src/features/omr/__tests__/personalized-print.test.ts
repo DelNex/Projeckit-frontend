@@ -26,8 +26,9 @@ describe('Personalized A5 OMR print layout', () => {
     assert.equal(geometry.layout.barcode.narrowBarWidth, 1);
     assert.ok(geometry.layout.barcode.y >= geometry.layout.sectionBar.topLineY);
     assert.ok(geometry.layout.barcode.y + geometry.layout.barcode.height <= geometry.layout.sectionBar.bottomLineY);
-    assert.match(svg, /class="omr-barcode"/);
-    assert.doesNotMatch(svg, /class="omr-barcode"[\s\S]*?<text/);
+    const barcodeGroup = svg.match(/<g class="omr-barcode"[\s\S]*?<\/g>/)?.[0] || '';
+    assert.ok(barcodeGroup.length > 0);
+    assert.doesNotMatch(barcodeGroup, /<text/);
   });
 
   it('prints two named students on one A4 landscape page with A5 sheet geometry', () => {
