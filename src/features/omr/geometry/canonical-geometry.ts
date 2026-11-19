@@ -165,7 +165,7 @@ export function generateCanonicalGeometry(rawConfig: AssessmentOmrConfig): Canon
   // HALF forms, calculate a compact physical height here (not only in the
   // print modal) so the scanner receives exactly the geometry that was printed.
   const requestedFormat: 'HALF' | 'FULL' = rawConfig.sheetFormat || (itemCount <= 60 ? 'HALF' : 'FULL');
-  if (requestedFormat === 'HALF' && itemCount < 60 && !rawConfig.pageHeight && !rawConfig.includeRollNumberGrid) {
+  if (requestedFormat === 'HALF' && itemCount < 60 && !rawConfig.pageHeight && !(rawConfig as AssessmentOmrConfig & { includeRollNumberGrid?: boolean }).includeRollNumberGrid) {
     const base = generateCanonicalGeometry({
       ...rawConfig,
       sheetFormat: 'HALF',
