@@ -256,7 +256,7 @@ export function OmrCameraModal({
 
     let active = true;
     const interval = setInterval(async () => {
-      if (!active || !videoRef.current || videoRef.current.videoWidth === 0) return;
+      if (!active || recognitionBusyRef.current || !videoRef.current || videoRef.current.videoWidth === 0) return;
       try {
         const metrics = await analyzeDocumentQuality(videoRef.current);
         if (!active) return;
