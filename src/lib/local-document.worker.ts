@@ -69,7 +69,6 @@ async function extractPdf(file: File): Promise<string> {
   const pages: string[] = [];
   let characterCount = 0;
   let ocrWorker: OcrWorker | null = null;
-  let scannedPages = 0;
 
   try {
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
@@ -89,7 +88,6 @@ async function extractPdf(file: File): Promise<string> {
         if (pageText.length < MIN_SELECTABLE_TEXT_CHARACTERS) {
           if (!ocrWorker) ocrWorker = await createLocalOcrWorker();
           const recognized = await recognizePdfPage(page, ocrWorker);
-          scannedPages += 1;
           usedOcrPage = true;
           if (recognized.length > extractedText.length) extractedText = recognized;
         }
