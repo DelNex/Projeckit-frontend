@@ -30,7 +30,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Could not load school settings. Apply the latest settings migration.' }, { status: 503 });
     }
     const caps = {
-      max_module_upload_cap_mb: platform?.max_module_upload_cap_mb ?? 60,
+      max_module_upload_cap_mb: platform?.max_module_upload_cap_mb ?? 100,
       max_scan_image_cap_mb: platform?.max_scan_image_cap_mb ?? 30,
     };
     return NextResponse.json({
@@ -38,7 +38,7 @@ export async function GET() {
         tenant_id: caller!.tenant_id,
         default_passing_mps: 60,
         allow_public_registration: true,
-        max_module_upload_mb: Math.min(60, caps.max_module_upload_cap_mb),
+        max_module_upload_mb: Math.min(100, caps.max_module_upload_cap_mb),
         max_scan_image_mb: Math.min(15, caps.max_scan_image_cap_mb),
       },
       caps,
