@@ -11,7 +11,7 @@ and a deployment is promoted.
   Original files are not uploaded to Supabase Storage.
 - PDF/DOCX/PPTX extraction runs in a Web Worker. Scanned/image-only PDF pages
   are rendered locally and passed through the locally bundled Tesseract WASM
-  runtime; English and Filipino language data are bundled under `public/ocr`.
+  runtime; English and Filipino language data are bundled under `public/ocr`. English is the faster default; teachers can select English + Filipino for Tagalog-heavy scans.
 - Only extracted lesson text is sent to the authenticated exam-generation API.
 - The default local file ceiling is 100 MB. Devices reporting sufficient memory
   and browser storage may be allowed up to 500 MB. This is a device-side limit,
