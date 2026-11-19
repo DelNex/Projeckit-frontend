@@ -36,6 +36,7 @@ export async function POST(request: Request) {
       .select('id,status,created_at,provider')
       .eq('tenant_id', caller.profile!.tenant_id)
       .eq('tos_id', tos.id)
+      .eq('provider', 'groq_api')
       .is('parent_job_id', null)
       .in('status', ['queued', 'running', 'needs_attention'])
       .order('created_at', { ascending: false })
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
         after(async () => { try { await runGroqExamJob(activeJob.id, caller.admin!); } catch (error) { console.error('[Groq worker] Existing job processing failed:', error instanceof Error ? error.message : 'unknown error'); } });
       }
       const position = activeJob.status === 'queued'
-        ? await caller.admin!.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('status', 'queued').lte('created_at', activeJob.created_at)
+        ? await caller.admin!.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('provider', 'groq_api').eq('status', 'queued').lte('created_at', activeJob.created_at)
         : null;
       return NextResponse.json({ id: activeJob.id, status: activeJob.status, reused: true, queuePosition: position?.count || null }, { status: 202, headers: { 'Cache-Control': 'no-store' } });
     }
@@ -100,7 +101,7 @@ export async function POST(request: Request) {
         catch (error) { console.error('[Groq worker] Exam job failed:', error instanceof Error ? error.message : 'unknown error'); }
       });
     }
-    const { count } = await caller.admin!.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('status', 'queued').lte('created_at', job.createdAt);
+    const { count } = await caller.admin!.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('provider', 'groq_api').eq('status', 'queued').lte('created_at', job.createdAt);
     return NextResponse.json({ id: job.id, status: job.status, reused: job.reused, queuePosition: job.status === 'queued' ? count || 1 : null }, { status: 202, headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     if (error instanceof SyntaxError) return NextResponse.json({ error: 'The request must be valid JSON.' }, { status: 400 });
@@ -141,7 +142,7 @@ export async function GET(request: Request) {
       const { data: parent } = await admin.from('exam_generation_jobs').select('id,tos_id,status,progress,error,result_summary,created_at,updated_at,finished_at,created_by').eq('tenant_id', caller.profile!.tenant_id).eq('id', job.parent_job_id).maybeSingle();
       if (parent) job = parent;
     }
-    const position = job.status === 'queued' ? await admin.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('status', 'queued').lte('created_at', job.created_at) : null;
+    const position = job.status === 'queued' ? await admin.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('provider', 'groq_api').eq('status', 'queued').lte('created_at', job.created_at) : null;
     return NextResponse.json({ job: { ...job, queuePosition: position?.count || null } }, { headers: { 'Cache-Control': 'no-store' } });
   } catch {
     return NextResponse.json({ error: 'Could not load exam generation status.' }, { status: 503 });
