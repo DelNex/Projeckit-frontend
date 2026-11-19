@@ -1,15 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { resolveBackendBaseUrl } from '@/lib/server/backend-url';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const allowedEndpoints = new Set(['info', 'chat', 'stream', 'upload']);
-
-function backendBaseUrl() {
-  const configured = process.env.BACKEND_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
-  return configured.replace(/\/+$/, '');
-}
 
 async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const segments = (await context.params).path;
@@ -31,7 +27,11 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
   }
 
   const endpoint = segments[0];
-  const upstreamUrl = `${backendBaseUrl()}/api/ai/${endpoint}${request.nextUrl.search}`;
+  const backendUrl = resolveBackendBaseUrl();
+  if (!backendUrl) {
+    return NextResponse.json({ message: 'The AI backend is not configured for this deployment.' }, { status: 503 });
+  }
+  const upstreamUrl = `${backendUrl}/api/ai/${endpoint}${request.nextUrl.search}`;
   const headers = new Headers({
     Authorization: `Bearer ${session.access_token}`,
     Accept: request.headers.get('accept') || 'application/json',
