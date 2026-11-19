@@ -26,15 +26,35 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     const result = await scopedJob(id);
     if (result.response) return result.response;
     const { job, admin } = result as any;
-    const leaseExpired = !job.lease_expires_at || Date.parse(job.lease_expires_at) <= Date.now();
-    if (job.provider === 'groq_api' && (
-      job.status === 'queued'
-      || job.status === 'needs_attention'
-      || (job.status === 'running' && leaseExpired)
-    )) {
+    const leaseExpired = Boolean(job.lease_expires_at) && Date.parse(job.lease_expires_at) <= Date.now();
+    let recoveryJobId: string | null = null;
+
+    if (job.provider === 'groq_api' && ['queued', 'needs_attention'].includes(job.status)) {
+      recoveryJobId = job.id;
+    } else if (job.provider === 'groq_api' && job.status === 'running') {
+      const repairJobId = typeof job.progress?.repairJobId === 'string' ? job.progress.repairJobId : null;
+      if (repairJobId) {
+        // A root job with no lease may be waiting for its repair child. Resume
+        // the child, never regenerate the completed root batch.
+        const { data: repairJob } = await admin.from('exam_generation_jobs')
+          .select('id,status,provider,lease_expires_at')
+          .eq('id', repairJobId)
+          .eq('parent_job_id', job.id)
+          .maybeSingle();
+        const repairLeaseExpired = Boolean(repairJob?.lease_expires_at) && Date.parse(repairJob.lease_expires_at) <= Date.now();
+        if (repairJob?.provider === 'groq_api' && (
+          ['queued', 'needs_attention'].includes(repairJob.status)
+          || (repairJob.status === 'running' && repairLeaseExpired)
+        )) recoveryJobId = repairJob.id;
+      } else if (leaseExpired || !job.lease_expires_at) {
+        recoveryJobId = job.id;
+      }
+    }
+
+    if (recoveryJobId) {
       after(async () => {
         try {
-          await runGroqExamJob(job.id, admin);
+          await runGroqExamJob(recoveryJobId!, admin);
         } catch (error) {
           console.error('[Groq worker] Status-poll recovery failed:', error instanceof Error ? error.message : 'unknown error');
         }
