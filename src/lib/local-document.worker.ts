@@ -78,7 +78,7 @@ async function extractPdf(file: File): Promise<string> {
         const content = await page.getTextContent();
         const pageText = content.items.map((item) => {
           if (!('str' in item)) return '';
-          return `${item.str}${'hasEOL' in item && item.hasEOL ? '\\n' : ' '}`;
+          return `${item.str}${'hasEOL' in item && item.hasEOL ? '\n' : ' '}`;
         }).join('').trim();
 
         // Image-only pages usually contain no selectable text. A very small
@@ -94,7 +94,8 @@ async function extractPdf(file: File): Promise<string> {
           if (recognized.length > extractedText.length) extractedText = recognized;
         }
 
-        const section = `[Page ${pageNumber}]${scannedPages ? ' [local OCR checked]' : ''}\\n${extractedText}`;
+        if (extractedText.trim()) hasExtractedContent = true;
+        const section = `[Page ${pageNumber}]${usedOcrPage ? ' [local OCR checked]' : ''}\n${extractedText}`;
         characterCount += section.length;
         if (characterCount > MAX_CHARACTERS) {
           throw new Error(`'${file.name}' exceeds the 900,000-character AI source limit. Split it by chapter before generating an exam.`);
@@ -109,8 +110,8 @@ async function extractPdf(file: File): Promise<string> {
     await pdf.destroy();
   }
 
-  const text = pages.join('\\n\\n').trim();
-  if (!text.replace(/\\[Page \\d+\\]/g, '').trim()) {
+  const text = pages.join('\n\n').trim();
+  if (!hasExtractedContent || !text.trim()) {
     throw new Error(`No readable text could be extracted from '${file.name}'. The PDF may be blank, encrypted, or too low-quality for local OCR.`);
   }
   return text;
