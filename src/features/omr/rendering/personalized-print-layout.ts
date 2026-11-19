@@ -83,7 +83,7 @@ export function buildA4CompactPages(
     `);
   }
 
-  return pages.join('\\n');
+  return pages.join('\n');
 }
 
 
