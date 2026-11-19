@@ -2,7 +2,11 @@ name: Refresh dependency lockfile
 
 on:
   push:
-    branches: ["perf/production-api-lazy-loading"]
+    branches: ["perf/**"]
+    paths:
+      - "package.json"
+      - "package-lock.json"
+  workflow_dispatch:
 
 concurrency:
   group: dependency-lock-${{ github.ref }}
