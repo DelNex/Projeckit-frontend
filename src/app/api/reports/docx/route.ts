@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -361,6 +362,7 @@ export async function GET(request: Request) {
     const buffer = await createMostLeastLearnedDocx(header, ranked);
     return new NextResponse(new Uint8Array(buffer), { headers: responseHeaders(`Most_Least_Learned_${baseName}.docx`) });
   } catch (error) {
+    await logSystemEvent({ severity: 'error', source: 'api.reports.docx', message: error instanceof Error ? error.message : 'Request failed.', method: 'GET', route: '/api/reports/docx', code: 'DOCX_EXPORT_FAILURE' });
     console.error('[GET /api/reports/docx] Export failed:', error);
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not generate the Word report.', code: 'DOCX_EXPORT_FAILED' }, { status: 500 });
   }
