@@ -36,8 +36,8 @@ export async function logSystemEvent(input: SystemEventInput): Promise<void> {
     if (!tenantId || !userId) {
       try {
         const supabase = await createClient();
-        const { data: { claims } } = await supabase.auth.getClaims();
-        const authenticatedUserId = claims?.sub;
+        const { data: claimsResult } = await supabase.auth.getClaims();
+        const authenticatedUserId = claimsResult?.claims?.sub;
         if (authenticatedUserId) {
           userId ||= authenticatedUserId;
           if (!tenantId) {
