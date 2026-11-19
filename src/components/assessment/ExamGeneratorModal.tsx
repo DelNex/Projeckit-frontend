@@ -101,11 +101,15 @@ export function ExamGeneratorModal({
   }, [generationJob.savedQuestions, generationJob.job?.id, generationJob.job?.status, generationJob.job?.resultSummary?.missingItems, toast]);
 
   useEffect(() => {
-    if (!generationJob.job || !['failed', 'cancelled', 'needs_attention'].includes(generationJob.job.status)) return;
-    startingRef.current = false;
+    if (!generationJob.job) return;
+    const status = generationJob.job.status;
+    if (['completed', 'partial', 'failed', 'cancelled', 'needs_attention'].includes(status)) {
+      startingRef.current = false;
+    }
+    if (!['failed', 'cancelled', 'needs_attention'].includes(status)) return;
     setCurrentStep('idle');
-    if (generationJob.job.status === 'failed') setErrorMsg(generationJob.job.error || 'Exam generation failed. You can try again.');
-    if (generationJob.job.status === 'needs_attention') setErrorMsg('The AI generation job needs attention. Clear the paused job and retry.');
+    if (status === 'failed') setErrorMsg(generationJob.job.error || 'Exam generation failed. You can try again.');
+    if (status === 'needs_attention') setErrorMsg('The AI generation job needs attention. Clear the paused job and retry.');
   }, [generationJob.job?.id, generationJob.job?.status, generationJob.job?.error]);
 
   if (!isOpen) return null;
