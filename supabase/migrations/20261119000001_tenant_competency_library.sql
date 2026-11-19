@@ -9,7 +9,7 @@ create table if not exists public.tenant_competencies (
 );
 
 create unique index if not exists tenant_competencies_tenant_code_description_uidx
-  on public.tenant_competencies (tenant_id, lower(trim(code)), lower(trim(description)));
+  on public.tenant_competencies (tenant_id, code, description);
 
 create index if not exists tenant_competencies_tenant_description_idx
   on public.tenant_competencies (tenant_id, description);
