@@ -417,7 +417,11 @@ export function OmrPrintModal({
 
               {/* Format Badge */}
               <span className="rounded-md bg-gray-800 px-2 py-0.5 text-[11px] font-mono font-medium text-gray-300 border border-gray-700">
-                {isHalfSheet ? 'A5 Half (2 per A4 Landscape)' : 'A4 Full Sheet'}
+                {isHalfSheet
+                  ? compactRowsPerPage > 1
+                    ? `Compact Half · ${sheetsPerPage} per A4 Landscape`
+                    : 'A5 Half (2 per A4 Landscape)'
+                  : 'A4 Full Sheet'}
               </span>
             </div>
 
