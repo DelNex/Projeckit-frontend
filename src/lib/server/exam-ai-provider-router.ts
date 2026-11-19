@@ -78,8 +78,8 @@ async function requestProvider(provider: ProviderConfig, messages: Array<{ role:
   if (provider.id === 'gemini') {
     const system = messages.find((message) => message.role === 'system')?.content || '';
     const user = messages.filter((message) => message.role !== 'system').map((message) => message.content).join('\n\n');
-    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(provider.model)}:generateContent?key=${encodeURIComponent(provider.key)}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(provider.model)}:generateContent`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': provider.key },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents: [{ role: 'user', parts: [{ text: user }] }],
@@ -132,7 +132,8 @@ export async function requestExamQuestionsFromProviders(
       const message = error instanceof Error ? error.message : `${provider.id} request failed`;
       failures.push(message.slice(0, 240));
       const retryable = Boolean((error as Error & { retryable?: boolean }).retryable)
-        || /timeout|fetch failed|network/i.test(message);
+        || error instanceof SyntaxError
+        || /timeout|fetch failed|network|returned no questions/i.test(message);
       if (!retryable) break;
     }
   }
