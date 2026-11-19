@@ -30,7 +30,8 @@ Status: partially implemented; OCR and resumable recovery remain open.
 - [x] Replace large lesson text in new job payloads with a versioned manifest, source hash, size metadata, and document counts.
 - [x] Retrieve, decompress, and verify the source object in the API and worker; enforce owner-scoped paths and size/character limits.
 - [x] Delete uploaded source objects after successful completion, terminal failure, or cancellation.
-- [ ] Add stale-object cleanup for abandoned browser sessions and resumable upload recovery. Compressed text is capped below the 6 MB TUS threshold; original large files stay local.
+- [x] Clean stale source objects older than 24 hours when that user next starts a job, while preserving every path referenced by an active job. Compressed text is capped below the 6 MB TUS threshold; original large files stay local.
+- [ ] Add resumable upload recovery only if measured compressed payload sizes exceed the 6 MB threshold.
 
 Acceptance: test text PDFs, image-only PDFs, DOCX, PPTX, photos, multi-file sources, interrupted uploads, retry/resume, cross-tenant access denial, and a large file on a low-memory phone. Confirm original file bytes never enter the AI provider request.
 
