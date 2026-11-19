@@ -125,6 +125,7 @@ export async function POST(request: Request) {
       prompt: buildExamPrompt(slots),
       ...(uploadedSource ? { sourceManifest: uploadedSource.manifest } : { lessonChunks }),
       slots,
+      requireEvidence: true,
       competencyIds: [...new Set(slots.map((slot) => slot.competency_id))],
       ...(teacherInstructions ? { teacherInstructions } : {}),
     };
