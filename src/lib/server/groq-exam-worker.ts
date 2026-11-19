@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { randomUUID } from 'node:crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { buildExamPrompt, finalizeExamJob } from './exam-jobs';
@@ -250,7 +251,16 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
       await runGroqExamJob(result.repairJobId, admin, repairDepth + 1, jobDeadline);
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Groq exam generation failed.';
+    const message = error instanceof Error ? error.message : 'Exam generation failed.';
+    await logSystemEvent({
+      severity: 'error',
+      source: 'exam.worker',
+      message,
+      code: 'EXAM_WORKER_FAILURE',
+      tenantId: claimed.tenant_id || null,
+      userId: claimed.created_by || null,
+      metadata: { jobId, provider: 'multi-provider', repairDepth, attempts: claimed.attempts || null },
+    });
     const { data: failedOwnedJob } = await admin.from('exam_generation_jobs').update({
       status: 'failed',
       error: message.slice(0, 500),
