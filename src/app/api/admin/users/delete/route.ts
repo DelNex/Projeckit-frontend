@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -269,6 +270,7 @@ export async function POST(request: Request) {
       authDeletionFailures: authDeletionFailures.length > 0 ? authDeletionFailures : undefined,
     });
   } catch (err: any) {
+    await logSystemEvent({ severity: 'error', source: 'api.admin.users-delete', message: err instanceof Error ? err.message : 'Request failed.', method: 'POST', route: '/api/admin/users/delete', code: 'ADMIN_USERS_DELETE_FAILURE' });
     console.error('[POST /api/admin/users/delete] Unexpected error:', err);
     return NextResponse.json(
       { error: 'An unexpected error occurred while permanently deleting accounts.' },
