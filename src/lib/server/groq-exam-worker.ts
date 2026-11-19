@@ -6,6 +6,21 @@ const DEFAULT_MODEL = 'openai/gpt-oss-120b';
 const MAX_LESSON_CHARS = 200_000;
 const WORKER_ID = 'project-kit-groq-worker';
 
+export function getExamBatchSize(itemCount: number): number {
+  if (!Number.isFinite(itemCount) || itemCount <= 0) return 0;
+  return itemCount <= 20 ? itemCount : itemCount <= 60 ? 20 : 30;
+}
+
+export function splitExamSlotsIntoBatches<T>(slots: readonly T[]): T[][] {
+  const batchSize = getExamBatchSize(slots.length);
+  if (!batchSize) return [];
+  const batches: T[][] = [];
+  for (let offset = 0; offset < slots.length; offset += batchSize) {
+    batches.push(slots.slice(offset, offset + batchSize));
+  }
+  return batches;
+}
+
 const QUESTION_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -93,7 +108,10 @@ async function requestGroqQuestions(payload: Record<string, any>): Promise<strin
     throw new Error(`Groq exam generation failed (${response.status}): ${String(result?.error?.message || 'The AI provider returned an error.').slice(0, 240)}`);
   }
 
-  const content = result?.choices?.[0]?.message?.content;
+  const choice = result?.choices?.[0];
+  if (choice?.finish_reason === 'length') throw new Error('Groq reached its output-token limit. The exam batch was not saved; reduce the batch size or lesson material and retry.');
+  if (choice?.message?.refusal) throw new Error('Groq refused to generate this exam content. Review the lesson material and try again.');
+  const content = choice?.message?.content;
   if (typeof content !== 'string' || !content.trim()) throw new Error('Groq returned an empty response. The existing exam was not changed.');
   let parsed: any;
   try { parsed = JSON.parse(content); } catch { throw new Error('Groq returned invalid structured output. The existing exam was not changed.'); }
@@ -132,11 +150,8 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
 
     // Adapt the batch size to exam size: one request for small exams, then
     // larger batches for longer exams to control response size and retries.
-    const batchSize = slots.length <= 20 ? slots.length : slots.length <= 60 ? 20 : 30;
-    const batches: any[][] = [];
-    for (let offset = 0; offset < slots.length; offset += batchSize) {
-      batches.push(slots.slice(offset, offset + batchSize));
-    }
+    const batches = splitExamSlotsIntoBatches(slots);
+    const batchSize = getExamBatchSize(slots.length);
 
     const generatedQuestions: any[] = [];
     for (let index = 0; index < batches.length; index++) {
