@@ -63,7 +63,7 @@ export function TosExamModal({
     if (generationJob.savedQuestions) setQuestions(generationJob.savedQuestions);
     if (generationJob.job && ['queued', 'running'].includes(generationJob.job.status)) {
       setIsGenerating(true);
-      setGenerationProgress(generationJob.job.progress?.label || (generationJob.job.status === 'queued' ? `Queued (position ${generationJob.job.queuePosition || 1}). Groq AI will process this exam in the background.` : 'Gemini is writing your exam.'));
+      setGenerationProgress(generationJob.job.progress?.label || (generationJob.job.status === 'queued' ? `Queued (position ${generationJob.job.queuePosition || 1}). Groq AI will process this exam in the background.` : 'Groq is generating your exam.'));
     } else if (generationJob.job?.status === 'needs_attention') {
       setIsGenerating(false);
       setGenerationProgress('');
@@ -248,7 +248,7 @@ export function TosExamModal({
       const queued = await generationJob.start(lessonDocuments.length ? { lessonDocuments } : { lessonText: combinedText });
       setGenerationProgress(queued.status === 'queued'
         ? `Queued (position ${queued.queuePosition || 1}). Groq AI will process this exam in the background.`
-        : queued.status === 'running' ? 'Groq is already generating questions for this TOS.' : 'This TOS already has a job that needs helper attention.');
+        : queued.status === 'running' ? 'Groq is already generating questions for this TOS.' : 'This TOS already has a job that needs worker attention.');
     } catch (err: any) {
       console.error('Exam generation error:', err);
       setIsGenerating(false);
