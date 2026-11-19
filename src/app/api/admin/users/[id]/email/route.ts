@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -161,6 +162,7 @@ export async function POST(
       message: successMessage,
     });
   } catch (err: any) {
+    await logSystemEvent({ severity: 'error', source: 'api.admin.user-email', message: err instanceof Error ? err.message : 'Request failed.', method: 'POST', route: '/api/admin/users/[id]/email', code: 'ADMIN_USER_EMAIL_FAILURE' });
     console.error('[Admin API] Error in user email route:', err);
     return NextResponse.json(
       { error: 'Something went wrong processing email action. Please try again.' },
