@@ -281,6 +281,17 @@ CREATE POLICY "Tenant admins can insert audit logs"
     OR (SELECT public.is_platform_admin())
   );
 
+-- Tenant administrators must not gain cross-tenant profile visibility.
+-- The old SELECT policy OR-ed is_current_user_admin() without a tenant check.
+DROP POLICY IF EXISTS "Users can view profiles in their own tenant" ON public.profiles;
+CREATE POLICY "Users can view profiles in their own tenant"
+  ON public.profiles FOR SELECT TO authenticated
+  USING (
+    tenant_id = (SELECT public.get_current_tenant_id())
+    OR id = (SELECT auth.uid())
+    OR (SELECT public.is_platform_admin())
+  );
+
 -- Audit records are administrator-only; teachers must not read other
 -- staff activity, IP metadata, or administrative event details.
 DROP POLICY IF EXISTS "Tenant isolation for audit_logs" ON public.audit_logs;
