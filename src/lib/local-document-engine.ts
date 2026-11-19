@@ -7,7 +7,7 @@
 const DATABASE_NAME = 'projectkit-local-documents';
 const DATABASE_VERSION = 1;
 const STORE_NAME = 'documents';
-const MAX_EXTRACTED_CHARACTERS = 200_000;
+const MAX_EXTRACTED_CHARACTERS = 900_000;
 const NORMAL_FILE_LIMIT_BYTES = 100 * 1024 * 1024;
 const LARGE_FILE_LIMIT_BYTES = 500 * 1024 * 1024;
 
@@ -165,7 +165,7 @@ function assertTextLimit(text: string, fileName: string): string {
   const normalized = text.trim();
   if (normalized.length > MAX_EXTRACTED_CHARACTERS) {
     throw new Error(
-      `'${fileName}' contains more than 200,000 readable characters. Split the document by chapter and generate smaller exams so no source content is silently discarded.`
+      `'${fileName}' contains more than 900,000 readable characters. Split the document by chapter and generate smaller exams so no source content is silently discarded.`
     );
   }
   return normalized;
