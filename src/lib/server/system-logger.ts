@@ -11,6 +11,7 @@ export type SystemEvent = {
 
 function redact(value: string): string {
   return value
+    .replace(/\bBearer\s+[^\s,;]+/gi, 'Bearer [REDACTED]')
     .replace(/(authorization\s*[:=]\s*bearer\s+)[^\s,;]+/gi, '$1[REDACTED]')
     .replace(/((?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret)\s*[:=]\s*)[^\s,;]+/gi, '$1[REDACTED]')
     .replace(/https?:\/\/[^\s?]+\?[^\s]+/gi, '[URL_WITH_QUERY_REDACTED]');
