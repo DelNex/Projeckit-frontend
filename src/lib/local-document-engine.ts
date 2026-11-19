@@ -21,6 +21,8 @@ type StoredDocument = {
   text?: string;
 };
 
+export type LocalDocumentProgress = { stage: 'extracting' | 'ocr'; progress: number; message: string; pageNumber?: number; pageCount?: number };
+
 export type LocalDocumentCapacity = {
   maxFileBytes: number;
   maxFileMb: number;
@@ -110,9 +112,21 @@ export async function getLocalDocumentCapacity(): Promise<LocalDocumentCapacity>
   };
 }
 
-type ExtractionResponse = { id: string; text?: string; error?: string };
+type ExtractionResponse = {
+  id: string;
+  type: 'progress' | 'result' | 'error';
+  text?: string;
+  error?: string;
+  lowConfidencePages?: number[];
+  progress?: LocalDocumentProgress;
+};
+type PendingExtraction = {
+  resolve: (result: { text: string; lowConfidencePages: number[] }) => void;
+  reject: (error: Error) => void;
+  onProgress?: (progress: LocalDocumentProgress) => void;
+};
 let extractionWorker: Worker | null = null;
-const pendingExtractions = new Map<string, { resolve: (text: string) => void; reject: (error: Error) => void }>();
+const pendingExtractions = new Map<string, PendingExtraction>();
 
 function getExtractionWorker(): Worker {
   if (typeof Worker === 'undefined') {
@@ -124,9 +138,13 @@ function getExtractionWorker(): Worker {
   worker.onmessage = (event: MessageEvent<ExtractionResponse>) => {
     const pending = pendingExtractions.get(event.data.id);
     if (!pending) return;
+    if (event.data.type === 'progress') {
+      if (event.data.progress) pending.onProgress?.(event.data.progress);
+      return;
+    }
     pendingExtractions.delete(event.data.id);
-    if (event.data.error) pending.reject(new Error(event.data.error));
-    else pending.resolve(event.data.text || '');
+    if (event.data.type === 'error') pending.reject(new Error(event.data.error || 'Document extraction failed.'));
+    else pending.resolve({ text: event.data.text || '', lowConfidencePages: event.data.lowConfidencePages || [] });
   };
   const failWorker = () => {
     for (const pending of pendingExtractions.values()) pending.reject(new Error('Background document processing stopped unexpectedly. Please retry.'));
@@ -140,18 +158,21 @@ function getExtractionWorker(): Worker {
   return worker;
 }
 
-function extractInWorker(file: File): Promise<string> {
+function extractInWorker(
+  file: File,
+  onProgress?: (progress: LocalDocumentProgress) => void
+): Promise<{ text: string; lowConfidencePages: number[] }> {
   if (typeof Worker === 'undefined') {
     const extension = file.name.toLowerCase().split('.').pop();
-    if (extension === 'txt' || extension === 'md') return file.text();
-    return Promise.reject(new Error('This browser does not support background document processing. Use a modern browser to extract PDF, DOCX, and PPTX files.'));
+    if (extension === 'txt' || extension === 'md') return file.text().then((text) => ({ text, lowConfidencePages: [] }));
+    return Promise.reject(new Error('This browser does not support background document processing. Use a modern browser to extract PDF, DOCX, PPTX, and image files.'));
   }
 
   const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    : Date.now() + '-' + Math.random().toString(16).slice(2);
   return new Promise((resolve, reject) => {
-    pendingExtractions.set(id, { resolve, reject });
+    pendingExtractions.set(id, { resolve, reject, onProgress });
     try {
       getExtractionWorker().postMessage({ id, file });
     } catch (error) {
@@ -171,7 +192,7 @@ function assertTextLimit(text: string, fileName: string): string {
   return normalized;
 }
 
-export async function extractLocalDocument(file: File): Promise<{ name: string; text: string }> {
+export async function extractLocalDocument(file: File, options?: { onProgress?: (progress: LocalDocumentProgress) => void }): Promise<{ name: string; text: string; lowConfidencePages: number[] }> {
   const capacity = await getLocalDocumentCapacity();
   if (file.size > capacity.maxFileBytes) {
     throw new Error(
@@ -201,7 +222,8 @@ export async function extractLocalDocument(file: File): Promise<{ name: string; 
   }
 
   try {
-    const text = assertTextLimit(await extractInWorker(file), file.name);
+    const extracted = await extractInWorker(file, options?.onProgress);
+    const text = assertTextLimit(extracted.text, file.name);
     await saveCheckpoint({
       id,
       name: file.name,
@@ -210,7 +232,7 @@ export async function extractLocalDocument(file: File): Promise<{ name: string; 
       status: 'extracted',
       text,
     }).catch(() => undefined);
-    return { name: file.name, text };
+    return { name: file.name, text, lowConfidencePages: extracted.lowConfidencePages };
   } catch (error) {
     await saveCheckpoint({
       id,
