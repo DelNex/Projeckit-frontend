@@ -6,6 +6,15 @@ export const dynamic = 'force-dynamic';
 
 const SYSTEM_ACTIONS = ['SYSTEM_ERROR', 'SYSTEM_WARNING', 'SYSTEM_INFO', 'AI_PROVIDER_FAILURE', 'EXAM_WORKER_FAILURE'];
 
+function safeJobError(value: unknown): string {
+  if (typeof value !== 'string') return 'Exam generation failed. Review the job and retry.';
+  return value
+    .replace(/(?:Bearer\\s+)[A-Za-z0-9._~+\\/-]+=*/gi, 'Bearer [REDACTED]')
+    .replace(/\\b(?:gsk_|sb_secret_|sb_publishable_)[A-Za-z0-9_-]+/gi, '[REDACTED]')
+    .replace(/(api[_-]?key|token|password|secret)\\s*[:=]\\s*[^\\s,;]+/gi, '$1=[REDACTED]')
+    .slice(0, 700);
+}
+
 export async function GET(request: Request) {
   try {
     const supabase = await createClient();
@@ -64,7 +73,7 @@ export async function GET(request: Request) {
       details: {
         severity: job.status === 'failed' ? 'error' : 'warning',
         source: 'exam.worker',
-        message: job.error || 'Exam generation requires administrator review.',
+        message: safeJobError(job.error) || 'Exam generation requires administrator review.',
         jobId: job.id,
         provider: job.provider,
         status: job.status,
