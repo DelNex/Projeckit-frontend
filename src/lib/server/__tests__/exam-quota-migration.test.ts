@@ -33,5 +33,5 @@ test('exam queue migration serializes quota checks before inserting jobs', async
   assert.match(securityMigration, /Tenant members can view profiles/);
   assert.match(securityMigration, /Approved tenant members can view grading periods/);
   assert.match(securityMigration, /Tenant members can insert own audit events/);
-  assert.doesNotMatch(securityMigration, /CREATE POLICY \\\"Tenant admins can insert audit logs\\\"/);
+  assert.doesNotMatch(securityMigration, /CREATE POLICY "Tenant admins can insert audit logs"/);
 });
