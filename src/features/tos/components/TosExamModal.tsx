@@ -84,7 +84,7 @@ export function TosExamModal({
     if (currentTos.rows) {
       const initMats: Record<string, CompetencyMaterial> = {};
       currentTos.rows.forEach((r, idx) => {
-        const id = r.id || String(idx + 1);
+        const id = r.id || r.code || String(idx + 1);
         initMats[id] = {
           competencyId: id,
           files: [],
@@ -224,7 +224,7 @@ export function TosExamModal({
     try {
       // Gather all text per competency
       let combinedText = '';
-      const lessonDocuments: Array<{ name: string; text: string }> = [];
+      const lessonDocuments: Array<{ name: string; text: string; competencyId: string }> = [];
       (tos.rows || []).forEach((r, idx) => {
         const id = r.id || String(idx + 1);
         const compFiles = materials[id]?.files || [];
