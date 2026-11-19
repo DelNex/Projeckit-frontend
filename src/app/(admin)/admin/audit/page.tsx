@@ -32,7 +32,7 @@ export default function AuditLogsPage() {
   const [systemLogs, setSystemLogs] = useState<SystemLogRecord[]>([]);
   const [systemLogsLoading, setSystemLogsLoading] = useState(true);
   const [systemLogsError, setSystemLogsError] = useState<string | null>(null);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -77,7 +77,7 @@ export default function AuditLogsPage() {
 
   useEffect(() => {
     fetchLogs();
-  }, [supabase]);
+  }, []);
 
   const formatDate = (isoString: string) => {
     try {
@@ -210,10 +210,10 @@ export default function AuditLogsPage() {
 
         <button
           onClick={fetchLogs}
-          disabled={loading}
+          disabled={loading || systemLogsLoading}
           className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 shadow-2xs hover:bg-gray-50 disabled:opacity-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 transition"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+          <RefreshCw className={`h-3.5 w-3.5 ${loading || systemLogsLoading ? 'animate-spin text-blue-600' : ''}`} />
           <span>Refresh</span>
         </button>
       </div>
