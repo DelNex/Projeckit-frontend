@@ -180,7 +180,6 @@ export async function runNextGroqExamJob(admin = createAdminClient()): Promise<v
   if (!queuedJobs.length) return;
 
   const tenantIds = [...new Set(queuedJobs.map((job: any) => job.tenant_id).filter(Boolean))];
-  const now = new Date().toISOString();
   const { data: activeJobs, error: activeError } = await admin
     .from('exam_generation_jobs')
     .select('tenant_id')
