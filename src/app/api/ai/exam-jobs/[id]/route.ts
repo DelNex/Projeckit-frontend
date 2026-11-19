@@ -15,7 +15,7 @@ async function scopedJob(id: string) {
   const admin = createAdminClient();
   await admin.rpc('expire_unserviceable_exam_jobs');
   await admin.rpc('cleanup_exam_job_payloads');
-  const { data: job, error } = await admin.from('exam_generation_jobs').select('id,tos_id,status,provider,lease_expires_at,progress,error,result_summary,created_at,updated_at,finished_at,created_by,tenant_id').eq('id', id).eq('tenant_id', profile.tenant_id).maybeSingle();
+  const { data: job, error } = await admin.from('exam_generation_jobs').select('id,tos_id,status,provider,lease_expires_at,progress,error,result_summary,created_at,updated_at,finished_at,created_by,tenant_id').eq('id', id).eq('tenant_id', profile.tenant_id).eq('provider', 'groq_api').maybeSingle();
   if (error || !jobBelongsToTenant(job, profile.tenant_id)) return { response: NextResponse.json({ error: 'Exam generation job was not found.' }, { status: 404 }) };
   return { job, admin };
 }
