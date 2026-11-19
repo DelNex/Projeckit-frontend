@@ -273,7 +273,7 @@ export function ExamGeneratorModal({
               </span>
               {generationJob.helperState === 'offline'
                 ? <span className="rounded-full border border-slate-300 px-2 py-1 text-[10px] text-slate-600">Groq AI offline</span>
-                : <span className="rounded-full border border-emerald-300 px-2 py-1 text-[10px] text-emerald-700">Groq {generationJob.helperState.replace('_', ' ')}</span>}
+                : <span className="rounded-full border border-emerald-300 px-2 py-1 text-[10px] text-emerald-700">AI {generationJob.helperState.replace('_', ' ')}</span>}
               {['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')
                 ? <button type="button" onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="rounded-lg border border-rose-200 px-2 py-1 text-[10px] font-semibold text-rose-700">Cancel</button>
                 : ['completed', 'partial', 'failed', 'cancelled'].includes(generationJob.job?.status || '') ? null : <Loader2 className="h-4 w-4 animate-spin text-blue-600 dark:text-blue-400" />}
@@ -316,7 +316,7 @@ export function ExamGeneratorModal({
           </div>
         )}
 
-        {generationJob.helperState === 'offline' && <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">Groq AI is offline. Add GROQ_API_KEY to the server environment to enable exam generation.</div>}
+        {generationJob.helperState === 'offline' && <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">AI generation is unavailable. Configure at least one server-side provider: Groq, OpenRouter, Gemini, or Cloudflare.</div>}
         {generationJob.helperState === 'needs_attention' && generationJob.job?.status !== 'needs_attention' && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">An earlier AI generation job needs attention. Resolve or cancel it before starting another generation.</div>}
 
         {truncationNotice && (
@@ -361,7 +361,7 @@ export function ExamGeneratorModal({
                   Choose lesson materials from this device, or <span className="text-blue-600 underline">browse</span>
                 </p>
                 <p className="text-[11px] text-gray-400">
-                  Supports PDF, DOCX, PPTX, TXT, or Markdown (up to 5 files; local device capacity is checked automatically)
+                  Supports PDF, DOCX, PPTX, TXT, or Markdown (up to 5 files). Original files stay on this device; only compressed extracted text is uploaded.
                 </p>
               </div>
             </div>
