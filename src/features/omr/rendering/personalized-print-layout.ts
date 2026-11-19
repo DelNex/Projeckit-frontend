@@ -31,3 +31,56 @@ export function buildA5TwoUpPages(
 
   return pages.join('\n');
 }
+
+
+/**
+ * Compact half-sheet printing keeps the original A5 width and scanner-sized
+ * marks/barcode, but shortens the physical sheet when fewer answer rows are
+ * needed. The result is tiled into the unused vertical space on A4 landscape.
+ */
+export function getA4CompactLayout(pageHeightPx: number) {
+  const safeHeight = Math.max(1, Number(pageHeightPx) || 1);
+  const sheetHeightMm = A5_TWO_UP_PRINT_SIZE.sheetHeightMm * (safeHeight / 794);
+  const rowsPerPage = Math.max(1, Math.floor((A5_TWO_UP_PRINT_SIZE.pageHeightMm + 0.001) / sheetHeightMm));
+  return {
+    sheetHeightMm: Number(sheetHeightMm.toFixed(2)),
+    rowsPerPage,
+    sheetsPerPage: rowsPerPage * 2,
+  };
+}
+
+/**
+ * Tile complete half-width OMR forms on A4 landscape. Empty cells are retained
+ * on the final page so every printed sheet keeps the same physical dimensions.
+ */
+export function buildA4CompactPages(
+  sheetCount: number,
+  rowsPerPage: number,
+  sheetHeightMm: number,
+  renderSheet: (index: number) => string
+): string {
+  const safeRows = Math.max(1, Math.floor(rowsPerPage));
+  const capacity = safeRows * 2;
+  const safeCount = Math.max(0, Math.floor(sheetCount));
+  const pages: string[] = [];
+
+  for (let pageStart = 0; pageStart < safeCount; pageStart += capacity) {
+    const cells = Array.from({ length: capacity }, (_, offset) => {
+      const index = pageStart + offset;
+      const content = index < safeCount ? renderSheet(index) : '';
+      return `<div class="omr-sheet-compact">${content}</div>`;
+    }).join('');
+    const horizontalCuts = Array.from({ length: safeRows - 1 }, (_, row) =>
+      `<div class="omr-compact-horizontal-cut" style="top:${((row + 1) * sheetHeightMm).toFixed(2)}mm"></div>`
+    ).join('');
+    pages.push(`
+      <div class="omr-print-page-compact" style="--omr-compact-rows:${safeRows};--omr-compact-height:${sheetHeightMm}mm">
+        ${cells}
+        <div class="omr-compact-vertical-cut"></div>
+        ${horizontalCuts}
+      </div>
+    `);
+  }
+
+  return pages.join('\\n');
+}
