@@ -13,7 +13,7 @@ describe('Personalized A5 OMR print layout', () => {
     schoolYear: '2026-2027',
     term: 'Quarter 1',
     schoolName: 'Caps Senior High School',
-    itemCount: 30,
+    itemCount: 60,
     classSize: 30,
   });
 
