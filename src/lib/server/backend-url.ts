@@ -21,3 +21,18 @@ export function resolveBackendBaseUrl(env: BackendUrlEnvironment = process.env):
     return null;
   }
 }
+
+/** Resolve the public application origin used by password-reset links. */
+export function resolvePublicAppUrl(env: BackendUrlEnvironment = process.env): string | null {
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (!configured) return env.NODE_ENV === 'development' ? 'http://localhost:3000' : null;
+  try {
+    const url = new URL(configured);
+    const isDevelopment = env.NODE_ENV === 'development';
+    if (url.username || url.password || url.search || url.hash) return null;
+    if (url.protocol !== 'https:' && !(isDevelopment && url.protocol === 'http:')) return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
