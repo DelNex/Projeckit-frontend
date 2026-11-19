@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { after, NextResponse } from 'next/server';
 import { runNextGroqExamJob } from '@/lib/server/groq-exam-worker';
 
@@ -105,6 +106,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ id: job.id, status: job.status, reused: job.reused, queuePosition: job.status === 'queued' ? count || 1 : null }, { status: 202, headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     if (error instanceof SyntaxError) return NextResponse.json({ error: 'The request must be valid JSON.' }, { status: 400 });
+    await logSystemEvent({
+      severity: 'error',
+      source: 'api.ai.exam-jobs',
+      message: error instanceof Error ? error.message : 'Could not create an exam generation job.',
+      code: 'EXAM_JOB_ENQUEUE_FAILURE',
+      method: 'POST',
+      route: '/api/ai/exam-jobs',
+    });
     console.error('[exam-jobs POST] Could not create a generation job.');
     return NextResponse.json({ error: 'Could not queue exam generation. Please try again.' }, { status: 500 });
   }
