@@ -9,9 +9,9 @@ const SYSTEM_ACTIONS = ['SYSTEM_ERROR', 'SYSTEM_WARNING', 'SYSTEM_INFO', 'AI_PRO
 function safeJobError(value: unknown): string {
   if (typeof value !== 'string') return 'Exam generation failed. Review the job and retry.';
   return value
-    .replace(/Bearer\\s+[A-Za-z0-9._~-]+/gi, 'Bearer [REDACTED]')
-    .replace(/\\b(?:gsk_|sb_secret_|sb_publishable_)[A-Za-z0-9_-]+/gi, '[REDACTED]')
-    .replace(/(api[_-]?key|token|password|secret)\\s*[:=]\\s*[^\\s,;]+/gi, '$1=[REDACTED]')
+    .replace(/Bearer\s+[A-Za-z0-9._~-]+/gi, 'Bearer [REDACTED]')
+    .replace(/\b(?:gsk_|sb_secret_|sb_publishable_)[A-Za-z0-9_-]+/gi, '[REDACTED]')
+    .replace(/(api[_-]?key|token|password|secret)\s*[:=]\s*[^\s,;]+/gi, '$1=[REDACTED]')
     .slice(0, 700);
 }
 
