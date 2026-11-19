@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -210,6 +211,7 @@ export async function POST(request: Request) {
       eligibleTeachers,
     });
   } catch (err: any) {
+    await logSystemEvent({ severity: 'error', source: 'api.admin.users-delete-impact', message: err instanceof Error ? err.message : 'Request failed.', method: 'POST', route: '/api/admin/users/delete/impact', code: 'ADMIN_USERS_DELETE_IMPACT_FAILURE' });
     console.error('[POST /api/admin/users/delete/impact] Unexpected error:', err);
     return NextResponse.json(
       { error: 'An unexpected error occurred while calculating deletion impact.' },
