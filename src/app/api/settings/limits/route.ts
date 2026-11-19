@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -16,6 +17,7 @@ export async function GET() {
     const limits = await getUploadLimits(createAdminClient(), profile.tenant_id);
     return NextResponse.json(limits, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
+    await logSystemEvent({ severity: 'error', source: 'api.settings.limits', message: error instanceof Error ? error.message : 'Request failed.', method: 'GET', route: '/api/settings/limits', code: 'SETTINGS_LIMITS_FAILURE' });
     console.error('[settings/limits GET]', error instanceof Error ? error.message : 'unknown error');
     return NextResponse.json({ error: 'Could not load upload limits.' }, { status: 503 });
   }
