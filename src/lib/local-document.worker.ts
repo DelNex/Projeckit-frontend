@@ -46,8 +46,17 @@ async function recognizePdfPage(page: pdfjs.PDFPageProxy, worker: OcrWorker): Pr
   const context = canvas.getContext('2d');
   if (!context) throw new Error('Could not prepare a local canvas for scanned PDF OCR.');
   await page.render({ canvasContext: context as unknown as CanvasRenderingContext2D, viewport }).promise;
-  const result = await worker.recognize(canvas as unknown as Parameters<OcrWorker['recognize']>[0]);
-  return String(result.data.text || '').trim();
+  try {
+    const result = await worker.recognize(canvas as unknown as Parameters<OcrWorker['recognize']>[0]);
+    return String(result.data.text || '').trim();
+  } catch (error) {
+    if (cachedOcrWorker === worker) {
+      cachedOcrWorker = null;
+      cachedOcrLanguages = null;
+    }
+    await worker.terminate().catch(() => undefined);
+    throw error;
+  }
 }
 
 function normalizeText(text: string): string {
