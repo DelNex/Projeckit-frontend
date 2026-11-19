@@ -4,6 +4,13 @@ export const config = {
 };
 
 export default async (request: Request) => {
+  // Preview deploys share the configured Supabase project. Never let a manual
+  // preview invocation process production jobs.
+  if (process.env.CONTEXT !== "production") {
+    console.info("[exam scheduler] Skipping non-production deployment context.");
+    return;
+  }
+
   const { next_run } = await request.json().catch(() => ({})) as { next_run?: string };
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
   const secret = process.env.CRON_SECRET || "";
