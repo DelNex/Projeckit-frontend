@@ -266,7 +266,7 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
       .maybeSingle();
     if (ownershipError || ownership?.status !== 'running' || ownership.claimed_by !== workerId) return;
 
-    const result = await finalizeExamJob(jobId, responseText, admin);
+    const result = await finalizeExamJob(jobId, responseText, admin, lessonChunks);
     if (result.status === 'running' && typeof result.repairJobId === 'string') {
       await runGroqExamJob(result.repairJobId, admin, repairDepth + 1, jobDeadline);
     }
