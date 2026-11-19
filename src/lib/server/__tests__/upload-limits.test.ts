@@ -9,11 +9,11 @@ import {
 } from '../upload-limits';
 
 test('upload limits use defaults and never exceed platform caps', () => {
-  assert.deepEqual(normalizeUploadLimits(null, null), { maxModuleUploadMb: 60, maxScanImageMb: 15 });
+  assert.deepEqual(normalizeUploadLimits(null, null), { maxModuleUploadMb: 100, maxScanImageMb: 15 });
   assert.deepEqual(normalizeUploadLimits(
-    { max_module_upload_mb: 72, max_scan_image_mb: 50 },
-    { max_module_upload_cap_mb: 60, max_scan_image_cap_mb: 30 },
-  ), { maxModuleUploadMb: 60, maxScanImageMb: 30 });
+    { max_module_upload_mb: 120, max_scan_image_mb: 50 },
+    { max_module_upload_cap_mb: 100, max_scan_image_cap_mb: 30 },
+  ), { maxModuleUploadMb: 100, maxScanImageMb: 30 });
 });
 
 test('upload limits are cached for 60 seconds by tenant', async () => {
@@ -38,4 +38,6 @@ test('server size check rejects stored files above the school limit with a speci
   assert.equal(isUploadWithinLimit(storedSize, 20), false);
   assert.equal(formatUploadLimitError(storedSize, 20), 'This file is 30 MB. The limit for your school is 20 MB.');
   assert.equal(isUploadWithinLimit(20 * 1024 * 1024, 20), true);
+  assert.equal(isUploadWithinLimit(100 * 1024 * 1024, 100), true);
+  assert.equal(isUploadWithinLimit(100 * 1024 * 1024 + 1, 100), false);
 });
