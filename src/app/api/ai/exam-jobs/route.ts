@@ -105,6 +105,13 @@ export async function POST(request: Request) {
     const { count } = await caller.admin!.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('provider', 'groq_api').eq('status', 'queued').lte('created_at', job.createdAt);
     return NextResponse.json({ id: job.id, status: job.status, reused: job.reused, queuePosition: job.status === 'queued' ? count || 1 : null }, { status: 202, headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
+    const failureMessage = error instanceof Error ? error.message : '';
+    if (failureMessage === 'EXAM_HOURLY_LIMIT_REACHED') {
+      return NextResponse.json({ error: 'Hourly rate limit reached. Please wait before generating another exam.' }, { status: 429 });
+    }
+    if (failureMessage === 'EXAM_DAILY_LIMIT_REACHED') {
+      return NextResponse.json({ error: 'Your school has reached its daily exam generation limit.' }, { status: 429 });
+    }
     if (error instanceof SyntaxError) return NextResponse.json({ error: 'The request must be valid JSON.' }, { status: 400 });
     await logSystemEvent({
       severity: 'error',
