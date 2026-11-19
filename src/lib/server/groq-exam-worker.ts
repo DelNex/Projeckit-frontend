@@ -66,6 +66,8 @@ export function buildGroqMessages(payload: Record<string, any>) {
   }
   const prompt = String(payload.prompt || '');
   if (!prompt) throw new Error('The exam blueprint is missing. Save the TOS and try again.');
+  const teacherInstructions = String(payload.teacherInstructions || '').trim();
+  if (teacherInstructions.length > 4000) throw new Error('Teacher instructions exceed the 4,000-character limit.');
   return [
     {
       role: 'system',
