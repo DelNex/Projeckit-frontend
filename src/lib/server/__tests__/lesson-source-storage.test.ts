@@ -37,7 +37,7 @@ function mockAdmin(compressed: Buffer) {
         return {
           async download(path: string) {
             assert.equal(path.startsWith(ownerId + '/lesson-imports/'), true);
-            return { data: new Blob([compressed.buffer.slice(compressed.byteOffset, compressed.byteOffset + compressed.byteLength)]), error: null };
+            return { data: new Blob([new Uint8Array(compressed).buffer as ArrayBuffer]), error: null };
           },
           async remove(paths: string[]) {
             removed.push(paths);
