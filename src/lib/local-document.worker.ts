@@ -15,6 +15,7 @@ async function createLocalOcrWorker(): Promise<OcrWorker> {
   const { createWorker } = await import('tesseract.js');
   return createWorker('eng+fil', 1, {
     workerPath: '/ocr/worker.min.js',
+    workerBlobURL: false,
     corePath: '/ocr/core',
     langPath: '/ocr/lang',
     cachePath: 'projectkit-local-ocr',
