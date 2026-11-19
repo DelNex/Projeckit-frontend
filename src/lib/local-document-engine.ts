@@ -4,8 +4,6 @@
  * Original files stay in this browser. They are never sent to Supabase Storage.
  * Extracted text is passed to the authenticated exam-generation API only.
  */
-import JSZip from 'jszip';
-
 const DATABASE_NAME = 'projectkit-local-documents';
 const DATABASE_VERSION = 1;
 const STORE_NAME = 'documents';
@@ -139,90 +137,59 @@ function assertTextLimit(text: string, fileName: string): string {
   return normalized;
 }
 
-async function extractPdf(file: File): Promise<string> {
-  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/legacy/build/pdf.worker.min.mjs',
-    import.meta.url
-  ).toString();
+type ExtractionResponse = { id: string; text?: string; error?: string };
+let extractionWorker: Worker | null = null;
+const pendingExtractions = new Map<string, { resolve: (text: string) => void; reject: (error: Error) => void }>();
 
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const task = pdfjs.getDocument({
-    data: bytes,
-    isEvalSupported: false,
-    useSystemFonts: true,
-  });
-  const pdf = await task.promise;
-  const pages: string[] = [];
-  let characterCount = 0;
-
-  try {
-    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-      const page = await pdf.getPage(pageNumber);
-      const content = await page.getTextContent();
-      const pageText = content.items
-        .map((item: unknown) => {
-          if (!item || typeof item !== 'object' || !('str' in item)) return '';
-          const value = item as { str?: string; hasEOL?: boolean };
-          return `${value.str || ''}${value.hasEOL ? '\n' : ' '}`;
-        })
-        .join('');
-      const section = `[Page ${pageNumber}]\n${pageText.trim()}`;
-      characterCount += section.length;
-      if (characterCount > MAX_EXTRACTED_CHARACTERS) {
-        throw new Error(
-          `'${file.name}' exceeds the 200,000-character AI source limit. Split it by chapter before generating an exam.`
-        );
-      }
-      pages.push(section);
-      page.cleanup();
-    }
-  } finally {
-    await pdf.destroy();
+function getExtractionWorker(): Worker {
+  if (typeof Worker === 'undefined') {
+    throw new Error('This browser does not support background document processing. Use a modern browser to extract lesson files.');
   }
+  if (extractionWorker) return extractionWorker;
 
-  const text = pages.join('\n\n').trim();
-  if (!text) {
+  const worker = new Worker(new URL('./local-document.worker.ts', import.meta.url), { type: 'module' });
+  worker.onmessage = (event: MessageEvent<ExtractionResponse>) => {
+    const pending = pendingExtractions.get(event.data.id);
+    if (!pending) return;
+    pendingExtractions.delete(event.data.id);
+    if (event.data.error) pending.reject(new Error(event.data.error));
+    else pending.resolve(event.data.text || '');
+  };
+  const failWorker = () => {
+    for (const pending of pendingExtractions.values()) pending.reject(new Error('Background document processing stopped unexpectedly. Please retry.'));
+    pendingExtractions.clear();
+    worker.terminate();
+    if (extractionWorker === worker) extractionWorker = null;
+  };
+  worker.onerror = failWorker;
+  worker.onmessageerror = failWorker;
+  extractionWorker = worker;
+  return worker;
+}
+
+function extractInWorker(file: File): Promise<string> {
+  const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return new Promise((resolve, reject) => {
+    pendingExtractions.set(id, { resolve, reject });
+    try {
+      getExtractionWorker().postMessage({ id, file });
+    } catch (error) {
+      pendingExtractions.delete(id);
+      reject(error instanceof Error ? error : new Error('Could not start background document processing.'));
+    }
+  });
+}
+
+function assertTextLimit(text: string, fileName: string): string {
+  const normalized = text.trim();
+  if (normalized.length > MAX_EXTRACTED_CHARACTERS) {
     throw new Error(
-      `No selectable text was found in '${file.name}'. It may be a scanned PDF; OCR support is required before this file can be used.`
+      `'${fileName}' contains more than 200,000 readable characters. Split the document by chapter and generate smaller exams so no source content is silently discarded.`
     );
   }
-  return text;
-}
-
-async function extractDocx(file: File): Promise<string> {
-  const mammoth = await import('mammoth');
-  const result = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
-  return result.value || '';
-}
-
-async function extractPptx(file: File): Promise<string> {
-  const archive = await JSZip.loadAsync(file);
-  const slidePaths = Object.keys(archive.files)
-    .filter((path) => /^ppt\/slides\/slide\d+\.xml$/.test(path))
-    .sort((a, b) => Number(a.match(/slide(\d+)/)?.[1]) - Number(b.match(/slide(\d+)/)?.[1]));
-
-  const slides: string[] = [];
-  for (const [index, path] of slidePaths.entries()) {
-    const xml = await archive.file(path)?.async('text');
-    if (!xml) continue;
-    const document = new DOMParser().parseFromString(xml, 'application/xml');
-    const text = Array.from(document.getElementsByTagName('a:t'))
-      .map((node) => node.textContent || '')
-      .filter(Boolean)
-      .join(' ');
-    if (text.trim()) slides.push(`[Slide ${index + 1}]\n${text}`);
-  }
-  return slides.join('\n\n');
-}
-
-async function extractFile(file: File): Promise<string> {
-  const extension = file.name.toLowerCase().split('.').pop();
-  if (extension === 'pdf') return extractPdf(file);
-  if (extension === 'docx') return extractDocx(file);
-  if (extension === 'pptx') return extractPptx(file);
-  if (extension === 'txt' || extension === 'md') return file.text();
-  throw new Error(`'${file.name}' is not supported. Use PDF, DOCX, PPTX, TXT, or Markdown.`);
+  return normalized;
 }
 
 export async function extractLocalDocument(file: File): Promise<{ name: string; text: string }> {
@@ -255,7 +222,7 @@ export async function extractLocalDocument(file: File): Promise<{ name: string; 
   }
 
   try {
-    const text = assertTextLimit(await extractFile(file), file.name);
+    const text = assertTextLimit(await extractInWorker(file), file.name);
     await saveCheckpoint({
       id,
       name: file.name,
