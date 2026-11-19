@@ -20,12 +20,12 @@ Acceptance: a queued job is processed after the teacher closes the browser; conc
 
 ## Phase 1 — Local-first document intelligence
 
-Status: partially implemented; OCR and resumable recovery remain open.
+Status: OCR runtime and browser integration implemented; cancellation, in-app review, and broader classroom validation remain open.
 
-- [ ] Add a pinned, self-hosted browser OCR runtime with language assets and a Web Worker.
-- [ ] OCR image-only PDFs and photographs locally; preserve page number, reading order, text blocks, and confidence.
+- [x] Add a pinned, self-hosted browser OCR runtime (Tesseract.js 7.0.0) with local WebAssembly core, English/Tagalog language assets, and a Web Worker.
+- [x] OCR image-only PDF pages and photographs locally; preserve PDF page numbers, extracted text, and page-level confidence flags.
 - [x] Detect raster PDF pages with almost no selectable text and stop generation rather than silently feeding incomplete lesson content to AI. This is detection only; OCR processing is still pending.
-- [ ] Add cancellation, progress, memory guards, and low-confidence page review.
+- [x] Report extraction/OCR progress, cap PDF render buffers at 12 megapixels, and terminate OCR workers after each document.\n- [x] Flag low-confidence pages and show a teacher review notice before exam generation.\n- [ ] Add user-triggered cancellation and an in-app preview/review workflow for low-confidence pages.
 - [x] Keep original documents in browser IndexedDB and process them locally; original file bytes are not uploaded to Supabase or sent to AI providers.
 - [x] Compress extracted lesson text in the browser with gzip before uploading it to the existing private `lesson-uploads` bucket.
 - [x] Replace large lesson text in new job payloads with a versioned manifest, source hash, size metadata, and document counts.
@@ -34,7 +34,7 @@ Status: partially implemented; OCR and resumable recovery remain open.
 - [x] Clean stale source objects older than 24 hours when that user next starts a job, while preserving every path referenced by an active job. Compressed text is capped below the 6 MB TUS threshold; original large files stay local.
 - [ ] Add resumable upload recovery only if measured compressed payload sizes exceed the 6 MB threshold.
 
-Acceptance: test text PDFs, image-only PDFs, DOCX, PPTX, photos, multi-file sources, interrupted uploads, retry/resume, cross-tenant access denial, and a large file on a low-memory phone. Confirm original file bytes never enter the AI provider request.
+Acceptance: CI now runs the production build in Chromium and OCRs a known lesson photo, a generated image-only lesson PDF, and a real-world scan photo using same-origin assets. Still validate real classroom scans, multi-page mixed PDFs, multi-file sources, interrupted uploads, retry/resume, cross-tenant access denial, and a large file on a low-memory phone. Confirm original file bytes never enter the AI provider request.
 
 ## Phase 2 — Evidence-grounded AI generation
 

@@ -59,16 +59,42 @@ test('production local document worker OCRs both photos and image-only PDFs usin
   });
 
   await page.goto('/omr-validation');
+  const lessonPngBase64 = await page.evaluate(async () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 2200;
+    canvas.height = 460;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Could not create the scanned lesson fixture.');
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = '#111111';
+    context.font = 'bold 76px Arial';
+    context.fillText('PHOTOSYNTHESIS', 60, 125);
+    context.font = '54px Arial';
+    context.fillText('Plants use light energy to make chemical energy.', 60, 235);
+    context.fillText('Carbon dioxide and water produce glucose and oxygen.', 60, 335);
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Could not encode the scanned lesson fixture.')), 'image/png');
+    });
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = '';
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+    }
+    return btoa(binary);
+  });
+  const lessonImage = Buffer.from(lessonPngBase64, 'base64');
+  const lessonPdf = createImageOnlyPdf(lessonImage);
   const fixturePath = path.resolve('src/features/omr/__tests__/fixtures/real_world_scan.png');
   expect(fs.existsSync(fixturePath)).toBe(true);
-  const image = fs.readFileSync(fixturePath);
-  const pdf = createImageOnlyPdf(image);
+  const realWorldImage = fs.readFileSync(fixturePath);
   const output = page.getByTestId('ocr-browser-result');
   const input = page.getByTestId('ocr-file-input');
 
   for (const file of [
-    { name: 'real_world_scan_photo.png', mimeType: 'image/png', buffer: image },
-    { name: 'real_world_scan_image_only.pdf', mimeType: 'application/pdf', buffer: pdf },
+    { name: 'photosynthesis_lesson_photo.png', mimeType: 'image/png', buffer: lessonImage },
+    { name: 'photosynthesis_lesson_scanned.pdf', mimeType: 'application/pdf', buffer: lessonPdf },
+    { name: 'real_world_scan_photo.png', mimeType: 'image/png', buffer: realWorldImage },
   ]) {
     const previousResult = await output.textContent();
     await input.setInputFiles(file);
@@ -85,6 +111,10 @@ test('production local document worker OCRs both photos and image-only PDFs usin
     expect(result, result.error || 'Local OCR did not complete').toMatchObject({ outcome: 'PASS' });
     expect((result.text || '').length).toBeGreaterThan(10);
     if (file.name.endsWith('.pdf')) expect(result.text).toContain('[Page 1]');
+    if (file.name.startsWith('photosynthesis_')) {
+      expect((result.text || '').toUpperCase()).toContain('PHOTOSYNTHESIS');
+      expect((result.text || '').toUpperCase()).toContain('CHEMICAL ENERGY');
+    }
   }
 
   expect(ocrRequests.length).toBeGreaterThan(0);
