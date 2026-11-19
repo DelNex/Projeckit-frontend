@@ -117,6 +117,13 @@ CREATE POLICY "Tenant members can insert own audit events"
   WITH CHECK (
     tenant_id = (SELECT public.get_current_tenant_id())
     AND user_id = (SELECT auth.uid())
+    AND action NOT IN (
+      'SYSTEM_ERROR',
+      'SYSTEM_WARNING',
+      'SYSTEM_INFO',
+      'AI_PROVIDER_FAILURE',
+      'EXAM_WORKER_FAILURE'
+    )
   );
 
 -- Audit records are administrator-only; teachers must not read other
@@ -150,7 +157,7 @@ AS $function$
 DECLARE
   target_tenant uuid;
 BEGIN
-  IF COALESCE(auth.role(), '') NOT IN ('anon', 'authenticated') THEN
+  IF auth.uid() IS NULL THEN
     IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
     RETURN NEW;
   END IF;
@@ -181,6 +188,33 @@ DROP TRIGGER IF EXISTS trg_guard_grading_period_writes ON public.grading_periods
 CREATE TRIGGER trg_guard_grading_period_writes
   BEFORE INSERT OR UPDATE OR DELETE ON public.grading_periods
   FOR EACH ROW EXECUTE FUNCTION public.guard_grading_period_writes();
+
+-- These helper functions are needed by authenticated RLS policies, but they
+-- should not be callable by anonymous clients. The trigger function itself is
+-- only invoked by PostgreSQL triggers and is not an RPC endpoint.
+REVOKE ALL ON FUNCTION public.get_current_tenant_id() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.is_current_user_admin() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.is_platform_admin() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_current_tenant_id() TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.is_current_user_admin() TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.is_platform_admin() TO authenticated, service_role;
+
+REVOKE ALL ON FUNCTION public.guard_grading_period_writes() FROM PUBLIC, anon, authenticated;
+
+-- Grading-period RPCs remain available to signed-in users, but their writes
+-- are checked by trg_guard_grading_period_writes before any row is changed.
+REVOKE ALL ON FUNCTION public.add_grading_period(text, text, text) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.apply_grading_period_preset(text) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.delete_or_archive_grading_period(uuid, text, uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.get_grading_period_usage(uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.restore_grading_period(uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.set_current_grading_period(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.add_grading_period(text, text, text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.apply_grading_period_preset(text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.delete_or_archive_grading_period(uuid, text, uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_grading_period_usage(uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.restore_grading_period(uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.set_current_grading_period(uuid) TO authenticated, service_role;
 
 -- Support the quota and lease scans without repeatedly scanning the full job
 -- history as the school grows.
