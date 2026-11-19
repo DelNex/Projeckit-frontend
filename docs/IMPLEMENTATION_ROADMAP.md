@@ -20,37 +20,40 @@ Acceptance: a queued job is processed after the teacher closes the browser; conc
 
 ## Phase 1 — Local-first document intelligence
 
-Status: planned; existing text extraction remains unchanged.
+Status: partially implemented; OCR and resumable recovery remain open.
 
 - [ ] Add a pinned, self-hosted browser OCR runtime with language assets and a Web Worker.
 - [ ] OCR image-only PDFs and photographs locally; preserve page number, reading order, text blocks, and confidence.
 - [ ] Add cancellation, progress, memory guards, and low-confidence page review.
-- [ ] Store compressed extracted chunks in a private Storage bucket using tenant-scoped paths and short-lived signed uploads.
-- [ ] Replace large lesson text in job payloads with a versioned manifest of object references and source hashes.
-- [ ] Add server-side retrieval, decompression, cleanup, quota checks, and resumable upload recovery.
-- [ ] Keep original documents private; do not expose Storage object URLs or service-role credentials to the browser.
+- [x] Keep original documents in browser IndexedDB and process them locally; original file bytes are not uploaded to Supabase or sent to AI providers.
+- [x] Compress extracted lesson text in the browser with gzip before uploading it to the existing private `lesson-uploads` bucket.
+- [x] Replace large lesson text in new job payloads with a versioned manifest, source hash, size metadata, and document counts.
+- [x] Retrieve, decompress, and verify the source object in the API and worker; enforce owner-scoped paths and size/character limits.
+- [x] Delete uploaded source objects after successful completion, terminal failure, or cancellation.
+- [ ] Add stale-object cleanup for abandoned browser sessions and resumable upload recovery. Compressed text is capped below the 6 MB TUS threshold; original large files stay local.
 
 Acceptance: test text PDFs, image-only PDFs, DOCX, PPTX, photos, multi-file sources, interrupted uploads, retry/resume, cross-tenant access denial, and a large file on a low-memory phone. Confirm original file bytes never enter the AI provider request.
 
 ## Phase 2 — Evidence-grounded AI generation
 
-Status: planned; current lexical retrieval and structural validation remain in place.
+Status: partially implemented; ambiguity/confidence scoring and labeled quality benchmarks remain open.
 
-- [ ] Add provider-specific structured-output schemas for Groq, OpenRouter, Gemini, and Cloudflare.
-- [ ] Require question-level source references (document, page, chunk) and a short supporting evidence span.
-- [ ] Verify evidence spans against retrieved source text before accepting an answer.
-- [ ] Detect unsupported facts, ambiguous wording, multiple defensible answers, and source conflicts.
-- [ ] Add per-question confidence and teacher-review states; never silently convert uncertain questions into approved items.
+- [x] Use one shared structured question schema through the Groq, OpenRouter, Gemini, and Cloudflare provider router.
+- [x] Require each new AI question to return a source ID, section number, and short verbatim evidence quote.
+- [x] Verify evidence against the exact retrieved lesson section before accepting a question; unsupported items enter the existing repair flow.
+- [ ] Detect ambiguous wording, multiple defensible answers, and conflicting source statements.
+- [ ] Add calibrated per-question confidence and explicit review states.
 - [ ] Measure question quality against labeled lesson/question fixtures and provider-specific regression tests.
 
 Acceptance: every accepted question has a verifiable source; unsupported or ambiguous questions are rejected or marked for review; provider failover preserves the same question schema and TOS constraints.
 
 ## Phase 3 — Teacher Exam Review Studio
 
-Status: planned; existing draft editor remains the foundation.
+Status: partially implemented; version history and immutable edit snapshots remain open.
 
-- [ ] Add a review workspace with source evidence, TOS alignment, competency, cognitive level, and answer explanation beside each question.
-- [ ] Support approve, edit, replace, regenerate-one-question, and regenerate-batch actions.
+- [x] Show question-level source evidence beside the question and rationale in the existing review editor.
+- [x] Retain existing TOS competency/cognitive-level alignment, edit, approve, and single-item regeneration controls.
+- [ ] Add batch replacement/regeneration with explicit preview.
 - [ ] Keep teacher edits immutable from background retries and provider failover.
 - [ ] Add version history and explicit save/restore operations.
 
@@ -58,25 +61,28 @@ Acceptance: regenerating one question never changes approved questions or the sa
 
 ## Phase 4 — OMR learning-gap intelligence
 
-Status: planned; existing OMR scoring and reports remain the source of truth.
+Status: partially implemented; remedial quiz generation and evidence-linked recommendations remain open.
 
-- [ ] Aggregate confirmed scan results by competency and item, excluding unverified scans.
-- [ ] Add item discrimination, difficulty, distractor analysis, and cohort comparisons with sample-size warnings.
-- [ ] Identify weak competencies and show the source evidence used for the recommendation.
+- [x] Aggregate processed/graded OMR scans by competency and item; the shared scan helper excludes pending and review-required scans and deduplicates rescans.
+- [x] Retain item difficulty, discrimination, distractor distribution, and Bloom-domain breakdowns in the existing assessment analysis.
+- [x] Add competency-level mastery percentages and weak-item lists to the assessment analysis.
+- [ ] Add explicit cohort comparison confidence intervals and small-sample warnings.
+- [ ] Attach original lesson evidence to weak-competency recommendations.
 - [ ] Generate remedial quizzes from the original lesson library and the weak competency set.
-- [ ] Keep student-identifying information out of external AI requests unless school policy explicitly allows it.
+- [x] Keep student identifiers out of external AI requests in the lesson-generation path.
 
 Acceptance: reports reconcile with existing item-analysis calculations; unconfirmed OMR sheets are excluded; remedial exams target only supported competencies.
 
 ## Phase 5 — Admin diagnostics and observability
 
-Status: planned; structured server logging and Next.js error capture are now present.
+Status: partially implemented; provider telemetry, alerts, and end-to-end trace views remain open.
 
-- [ ] Add a protected diagnostics API and admin dashboard.
-- [ ] Show provider health, failure/fallback rates, latency, queue depth, oldest queued age, lease expiry, repair count, and usage limits.
-- [ ] Add trace/request/job IDs that connect API, queue, worker, and provider attempts.
-- [ ] Add retention and redaction policies; never expose secrets, student records, or full lesson text.
-- [ ] Add alerts for stuck jobs, repeated provider failures, and abnormal queue growth.
+- [x] Add a protected diagnostics API and admin dashboard section.
+- [x] Show configured provider names, queued/running/needs-attention/failed counts, expired leases, and oldest queued age.
+- [ ] Show actual provider health, failure/fallback rates, latency, repair count, and usage limits.
+- [ ] Add a unified trace view connecting request, queue, worker, and provider attempts.
+- [x] Keep provider secrets and lesson text out of diagnostics responses.
+- [ ] Add retention/redaction policies and alerts for stuck jobs, repeated provider failures, and abnormal queue growth.
 
 Acceptance: administrators can identify a failed request from its request ID without seeing API keys, lesson contents, or student data.
 
