@@ -20,6 +20,7 @@ function cleanText(value: unknown, max = 500): string | null {
   return value
     .replace(/(?:Bearer\s+)[A-Za-z0-9._~+\/-]+=*/gi, 'Bearer [REDACTED]')
     .replace(/\b(?:gsk_|sb_secret_|sb_publishable_)[A-Za-z0-9_-]+/gi, '[REDACTED]')
+    .replace(/\bsk-or-v1-[A-Za-z0-9_-]+|\bsk-[A-Za-z0-9_-]{20,}|\bAIza[0-9A-Za-z_-]{20,}/gi, '[REDACTED]')
     .replace(/(api[_-]?key|token|password|secret)\s*[:=]\s*[^\s,;]+/gi, '$1=[REDACTED]')
     .slice(0, max);
 }
