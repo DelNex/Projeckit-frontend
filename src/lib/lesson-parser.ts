@@ -34,7 +34,7 @@ export async function extractTextFromFiles(files: File[]): Promise<LessonExtract
     totalCharacters += document.text.length;
     if (totalCharacters > LOCAL_DOCUMENT_MAX_CHARACTERS) {
       throw new Error(
-        'These documents contain more than 200,000 readable characters. Split them into smaller chapter groups so no source content is silently dropped.'
+        'These documents contain more than 900,000 readable characters. Split them into smaller chapter groups so no source content is silently dropped.'
       );
     }
     documents.push(document);
