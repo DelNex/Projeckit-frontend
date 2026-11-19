@@ -18,13 +18,14 @@ function safeJobError(value: unknown): string {
 export async function GET(request: Request) {
   try {
     const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ error: 'Sign in to view system events.' }, { status: 401 });
+    const { data: claimsResult, error: authError } = await supabase.auth.getClaims();
+    const userId = claimsResult?.claims?.sub;
+    if (authError || !userId) return NextResponse.json({ error: 'Sign in to view system events.' }, { status: 401 });
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role,status,archived_at,tenant_id,is_platform_admin')
-      .eq('id', user.id)
+      .eq('id', userId)
       .maybeSingle();
 
     if (profileError || !profile || (profile.role !== 'admin' && !profile.is_platform_admin) || profile.status !== 'approved' || profile.archived_at) {
