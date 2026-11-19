@@ -24,7 +24,23 @@ export function getValidatedFrontendEnv(): FrontendEnv {
     throw new Error('Missing NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY');
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (!configuredAppUrl) {
+    throw new Error('Missing NEXT_PUBLIC_APP_URL');
+  }
+
+  let appUrl: string;
+  try {
+    const parsedAppUrl = new URL(configuredAppUrl);
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    if (parsedAppUrl.username || parsedAppUrl.password || parsedAppUrl.search || parsedAppUrl.hash ||
+      (parsedAppUrl.protocol !== 'https:' && !(isDevelopment && parsedAppUrl.protocol === 'http:'))) {
+      throw new Error('Invalid application URL');
+    }
+    appUrl = parsedAppUrl.origin;
+  } catch {
+    throw new Error('NEXT_PUBLIC_APP_URL must be a valid HTTPS origin in production.');
+  }
 
   return {
     NEXT_PUBLIC_SUPABASE_URL: url.trim(),
