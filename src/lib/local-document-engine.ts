@@ -115,17 +115,17 @@ export async function getLocalDocumentCapacity(): Promise<LocalDocumentCapacity>
 function normalizeText(text: string): string {
   const seen = new Set<string>();
   return text
-    .replace(/\u0000/g, '')
-    .replace(/\r\n?/g, '\n')
-    .split('\n')
-    .map((line) => line.replace(/[\t ]+/g, ' ').trim())
-    .filter((line) => {
-      if (!line) return true;
-      if (seen.has(line)) return false;
-      seen.add(line);
+    .replace(/\\u0000/g, '')
+    .replace(/\\r\\n?/g, '\\n')
+    .split(/\\n\\s*\\n/)
+    .map((paragraph) => paragraph.replace(/[\\t ]+/g, ' ').trim())
+    .filter((paragraph) => {
+      if (!paragraph) return true;
+      if (seen.has(paragraph)) return false;
+      seen.add(paragraph);
       return true;
     })
-    .join('\n')
+    .join('\\n\\n')
     .trim();
 }
 
