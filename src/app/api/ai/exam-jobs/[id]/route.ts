@@ -1,4 +1,7 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
+import { runGroqExamJob } from '@/lib/server/groq-exam-worker';
+
+export const maxDuration = 60;
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { jobBelongsToTenant } from '@/lib/server/exam-jobs';
@@ -12,7 +15,7 @@ async function scopedJob(id: string) {
   const admin = createAdminClient();
   await admin.rpc('expire_unserviceable_exam_jobs');
   await admin.rpc('cleanup_exam_job_payloads');
-  const { data: job, error } = await admin.from('exam_generation_jobs').select('id,tos_id,status,progress,error,result_summary,created_at,updated_at,finished_at,created_by,tenant_id').eq('id', id).eq('tenant_id', profile.tenant_id).maybeSingle();
+  const { data: job, error } = await admin.from('exam_generation_jobs').select('id,tos_id,status,provider,lease_expires_at,progress,error,result_summary,created_at,updated_at,finished_at,created_by,tenant_id').eq('id', id).eq('tenant_id', profile.tenant_id).maybeSingle();
   if (error || !jobBelongsToTenant(job, profile.tenant_id)) return { response: NextResponse.json({ error: 'Exam generation job was not found.' }, { status: 404 }) };
   return { job, admin };
 }
@@ -23,6 +26,20 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     const result = await scopedJob(id);
     if (result.response) return result.response;
     const { job, admin } = result as any;
+    const leaseExpired = !job.lease_expires_at || Date.parse(job.lease_expires_at) <= Date.now();
+    if (job.provider === 'groq_api' && (
+      job.status === 'queued'
+      || job.status === 'needs_attention'
+      || (job.status === 'running' && leaseExpired)
+    )) {
+      after(async () => {
+        try {
+          await runGroqExamJob(job.id, admin);
+        } catch (error) {
+          console.error('[Groq worker] Status-poll recovery failed:', error instanceof Error ? error.message : 'unknown error');
+        }
+      });
+    }
     let queuePosition: number | null = null;
     if (job.status === 'queued') {
       const count = await admin.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('status', 'queued').lte('created_at', job.created_at);
