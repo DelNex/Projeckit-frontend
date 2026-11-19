@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { authorizeHelperRequest } from '../helper-auth';
-import { finalizeExamJob, jobBelongsToTenant } from '../exam-jobs';
+import { finalizeExamJob, jobBelongsToTenant, verifySourceEvidence } from '../exam-jobs';
 
 const slots = [
   { item_number: 1, competency_id: 'C1', competency_code: 'C1', competency_description: 'First competency', cognitive_level: 'remembering' as const },
@@ -97,6 +97,56 @@ test('failed generation does not call the atomic question-save operation', async
   const result = await finalizeExamJob('job-4', 'not a question array', admin);
   assert.equal(result.status, 'failed');
   assert.equal(writes.some((write) => write.method === 'rpc'), false);
+});
+
+
+test('source evidence must quote the exact supplied source section', () => {
+  const chunks = [{
+    source: 'Lesson material',
+    sourceId: 'source-1',
+    part: 2,
+    parts: 3,
+    text: 'Photosynthesis converts sunlight into chemical energy in green plants.',
+  }];
+  assert.equal(verifySourceEvidence({
+    source_id: 'source-1', part: 2, quote: 'converts sunlight into chemical energy',
+  }, chunks), true);
+  assert.equal(verifySourceEvidence({
+    source_id: 'source-1', part: 2, quote: 'plants convert water into glucose',
+  }, chunks), false);
+  assert.equal(verifySourceEvidence({
+    source_id: 'source-2', part: 2, quote: 'converts sunlight into chemical energy',
+  }, chunks), false);
+  assert.equal(verifySourceEvidence({
+    source_id: 'source-1', part: 3, quote: 'converts sunlight into chemical energy',
+  }, chunks), false);
+});
+
+test('finalizer queues repair when a new question has unsupported source evidence', async () => {
+  const sourceChunks = [{
+    source: 'Lesson material', sourceId: 'source-1', part: 1, parts: 1,
+    text: 'Photosynthesis converts light energy into chemical energy.',
+  }];
+  const job = {
+    id: 'job-evidence', tenant_id: 'tenant-a', tos_id: 'tos-a', created_by: 'user-a',
+    status: 'running', job_kind: 'full', repair_round: 0,
+    payload: { slots, requireEvidence: true, lessonChunks: sourceChunks, prompt: 'write' },
+  };
+  const { admin, writes } = createAdminMock(job);
+  const valid = {
+    ...question(slots[0]),
+    source_evidence: { source_id: 'source-1', part: 1, quote: 'converts light energy into chemical energy' },
+  };
+  const unsupported = {
+    ...question(slots[1]),
+    source_evidence: { source_id: 'source-1', part: 1, quote: 'plants absorb blue light to make proteins' },
+  };
+  const result = await finalizeExamJob('job-evidence', JSON.stringify([valid, unsupported]), admin, sourceChunks);
+  assert.equal(result.status, 'running');
+  assert.deepEqual(result.missingItems, [2]);
+  const child = writes.find((write) => write.table === 'exam_generation_jobs' && write.method === 'insert')?.value;
+  assert.deepEqual(child.payload.slots.map((slot: any) => slot.item_number), [2]);
+  assert.equal(child.payload.partialQuestions[0].source_evidence.quote, valid.source_evidence.quote);
 });
 
 test('helper routes reject missing and incorrect bearer tokens', () => {
