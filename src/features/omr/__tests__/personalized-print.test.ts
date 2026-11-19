@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import { describe, it } from 'node:test';
 import { generateCanonicalGeometry } from '../geometry/canonical-geometry';
-import { A5_TWO_UP_PRINT_SIZE, buildA5TwoUpPages, buildA4CompactPages, getA4CompactLayout } from '../rendering/personalized-print-layout';
+import { A5_TWO_UP_PRINT_SIZE, buildA5TwoUpPages, buildA4CompactPages, getA4CompactLayout, getCompactOmrPageHeight } from '../rendering/personalized-print-layout';
 import { renderOmrMasterSvg } from '../rendering/svg-renderer';
 
 describe('Personalized A5 OMR print layout', () => {
@@ -83,5 +83,40 @@ describe('Compact A4 OMR printing', () => {
     const html = buildA4CompactPages(1, 2, 90, () => '<svg data-student="1"></svg>');
     assert.strictEqual((html.match(/class="omr-sheet-compact"/g) || []).length, 4);
     assert.strictEqual((html.match(/data-student=/g) || []).length, 1);
+  });
+});
+
+
+describe('Compact canonical OMR geometry', () => {
+  const makeGeometry = (itemCount: number) => generateCanonicalGeometry({
+    assessmentId: `compact-${itemCount}`,
+    itemCount,
+    classSize: 40,
+    title: 'Quarter 1 Test',
+    subject: 'Mathematics',
+  });
+
+  it('preserves the original 60-item A5 physical geometry', () => {
+    const full = makeGeometry(60);
+    assert.strictEqual(getCompactOmrPageHeight(full), 794);
+    assert.deepStrictEqual([full.page.width, full.page.height], [559, 794]);
+  });
+
+  it('shortens a 10-item form enough to fit additional students per page', () => {
+    const base = makeGeometry(10);
+    const compactHeight = getCompactOmrPageHeight(base);
+    const compact = generateCanonicalGeometry({
+      ...base.config,
+      sheetFormat: 'HALF',
+      pageWidth: base.page.width,
+      pageHeight: compactHeight,
+    });
+    const layout = getA4CompactLayout(compact.page.height);
+    assert.ok(compact.page.height < 794);
+    assert.ok(layout.sheetsPerPage > 2);
+    assert.strictEqual(compact.layout.answerArea.markerSize, base.layout.answerArea.markerSize);
+    assert.strictEqual(compact.layout.barcode.narrowBarWidth, base.layout.barcode.narrowBarWidth);
+    assert.strictEqual(compact.layout.barcode.height, base.layout.barcode.height);
+    assert.strictEqual(compact.page.width, base.page.width);
   });
 });
