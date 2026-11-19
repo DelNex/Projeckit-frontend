@@ -38,4 +38,10 @@ test('exam queue migration serializes quota checks before inserting jobs', async
   assert.match(securityMigration, /IF auth\.uid\(\) IS NULL THEN/);
   assert.match(securityMigration, /REVOKE ALL ON FUNCTION public\.guard_grading_period_writes/);
   assert.doesNotMatch(securityMigration, /CREATE POLICY "Tenant admins can insert audit logs"/);
+  assert.match(securityMigration, /Tenant admins can insert academic configs/);
+  assert.match(securityMigration, /Tenant admins can insert sections/);
+  assert.match(securityMigration, /Tenant admins can insert subjects/);
+  assert.match(securityMigration, /Tenant admins can insert grading periods/);
+  assert.match(securityMigration, /Tenant admins can update school settings/);
+  assert.match(securityMigration, /Approved tenant members can read exam generation jobs/);
 });
