@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { buildExamPrompt, finalizeExamJob } from './exam-jobs';
 import type { TosBlueprintSlot } from '@/lib/exam-types';
@@ -129,21 +130,14 @@ async function requestGroqQuestions(payload: Record<string, any>): Promise<strin
  */
 export async function runGroqExamJob(jobId: string, admin = createAdminClient(), repairDepth = 0): Promise<void> {
   if (repairDepth > 2) throw new Error('Exam repair limit reached.');
-  const { data: claimed, error: claimError } = await admin
-    .from('exam_generation_jobs')
-    .update({
-      status: 'running',
-      claimed_by: WORKER_ID,
-      lease_expires_at: new Date(Date.now() + 55_000).toISOString(),
-      progress: { stage: 'generating', label: 'Groq is generating and checking exam questions', completedChunks: 0, totalChunks: 1 },
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', jobId)
-    .in('status', ['queued', 'needs_attention'])
-    .select('*')
-    .maybeSingle();
-
-  if (claimError) throw new Error('Could not claim the exam generation job.');
+  const workerId = `${WORKER_ID}:${randomUUID()}`;
+  const { data: claimRows, error: claimError } = await admin.rpc('claim_groq_exam_job', {
+    p_job_id: jobId,
+    p_worker_id: workerId,
+    p_lease_seconds: 75,
+  });
+  const claimed = Array.isArray(claimRows) ? claimRows[0] : claimRows;
+  if (claimError) throw new Error('Could not claim the Groq exam generation job.');
   if (!claimed) return; // Another worker, a cancellation, or a completed job won the race.
 
   try {
@@ -169,20 +163,21 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
       if (!Array.isArray(batchQuestions)) throw new Error('Groq returned an invalid question batch.');
       generatedQuestions.push(...batchQuestions);
 
-      await admin.from('exam_generation_jobs').update({
+      const { error: progressError } = await admin.from('exam_generation_jobs').update({
         progress: {
           stage: 'generating',
           label: `Generated ${Math.min((index + 1) * batchSize, slots.length)} of ${slots.length} questions`,
           completedChunks: index + 1,
           totalChunks: batches.length,
         },
-        lease_expires_at: new Date(Date.now() + 55_000).toISOString(),
+        lease_expires_at: new Date(Date.now() + 75_000).toISOString(),
         updated_at: new Date().toISOString(),
-      }).eq('id', jobId).eq('claimed_by', WORKER_ID);
+      }).eq('id', jobId).eq('claimed_by', workerId);
+      if (progressError) throw new Error('The Groq worker lost its exam job lease while generating questions.');
     }
 
     const responseText = JSON.stringify(generatedQuestions);
-    await admin.from('exam_generation_jobs').update({
+    const { error: validationProgressError } = await admin.from('exam_generation_jobs').update({
       progress: { stage: 'validating', label: 'Validating answers, choices, competencies and duplicates', completedChunks: batches.length, totalChunks: batches.length },
       lease_expires_at: new Date(Date.now() + 55_000).toISOString(),
       updated_at: new Date().toISOString(),
@@ -202,7 +197,7 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
       payload: {},
       claimed_by: null,
       lease_expires_at: null,
-    }).eq('id', jobId).in('status', ['running', 'queued']);
+    }).eq('id', jobId).eq('claimed_by', workerId).in('status', ['running', 'queued']);
     if (claimed.parent_job_id) {
       await admin.from('exam_generation_jobs').update({
         status: 'failed',
