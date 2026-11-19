@@ -23,7 +23,6 @@ import {
   exportReportToExcel,
   generateAssessmentReportData,
 } from '@/lib/reports-generator';
-import { downloadAnalyticsReportDocx, downloadConsolidatedReportDocx } from '@/lib/analytics-docx-export';
 import { deduplicateItemScans, readScanAnswers, readScanItemStates, type ItemResponseScan } from '@/lib/item-response-analysis';
 import { calculateAssessmentScore, isAnswerCorrect, percentageToMps } from '@/lib/assessment-scoring';
 
@@ -759,6 +758,7 @@ function AnalyticsContent() {
   const handleExportDocx = async () => {
     try {
       setExporting(true);
+      const { downloadAnalyticsReportDocx, downloadConsolidatedReportDocx } = await import('@/lib/analytics-docx-export');
       const targetId = selectedAssessmentId || (assessments.length > 0 ? assessments[0].id : null);
       if (activeTab === 'reports') {
         await downloadConsolidatedReportDocx({
