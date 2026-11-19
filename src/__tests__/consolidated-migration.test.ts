@@ -2,15 +2,18 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import {
-  generateConsolidatedAllWithSeed,
-  generateConsolidated14to20,
-} from '../../../scripts/build-consolidated.mjs';
+import { pathToFileURL } from 'node:url';
+
+// This generator lives in the parent monorepo, not in the standalone frontend checkout.
+const generatorPath = path.resolve(__dirname, '../../../scripts/build-consolidated.mjs');
+const generators: any = fs.existsSync(generatorPath)
+  ? await import(pathToFileURL(generatorPath).href)
+  : null;
 
 describe('Project KIT — Consolidated Migrations Parity Tests', () => {
   const repoRoot = path.resolve(__dirname, '../../..');
 
-  it('1. committed consolidated_migration_and_seed.sql matches generated output exactly', () => {
+  it('1. committed consolidated_migration_and_seed.sql matches generated output exactly', { skip: !generators }, () => {
     const committedFilePath = path.join(
       repoRoot,
       'supabase',
@@ -22,7 +25,7 @@ describe('Project KIT — Consolidated Migrations Parity Tests', () => {
     );
 
     const committedContent = fs.readFileSync(committedFilePath, 'utf8');
-    const expectedContent = generateConsolidatedAllWithSeed();
+    const expectedContent = generators.generateConsolidatedAllWithSeed();
 
     assert.ok(
       committedContent.startsWith('-- =============================================================================\n-- GENERATED FILE - DO NOT EDIT'),
@@ -36,7 +39,7 @@ describe('Project KIT — Consolidated Migrations Parity Tests', () => {
     );
   });
 
-  it('2. committed consolidated_migrations_14_to_20.sql matches generated output exactly', () => {
+  it('2. committed consolidated_migrations_14_to_20.sql matches generated output exactly', { skip: !generators }, () => {
     const committedFilePath = path.join(
       repoRoot,
       'supabase',
@@ -49,7 +52,7 @@ describe('Project KIT — Consolidated Migrations Parity Tests', () => {
     );
 
     const committedContent = fs.readFileSync(committedFilePath, 'utf8');
-    const expectedContent = generateConsolidated14to20();
+    const expectedContent = generators.generateConsolidated14to20();
 
     assert.ok(
       committedContent.startsWith('-- =============================================================================\n-- GENERATED FILE - DO NOT EDIT'),
