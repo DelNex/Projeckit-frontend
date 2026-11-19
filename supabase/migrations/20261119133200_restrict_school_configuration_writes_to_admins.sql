@@ -1,6 +1,139 @@
 -- Restrict school-wide configuration writes to approved tenant administrators.
 -- Tenant members retain read access for normal teaching workflows.
 
+-- Optimize and tighten profile RLS. The previous SELECT policy used
+-- is_current_user_admin() without a tenant predicate, allowing any school
+-- administrator to read profiles from every school.
+DROP POLICY IF EXISTS "Admins can manage all profiles in their tenant" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can view profiles in their own tenant" ON public.profiles;
+
+CREATE POLICY "Tenant members can view profiles"
+  ON public.profiles FOR SELECT TO public
+  USING (
+    tenant_id = (SELECT public.get_current_tenant_id())
+    OR id = (SELECT auth.uid())
+    OR (SELECT public.is_platform_admin())
+  );
+
+CREATE POLICY "Tenant admins can insert profiles"
+  ON public.profiles FOR INSERT TO public
+  WITH CHECK (
+    (
+      tenant_id = (SELECT public.get_current_tenant_id())
+      AND (SELECT public.is_current_user_admin())
+    )
+    OR (SELECT public.is_platform_admin())
+  );
+
+CREATE POLICY "Users and tenant admins can update profiles"
+  ON public.profiles FOR UPDATE TO public
+  USING (
+    id = (SELECT auth.uid())
+    OR (
+      tenant_id = (SELECT public.get_current_tenant_id())
+      AND (SELECT public.is_current_user_admin())
+    )
+    OR (SELECT public.is_platform_admin())
+  )
+  WITH CHECK (
+    id = (SELECT auth.uid())
+    OR (
+      tenant_id = (SELECT public.get_current_tenant_id())
+      AND (SELECT public.is_current_user_admin())
+    )
+    OR (SELECT public.is_platform_admin())
+  );
+
+CREATE POLICY "Tenant admins can delete profiles"
+  ON public.profiles FOR DELETE TO public
+  USING (
+    (
+      tenant_id = (SELECT public.get_current_tenant_id())
+      AND (SELECT public.is_current_user_admin())
+    )
+    OR (SELECT public.is_platform_admin())
+  );
+
+-- Preserve teacher audit-event writes while avoiding per-row auth function calls.
+DROP POLICY IF EXISTS "Admins can insert audit logs" ON public.audit_logs;
+CREATE POLICY "Tenant members can insert own audit events"
+  ON public.audit_logs FOR INSERT TO authenticated
+  WITH CHECK (
+    tenant_id = (SELECT public.get_current_tenant_id())
+    AND user_id = (SELECT auth.uid())
+  );
+
+-- Cache the caller identity once per statement and exclude archived accounts.
+DROP POLICY IF EXISTS "Approved tenant members can read exam generation jobs" ON public.exam_generation_jobs;
+CREATE POLICY "Approved tenant members can read exam generation jobs"
+  ON public.exam_generation_jobs FOR SELECT TO authenticated
+  USING (
+    tenant_id = (SELECT public.get_current_tenant_id())
+    AND EXISTS (
+      SELECT 1 FROM public.profiles p
+      WHERE p.id = (SELECT auth.uid())
+        AND p.tenant_id = exam_generation_jobs.tenant_id
+        AND p.status = 'approved'
+        AND p.archived_at IS NULL
+    )
+  );
+
+DROP POLICY IF EXISTS "Approved tenant members can read school settings" ON public.school_settings;
+CREATE POLICY "Approved tenant members can read school settings"
+  ON public.school_settings FOR SELECT TO authenticated
+  USING (
+    tenant_id = (SELECT public.get_current_tenant_id())
+    AND EXISTS (
+      SELECT 1 FROM public.profiles p
+      WHERE p.id = (SELECT auth.uid())
+        AND p.tenant_id = school_settings.tenant_id
+        AND p.status = 'approved'
+        AND p.archived_at IS NULL
+    )
+  );
+
+DROP POLICY IF EXISTS "Tenant admins can insert school settings" ON public.school_settings;
+CREATE POLICY "Tenant admins can insert school settings"
+  ON public.school_settings FOR INSERT TO authenticated
+  WITH CHECK (
+    (SELECT public.is_platform_admin())
+    OR EXISTS (
+      SELECT 1 FROM public.profiles p
+      WHERE p.id = (SELECT auth.uid())
+        AND p.tenant_id = school_settings.tenant_id
+        AND p.role = 'admin'
+        AND p.status = 'approved'
+        AND p.archived_at IS NULL
+    )
+  );
+
+DROP POLICY IF EXISTS "Tenant admins can update school settings" ON public.school_settings;
+CREATE POLICY "Tenant admins can update school settings"
+  ON public.school_settings FOR UPDATE TO authenticated
+  USING (
+    (SELECT public.is_platform_admin())
+    OR EXISTS (
+      SELECT 1 FROM public.profiles p
+      WHERE p.id = (SELECT auth.uid())
+        AND p.tenant_id = school_settings.tenant_id
+        AND p.role = 'admin'
+        AND p.status = 'approved'
+        AND p.archived_at IS NULL
+    )
+  )
+  WITH CHECK (
+    (SELECT public.is_platform_admin())
+    OR EXISTS (
+      SELECT 1 FROM public.profiles p
+      WHERE p.id = (SELECT auth.uid())
+        AND p.tenant_id = school_settings.tenant_id
+        AND p.role = 'admin'
+        AND p.status = 'approved'
+        AND p.archived_at IS NULL
+    )
+  );
+
 -- Academic configuration
 DROP POLICY IF EXISTS "Tenant isolation for academic_configs" ON public.academic_configs;
 CREATE POLICY "Approved tenant members can read academic configs"
