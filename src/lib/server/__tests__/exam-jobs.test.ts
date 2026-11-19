@@ -168,7 +168,7 @@ test('job tenant check prevents a tenant from reading another school job', () =>
 
 test('claim function uses row locking, leases, retries and tenant concurrency limits', async () => {
   const migration = await readFile(new URL('../../../../supabase/migrations/20261119115522_multi_provider_exam_dispatch_limits.sql', import.meta.url), 'utf8');
-  assert.match(migration, /FOR UPDATE SKIP LOCKED/);
+  assert.match(migration, /FOR UPDATE SKIP LOCKED/i);
   assert.match(migration, /lease_expires_at is not null and lease_expires_at <= now\(\)/i);
   assert.match(migration, /pg_advisory_xact_lock/);
   assert.match(migration, /global_active >= 4/);
