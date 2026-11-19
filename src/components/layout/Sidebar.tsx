@@ -23,7 +23,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 
 import { useTenant } from '@/context/TenantContext';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -35,9 +35,10 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentTab = searchParams ? searchParams.get('tab') : null;
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const { tenantName, isLoading: tenantLoading } = useTenant();
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  const [isTenantAdmin, setIsTenantAdmin] = useState(false);
 
   useEffect(() => {
     async function checkPlatformAdmin() {
@@ -46,12 +47,12 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
         if (user) {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('is_platform_admin')
+            .select('role,status,archived_at,is_platform_admin')
             .eq('id', user.id)
             .maybeSingle();
-          if (profile?.is_platform_admin) {
-            setIsPlatformAdmin(true);
-          }
+          const approvedAdmin = profile?.role === 'admin' && profile.status === 'approved' && !profile.archived_at;
+          setIsTenantAdmin(Boolean(approvedAdmin));
+          setIsPlatformAdmin(Boolean(approvedAdmin && profile.is_platform_admin));
         }
       } catch {
         // Fallback
@@ -100,7 +101,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
     {
       group: 'SETTINGS',
       items: [
-        { name: 'School Settings', href: '/settings/school', icon: Settings },
+        ...(isTenantAdmin ? [{ name: 'School Settings', href: '/settings/school', icon: Settings }] : []),
       ],
     },
   ];
@@ -129,7 +130,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
     },
   ];
 
-  const navGroups = isAdminMode ? adminNavItems : teacherNavItems;
+  const navGroups = (isAdminMode ? adminNavItems : teacherNavItems).filter((group) => group.items.length > 0);
 
   return (
     <>
