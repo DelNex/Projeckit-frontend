@@ -250,7 +250,7 @@ for (const filePath of sourceFiles) {
         const ch = chain[endIdx];
         const prev = chain[endIdx - 1];
         if (inString) {
-          if (ch === inString && prev !== '\') inString = null;
+          if (ch === inString && prev !== '\\') inString = null;
         } else if (ch === '"' || ch === "'" || ch === '`') {
           inString = ch;
         } else if (ch === '(') {
@@ -270,7 +270,7 @@ for (const filePath of sourceFiles) {
         const ch = rawArgStr[i];
         const prev = i > 0 ? rawArgStr[i - 1] : '';
         if (argInStr) {
-          if (ch === argInStr && prev !== '\') argInStr = null;
+          if (ch === argInStr && prev !== '\\') argInStr = null;
         } else if (ch === '"' || ch === "'" || ch === '`') {
           argInStr = ch;
         } else if (ch === '(') argDepthP++;
@@ -298,7 +298,7 @@ for (const filePath of sourceFiles) {
         const prev = i > 0 ? argStr[i - 1] : '';
 
         if (strQuote) {
-          if (c === strQuote && prev !== '\') strQuote = null;
+          if (c === strQuote && prev !== '\\') strQuote = null;
           continue;
         }
         if (c === '"' || c === "'" || c === '`') {
