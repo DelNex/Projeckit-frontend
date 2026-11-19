@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 
 export async function GET() {
-  if (process.env.NODE_ENV !== 'development') {
+  if (process.env.NODE_ENV !== 'development' && !(process.env.OMR_VALIDATION_ENABLED === 'true' && process.env.GITHUB_ACTIONS === 'true')) {
     return new NextResponse(null, { status: 404 });
   }
 
