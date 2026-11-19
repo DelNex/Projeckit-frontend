@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { NextResponse } from 'next/server';
@@ -96,6 +97,7 @@ export async function GET() {
       checkedAt: new Date().toISOString(),
     });
   } catch (err: any) {
+    await logSystemEvent({ severity: 'error', source: 'api.admin.schema-health', message: err instanceof Error ? err.message : 'Request failed.', method: 'GET', route: '/api/admin/schema-health', code: 'ADMIN_SCHEMA_HEALTH_FAILURE' });
     return NextResponse.json(
       {
         healthy: false,
