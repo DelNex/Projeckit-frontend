@@ -48,28 +48,75 @@ export default function TosPage() {
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
 
   useEffect(() => {
-    if (tosList.length === 0) { setActiveExamJobTos(new Set()); return; }
+    if (tosList.length === 0) {
+      setActiveExamJobTos(new Set());
+      return;
+    }
+
     let active = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let controller: AbortController | null = null;
+    let hasActiveJobs = false;
+    const ids = tosList.map((tos) => tos.id).filter(Boolean).join(',');
+    if (!ids) return;
+
+    const schedule = (delay: number) => {
+      if (!active || document.visibilityState === 'hidden') return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { void refresh(); }, delay);
+    };
+
     const refresh = async () => {
+      if (!active || document.visibilityState === 'hidden') return;
+      controller?.abort();
+      controller = new AbortController();
       try {
-        const ids = tosList.map((tos) => tos.id).filter(Boolean).join(',');
-        if (!ids) return;
-        const response = await fetch(`/api/ai/exam-jobs?tosIds=${encodeURIComponent(ids)}`, { cache: 'no-store' });
+        const response = await fetch(`/api/ai/exam-jobs?tosIds=${encodeURIComponent(ids)}`, {
+          cache: 'no-store',
+          signal: controller.signal,
+        });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok || !active) return;
+        if (!active) return;
+        if (!response.ok) {
+          schedule(30_000);
+          return;
+        }
         const next = new Set<string>();
         for (const [tosId, job] of Object.entries(data.jobsByTosId || {}) as Array<[string, any]>) {
           if (job && ['queued', 'running', 'needs_attention'].includes(job.status)) next.add(tosId);
         }
+        hasActiveJobs = next.size > 0;
         setActiveExamJobTos((current) => {
           if (current.size === next.size && [...current].every((id) => next.has(id))) return current;
           return next;
         });
-      } catch { /* Keep the page usable if status refresh is temporarily unavailable. */ }
+        // Poll quickly while work is running, but back off when idle and pause
+        // completely when the teacher leaves this browser tab.
+        schedule(hasActiveJobs ? 8_000 : 45_000);
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') return;
+        schedule(30_000);
+      }
     };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        if (timer) clearTimeout(timer);
+        timer = null;
+        controller?.abort();
+      } else {
+        void refresh();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     void refresh();
-    const interval = setInterval(refresh, 8000);
-    return () => { active = false; clearInterval(interval); };
+    return () => {
+      active = false;
+      if (timer) clearTimeout(timer);
+      controller?.abort();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [tosList]);
 
   // Page Controls & Filters
