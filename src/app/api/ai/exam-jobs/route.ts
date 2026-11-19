@@ -159,6 +159,7 @@ export async function GET(request: Request) {
     const position = job.status === 'queued' ? await admin.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('provider', 'groq_api').eq('status', 'queued').lte('created_at', job.created_at) : null;
     return NextResponse.json({ job: { ...job, queuePosition: position?.count || null } }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
+    await logSystemEvent({ severity: 'error', source: 'api.ai.exam-jobs.status', message: error instanceof Error ? error.message : 'Request failed.', method: 'GET', route: '/api/ai/exam-jobs', code: 'EXAM_JOB_LIST_FAILURE' });
     console.error('[exam-jobs GET] Could not load generation status:', error instanceof Error ? error.message : 'unknown error');
     return NextResponse.json({ error: 'Could not load exam generation status.' }, { status: 503 });
   }
