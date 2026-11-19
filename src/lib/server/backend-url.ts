@@ -1,4 +1,8 @@
-type BackendUrlEnvironment = Pick<NodeJS.ProcessEnv, 'BACKEND_API_BASE_URL' | 'NODE_ENV' | 'NEXT_PUBLIC_APP_URL'>;
+type BackendUrlEnvironment = {
+  BACKEND_API_BASE_URL?: string;
+  NEXT_PUBLIC_APP_URL?: string;
+  NODE_ENV?: string;
+};
 
 /**
  * Resolve the private AI backend origin without ever silently routing a
