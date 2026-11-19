@@ -2,13 +2,17 @@ name: OMR mobile calibration
 
 on:
   push:
-    branches: [main, "fix/**", "feat/**"]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: omr-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   omr:

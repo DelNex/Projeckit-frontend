@@ -4,6 +4,15 @@ export interface QueueExamJobInput {
   createdBy: string;
   payload: Record<string, unknown>;
   jobKind: 'full' | 'repair';
+  hourlyLimit: number;
+  dailyLimit: number;
+}
+
+export class ExamQuotaError extends Error {
+  constructor(readonly limit: 'hourly' | 'daily') {
+    super(limit === 'hourly' ? 'EXAM_HOURLY_LIMIT_REACHED' : 'EXAM_DAILY_LIMIT_REACHED');
+    this.name = 'ExamQuotaError';
+  }
 }
 
 export interface ExamAiProvider {
@@ -22,7 +31,11 @@ export class GroqExamJobProvider implements ExamAiProvider {
       p_created_by: input.createdBy,
       p_payload: input.payload,
       p_job_kind: input.jobKind,
+      p_hourly_limit: input.hourlyLimit,
+      p_daily_limit: input.dailyLimit,
     });
+    if (error?.message?.includes('EXAM_HOURLY_LIMIT_REACHED')) throw new ExamQuotaError('hourly');
+    if (error?.message?.includes('EXAM_DAILY_LIMIT_REACHED')) throw new ExamQuotaError('daily');
     const row = Array.isArray(data) ? data[0] : data;
     if (error || !row) throw new Error('Could not queue exam generation. Please try again.');
     return { id: row.job_id, createdAt: row.created_at, status: row.status, reused: !row.created };

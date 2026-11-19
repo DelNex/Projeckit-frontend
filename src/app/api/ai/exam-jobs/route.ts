@@ -6,7 +6,7 @@ export const maxDuration = 60;
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { buildExamPrompt, buildSlotsFromTos, toLessonChunks } from '@/lib/server/exam-jobs';
-import { getExamAiProvider } from '@/lib/server/exam-ai-provider';
+import { ExamQuotaError, getExamAiProvider } from '@/lib/server/exam-ai-provider';
 import { getConfiguredExamProviders } from '@/lib/server/exam-ai-provider-router';
 import { logSystemEvent } from '@/lib/server/system-logger';
 import { isLessonSourceManifest, type LessonSourceManifest } from '@/lib/lesson-source';
@@ -121,8 +121,9 @@ export async function POST(request: Request) {
       caller.admin!.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('tenant_id', caller.profile!.tenant_id)
         .neq('status', 'cancelled').or('status.neq.failed,attempts.gt.0').gte('created_at', new Date(Date.now() - 86400000).toISOString()),
     ]);
-    const userLimit = Number(process.env.AI_HOURLY_USER_LIMIT) || tenant.data?.ai_hourly_user_limit || 5;
-    const schoolLimit = Number(process.env.AI_DAILY_SCHOOL_LIMIT) || tenant.data?.ai_daily_school_limit || 100;
+    if (tenant.error) throw tenant.error;
+    const userLimit = Math.max(1, Math.trunc(Number(process.env.AI_HOURLY_USER_LIMIT) || Number(tenant.data?.ai_hourly_user_limit) || 5));
+    const schoolLimit = Math.max(1, Math.trunc(Number(process.env.AI_DAILY_SCHOOL_LIMIT) || Number(tenant.data?.ai_daily_school_limit) || 100));
     if ((hourly.count || 0) >= userLimit) return NextResponse.json({ error: 'Hourly rate limit reached (' + userLimit + ' exam generations per hour). Please wait before generating again.' }, { status: 429 });
     if ((daily.count || 0) >= schoolLimit) return NextResponse.json({ error: 'Your school has reached the daily limit of ' + schoolLimit + ' exam generations per day.' }, { status: 429 });
 
@@ -153,6 +154,8 @@ export async function POST(request: Request) {
     const job = await getExamAiProvider().enqueue(caller.admin!, {
       tenantId: caller.profile!.tenant_id, tosId: tos.id, createdBy: caller.user!.id, payload,
       jobKind: Number.isInteger(body.repairItemNumber) ? 'repair' : 'full',
+      hourlyLimit: userLimit,
+      dailyLimit: schoolLimit,
     });
     if (!job.reused) keepUploadedSource = Boolean(uploadedSource);
     if (job.reused && uploadedSource) {
@@ -170,6 +173,12 @@ export async function POST(request: Request) {
       .eq('provider', 'groq_api').eq('status', 'queued').lte('created_at', job.createdAt);
     return NextResponse.json({ id: job.id, status: job.status, reused: job.reused, queuePosition: job.status === 'queued' ? count || 1 : null }, { status: 202, headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
+    if (error instanceof ExamQuotaError) {
+      const message = error.limit === 'hourly'
+        ? 'Hourly rate limit reached. Please wait before generating another exam.'
+        : 'Your school has reached its daily exam-generation limit.';
+      return NextResponse.json({ error: message, code: error.message, requestId }, { status: 429 });
+    }
     if (error instanceof SyntaxError) return NextResponse.json({ error: 'The request must be valid JSON.', requestId }, { status: 400 });
     await logSystemEvent({
       severity: 'error', source: 'exam.jobs.create', code: 'EXAM_JOB_CREATE_FAILED',
