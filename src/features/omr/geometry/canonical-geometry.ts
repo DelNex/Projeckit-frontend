@@ -547,15 +547,18 @@ export function generateCanonicalGeometry(rawConfig: AssessmentOmrConfig): Canon
   const yearSectionLineStartX = yearSectionLabelX + 75;
   const yearSectionLineEndX = isHalf ? 485 : 690;
 
-  // Keep the barcode right-aligned while leaving enough width for its fixed 15-character payload.
+  // Place the full-size barcode inside the section bar's right side. The old
+  // title-block position crossed the subject and school-year text on short
+  // forms. Keep the physical bar thickness and height unchanged for scanning.
   const barcodeNarrowBarWidth = isHalf ? 1.0 : 1.1;
-  const barcodeCharacterCount = 17; // Code 39 start/stop characters plus Kxxxxxx-xxxxxx
+  const barcodeCharacterCount = 16; // Code 39 start/stop plus K + 6 assessment hex + '-' + 6 student hex
   const barcodeUnitWidth = 6 + 3 * 2.2 + 1; // six narrow elements, three wide elements, and the gap
   const barcodeWidth = barcodeCharacterCount * barcodeUnitWidth * barcodeNarrowBarWidth;
+  const barcodeHeight = isHalf ? 26 : 32;
   const barcode = {
     x: answerAreaX + answerAreaWidth - barcodeWidth - 8,
-    y: Math.round(subjectY - (isHalf ? 4 : 6)),
-    height: isHalf ? 26 : 32,
+    y: Math.round(sectionTopLineY + (sectionBottomLineY - sectionTopLineY - barcodeHeight) / 2),
+    height: barcodeHeight,
     narrowBarWidth: barcodeNarrowBarWidth,
     wideBarRatio: 2.2,
   };
