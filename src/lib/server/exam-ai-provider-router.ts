@@ -122,8 +122,10 @@ export async function requestExamQuestionsFromProviders(
   const failures: string[] = [];
   // The caller is a 60-second Next.js route. Keep provider failover inside a
   // 50-second budget so the job lease can be renewed/finalized safely.
-  const totalBudgetMs = Math.max(10_000, Math.min(Number(process.env.AI_PROVIDER_TOTAL_TIMEOUT_MS || 50_000), 50_000));
-  const providerTimeoutMs = Math.max(3_000, Math.min(Number(process.env.AI_PROVIDER_TIMEOUT_MS || 18_000), 25_000));
+  const totalSetting = Number(process.env.AI_PROVIDER_TOTAL_TIMEOUT_MS || 50_000);
+  const providerSetting = Number(process.env.AI_PROVIDER_TIMEOUT_MS || 18_000);
+  const totalBudgetMs = Number.isFinite(totalSetting) ? Math.max(10_000, Math.min(totalSetting, 50_000)) : 50_000;
+  const providerTimeoutMs = Number.isFinite(providerSetting) ? Math.max(3_000, Math.min(providerSetting, 25_000)) : 18_000;
   const deadline = Date.now() + totalBudgetMs;
   for (const provider of providers) {
     const remainingMs = deadline - Date.now();
