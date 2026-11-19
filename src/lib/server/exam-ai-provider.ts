@@ -7,13 +7,13 @@ export interface QueueExamJobInput {
 }
 
 export interface ExamAiProvider {
-  readonly id: 'helper_queue';
+  readonly id: 'groq_api';
   enqueue(admin: any, input: QueueExamJobInput): Promise<{ id: string; createdAt: string; status: string; reused: boolean }>;
 }
 
-/** Single current provider. The interface keeps queue creation independent of the screens. */
-export class HelperQueueExamAiProvider implements ExamAiProvider {
-  readonly id = 'helper_queue' as const;
+/** Groq uses the existing durable database job table; generation runs on the hosted server, not a local browser helper. */
+export class GroqExamJobProvider implements ExamAiProvider {
+  readonly id = 'groq_api' as const;
 
   async enqueue(admin: any, input: QueueExamJobInput): Promise<{ id: string; createdAt: string; status: string; reused: boolean }> {
     const { data, error } = await admin.rpc('enqueue_exam_generation_job', {
@@ -29,8 +29,8 @@ export class HelperQueueExamAiProvider implements ExamAiProvider {
   }
 }
 
-const helperQueueProvider: ExamAiProvider = new HelperQueueExamAiProvider();
+const groqExamJobProvider: ExamAiProvider = new GroqExamJobProvider();
 
 export function getExamAiProvider(): ExamAiProvider {
-  return helperQueueProvider;
+  return groqExamJobProvider;
 }
