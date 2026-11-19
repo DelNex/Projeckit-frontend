@@ -53,8 +53,8 @@ export async function uploadCompressedLessonDocuments(documents: LessonSourceDoc
     throw new Error('The compressed lesson source is still too large. Split the material into smaller chapter groups.');
   }
 
-  const compressedBytes = new Uint8Array(await compressedBlob.arrayBuffer());
-  const digest = await crypto.subtle.digest('SHA-256', compressedBytes);
+  const compressedBuffer = await compressedBlob.arrayBuffer();
+  const digest = await crypto.subtle.digest('SHA-256', compressedBuffer);
   const supabase = createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) throw new Error('Your session expired. Sign in again before uploading lesson text.');
