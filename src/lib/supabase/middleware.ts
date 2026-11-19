@@ -39,11 +39,9 @@ export async function updateSession(request: NextRequest) {
   // Verify the signed JWT using the cached JWKS when the project uses
   // asymmetric signing keys. This avoids a user-record network lookup on
   // every protected page request while preserving server-side verification.
-  const {
-    data: { claims },
-    error: claimsError,
-  } = await supabase.auth.getClaims();
-  const user = !claimsError && claims?.sub ? { id: claims.sub } : null;
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+  const claims = claimsData?.claims;
+  const user = !claimsError && typeof claims?.sub === 'string' ? { id: claims.sub } : null;
 
   const pathname = request.nextUrl.pathname;
   const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/register');
