@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { after, NextResponse } from 'next/server';
 import { runNextGroqExamJob } from '@/lib/server/groq-exam-worker';
 
@@ -19,7 +20,7 @@ async function getCaller() {
 }
 
 export async function POST(request: Request) {
-  const requestId = request.headers.get('x-request-id') || request.headers.get('x-nf-request-id') || crypto.randomUUID();
+  const requestId = request.headers.get('x-request-id') || request.headers.get('x-nf-request-id') || randomUUID();
   try {
     const caller = await getCaller();
     if (caller.response) return caller.response;
