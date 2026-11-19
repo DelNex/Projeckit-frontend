@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { logSystemEvent } from '@/lib/server/system-logger';
 
 const recentByUser = new Map<string, number>();
@@ -28,13 +29,19 @@ export async function POST(request: Request) {
   }
 
   let body: Record<string, unknown>;
+  let rawBody = '';
   try {
-    body = await request.json();
+    rawBody = await request.text();
+    if (Buffer.byteLength(rawBody, 'utf8') > MAX_EVENT_BYTES) {
+      return NextResponse.json({ error: 'Client error report is too large.' }, { status: 413, headers: { 'Cache-Control': 'no-store' } });
+    }
+    const parsed: unknown = JSON.parse(rawBody);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return NextResponse.json({ error: 'Invalid error report.' }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
+    }
+    body = parsed as Record<string, unknown>;
   } catch {
     return NextResponse.json({ error: 'Invalid error report.' }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
-  }
-  if (!body || typeof body !== 'object' || Array.isArray(body) || JSON.stringify(body).length > MAX_EVENT_BYTES) {
-    return NextResponse.json({ error: 'Invalid or oversized error report.' }, { status: 413, headers: { 'Cache-Control': 'no-store' } });
   }
 
   const message = String(body.message || 'Unknown client-side error').slice(0, 1200);
@@ -46,6 +53,25 @@ export async function POST(request: Request) {
   const now = Date.now();
   const lastReportedAt = recentByUser.get(user.id) || 0;
   if (now - lastReportedAt < USER_ERROR_COOLDOWN_MS) {
+    return NextResponse.json({ accepted: true, deduplicated: true }, { status: 202, headers: { 'Cache-Control': 'no-store' } });
+  }
+
+  // Also check the durable event stream so cooldowns work across serverless
+  // instances instead of relying only on this process's in-memory map.
+  const admin = createAdminClient();
+  const { data: recentEvents, error: recentEventsError } = await admin
+    .from('audit_logs')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('action', 'SYSTEM_ERROR')
+    .contains('details', { source: 'client.runtime' })
+    .gte('created_at', new Date(now - USER_ERROR_COOLDOWN_MS).toISOString())
+    .limit(1);
+  if (recentEventsError) {
+    return NextResponse.json({ error: 'Error reporting is temporarily unavailable.' }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
+  }
+  if (recentEvents?.length) {
+    recentByUser.set(user.id, now);
     return NextResponse.json({ accepted: true, deduplicated: true }, { status: 202, headers: { 'Cache-Control': 'no-store' } });
   }
   recentByUser.set(user.id, now);
