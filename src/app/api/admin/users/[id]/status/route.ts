@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -210,6 +211,7 @@ export async function POST(
       },
     });
   } catch (err: any) {
+    await logSystemEvent({ severity: 'error', source: 'api.admin.user-status', message: err instanceof Error ? err.message : 'Request failed.', method: 'PATCH', route: '/api/admin/users/[id]/status', code: 'ADMIN_USER_STATUS_FAILURE' });
     console.error('[Admin API] Error in status update route:', err);
     return NextResponse.json(
       { error: 'Something went wrong while updating user status. Please try again.' },
