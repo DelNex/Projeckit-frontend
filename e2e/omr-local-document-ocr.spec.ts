@@ -14,7 +14,14 @@ test('extracts a scanned PDF with the locally bundled OCR runtime', async ({ pag
   );
 
   const output = page.getByTestId('ocr-result');
-  await expect(output).not.toBeEmpty({ timeout: 120_000 });
+  await expect.poll(async () => {
+    const extracted = (await output.textContent())?.trim();
+    if (extracted) return extracted;
+    return (await page.getByRole('alert').textContent())?.trim() || '';
+  }, { timeout: 120_000 }).not.toBe('');
+
+  const extractionError = await page.getByRole('alert').textContent().catch(() => null);
+  expect(extractionError).toBeNull();
   const text = await output.textContent();
   expect((text || '').replace(/\[Page \d+\]/g, '').trim().length).toBeGreaterThan(30);
   expect(text).toContain('[local OCR checked]');
