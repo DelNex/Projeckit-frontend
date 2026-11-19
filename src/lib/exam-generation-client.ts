@@ -23,6 +23,7 @@ export function useExamGenerationJob(tosId: string | undefined) {
   const [savedQuestions, setSavedQuestions] = useState<ExamQuestion[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const startedAt = useRef(0);
+  const loadedQuestionsForJob = useRef<string | null>(null);
   const alive = useRef(true);
 
   const refreshHelperStatus = useCallback(async () => {
@@ -39,10 +40,13 @@ export function useExamGenerationJob(tosId: string | undefined) {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || 'Could not load exam generation status.');
     if (alive.current) setJob(data as ExamGenerationJob);
-    if (data.status === 'completed' || data.status === 'partial') {
+    if ((data.status === 'completed' || data.status === 'partial') && loadedQuestionsForJob.current !== id) {
       const saved = await fetch(`/api/ai/exam-jobs/${encodeURIComponent(id)}/questions`, { cache: 'no-store' });
       const result = await saved.json().catch(() => ({}));
-      if (saved.ok && alive.current) setSavedQuestions(Array.isArray(result.questions) ? result.questions : []);
+      if (saved.ok && alive.current) {
+        setSavedQuestions(Array.isArray(result.questions) ? result.questions : []);
+        loadedQuestionsForJob.current = id;
+      }
     }
     return data as ExamGenerationJob;
   }, []);
@@ -64,7 +68,7 @@ export function useExamGenerationJob(tosId: string | undefined) {
         if (cancelled) return;
         setJob(latest);
         if (latest && ['queued', 'running', 'needs_attention'].includes(latest.status) && !startedAt.current) startedAt.current = Date.now();
-        if (latest && ['completed', 'partial'].includes(latest.status)) await refreshJob(latest.id);
+        if (latest && ['completed', 'partial'].includes(latest.status) && loadedQuestionsForJob.current !== latest.id) await refreshJob(latest.id);
       } catch (error) { if (!cancelled) setLoadError(error instanceof Error ? error.message : 'Could not load exam status.'); }
     };
     void load();
@@ -84,7 +88,7 @@ export function useExamGenerationJob(tosId: string | undefined) {
             const next = latestData.job as ExamGenerationJob;
             setJob(next);
             hasActiveJob = ['queued', 'running', 'needs_attention'].includes(next.status);
-            if (['completed', 'partial', 'queued', 'running', 'needs_attention'].includes(next.status)) {
+            if (['completed', 'partial'].includes(next.status) && loadedQuestionsForJob.current !== next.id) {
               await refreshJob(next.id);
             }
           }
@@ -113,7 +117,7 @@ export function useExamGenerationJob(tosId: string | undefined) {
   const start = useCallback(async (input: { lessonText?: string; lessonDocuments?: Array<{ name: string; text: string; competencyId?: string }>; teacherInstructions?: string; repairItemNumber?: number }) => {
     if (!tosId) throw new Error('A TOS is required to start exam generation.');
     if (job && ['queued', 'running', 'needs_attention'].includes(job.status)) throw new Error('This TOS already has an active generation job. Cancel or resolve it before starting another.');
-    setIsStarting(true); setSavedQuestions(null); setLoadError(null);
+    setIsStarting(true); setSavedQuestions(null); loadedQuestionsForJob.current = null; setLoadError(null);
     try {
       const response = await fetch('/api/ai/exam-jobs', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
