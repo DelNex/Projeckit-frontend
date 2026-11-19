@@ -35,8 +35,9 @@ test('exam queue migration serializes quota checks before inserting jobs', async
   assert.match(securityMigration, /action NOT IN/);
   assert.match(securityMigration, /'SYSTEM_ERROR'/);
   assert.match(securityMigration, /guard_grading_period_writes/);
-  assert.match(securityMigration, /IF auth\.uid\(\) IS NULL THEN/);
+  assert.match(securityMigration, /IF auth\.uid\(\) IS NULL AND COALESCE\(current_setting\('request\.jwt\.claim\.role', true\), ''\)/);
   assert.match(securityMigration, /REVOKE ALL ON FUNCTION public\.guard_grading_period_writes/);
+  assert.match(securityMigration, /REVOKE ALL ON FUNCTION public\.check_profile_updates/);
   assert.doesNotMatch(securityMigration, /CREATE POLICY "Tenant admins can insert audit logs"/);
   assert.match(securityMigration, /Tenant admins can insert academic configs/);
   assert.match(securityMigration, /Tenant admins can insert sections/);
