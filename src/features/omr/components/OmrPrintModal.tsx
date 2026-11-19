@@ -30,8 +30,7 @@ import {
   renderOmrMasterSvg,
   VisibleHeaderFields,
 } from '../rendering/svg-renderer';
-import { A5_TWO_UP_PRINT_SIZE, buildA5TwoUpPages, buildA4CompactPages, getA4CompactLayout, getCompactOmrPageHeight } from '../rendering/personalized-print-layout';
-import { generateCanonicalGeometry } from '../geometry/canonical-geometry';
+import { A5_TWO_UP_PRINT_SIZE, buildA5TwoUpPages, buildA4CompactPages, getA4CompactLayout } from '../rendering/personalized-print-layout';
 
 export interface OmrPrintModalStudent {
   id: string;
@@ -110,21 +109,10 @@ export function OmrPrintModal({
 
   const isHalfSheet = geometry?.sheetFormat === 'HALF';
 
-  // Preserve the original 60-item A5 geometry exactly. Smaller exams receive
-  // a shorter physical sheet, but bubble, marker and barcode dimensions stay
-  // unchanged. The shorter sheets can then be tiled vertically on A4.
-  const printGeometry = useMemo(() => {
-    if (!geometry || !isHalfSheet || geometry.config.itemCount >= 60) return geometry;
-    const minimumHeight = getCompactOmrPageHeight(geometry);
-    return generateCanonicalGeometry({
-      ...geometry.config,
-      sheetFormat: 'HALF',
-      pageWidth: geometry.page.width,
-      pageHeight: Math.min(794, Math.max(1, minimumHeight)),
-    });
-  }, [geometry, isHalfSheet]);
-
-  const compactLayout = isHalfSheet && printGeometry && geometry && printGeometry.page.height < geometry.page.height
+  // The assessment's canonical geometry already contains the compact height.
+  // Printing and scanning therefore use the exact same bubble coordinates.
+  const printGeometry = geometry;
+  const compactLayout = isHalfSheet && printGeometry && printGeometry.page.height < 794
     ? getA4CompactLayout(printGeometry.page.height)
     : { sheetHeightMm: A5_TWO_UP_PRINT_SIZE.sheetHeightMm, rowsPerPage: 1, sheetsPerPage: 2 };
   const compactRowsPerPage = compactLayout.rowsPerPage;
