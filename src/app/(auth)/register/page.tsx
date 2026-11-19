@@ -176,7 +176,7 @@ export default function RegisterPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
-                  Recommendation / School Invite Code (Optional)
+                  School Invite Code / School Tenants (Optional)
                 </label>
                 <input
                   type="text"
