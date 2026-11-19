@@ -6,6 +6,8 @@ export default defineConfig({
   timeout: 90_000,
   expect: { timeout: 30_000 },
   reporter: 'list',
+  workers: 1,
+  fullyParallel: false,
   use: {
     baseURL: 'http://127.0.0.1:3100',
     browserName: 'chromium',
@@ -13,8 +15,8 @@ export default defineConfig({
   },
   webServer: {
     command: 'node node_modules/next/dist/bin/next start -p 3100',
-    url: 'http://127.0.0.1:3100/omr-validation',
-    reuseExistingServer: !process.env.CI,
+    url: 'http://127.0.0.1:3100/',
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 });
