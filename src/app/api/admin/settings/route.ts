@@ -67,7 +67,7 @@ export async function PUT(request: Request) {
       .select('max_module_upload_cap_mb, max_scan_image_cap_mb').eq('id', 1).maybeSingle();
     if (platformError) return NextResponse.json({ error: 'Could not load platform upload limits.' }, { status: 503 });
     const caps = {
-      module: platform?.max_module_upload_cap_mb ?? 60,
+      module: platform?.max_module_upload_cap_mb ?? 100,
       scan: platform?.max_scan_image_cap_mb ?? 30,
     };
     const input = await request.json().catch(() => null);
