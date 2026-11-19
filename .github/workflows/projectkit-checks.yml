@@ -2,7 +2,7 @@ name: Project KIT checks
 
 on:
   push:
-    branches: ["main", "feat/**"]
+    branches: ["main", "feat/**", "perf/**"]
   pull_request:
     branches: ["main"]
   workflow_dispatch:
@@ -36,4 +36,5 @@ jobs:
           src/lib/server/__tests__/simple-report-pdf.test.ts
           src/lib/server/__tests__/groq-exam-worker.test.ts
           src/lib/server/__tests__/exam-ai-provider-router.test.ts
+          src/lib/server/__tests__/backend-url.test.ts
           src/lib/__tests__/local-document-engine.test.ts
