@@ -763,7 +763,7 @@ export function TosEditor({
             <div className="flex items-center gap-2">
               <button
                 onClick={() => handleSaveTos(false)}
-                disabled={saving || isOverCompetencyLimit}
+                disabled={saving}
                 className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-xs transition flex items-center gap-1.5 shrink-0"
               >
                 {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
