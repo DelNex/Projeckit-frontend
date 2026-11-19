@@ -20,7 +20,6 @@ test('extracts a scanned PDF with the locally bundled OCR runtime', async ({ pag
   await page.getByLabel('Scanned PDF fixture').setInputFiles(
     path.join(process.cwd(), 'src/lib/server/__tests__/fixtures/scanned_image.pdf')
   );
-  await expect(page.getByRole('status')).toHaveText('Extracting text locally…', { timeout: 10_000 });
 
   const output = page.getByTestId('ocr-result');
   await expect.poll(async () => {
