@@ -167,9 +167,11 @@ test('job tenant check prevents a tenant from reading another school job', () =>
 });
 
 test('claim function uses row locking, leases, retries and tenant fairness ordering', async () => {
-  const migration = await readFile(new URL('../../../../../supabase/migrations/20260908000032_exam_generation_jobs.sql', import.meta.url), 'utf8');
-  assert.match(migration, /FOR UPDATE OF j SKIP LOCKED/);
-  assert.match(migration, /lease_expires_at <= now\(\).*attempts < j\.max_attempts/s);
-  assert.match(migration, /active_for_tenant|SELECT count\(\*\).*active/s);
-  assert.match(migration, /attempts = j\.attempts \+ 1/);
+  const migration = await readFile(new URL('../../../../supabase/migrations/20261119115522_multi_provider_exam_dispatch_limits.sql', import.meta.url), 'utf8');
+  assert.match(migration, /FOR UPDATE SKIP LOCKED/);
+  assert.match(migration, /lease_expires_at is not null and target\.lease_expires_at <= now\(\)/i);
+  assert.match(migration, /pg_advisory_xact_lock/);
+  assert.match(migration, /global_active >= 4/);
+  assert.match(migration, /tenant_active >= 2/);
+  assert.match(migration, /attempts = attempts \+ 1/);
 });
