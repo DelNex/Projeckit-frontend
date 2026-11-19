@@ -163,7 +163,7 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
       if (!Array.isArray(batchQuestions)) throw new Error('Groq returned an invalid question batch.');
       generatedQuestions.push(...batchQuestions);
 
-      const { error: progressError } = await admin.from('exam_generation_jobs').update({
+      const { data: progressUpdate, error: progressError } = await admin.from('exam_generation_jobs').update({
         progress: {
           stage: 'generating',
           label: `Generated ${Math.min((index + 1) * batchSize, slots.length)} of ${slots.length} questions`,
@@ -172,17 +172,17 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
         },
         lease_expires_at: new Date(Date.now() + 75_000).toISOString(),
         updated_at: new Date().toISOString(),
-      }).eq('id', jobId).eq('claimed_by', workerId);
-      if (progressError) throw new Error('The Groq worker lost its exam job lease while generating questions.');
+      }).eq('id', jobId).eq('claimed_by', workerId).select('id').maybeSingle();
+      if (progressError || !progressUpdate) throw new Error('The Groq worker lost its exam job lease while generating questions.');
     }
 
     const responseText = JSON.stringify(generatedQuestions);
-    const { error: validationProgressError } = await admin.from('exam_generation_jobs').update({
+    const { data: validationProgressUpdate, error: validationProgressError } = await admin.from('exam_generation_jobs').update({
       progress: { stage: 'validating', label: 'Validating answers, choices, competencies and duplicates', completedChunks: batches.length, totalChunks: batches.length },
       lease_expires_at: new Date(Date.now() + 75_000).toISOString(),
       updated_at: new Date().toISOString(),
-    }).eq('id', jobId).eq('claimed_by', workerId);
-    if (validationProgressError) throw new Error('The Groq worker lost its exam job lease before validation.');
+    }).eq('id', jobId).eq('claimed_by', workerId).select('id').maybeSingle();
+    if (validationProgressError || !validationProgressUpdate) throw new Error('The Groq worker lost its exam job lease before validation.');
 
     const { data: ownership, error: ownershipError } = await admin.from('exam_generation_jobs')
       .select('id,status,claimed_by')
@@ -196,7 +196,7 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Groq exam generation failed.';
-    await admin.from('exam_generation_jobs').update({
+    const { data: failedOwnedJob } = await admin.from('exam_generation_jobs').update({
       status: 'failed',
       error: message.slice(0, 500),
       finished_at: new Date().toISOString(),
@@ -204,8 +204,8 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
       payload: {},
       claimed_by: null,
       lease_expires_at: null,
-    }).eq('id', jobId).eq('claimed_by', workerId).in('status', ['running', 'queued']);
-    if (claimed.parent_job_id) {
+    }).eq('id', jobId).eq('claimed_by', workerId).in('status', ['running', 'queued']).select('id').maybeSingle();
+    if (failedOwnedJob && claimed.parent_job_id) {
       await admin.from('exam_generation_jobs').update({
         status: 'failed',
         error: message.slice(0, 500),
