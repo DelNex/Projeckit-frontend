@@ -116,6 +116,7 @@ async function requestProvider(provider: ProviderConfig, messages: Array<{ role:
 export async function requestExamQuestionsFromProviders(
   messages: Array<{ role: string; content: string }>,
   schema: Record<string, unknown>,
+  jobDeadline?: number,
 ): Promise<string> {
   const providers = providerConfigs();
   if (!providers.length) throw new Error('No exam AI provider is configured. Add at least one server-side provider API key.');
@@ -126,7 +127,7 @@ export async function requestExamQuestionsFromProviders(
   const providerSetting = Number(process.env.AI_PROVIDER_TIMEOUT_MS || 18_000);
   const totalBudgetMs = Number.isFinite(totalSetting) ? Math.max(10_000, Math.min(totalSetting, 50_000)) : 50_000;
   const providerTimeoutMs = Number.isFinite(providerSetting) ? Math.max(3_000, Math.min(providerSetting, 25_000)) : 18_000;
-  const deadline = Date.now() + totalBudgetMs;
+  const deadline = Math.min(jobDeadline ?? Number.POSITIVE_INFINITY, Date.now() + totalBudgetMs);
   for (const provider of providers) {
     const remainingMs = deadline - Date.now();
     if (remainingMs < 2_000) {
