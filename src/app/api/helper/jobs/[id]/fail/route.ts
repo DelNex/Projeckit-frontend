@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { authorizeHelperRequest, readHelperJson } from '@/lib/server/helper-auth';
@@ -23,6 +24,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     if (status === 'failed' || status === 'needs_attention') await admin.from('audit_logs').insert({ tenant_id: job.tenant_id, user_id: job.created_by, action: 'AI_EXAM_GENERATION', details: { job_id: id, status, reason: String(body.reason).slice(0, 240) } });
     return NextResponse.json({ accepted: true, status });
   } catch {
+    await logSystemEvent({ severity: 'error', source: 'api.helper.job-fail', message: 'Could not record the job failure.', method: 'POST', route: '/api/helper/jobs/[id]/fail', code: 'HELPER_JOB_FAIL_FAILURE' });
     return NextResponse.json({ error: 'Could not record the job failure.' }, { status: 503 });
   }
 }
