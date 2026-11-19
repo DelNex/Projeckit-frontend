@@ -31,18 +31,20 @@ export async function POST(request: Request) {
     const caller = await getCaller();
     if (caller.response) return caller.response;
     cleanupAdmin = caller.admin!;
-    const { data: activeSourceJobs } = await caller.admin!.from('exam_generation_jobs')
+    const { data: activeSourceJobs, error: activeSourceError } = await caller.admin!.from('exam_generation_jobs')
       .select('payload')
       .eq('created_by', caller.user!.id)
       .eq('provider', 'groq_api')
       .in('status', ['queued', 'running', 'needs_attention'])
       .limit(100);
-    const activeSourcePaths = new Set<string>(
-      (activeSourceJobs || [])
-        .map((job: any) => job.payload?.sourceManifest?.storagePath)
-        .filter((value: unknown): value is string => typeof value === 'string')
-    );
-    await cleanupStaleLessonSourcesForUser(caller.admin!, caller.user!.id, activeSourcePaths);
+    if (!activeSourceError) {
+      const activeSourcePaths = new Set<string>(
+        (activeSourceJobs || [])
+          .map((job: any) => job.payload?.sourceManifest?.storagePath)
+          .filter((value: unknown): value is string => typeof value === 'string')
+      );
+      await cleanupStaleLessonSourcesForUser(caller.admin!, caller.user!.id, activeSourcePaths);
+    }
     const raw = await request.text();
     if (Buffer.byteLength(raw, 'utf8') > 1_450_000) return NextResponse.json({ error: 'The exam request metadata is too large.' }, { status: 413 });
     const body = JSON.parse(raw) as {
