@@ -133,8 +133,8 @@ export function buildGroqMessages(payload: Record<string, any>) {
   ];
 }
 
-async function requestGroqQuestions(payload: Record<string, any>): Promise<string> {
-  return requestExamQuestionsFromProviders(buildGroqMessages(payload), QUESTION_SCHEMA as unknown as Record<string, unknown>);
+async function requestGroqQuestions(payload: Record<string, any>, jobDeadline: number): Promise<string> {
+  return requestExamQuestionsFromProviders(buildGroqMessages(payload), QUESTION_SCHEMA as unknown as Record<string, unknown>, jobDeadline);
 }
 
 /**
@@ -142,7 +142,7 @@ async function requestGroqQuestions(payload: Record<string, any>): Promise<strin
  * validates/saves through the existing atomic finalizer, and processes repair
  * jobs without requiring the local Gemini browser helper.
  */
-export async function runGroqExamJob(jobId: string, admin = createAdminClient(), repairDepth = 0): Promise<void> {
+export async function runGroqExamJob(jobId: string, admin = createAdminClient(), repairDepth = 0, jobDeadline = Date.now() + 50_000): Promise<void> {
   if (repairDepth > 2) throw new Error('Exam repair limit reached.');
   const workerId = `${WORKER_ID}:${randomUUID()}`;
   const { data: claimRows, error: claimError } = await admin.rpc('claim_groq_exam_job', {
@@ -172,7 +172,8 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
         slots: batchSlots,
         prompt: buildExamPrompt(batchSlots),
       };
-      const responseText = await requestGroqQuestions(batchPayload);
+      if (Date.now() >= jobDeadline - 2_000) throw new Error('The exam generation time budget expired before all batches finished. Retry the job; the existing exam was kept.');
+      const responseText = await requestGroqQuestions(batchPayload, jobDeadline);
       const batchQuestions = JSON.parse(responseText);
       if (!Array.isArray(batchQuestions)) throw new Error('Groq returned an invalid question batch.');
       generatedQuestions.push(...batchQuestions);
@@ -206,7 +207,7 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
 
     const result = await finalizeExamJob(jobId, responseText, admin);
     if (result.status === 'running' && typeof result.repairJobId === 'string') {
-      await runGroqExamJob(result.repairJobId, admin, repairDepth + 1);
+      await runGroqExamJob(result.repairJobId, admin, repairDepth + 1, jobDeadline);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Groq exam generation failed.';
