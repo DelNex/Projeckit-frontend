@@ -1,3 +1,4 @@
+import type { CanonicalOmrGeometry } from '../geometry/geometry-types';
 import type { OmrPrintModalStudent } from '../components/OmrPrintModal';
 
 export const A5_TWO_UP_PRINT_SIZE = {
@@ -83,4 +84,21 @@ export function buildA4CompactPages(
   }
 
   return pages.join('\\n');
+}
+
+
+/**
+ * Recover the unshifted content cursor from the base geometry and calculate
+ * the shortest safe HALF sheet. A 60-item form deliberately returns its
+ * original 794px A5 height.
+ */
+export function getCompactOmrPageHeight(geometry: CanonicalOmrGeometry): number {
+  if (geometry.sheetFormat !== 'HALF' || geometry.config.itemCount >= 60) return geometry.page.height;
+  const rowsPerColumn = geometry.layout.answerArea.rowsPerCol;
+  const baseAnswerY = geometry.layout.answerArea.y;
+  const shiftedSectionBottom = geometry.layout.sectionBar.bottomLineY;
+  const contentCursorY = Math.max(0, 4 * shiftedSectionBottom - 3 * (baseAnswerY - 8));
+  return Math.min(794, Math.max(1, Math.ceil(
+    23 + contentCursorY + 8 + 26 + 16 + 19 * Math.max(0, rowsPerColumn - 1) + 2
+  )));
 }
