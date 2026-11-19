@@ -36,9 +36,24 @@ Before a production release, run the frontend test suite, TypeScript check, prod
 
 Record the commit and deployment, database migration status, AI service URL/health, and a small OMR validation sample for every release. Validate clean marks, faint marks, erased marks, multiple marks, rotation/cropping, glare, and low-resolution images. Keep the machine reading, confidence/reason, teacher correction, and final saved response separately auditable. Do not promise perfect camera recognition; ambiguous marks require teacher review.
 
+## Exam AI provider routing and large lessons
+
+Exam generation uses the existing durable `exam_generation_jobs` queue. The database claim function remains responsible for leases, retries, and tenant-fair job claiming; provider failover does not create a second queue.
+
+The server-side provider router supports these adapters when credentials are configured:
+
+- Groq: `GROQ_API_KEY`, optional `GROQ_MODEL`
+- OpenRouter: `OPENROUTER_API_KEY`, optional `OPENROUTER_MODEL`
+- Gemini: `GEMINI_API_KEY`, optional `GEMINI_MODEL`
+- Cloudflare Workers AI: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, optional `CLOUDFLARE_MODEL`
+
+Set `AI_PROVIDER_ORDER=groq,openrouter,gemini,cloudflare` to choose the failover order. Only providers with server-side credentials are eligible. Never put these keys in `NEXT_PUBLIC_*` variables or browser code. The router skips a provider during its rate-limit cooldown and falls back on retryable provider errors; it does not create accounts, rotate identities, or bypass quotas. Review each provider's current pricing, rate limits, and data-use terms before enabling it. Do not send student records or other personal information to a provider unless the school's data-processing rules permit it.
+
+Local extraction now accepts up to 900,000 readable characters per generation job, subject to the existing 1.5 MB serialized queue-payload limit. Text is stored as bounded lesson sections in the durable job. For each question batch, the worker ranks sections against the requested TOS competency and sends at most eight relevant sections / 120,000 characters to the model. If no section matches, it samples across the document instead of repeatedly sending only the first pages. This is lexical retrieval, not semantic search; teachers must still review generated questions against the source.
+
 ## Known operational constraints
 
 - The AI service needs to be reachable from the Next.js server and requires the same Supabase signing configuration to validate user tokens.
-- Scanned/image-only PDFs have no selectable text and cannot be indexed by text extraction alone; OCR or a text-based source is needed.
+- Scanned/image-only PDFs still require OCR or a text-based source. The local OCR engine is not yet integrated; do not treat image-only PDFs as supported until a pinned, self-hosted OCR runtime and language assets are added and tested.
 - OpenCV quality depends on camera and printing conditions. Calibration and a recorded validation dataset remain release tasks.
 - Retain separate, current lockfile-based SBOMs and review dependency audit findings before production deployment.
