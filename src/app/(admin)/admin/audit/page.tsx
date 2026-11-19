@@ -186,6 +186,20 @@ export default function AuditLogsPage() {
         },
       },
       {
+        id: 'status-code',
+        header: 'HTTP / Code',
+        cell: ({ row }) => {
+          const details = row.original.details || {};
+          return (
+            <div className="font-mono text-[10px] text-gray-500 dark:text-gray-400">
+              <div>{details.status ? `HTTP ${details.status}` : '—'}</div>
+              {details.code ? <div>{details.code}</div> : null}
+              {details.request_id ? <div title={details.request_id}>ID {String(details.request_id).slice(0, 12)}</div> : null}
+            </div>
+          );
+        },
+      },
+      {
         accessorKey: 'created_at',
         header: 'Timestamp',
         cell: ({ row }) => (
