@@ -1,10 +1,13 @@
 -- Grading periods are school-wide academic configuration. Teachers may read
 -- them, but only approved tenant administrators (or platform admins) may write.
--- The database RPCs are SECURITY DEFINER, so RLS alone is not sufficient:
--- this trigger also guards writes initiated by those RPCs.
+-- The SECURITY DEFINER RPCs are also guarded by the trigger below.
 
 DROP POLICY IF EXISTS "Users can manage grading periods in their tenant" ON public.grading_periods;
 DROP POLICY IF EXISTS "Users can view grading periods in their tenant" ON public.grading_periods;
+DROP POLICY IF EXISTS "Approved tenant members can view grading periods" ON public.grading_periods;
+DROP POLICY IF EXISTS "Tenant admins can insert grading periods" ON public.grading_periods;
+DROP POLICY IF EXISTS "Tenant admins can update grading periods" ON public.grading_periods;
+DROP POLICY IF EXISTS "Tenant admins can delete grading periods" ON public.grading_periods;
 
 CREATE POLICY "Approved tenant members can view grading periods"
   ON public.grading_periods FOR SELECT TO authenticated
@@ -15,51 +18,6 @@ CREATE POLICY "Approved tenant members can view grading periods"
 
 CREATE POLICY "Tenant admins can insert grading periods"
   ON public.grading_periods FOR INSERT TO authenticated
-  WITH CHECK (
-    (
-      tenant_id = (SELECT public.get_current_tenant_id())
-      AND EXISTS (
-        SELECT 1 FROM public.profiles p
-        WHERE p.id = (SELECT auth.uid())
-          AND p.tenant_id = grading_periods.tenant_id
-          AND p.role = 'admin'
-          AND p.status = 'approved'
-          AND p.archived_at IS NULL
-      )
-    )
-    OR (SELECT public.is_platform_admin())
-  )
-  WITH CHECK (
-    (
-      tenant_id = (SELECT public.get_current_tenant_id())
-      AND EXISTS (
-        SELECT 1 FROM public.profiles p
-        WHERE p.id = (SELECT auth.uid())
-          AND p.tenant_id = grading_periods.tenant_id
-          AND p.role = 'admin'
-          AND p.status = 'approved'
-          AND p.archived_at IS NULL
-      )
-    )
-    OR (SELECT public.is_platform_admin())
-  );
-
-CREATE POLICY "Tenant admins can insert grading periods"
-  ON public.grading_periods FOR INSERT TO authenticated
-  WITH CHECK (
-    (
-      tenant_id = (SELECT public.get_current_tenant_id())
-      AND EXISTS (
-        SELECT 1 FROM public.profiles p
-        WHERE p.id = (SELECT auth.uid())
-          AND p.tenant_id = grading_periods.tenant_id
-          AND p.role = 'admin'
-          AND p.status = 'approved'
-          AND p.archived_at IS NULL
-      )
-    )
-    OR (SELECT public.is_platform_admin())
-  )
   WITH CHECK (
     (
       tenant_id = (SELECT public.get_current_tenant_id())
@@ -133,7 +91,6 @@ DECLARE
   target_tenant uuid;
   caller_is_admin boolean := false;
 BEGIN
-  -- Trusted server-side operations and migrations remain supported.
   IF auth.role() = 'service_role' OR auth.uid() IS NULL THEN
     IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
     RETURN NEW;
