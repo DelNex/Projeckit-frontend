@@ -1,4 +1,4 @@
-type BackendUrlEnvironment = Pick<NodeJS.ProcessEnv, 'BACKEND_API_BASE_URL' | 'NODE_ENV'>;
+type BackendUrlEnvironment = Pick<NodeJS.ProcessEnv, 'BACKEND_API_BASE_URL' | 'NODE_ENV' | 'NEXT_PUBLIC_APP_URL'>;
 
 /**
  * Resolve the private AI backend origin without ever silently routing a
@@ -24,7 +24,7 @@ export function resolveBackendBaseUrl(env: BackendUrlEnvironment = process.env):
 
 /** Resolve the public application origin used by password-reset links. */
 export function resolvePublicAppUrl(env: BackendUrlEnvironment = process.env): string | null {
-  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const configured = env.NEXT_PUBLIC_APP_URL?.trim();
   if (!configured) return env.NODE_ENV === 'development' ? 'http://localhost:3000' : null;
   try {
     const url = new URL(configured);
