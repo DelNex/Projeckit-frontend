@@ -13,7 +13,7 @@ type OcrWorker = Awaited<ReturnType<typeof import('tesseract.js').createWorker>>
 
 async function createLocalOcrWorker(): Promise<OcrWorker> {
   const { createWorker } = await import('tesseract.js');
-  return createWorker('eng', 1, {
+  return createWorker('eng+fil', 1, {
     workerPath: '/ocr/worker.min.js',
     corePath: '/ocr/core',
     langPath: '/ocr/lang',
