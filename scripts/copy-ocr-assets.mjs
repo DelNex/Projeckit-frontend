@@ -24,7 +24,7 @@ copied.push(await copyRequired(workerSource, path.join(publicRoot, 'worker.min.j
 
 const coreFiles = (await readdir(coreSource))
   .filter((name) => name.startsWith('tesseract-core-') || name === 'tesseract-core.js' || name === 'tesseract-core.wasm' || name === 'tesseract-core.wasm.js')
-  .filter((name) => /\\.(?:js|wasm)$/.test(name))
+  .filter((name) => /\.(?:js|wasm)$/.test(name))
   .sort();
 
 const requiredCore = [
@@ -53,5 +53,5 @@ const manifest = {
   assets: copied,
   totalBytes: copied.reduce((total, item) => total + item.bytes, 0),
 };
-await writeFile(path.join(publicRoot, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\\n');
+await writeFile(path.join(publicRoot, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 console.log('Prepared ' + copied.length + ' self-hosted OCR assets (' + manifest.totalBytes + ' bytes).');
