@@ -110,33 +110,6 @@ export async function getLocalDocumentCapacity(): Promise<LocalDocumentCapacity>
   };
 }
 
-function normalizeText(text: string): string {
-  const seen = new Set<string>();
-  return text
-    .replace(/\\u0000/g, '')
-    .replace(/\\r\\n?/g, '\\n')
-    .split(/\\n\\s*\\n/)
-    .map((paragraph) => paragraph.replace(/[\\t ]+/g, ' ').trim())
-    .filter((paragraph) => {
-      if (!paragraph) return true;
-      if (seen.has(paragraph)) return false;
-      seen.add(paragraph);
-      return true;
-    })
-    .join('\\n\\n')
-    .trim();
-}
-
-function assertTextLimit(text: string, fileName: string): string {
-  const normalized = normalizeText(text);
-  if (normalized.length > MAX_EXTRACTED_CHARACTERS) {
-    throw new Error(
-      `'${fileName}' contains more than 200,000 readable characters. Split the document by chapter and generate smaller exams so no source content is silently discarded.`
-    );
-  }
-  return normalized;
-}
-
 type ExtractionResponse = { id: string; text?: string; error?: string };
 let extractionWorker: Worker | null = null;
 const pendingExtractions = new Map<string, { resolve: (text: string) => void; reject: (error: Error) => void }>();
