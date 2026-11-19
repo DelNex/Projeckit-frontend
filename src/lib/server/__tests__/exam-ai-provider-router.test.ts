@@ -25,7 +25,7 @@ test('provider registry exposes only providers with server-side credentials', ()
   try {
     for (const name of names) delete process.env[name];
     assert.deepEqual(getConfiguredExamProviders(), []);
-    process.env.AI_PROVIDER_ORDER = 'gemini,groq,openrouter,cloudflare';
+    process.env.AI_PROVIDER_ORDER = 'toString,gemini,groq,openrouter,cloudflare';
     process.env.GEMINI_API_KEY = 'test-gemini-key';
     process.env.GROQ_API_KEY = 'test-groq-key';
     process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
@@ -91,4 +91,65 @@ test('queue dispatcher prefers the least-loaded school, then the oldest job', ()
   assert.equal(chooseNextExamJob(queued, active)?.id, 'c-new');
   assert.equal(chooseNextExamJob(queued.slice(1), [{ tenant_id: 'school-b' }])?.id, 'c-new');
   assert.equal(chooseNextExamJob(queued, [{ tenant_id: 'school-a' }, { tenant_id: 'school-a' }, { tenant_id: 'school-b' }, { tenant_id: 'school-b' }, { tenant_id: 'school-c' }, { tenant_id: 'school-c' }]), undefined);
+});
+
+test('Groq adapter uses the configured chat endpoint and parses structured question JSON', async () => {
+  const names = ['GROQ_API_KEY', 'GROQ_MODEL', 'AI_PROVIDER_ORDER'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  try {
+    process.env.GROQ_API_KEY = 'test-groq-key';
+    process.env.GROQ_MODEL = 'openai/gpt-oss-120b';
+    process.env.AI_PROVIDER_ORDER = 'groq';
+    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      assert.equal(String(input), 'https://api.groq.com/openai/v1/chat/completions');
+      assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer test-groq-key');
+      const body = JSON.parse(String(init?.body));
+      assert.equal(body.model, 'openai/gpt-oss-120b');
+      assert.equal(body.response_format.type, 'json_schema');
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({ questions: [{ item_number: 1 }] }) } }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    const { requestExamQuestionsFromProviders } = await import('../exam-ai-provider-router');
+    const result = await requestExamQuestionsFromProviders([{ role: 'user', content: 'Create one item.' }], { type: 'object' });
+    assert.deepEqual(JSON.parse(result), [{ item_number: 1 }]);
+  } finally {
+    global.fetch = originalFetch;
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
+test('Cloudflare adapter preserves the model path and parses Workers AI response output', async () => {
+  const names = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_MODEL', 'AI_PROVIDER_ORDER'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  try {
+    process.env.CLOUDFLARE_API_TOKEN = 'test-cloudflare-token';
+    process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account';
+    process.env.CLOUDFLARE_MODEL = '@cf/meta/llama-3.1-8b-instruct';
+    process.env.AI_PROVIDER_ORDER = 'cloudflare';
+    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      assert.equal(String(input), 'https://api.cloudflare.com/client/v4/accounts/test-account/ai/run/@cf/meta/llama-3.1-8b-instruct');
+      assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer test-cloudflare-token');
+      const body = JSON.parse(String(init?.body));
+      assert.ok(Array.isArray(body.messages));
+      return new Response(JSON.stringify({
+        success: true,
+        result: { response: JSON.stringify({ questions: [{ item_number: 2 }] }) },
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    const { requestExamQuestionsFromProviders } = await import('../exam-ai-provider-router');
+    const result = await requestExamQuestionsFromProviders([{ role: 'user', content: 'Create one item.' }], { type: 'object' });
+    assert.deepEqual(JSON.parse(result), [{ item_number: 2 }]);
+  } finally {
+    global.fetch = originalFetch;
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
 });
