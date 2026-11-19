@@ -72,8 +72,10 @@ export function useExamGenerationJob(tosId: string | undefined) {
     const onVisibility = () => { if (document.visibilityState === 'visible') { void load(); void refreshHelperStatus(); } };
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onVisibility);
+    let lastHelperRefreshAt = 0;
     const poll = async () => {
       if (cancelled) return;
+      let hasActiveJob = false;
       if (document.visibilityState === 'visible') {
         try {
           const latestResponse = await fetch(`/api/ai/exam-jobs?tosId=${encodeURIComponent(tosId)}`, { cache: 'no-store' });
@@ -81,16 +83,24 @@ export function useExamGenerationJob(tosId: string | undefined) {
           if (latestResponse.ok && latestData.job) {
             const next = latestData.job as ExamGenerationJob;
             setJob(next);
-            if (['completed', 'partial'].includes(next.status)) await refreshJob(next.id);
-            else if (['queued', 'running', 'needs_attention'].includes(next.status)) await refreshJob(next.id);
+            hasActiveJob = ['queued', 'running', 'needs_attention'].includes(next.status);
+            if (['completed', 'partial', 'queued', 'running', 'needs_attention'].includes(next.status)) {
+              await refreshJob(next.id);
+            }
           }
-          await refreshHelperStatus();
+          // Helper/provider availability is informational; it does not need to
+          // be fetched on every queue-status poll.
+          if (Date.now() - lastHelperRefreshAt >= 60_000) {
+            await refreshHelperStatus();
+            lastHelperRefreshAt = Date.now();
+          }
         } catch { /* next poll retries */ }
       }
-      const delay = Date.now() - startedAt.current > 60_000 ? 8000 : 2500;
-      timer = setTimeout(poll, delay);
+      // Keep active progress responsive without hammering the API while idle.
+      // Hidden tabs also back off and do not issue network requests.
+      timer = setTimeout(poll, document.visibilityState === 'visible' && hasActiveJob ? 8000 : 30_000);
     };
-    timer = setTimeout(poll, 2500);
+    timer = setTimeout(poll, 8000);
     return () => {
       cancelled = true;
       alive.current = false;
