@@ -21,7 +21,8 @@ test('extracts a scanned PDF with the locally bundled OCR runtime', async ({ pag
     path.join(process.cwd(), 'src/lib/server/__tests__/fixtures/scanned_image.pdf')
   );
 
-  const output = page.getByTestId('ocr-result');
+  // Production builds strip data-testid attributes; use the semantic result element.
+  const output = page.locator('main pre');
   await expect.poll(async () => {
     const extracted = (await output.textContent())?.trim();
     if (extracted) return extracted;
