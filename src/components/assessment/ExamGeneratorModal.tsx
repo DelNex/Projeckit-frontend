@@ -264,7 +264,7 @@ export function ExamGeneratorModal({
                 {generationJob.job?.status === 'needs_attention'
                   ? 'The AI generation job needs attention. Review the error and retry.'
                   : generationJob.job?.status === 'queued'
-                    ? `Queued (position ${generationJob.job.queuePosition || 1}). Groq AI will process this exam in the background. This is running in the background, you can leave this page.`
+                    ? `Queued (position ${generationJob.job.queuePosition || 1}). The configured AI provider will process this exam in the background. This is running in the background, you can leave this page.`
                     : generationJob.job?.status === 'running'
                       ? `${generationJob.job.progress?.label || 'AI is writing your exam.'} This is running in the background, you can leave this page.`
                       : generationJob.job?.status === 'failed'
@@ -272,7 +272,7 @@ export function ExamGeneratorModal({
                         : currentStep === 'generating' && chunkProgress ? chunkProgress.label : STEP_LABELS[currentStep]}
               </span>
               {generationJob.helperState === 'offline'
-                ? <span className="rounded-full border border-slate-300 px-2 py-1 text-[10px] text-slate-600">Groq AI offline</span>
+                ? <span className="rounded-full border border-slate-300 px-2 py-1 text-[10px] text-slate-600">AI providers offline</span>
                 : <span className="rounded-full border border-emerald-300 px-2 py-1 text-[10px] text-emerald-700">Groq {generationJob.helperState.replace('_', ' ')}</span>}
               {['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')
                 ? <button type="button" onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="rounded-lg border border-rose-200 px-2 py-1 text-[10px] font-semibold text-rose-700">Cancel</button>
@@ -316,7 +316,7 @@ export function ExamGeneratorModal({
           </div>
         )}
 
-        {generationJob.helperState === 'offline' && <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">Groq AI is offline. Add GROQ_API_KEY to the server environment to enable exam generation.</div>}
+        {generationJob.helperState === 'offline' && <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">No server-side exam AI provider is currently reporting as available. You can still try starting; the server will check provider availability.</div>}
         {generationJob.helperState === 'needs_attention' && generationJob.job?.status !== 'needs_attention' && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">An earlier AI generation job needs attention. Resolve or cancel it before starting another generation.</div>}
 
         {truncationNotice && (
@@ -467,7 +467,7 @@ export function ExamGeneratorModal({
           <button
             type="button"
             onClick={handleStartGeneration}
-            disabled={isGenerating || generationJob.isStarting || generationJob.helperState === 'offline' || generationJob.helperState === 'needs_attention' || (selectedFiles.length === 0 && !pastedText.trim())}
+            disabled={isGenerating || generationJob.isStarting || (selectedFiles.length === 0 && !pastedText.trim())}
             className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 transition"
           >
             {isGenerating ? (
