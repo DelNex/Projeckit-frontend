@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import {
@@ -77,6 +78,7 @@ export async function POST(request: Request) {
       await admin.storage.from('lesson-uploads').remove([storagePath]);
     }
   } catch (err: any) {
+    await logSystemEvent({ severity: 'error', source: 'api.ai.extract-lesson-text', message: err instanceof Error ? err.message : 'Lesson extraction failed.', method: 'POST', route: '/api/ai/extract-lesson-text', code: 'LESSON_EXTRACTION_FAILURE' });
     console.error('[ExtractLessonText] Extraction failed:', err);
     return NextResponse.json(
       { error: err.message || 'Failed to extract text from lesson documents.' },
