@@ -663,3 +663,10 @@ CREATE INDEX IF NOT EXISTS idx_exam_jobs_tenant_status
 CREATE INDEX IF NOT EXISTS idx_exam_jobs_running_lease
   ON public.exam_generation_jobs (provider, lease_expires_at, created_at)
   WHERE status = 'running';
+
+-- Full (non-partial) foreign-key indexes also support cascades and joins for
+-- every job row, including cancelled and failed history.
+CREATE INDEX IF NOT EXISTS idx_exam_generation_jobs_created_by
+  ON public.exam_generation_jobs (created_by);
+CREATE INDEX IF NOT EXISTS idx_exam_generation_jobs_tenant_id
+  ON public.exam_generation_jobs (tenant_id);
