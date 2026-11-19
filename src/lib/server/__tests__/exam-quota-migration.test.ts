@@ -19,4 +19,7 @@ test('exam queue migration serializes quota checks before inserting jobs', async
   assert.match(migration, /Tenant members can view profiles/);
   assert.match(migration, /idx_exam_generation_jobs_created_by/);
   assert.match(migration, /idx_exam_generation_jobs_tenant_id/);
+  assert.match(migration, /Approved tenant members can view grading periods/);
+  assert.match(migration, /Tenant members can insert own audit events/);
+  assert.doesNotMatch(migration, /Tenant admins can insert audit logs/);
 });
