@@ -233,6 +233,7 @@ export function TosExamModal({
           compFiles.forEach((file) => lessonDocuments.push({
             name: `Competency ${idx + 1}: ${r.description} — ${file.name}`,
             text: file.text,
+            competencyId: r.id || r.code || String(idx + 1),
           }));
           combinedText += `\n\n--- COMPETENCY ${idx + 1}: ${r.description} ---\n${compText}`;
         }
