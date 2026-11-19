@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildGroqMessages } from '../groq-exam-worker';
+import { buildGroqMessages, chooseNextExamJob } from '../groq-exam-worker';
 import { getConfiguredExamProviders } from '../exam-ai-provider-router';
 
 test('exam context retrieval prefers lesson sections relevant to the requested competency', () => {
@@ -78,4 +78,17 @@ test('falls back from a rate-limited provider and parses the next provider respo
       else process.env[name] = previous[name];
     }
   }
+});
+
+test('queue dispatcher prefers the least-loaded school, then the oldest job', () => {
+  const queued = [
+    { id: 'a-old', tenant_id: 'school-a', created_at: '2026-01-01T00:00:00Z' },
+    { id: 'b-old', tenant_id: 'school-b', created_at: '2026-01-02T00:00:00Z' },
+    { id: 'c-new', tenant_id: 'school-c', created_at: '2026-01-03T00:00:00Z' },
+    { id: 'a-new', tenant_id: 'school-a', created_at: '2026-01-04T00:00:00Z' },
+  ];
+  const active = [{ tenant_id: 'school-a' }, { tenant_id: 'school-a' }, { tenant_id: 'school-b' }];
+  assert.equal(chooseNextExamJob(queued, active)?.id, 'c-new');
+  assert.equal(chooseNextExamJob(queued.slice(1), [{ tenant_id: 'school-b' }])?.id, 'c-new');
+  assert.equal(chooseNextExamJob(queued, [{ tenant_id: 'school-a' }, { tenant_id: 'school-a' }, { tenant_id: 'school-b' }, { tenant_id: 'school-c' }]), undefined);
 });
