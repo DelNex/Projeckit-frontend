@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { jobBelongsToTenant } from '@/lib/server/exam-jobs';
 import { logSystemEvent } from '@/lib/server/system-logger';
+import { deleteCompressedLessonSource } from '@/lib/server/lesson-source-storage';
 
 async function scopedJob(id: string) {
   const supabase = await createClient();
@@ -81,9 +82,11 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
     if (result.response) return result.response;
     const { job, admin } = result as any;
     if (!['queued', 'running', 'needs_attention'].includes(job.status)) return NextResponse.json({ error: 'This generation job can no longer be cancelled.' }, { status: 409 });
+    const { data: sourceRecord } = await admin.from('exam_generation_jobs').select('payload,created_by').eq('id', id).maybeSingle();
     const { error } = await admin.from('exam_generation_jobs').update({ status: 'cancelled', error: 'Cancelled by the user.', finished_at: new Date().toISOString(), updated_at: new Date().toISOString(), payload: {}, claimed_by: null, lease_expires_at: null }).eq('id', id).eq('tenant_id', job.tenant_id).in('status', ['queued', 'running', 'needs_attention']);
     if (error) throw error;
     await admin.from('exam_generation_jobs').update({ status: 'cancelled', error: 'Cancelled by the user.', finished_at: new Date().toISOString(), updated_at: new Date().toISOString(), payload: {}, claimed_by: null, lease_expires_at: null }).eq('parent_job_id', id).in('status', ['queued', 'running', 'needs_attention']);
+    if (sourceRecord?.payload?.sourceManifest) await deleteCompressedLessonSource(admin, sourceRecord.payload.sourceManifest, sourceRecord.created_by || job.created_by).catch(() => undefined);
     return NextResponse.json({ accepted: true, status: 'cancelled' });
   } catch {
     return NextResponse.json({ error: 'Could not cancel exam generation.' }, { status: 503 });
