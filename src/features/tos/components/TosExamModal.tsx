@@ -63,7 +63,7 @@ export function TosExamModal({
     if (generationJob.savedQuestions) setQuestions(generationJob.savedQuestions);
     if (generationJob.job && ['queued', 'running'].includes(generationJob.job.status)) {
       setIsGenerating(true);
-      setGenerationProgress(generationJob.job.progress?.label || (generationJob.job.status === 'queued' ? `Queued (position ${generationJob.job.queuePosition || 1}). Starts when the Gemini helper is available.` : 'Gemini is writing your exam.'));
+      setGenerationProgress(generationJob.job.progress?.label || (generationJob.job.status === 'queued' ? `Queued (position ${generationJob.job.queuePosition || 1}). Groq AI will process this exam in the background.` : 'Gemini is writing your exam.'));
     } else if (generationJob.job?.status === 'needs_attention') {
       setIsGenerating(false);
       setGenerationProgress('');
@@ -246,8 +246,8 @@ export function TosExamModal({
 
       const queued = await generationJob.start(lessonDocuments.length ? { lessonDocuments } : { lessonText: combinedText });
       setGenerationProgress(queued.status === 'queued'
-        ? `Queued (position ${queued.queuePosition || 1}). Starts when the Gemini helper is available.`
-        : queued.status === 'running' ? 'Gemini is already generating questions for this TOS.' : 'This TOS already has a job that needs helper attention.');
+        ? `Queued (position ${queued.queuePosition || 1}). Groq AI will process this exam in the background.`
+        : queued.status === 'running' ? 'Groq is already generating questions for this TOS.' : 'This TOS already has a job that needs helper attention.');
     } catch (err: any) {
       console.error('Exam generation error:', err);
       setIsGenerating(false);
@@ -339,14 +339,14 @@ export function TosExamModal({
               <button
                 onClick={handleGenerateExam}
                 disabled={isGenerating || generationJob.isStarting || generationJob.helperState === 'offline' || generationJob.helperState === 'needs_attention' || ['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')}
-                title={generationJob.helperState === 'offline' ? 'The Gemini helper is offline. No generation job can be started.' : undefined}
+                title={generationJob.helperState === 'offline' ? 'Groq AI is offline. Configure GROQ_API_KEY on the server.' : undefined}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all disabled:opacity-50"
               >
                 {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                 <span>{isGenerating ? 'Generating...' : 'Generate Exam'}</span>
               </button>
               <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold ${generationJob.helperState === 'offline' ? 'border-slate-300 text-slate-600' : generationJob.helperState === 'needs_attention' ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-emerald-300 bg-emerald-50 text-emerald-800'}`}>
-                Helper {generationJob.helperState === 'needs_attention' ? 'needs attention' : generationJob.helperState}
+                Groq AI {generationJob.helperState === 'needs_attention' ? 'needs attention' : generationJob.helperState}
               </span>
               <button
                 onClick={() => setShowTeacherCopyModal(true)}
@@ -373,27 +373,27 @@ export function TosExamModal({
             {generationJob.job?.status === 'needs_attention' && (
               <div className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
                 <AlertTriangle className="h-5 w-5 shrink-0" />
-                <span className="font-semibold">The Gemini helper needs attention. This job is paused and will not be retried automatically. Resolve the helper issue, then clear this job to retry.</span>
+                <span className="font-semibold">This AI job needs attention. Review its error, then clear the job to retry.</span>
                 <button onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="ml-auto shrink-0 rounded-lg border border-amber-300 px-3 py-1.5 font-semibold">Clear job</button>
               </div>
             )}
 
             {generationJob.helperState === 'offline' && !isGenerating && (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">Gemini helper is offline. Generation is disabled and no new job will be queued until it is available.</div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">Groq AI is offline. Add GROQ_API_KEY to the server environment to enable generation.</div>
             )}
             {generationJob.helperState === 'needs_attention' && generationJob.job?.status !== 'needs_attention' && (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">Gemini helper needs attention. Resolve the prompt on the helper computer before starting another generation.</div>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">An earlier AI generation job needs attention. Resolve or cancel it before starting another generation.</div>
             )}
 
             {isGenerating && (
               <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center gap-3 text-xs text-emerald-900 dark:text-emerald-100">
                 <Loader2 className="h-5 w-5 animate-spin text-emerald-600 shrink-0" />
                 <span className="font-semibold">{generationJob.job?.status === 'needs_attention'
-                  ? 'The Gemini helper needs a person to sign in or confirm on the helper computer. Tell your administrator.'
+                  ? 'The AI generation job needs attention. Review the error and retry.'
                   : generationJob.job?.status === 'running'
                     ? `${generationJob.job.progress?.label || generationProgress} This is running in the background, you can leave this page.`
                     : generationJob.job?.status === 'queued'
-                      ? `Queued (position ${generationJob.job.queuePosition || 1}). Starts when the Gemini helper is available. This is running in the background, you can leave this page.`
+                      ? `Queued (position ${generationJob.job.queuePosition || 1}). Groq AI will process this exam in the background. This is running in the background, you can leave this page.`
                       : generationProgress}</span>
                 {['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '') && <button onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="ml-auto rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700">Cancel</button>}
               </div>
