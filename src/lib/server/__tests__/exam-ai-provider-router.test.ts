@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildGroqMessages, chooseNextExamJob } from '../groq-exam-worker';
 import { getConfiguredExamProviders } from '../exam-ai-provider-router';
+import { GroqExamJobProvider } from '../exam-ai-provider';
 
 test('exam context retrieval prefers lesson sections relevant to the requested competency', () => {
   const payload = {
@@ -91,4 +92,34 @@ test('queue dispatcher prefers the least-loaded school, then the oldest job', ()
   assert.equal(chooseNextExamJob(queued, active)?.id, 'c-new');
   assert.equal(chooseNextExamJob(queued.slice(1), [{ tenant_id: 'school-b' }])?.id, 'c-new');
   assert.equal(chooseNextExamJob(queued, [{ tenant_id: 'school-a' }, { tenant_id: 'school-a' }, { tenant_id: 'school-b' }, { tenant_id: 'school-b' }, { tenant_id: 'school-c' }, { tenant_id: 'school-c' }]), undefined);
+});
+
+
+test('queue admission sends validated hourly and school quota limits to the atomic RPC', async () => {
+  let rpcName = '';
+  let rpcArgs: Record<string, unknown> = {};
+  const admin = {
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      rpcName = name;
+      rpcArgs = args;
+      return {
+        data: [{ job_id: 'job-1', created_at: '2026-11-19T12:00:00Z', status: 'queued', created: true }],
+        error: null,
+      };
+    },
+  };
+  const result = await new GroqExamJobProvider().enqueue(admin, {
+    tenantId: 'tenant-1',
+    tosId: 'tos-1',
+    createdBy: 'teacher-1',
+    payload: { slots: [] },
+    jobKind: 'full',
+    hourlyLimit: 5,
+    dailyLimit: 100,
+  });
+  assert.equal(rpcName, 'enqueue_groq_exam_generation_job');
+  assert.equal(rpcArgs.p_hourly_limit, 5);
+  assert.equal(rpcArgs.p_daily_limit, 100);
+  assert.equal(result.reused, false);
+  assert.equal(result.id, 'job-1');
 });
