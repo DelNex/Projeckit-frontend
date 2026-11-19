@@ -87,6 +87,7 @@ export function ExamGeneratorModal({
   const [isDragging, setIsDragging] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [truncationNotice, setTruncationNotice] = useState<string | null>(null);
+  const [ocrNotice, setOcrNotice] = useState<string | null>(null);
   const [chunkProgress, setChunkProgress] = useState<{
     completed: number;
     total: number;
@@ -194,6 +195,7 @@ export function ExamGeneratorModal({
     startingRef.current = true;
     setErrorMsg(null);
     setTruncationNotice(null);
+    setOcrNotice(null);
     let extractedLessonText = pastedText.trim();
     let lessonDocuments: Array<{ name: string; text: string }> = pastedText.trim()
       ? [{ name: 'Pasted lesson text', text: pastedText.trim() }]
@@ -205,6 +207,9 @@ export function ExamGeneratorModal({
         setCurrentStep('extracting');
         const extractResult = await extractTextFromFiles(selectedFiles, { ocrLanguages });
         lessonDocuments = [...extractResult.documents, ...lessonDocuments];
+        if (extractResult.text.includes('[local OCR checked]')) {
+          setOcrNotice('Scanned PDF pages were read locally with OCR. Blurry scans can misread names, numbers, and wording, so review generated questions carefully.');
+        }
         extractedLessonText = (extractResult.text + (extractedLessonText ? `\n\n${extractedLessonText}` : '')).trim();
 
         if (extractResult.notice) {
@@ -344,6 +349,12 @@ export function ExamGeneratorModal({
 
         {generationJob.helperState === 'offline' && <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">No server-side exam AI provider is currently reporting as available. You can still try starting; the server will check provider availability.</div>}
         {generationJob.helperState === 'needs_attention' && generationJob.job?.status !== 'needs_attention' && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">An earlier AI generation job needs attention. Resolve or cancel it before starting another generation.</div>}
+
+        {ocrNotice && (
+          <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3.5 text-xs text-blue-800 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200">
+            {ocrNotice}
+          </div>
+        )}
 
         {truncationNotice && (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300 flex items-center gap-2">
