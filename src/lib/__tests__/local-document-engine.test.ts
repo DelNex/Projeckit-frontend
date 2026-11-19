@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { File } from 'node:buffer';
 import { extractTextFromFiles } from '../lesson-parser';
 import { getLocalDocumentCapacity, LOCAL_DOCUMENT_MAX_CHARACTERS } from '../local-document-engine';
 
