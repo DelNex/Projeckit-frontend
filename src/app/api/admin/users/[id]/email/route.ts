@@ -118,7 +118,22 @@ export async function POST(
       }
       successMessage = `Confirmation email resent to ${targetProfile.email}.`;
     } else if (action === 'reset_password') {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+      if (!configuredAppUrl) {
+        return NextResponse.json({ error: 'Password reset is unavailable because the public application URL is not configured.' }, { status: 503 });
+      }
+      let appUrl: string;
+      try {
+        const parsedAppUrl = new URL(configuredAppUrl);
+        if (parsedAppUrl.username || parsedAppUrl.password || parsedAppUrl.search || parsedAppUrl.hash ||
+          (process.env.NODE_ENV === 'production' && parsedAppUrl.protocol !== 'https:') ||
+          !['https:', ...(process.env.NODE_ENV === 'development' ? ['http:'] : [])].includes(parsedAppUrl.protocol)) {
+          throw new Error('Invalid public application URL.');
+        }
+        appUrl = parsedAppUrl.origin;
+      } catch {
+        return NextResponse.json({ error: 'Password reset is unavailable because the public application URL is invalid.' }, { status: 503 });
+      }
       const { error: resetErr } = await adminClient.auth.resetPasswordForEmail(
         targetProfile.email,
         {
