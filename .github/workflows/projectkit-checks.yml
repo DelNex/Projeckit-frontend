@@ -28,7 +28,7 @@ jobs:
         run: npm ci
       - name: TypeScript check
         run: npm run typecheck
-      - name: Full unit and schema test suite
+      - name: Schema contract and complete unit test suite
         run: npm test
       - name: Production build
         run: npm run build
