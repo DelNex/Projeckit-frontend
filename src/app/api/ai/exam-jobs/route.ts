@@ -1,5 +1,5 @@
 import { after, NextResponse } from 'next/server';
-import { runGroqExamJob } from '@/lib/server/groq-exam-worker';
+import { runNextGroqExamJob } from '@/lib/server/groq-exam-worker';
 
 export const maxDuration = 60;
 import { createClient } from '@/lib/supabase/server';
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     if (activeJobError) throw activeJobError;
     if (activeJob) {
       if (activeJob.provider === 'groq_api' && ['queued', 'needs_attention'].includes(activeJob.status)) {
-        after(async () => { try { await runGroqExamJob(activeJob.id, caller.admin!); } catch (error) { console.error('[Groq worker] Existing job processing failed:', error instanceof Error ? error.message : 'unknown error'); } });
+        after(async () => { try { await runNextGroqExamJob(caller.admin!); } catch (error) { console.error('[Groq worker] Existing job processing failed:', error instanceof Error ? error.message : 'unknown error'); } });
       }
       const position = activeJob.status === 'queued'
         ? await caller.admin!.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('provider', 'groq_api').eq('status', 'queued').lte('created_at', activeJob.created_at)
@@ -97,7 +97,7 @@ export async function POST(request: Request) {
     const job = await getExamAiProvider().enqueue(caller.admin!, { tenantId: caller.profile!.tenant_id, tosId: tos.id, createdBy: caller.user!.id, payload, jobKind: Number.isInteger(body.repairItemNumber) ? 'repair' : 'full' });
     if (!job.reused && ['queued', 'needs_attention'].includes(job.status)) {
       after(async () => {
-        try { await runGroqExamJob(job.id, caller.admin!); }
+        try { await runNextGroqExamJob(caller.admin!); }
         catch (error) { console.error('[Groq worker] Exam job failed:', error instanceof Error ? error.message : 'unknown error'); }
       });
     }
