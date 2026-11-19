@@ -60,7 +60,21 @@ const QUESTION_SCHEMA = {
 
 export function buildGroqMessages(payload: Record<string, any>) {
   const chunks = Array.isArray(payload.lessonChunks) ? payload.lessonChunks : [];
-  const lessonText = chunks.map((chunk: any) => String(chunk?.text || '')).filter(Boolean).join('\n\n');
+  const slots = Array.isArray(payload.slots) ? payload.slots : [];
+  const slotCompetencies = [...new Set(slots.map((slot: any) => String(slot?.competency_id || '')).filter(Boolean))];
+  const assignedChunks = chunks.filter((chunk: any) =>
+    typeof chunk?.competencyId === 'string' && slotCompetencies.includes(chunk.competencyId)
+  );
+  const everySlotHasDedicatedMaterial = slotCompetencies.length > 0
+    && slotCompetencies.every((competencyId) => chunks.some((chunk: any) => chunk?.competencyId === competencyId));
+  // When every requested competency has its own module, avoid sending unrelated
+  // modules to the model. If any requested competency lacks a dedicated file,
+  // retain all uploaded material as shared context rather than silently dropping it.
+  const selectedChunks = everySlotHasDedicatedMaterial ? assignedChunks : chunks;
+  const lessonText = selectedChunks.map((chunk: any) => {
+    const competencyLabel = typeof chunk?.competencyId === 'string' ? `[TOS competency ${chunk.competencyId}]\\n` : '';
+    return `${competencyLabel}${String(chunk?.text || '')}`;
+  }).filter((text: string) => text.trim()).join('\\n\\n');
   if (!lessonText.trim()) throw new Error('The uploaded lesson material contains no readable text.');
   if (lessonText.length > MAX_LESSON_CHARS) {
     throw new Error(`The extracted lesson material is too large for the free AI generation route (${MAX_LESSON_CHARS.toLocaleString()} characters maximum). Split the material into smaller files and try again.`);
