@@ -7,6 +7,34 @@ const recentByUser = new Map<string, number>();
 const USER_ERROR_COOLDOWN_MS = 10_000;
 const MAX_EVENT_BYTES = 8_000;
 
+async function readBoundedBody(request: Request, maxBytes: number): Promise<string | null> {
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const combined = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(combined);
+}
+
 export async function POST(request: Request) {
   const contentLength = Number(request.headers.get('content-length') || 0);
   if (contentLength > MAX_EVENT_BYTES) {
@@ -31,10 +59,11 @@ export async function POST(request: Request) {
   let body: Record<string, unknown>;
   let rawBody = '';
   try {
-    rawBody = await request.text();
-    if (Buffer.byteLength(rawBody, 'utf8') > MAX_EVENT_BYTES) {
+    const boundedBody = await readBoundedBody(request, MAX_EVENT_BYTES);
+    if (boundedBody === null) {
       return NextResponse.json({ error: 'Client error report is too large.' }, { status: 413, headers: { 'Cache-Control': 'no-store' } });
     }
+    rawBody = boundedBody;
     const parsed: unknown = JSON.parse(rawBody);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return NextResponse.json({ error: 'Invalid error report.' }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
