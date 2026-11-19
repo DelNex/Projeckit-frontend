@@ -55,5 +55,8 @@
   },
   "overrides": {
     "postcss": "8.5.31"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
