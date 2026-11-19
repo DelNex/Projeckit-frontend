@@ -141,6 +141,12 @@ function getExtractionWorker(): Worker {
 }
 
 function extractInWorker(file: File): Promise<string> {
+  if (typeof Worker === 'undefined') {
+    const extension = file.name.toLowerCase().split('.').pop();
+    if (extension === 'txt' || extension === 'md') return file.text();
+    return Promise.reject(new Error('This browser does not support background document processing. Use a modern browser to extract PDF, DOCX, and PPTX files.'));
+  }
+
   const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
