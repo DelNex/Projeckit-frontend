@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient, MissingServiceKeyError } from '@/lib/supabase/admin';
@@ -96,6 +97,7 @@ export async function GET() {
       },
     });
   } catch (err: any) {
+    await logSystemEvent({ severity: 'error', source: 'api.admin.health', message: err instanceof Error ? err.message : 'Request failed.', method: 'GET', route: '/api/admin/health', code: 'ADMIN_HEALTH_FAILURE' });
     console.error('[admin/health GET] Unexpected error:', err);
     return NextResponse.json(
       {
