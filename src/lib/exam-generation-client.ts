@@ -25,6 +25,7 @@ export function useExamGenerationJob(tosId: string | undefined) {
   const startedAt = useRef(0);
   const loadedQuestionsForJob = useRef<string | null>(null);
   const startInFlight = useRef(false);
+  const cancelInFlight = useRef(false);
   const alive = useRef(true);
 
   const refreshHelperStatus = useCallback(async () => {
@@ -137,12 +138,17 @@ export function useExamGenerationJob(tosId: string | undefined) {
   }, [tosId, job, helperState, refreshHelperStatus]);
 
   const cancel = useCallback(async () => {
-    if (!job || !['queued', 'running', 'needs_attention'].includes(job.status)) return;
-    const response = await fetch(`/api/ai/exam-jobs/${encodeURIComponent(job.id)}`, { method: 'POST' });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || 'Could not cancel exam generation.');
-    invalidateClientQueryCache();
-    setJob({ ...job, status: 'cancelled' });
+    if (cancelInFlight.current || !job || !['queued', 'running', 'needs_attention'].includes(job.status)) return;
+    cancelInFlight.current = true;
+    try {
+      const response = await fetch(`/api/ai/exam-jobs/${encodeURIComponent(job.id)}`, { method: 'POST' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Could not cancel exam generation.');
+      invalidateClientQueryCache();
+      setJob({ ...job, status: 'cancelled' });
+    } finally {
+      cancelInFlight.current = false;
+    }
   }, [job]);
 
   return { job, helperState, isStarting, savedQuestions, loadError, start, cancel, refreshJob };
