@@ -168,7 +168,7 @@ export function ExamGeneratorModal({
   };
 
   const handleStartGeneration = async () => {
-    if (startingRef.current || generationJob.isStarting || isGenerating) return;
+    if (startingRef.current || generationJob.isStarting || (currentStep !== 'idle' && currentStep !== 'done') || ['queued', 'running'].includes(generationJob.job?.status || '')) return;
     if (selectedFiles.length === 0 && !pastedText.trim()) {
       toast.error('Please upload a lesson document or paste lesson content.');
       return;
