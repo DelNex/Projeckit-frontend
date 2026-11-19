@@ -31,7 +31,10 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: 'Invalid error report.' }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid error report.' }, { status: 400, headers: { 'Cache-Control': 'no-store' } });
+  }
+  if (!body || typeof body !== 'object' || Array.isArray(body) || JSON.stringify(body).length > MAX_EVENT_BYTES) {
+    return NextResponse.json({ error: 'Invalid or oversized error report.' }, { status: 413, headers: { 'Cache-Control': 'no-store' } });
   }
 
   const message = String(body.message || 'Unknown client-side error').slice(0, 1200);
@@ -43,7 +46,7 @@ export async function POST(request: Request) {
   const now = Date.now();
   const lastReportedAt = recentByUser.get(user.id) || 0;
   if (now - lastReportedAt < USER_ERROR_COOLDOWN_MS) {
-    return NextResponse.json({ accepted: true, deduplicated: true }, { status: 202 });
+    return NextResponse.json({ accepted: true, deduplicated: true }, { status: 202, headers: { 'Cache-Control': 'no-store' } });
   }
   recentByUser.set(user.id, now);
   if (recentByUser.size > 1_000) {
