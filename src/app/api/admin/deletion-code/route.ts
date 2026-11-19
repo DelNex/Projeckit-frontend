@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -71,6 +72,7 @@ export async function GET(request: Request) {
       tenants,
     });
   } catch (err: any) {
+    await logSystemEvent({ severity: 'error', source: 'api.admin.deletion-code', message: err instanceof Error ? err.message : 'Request failed.', method: 'GET', route: '/api/admin/deletion-code', code: 'ADMIN_DELETION_CODE_FAILURE' });
     console.error('[GET /api/admin/deletion-code] Error:', err);
     return NextResponse.json(
       { error: 'Failed to retrieve deletion code status.' },
@@ -231,6 +233,7 @@ export async function POST(request: Request) {
         : 'Deletion code created successfully.',
     });
   } catch (err: any) {
+    await logSystemEvent({ severity: 'error', source: 'api.admin.deletion-code', message: err instanceof Error ? err.message : 'Request failed.', method: 'POST', route: '/api/admin/deletion-code', code: 'ADMIN_DELETION_CODE_FAILURE' });
     console.error('[POST /api/admin/deletion-code] Error:', err);
     return NextResponse.json(
       { error: 'Failed to save deletion code.' },
