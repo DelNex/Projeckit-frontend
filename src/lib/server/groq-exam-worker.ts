@@ -82,7 +82,7 @@ async function requestGroqQuestions(payload: Record<string, any>): Promise<strin
         json_schema: { name: 'project_kit_exam_questions', strict: true, schema: QUESTION_SCHEMA },
       },
     }),
-    signal: AbortSignal.timeout(50_000),
+    signal: AbortSignal.timeout(18_000),
     cache: 'no-store',
   });
 
@@ -184,7 +184,18 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
       payload: {},
       claimed_by: null,
       lease_expires_at: null,
-    }).eq('id', jobId).eq('claimed_by', WORKER_ID).eq('status', 'running');
+    }).eq('id', jobId).in('status', ['running', 'queued']);
+    if (claimed.parent_job_id) {
+      await admin.from('exam_generation_jobs').update({
+        status: 'failed',
+        error: message.slice(0, 500),
+        finished_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        payload: {},
+        claimed_by: null,
+        lease_expires_at: null,
+      }).eq('id', claimed.parent_job_id).in('status', ['running', 'queued']);
+    }
     throw error;
   }
 }
