@@ -161,8 +161,34 @@ export function generateCanonicalGeometry(rawConfig: AssessmentOmrConfig): Canon
   const itemCount = rawConfig.itemCount;
   const classSize = rawConfig.classSize;
 
+  // The same canonical geometry is used by printing and scanning. For smaller
+  // HALF forms, calculate a compact physical height here (not only in the
+  // print modal) so the scanner receives exactly the geometry that was printed.
+  const requestedFormat: 'HALF' | 'FULL' = rawConfig.sheetFormat || (itemCount <= 60 ? 'HALF' : 'FULL');
+  if (requestedFormat === 'HALF' && itemCount < 60 && !rawConfig.pageHeight) {
+    const base = generateCanonicalGeometry({
+      ...rawConfig,
+      sheetFormat: 'HALF',
+      pageWidth: rawConfig.pageWidth || 559,
+      pageHeight: 794,
+    });
+    const rowsPerColumn = base.layout.answerArea.rowsPerCol;
+    const baseAnswerY = base.layout.answerArea.y;
+    const shiftedSectionBottom = base.layout.sectionBar.bottomLineY;
+    const contentCursorY = Math.max(0, 4 * shiftedSectionBottom - 3 * (baseAnswerY - 8));
+    const compactHeight = Math.ceil(
+      23 + contentCursorY + 8 + 26 + 16 + 19 * Math.max(0, rowsPerColumn - 1) + 2
+    );
+    return generateCanonicalGeometry({
+      ...rawConfig,
+      sheetFormat: 'HALF',
+      pageWidth: base.page.width,
+      pageHeight: compactHeight,
+    });
+  }
+
   // Initial format decision: HALF for <= 60 items, FULL for 61..90 items
-  let sheetFormat: 'HALF' | 'FULL' = rawConfig.sheetFormat || (itemCount <= 60 ? 'HALF' : 'FULL');
+  let sheetFormat: 'HALF' | 'FULL' = requestedFormat;
 
   // Internal layout planner to support automatic fallback
   function computeLayoutMetrics(format: 'HALF' | 'FULL') {
