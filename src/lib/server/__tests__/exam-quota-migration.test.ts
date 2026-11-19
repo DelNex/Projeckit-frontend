@@ -22,4 +22,7 @@ test('exam queue migration serializes quota checks before inserting jobs', async
   assert.match(migration, /Approved tenant members can view grading periods/);
   assert.match(migration, /Tenant members can insert own audit events/);
   assert.doesNotMatch(migration, /Tenant admins can insert audit logs/);
+  assert.match(migration, /p_hourly_limit integer/);
+  assert.match(migration, /p_daily_limit integer/);
+  assert.match(migration, /enqueue_groq_exam_generation_job\\(uuid, uuid, uuid, jsonb, text, integer, integer\\)/);
 });
