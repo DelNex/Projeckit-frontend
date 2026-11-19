@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import JSZip from 'jszip';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { isLikelyScannedPdfPage } from './pdf-page-analysis';
 
 type WorkerRequest = { id: string; file: File };
 type WorkerResponse = { id: string; text?: string; error?: string };
@@ -39,6 +40,7 @@ async function extractPdf(file: File): Promise<string> {
   const pdf = await task.promise;
   const pages: string[] = [];
   let characterCount = 0;
+  const scannedPageNumbers: number[] = [];
 
   try {
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
@@ -48,6 +50,17 @@ async function extractPdf(file: File): Promise<string> {
         if (!('str' in item)) return '';
         return `${item.str}${'hasEOL' in item && item.hasEOL ? '\n' : ' '}`;
       }).join('');
+      const operatorList = await page.getOperatorList();
+      const imageOperators = new Set([
+        pdfjs.OPS.paintImageXObject,
+        pdfjs.OPS.paintInlineImageXObject,
+        pdfjs.OPS.paintImageMaskXObject,
+        pdfjs.OPS.paintJpegXObject,
+      ]);
+      const imageOperatorCount = operatorList.fnArray.filter((operator) => imageOperators.has(operator)).length;
+      if (isLikelyScannedPdfPage({ textLength: pageText.trim().length, imageOperatorCount })) {
+        scannedPageNumbers.push(pageNumber);
+      }
       const section = `[Page ${pageNumber}]\n${pageText.trim()}`;
       characterCount += section.length;
       if (characterCount > MAX_CHARACTERS) {
@@ -58,6 +71,12 @@ async function extractPdf(file: File): Promise<string> {
     }
   } finally {
     await pdf.destroy();
+  }
+
+  if (scannedPageNumbers.length) {
+    throw new Error(
+      `Scanned or image-only page(s) ${scannedPageNumbers.join(', ')} were found in '${file.name}'. These pages do not contain enough selectable text. OCR is not enabled yet, so this file was not sent for AI generation. Use a text-based PDF or OCR these pages first.`
+    );
   }
 
   const text = pages.join('\n\n').trim();
