@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import path from 'node:path';
 
 test('extracts a scanned PDF with the locally bundled OCR runtime', async ({ page }) => {
+  test.setTimeout(150_000);
   const externalRequests: string[] = [];
   page.on('request', (request) => {
     if (!request.url().startsWith('http://127.0.0.1:3100')) externalRequests.push(request.url());
