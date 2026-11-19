@@ -82,7 +82,7 @@ export function ExamGeneratorModal({
   const [teacherInstructions, setTeacherInstructions] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [truncationNotice, setTruncationNotice] = useState<string | null>(null);
+  const [truncationNotice, setTruncationNotice] = useState<string | null>(null);\n  const [extractionProgress, setExtractionProgress] = useState('');
   const [chunkProgress, setChunkProgress] = useState<{
     completed: number;
     total: number;
@@ -178,7 +178,7 @@ export function ExamGeneratorModal({
       // Process documents locally; original files never leave this browser.
       if (selectedFiles.length > 0) {
         setCurrentStep('extracting');
-        const extractResult = await extractTextFromFiles(selectedFiles);
+        setExtractionProgress('Starting local document extraction…');\n        const extractResult = await extractTextFromFiles(selectedFiles, {\n          onProgress: (progress) => setExtractionProgress(progress.message + ' (' + progress.fileIndex + '/' + progress.fileCount + ')'),\n        });\n        setExtractionProgress('Local extraction complete.');
         lessonDocuments = [...extractResult.documents, ...lessonDocuments];
         extractedLessonText = (extractResult.text + (extractedLessonText ? `\n\n${extractedLessonText}` : '')).trim();
 
@@ -269,7 +269,7 @@ export function ExamGeneratorModal({
                       ? `${generationJob.job.progress?.label || 'Groq is writing your exam.'} This is running in the background, you can leave this page.`
                       : generationJob.job?.status === 'failed'
                         ? generationJob.job.error || 'Exam generation failed.'
-                        : currentStep === 'generating' && chunkProgress ? chunkProgress.label : STEP_LABELS[currentStep]}
+                        : currentStep === 'generating' && chunkProgress ? chunkProgress.label : currentStep === 'extracting' && extractionProgress ? extractionProgress : STEP_LABELS[currentStep]}
               </span>
               {generationJob.helperState === 'offline'
                 ? <span className="rounded-full border border-slate-300 px-2 py-1 text-[10px] text-slate-600">Groq AI offline</span>
@@ -346,7 +346,7 @@ export function ExamGeneratorModal({
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept=".pdf,.docx,.pptx,.txt,.md"
+                accept=".pdf,.docx,.pptx,.txt,.md,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff"
                 onChange={(e) => {
                   if (e.target.files && e.target.files.length > 0) {
                     handleFilesSelect(e.target.files);

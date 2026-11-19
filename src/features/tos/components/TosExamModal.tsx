@@ -154,7 +154,7 @@ export function TosExamModal({
     }));
 
     try {
-      const extraction = await extractTextFromFiles(Array.from(filesList));
+      const extraction = await extractTextFromFiles(Array.from(filesList), {\n        onProgress: (progress) => setMaterials((prev) => ({\n          ...prev,\n          [competencyId]: { ...prev[competencyId], isUploading: true, progress: progress.message },\n        })),\n      });\n      if (extraction.notice) toast.info(extraction.notice);
       const extractedFiles = extraction.documents;
 
       setMaterials((prev) => ({
@@ -446,7 +446,7 @@ export function TosExamModal({
                           <input
                             type="file"
                             multiple
-                            accept=".pdf,.docx,.pptx,.txt,.md"
+                            accept=".pdf,.docx,.pptx,.txt,.md,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff"
                             onChange={(e) => handleFileUpload(id, e.target.files)}
                             className="hidden"
                             disabled={mat.isUploading}
@@ -454,7 +454,7 @@ export function TosExamModal({
                         </label>
                       </div>
 
-                      {/* File Chips */}
+                      {mat.progress && <p className={'text-xs ' + (mat.isUploading ? 'text-blue-600 dark:text-blue-300' : 'text-amber-700 dark:text-amber-300')}>{mat.progress}</p>}\n\n                      {/* File Chips */}
                       {mat.files.length > 0 ? (
                         <div className="flex flex-wrap gap-2 pt-1">
                           {mat.files.map((file, fIdx) => (
