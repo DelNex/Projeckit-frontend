@@ -81,6 +81,7 @@ export function ExamGeneratorModal({
 
   const [currentStep, setCurrentStep] = useState<GenerationStep>('idle');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [ocrLanguages, setOcrLanguages] = useState<'eng' | 'eng+fil'>('eng');
   const [pastedText, setPastedText] = useState('');
   const [teacherInstructions, setTeacherInstructions] = useState('');
   const [isDragging, setIsDragging] = useState(false);
@@ -202,7 +203,7 @@ export function ExamGeneratorModal({
       // Process documents locally; original files never leave this browser.
       if (selectedFiles.length > 0) {
         setCurrentStep('extracting');
-        const extractResult = await extractTextFromFiles(selectedFiles);
+        const extractResult = await extractTextFromFiles(selectedFiles, { ocrLanguages });
         lessonDocuments = [...extractResult.documents, ...lessonDocuments];
         extractedLessonText = (extractResult.text + (extractedLessonText ? `\n\n${extractedLessonText}` : '')).trim();
 
@@ -354,6 +355,21 @@ export function ExamGeneratorModal({
         {/* Local document selection (Disabled when generating) */}
         {!isGenerating && (
           <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="scanned-pdf-language" className="text-xs font-semibold text-gray-600 dark:text-gray-300">
+                Scanned PDF OCR language
+              </label>
+              <select
+                id="scanned-pdf-language"
+                value={ocrLanguages}
+                onChange={(event) => setOcrLanguages(event.target.value as 'eng' | 'eng+fil')}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+              >
+                <option value="eng">English (faster)</option>
+                <option value="eng+fil">English + Filipino</option>
+              </select>
+            </div>
+
             <div
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
