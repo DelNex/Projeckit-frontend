@@ -39,7 +39,12 @@ describe('Project KIT — Canonical Geometry Engine Tests', () => {
         // Verify page dimensions
         if (tc.expectedFormat === 'HALF') {
           assert.strictEqual(geom.page.width, 559);
-          assert.strictEqual(geom.page.height, 794);
+          if (tc.itemCount === 60) {
+            assert.strictEqual(geom.page.height, 794, '60-item A5 baseline must remain unchanged');
+          } else {
+            assert.ok(geom.page.height < 794, 'smaller assessments must use compact physical sheets');
+            assert.ok(geom.page.height > 200, 'compact sheets must retain safe physical space for markers and content');
+          }
         } else {
           assert.strictEqual(geom.page.width, 794);
           assert.strictEqual(geom.page.height, 1123);
