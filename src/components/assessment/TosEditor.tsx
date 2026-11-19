@@ -1442,8 +1442,7 @@ export function TosEditor({
 
                 {/* Add as many competency rows as the saved TOS requires. */}
                 {isEditing && (
-                  (
-                    <tr className="bg-emerald-50/40 dark:bg-emerald-950/10 border-t-2 border-dashed border-emerald-300 dark:border-emerald-800">
+                  <tr className="bg-emerald-50/40 dark:bg-emerald-950/10 border-t-2 border-dashed border-emerald-300 dark:border-emerald-800">
                       <td className="px-3 py-2 text-center">
                         <button
                           onClick={handleCommitInlineRow}
