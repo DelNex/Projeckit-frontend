@@ -203,7 +203,7 @@ export function TosExamModal({
       material.files.some((file) => file.text.trim().length > 0)
     );
     if (!hasAnyLessonMaterial) {
-      toast.error('Upload at least one lesson module before generating the exam.');
+      toast.error('Choose at least one lesson module before generating the exam.');
       return;
     }
 
@@ -240,7 +240,7 @@ export function TosExamModal({
       });
 
       if (!combinedText.trim()) {
-        throw new Error('Upload at least one lesson module before generating the exam.');
+        throw new Error('Choose at least one lesson module before generating the exam.');
       }
 
       setGenerationProgress('Generating questions in structured chunks...');
@@ -417,7 +417,7 @@ export function TosExamModal({
                   Learning Materials by Competency
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Upload lesson presentations or references (PDF, DOCX, PPTX, TXT). Each competency generates questions from its own materials.
+                  Choose lesson presentations or references from this device (PDF, DOCX, PPTX, TXT, Markdown). Files are extracted locally; each competency generates questions from its own materials.
                 </p>
               </div>
 
@@ -442,7 +442,7 @@ export function TosExamModal({
 
                         <label className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-600 cursor-pointer shrink-0 transition-colors">
                           <Upload className="h-3.5 w-3.5" />
-                          <span>{mat.isUploading ? 'Extracting...' : 'Upload Files'}</span>
+                          <span>{mat.isUploading ? 'Extracting locally...' : 'Choose Files'}</span>
                           <input
                             type="file"
                             multiple
@@ -477,7 +477,7 @@ export function TosExamModal({
                         </div>
                       ) : (
                         <div className="text-[11px] text-slate-400 italic">
-                          No files uploaded for this competency. Questions will be synthesized from curriculum objectives.
+                          No local lesson files selected for this competency. Questions will be synthesized from curriculum objectives.
                         </div>
                       )}
                     </div>
