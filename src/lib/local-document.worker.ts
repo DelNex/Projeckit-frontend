@@ -24,6 +24,17 @@ async function createLocalOcrWorker(languages: OcrLanguages): Promise<OcrWorker>
   });
 }
 
+let cachedOcrWorker: OcrWorker | null = null;
+let cachedOcrLanguages: OcrLanguages | null = null;
+
+async function getLocalOcrWorker(languages: OcrLanguages): Promise<OcrWorker> {
+  if (cachedOcrWorker && cachedOcrLanguages === languages) return cachedOcrWorker;
+  if (cachedOcrWorker) await cachedOcrWorker.terminate();
+  cachedOcrWorker = await createLocalOcrWorker(languages);
+  cachedOcrLanguages = languages;
+  return cachedOcrWorker;
+}
+
 async function recognizePdfPage(page: pdfjs.PDFPageProxy, worker: OcrWorker): Promise<string> {
   if (typeof OffscreenCanvas === 'undefined') {
     throw new Error('This browser cannot render scanned PDF pages locally. Use a modern browser with OffscreenCanvas support.');
@@ -89,7 +100,7 @@ async function extractPdf(file: File, ocrLanguages: OcrLanguages): Promise<strin
         let extractedText = pageText;
         let usedOcrPage = false;
         if (pageText.length < MIN_SELECTABLE_TEXT_CHARACTERS) {
-          if (!ocrWorker) ocrWorker = await createLocalOcrWorker(ocrLanguages);
+          if (!ocrWorker) ocrWorker = await getLocalOcrWorker(ocrLanguages);
           const recognized = await recognizePdfPage(page, ocrWorker);
           usedOcrPage = true;
           if (recognized.length > extractedText.length) extractedText = recognized;
@@ -107,7 +118,7 @@ async function extractPdf(file: File, ocrLanguages: OcrLanguages): Promise<strin
       }
     }
   } finally {
-    if (ocrWorker) await ocrWorker.terminate();
+    // Keep the language worker warm for the next selected PDF in this tab.
     await pdf.destroy();
   }
 
