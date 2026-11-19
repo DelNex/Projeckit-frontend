@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { logSystemEvent } from '@/lib/server/system-logger';
 import { runNextGroqExamJob } from '@/lib/server/groq-exam-worker';
@@ -22,24 +22,37 @@ export async function POST(request: Request) {
   if (!isAuthorized(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   try {
     const admin = createAdminClient();
-    const [expired, cleaned] = await Promise.all([
+    after(async () => {
+      try {
+        const [expired, cleaned] = await Promise.all([
       admin.rpc('expire_unserviceable_exam_jobs'),
       admin.rpc('cleanup_exam_job_payloads'),
     ]);
-    if (expired.error || cleaned.error) {
-      await logSystemEvent({
-        severity: 'warning',
-        source: 'exam.scheduler.maintenance',
-        message: 'Exam queue maintenance returned an error.',
-        code: 'EXAM_QUEUE_MAINTENANCE',
-        metadata: {
-          expireError: expired.error?.message || null,
-          cleanupError: cleaned.error?.message || null,
-        },
-      });
-    }
-    await runNextGroqExamJob(admin);
-    return NextResponse.json({ ok: true, accepted: true }, { headers: { 'Cache-Control': 'no-store' } });
+        if (expired.error || cleaned.error) {
+          await logSystemEvent({
+            severity: 'warning',
+            source: 'exam.scheduler.maintenance',
+            message: 'Exam queue maintenance returned an error.',
+            code: 'EXAM_QUEUE_MAINTENANCE',
+            metadata: {
+              expireError: expired.error?.message || null,
+              cleanupError: cleaned.error?.message || null,
+            },
+          });
+        }
+        await runNextGroqExamJob(admin);
+      } catch (error) {
+        await logSystemEvent({
+          severity: 'error',
+          source: 'exam.scheduler',
+          message: error instanceof Error ? error.message : 'Scheduled exam worker failed.',
+          code: 'EXAM_SCHEDULER_FAILURE',
+          method: 'POST',
+          route: '/api/internal/exam-worker',
+        });
+      }
+    });
+    return NextResponse.json({ ok: true, accepted: true }, { status: 202, headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     await logSystemEvent({
       severity: 'error',
