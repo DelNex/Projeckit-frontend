@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -98,6 +99,7 @@ export async function POST(request: Request) {
       user: data.user,
     });
   } catch (err: any) {
+    await logSystemEvent({ severity: 'error', source: 'api.auth.register', message: err instanceof Error ? err.message : 'Request failed.', method: 'POST', route: '/api/auth/register', code: 'AUTH_REGISTER_FAILURE' });
     console.error('Server-side registration error:', err);
     return NextResponse.json(
       { error: err?.message || 'Internal server error during registration.' },
