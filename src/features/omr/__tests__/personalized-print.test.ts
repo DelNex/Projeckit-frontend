@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import { describe, it } from 'node:test';
 import { generateCanonicalGeometry } from '../geometry/canonical-geometry';
-import { A5_TWO_UP_PRINT_SIZE, buildA5TwoUpPages } from '../rendering/personalized-print-layout';
+import { A5_TWO_UP_PRINT_SIZE, buildA5TwoUpPages, buildA4CompactPages, getA4CompactLayout } from '../rendering/personalized-print-layout';
 import { renderOmrMasterSvg } from '../rendering/svg-renderer';
 
 describe('Personalized A5 OMR print layout', () => {
@@ -57,5 +57,31 @@ describe('Personalized A5 OMR print layout', () => {
     assert.strictEqual((pages.match(/class="omr-sheet-half"/g) || []).length, 2);
     assert.match(pages, /data-student="student-001"/);
     assert.match(pages, /<div class="omr-sheet-half"><\/div>/);
+  });
+});
+
+
+describe('Compact A4 OMR printing', () => {
+  it('keeps full-height 60-item sheets at exactly two per A4 landscape page', () => {
+    const layout = getA4CompactLayout(794);
+    assert.deepStrictEqual(layout, { sheetHeightMm: 210, rowsPerPage: 1, sheetsPerPage: 2 });
+  });
+
+  it('fits additional complete forms when a compact sheet is shorter', () => {
+    const layout = getA4CompactLayout(320);
+    assert.ok(layout.rowsPerPage >= 2);
+    assert.strictEqual(layout.sheetsPerPage, layout.rowsPerPage * 2);
+    const html = buildA4CompactPages(layout.sheetsPerPage, layout.rowsPerPage, layout.sheetHeightMm, (index) =>
+      `<svg data-student="${index + 1}"></svg>`
+    );
+    assert.strictEqual((html.match(/class="omr-sheet-compact"/g) || []).length, layout.sheetsPerPage);
+    assert.strictEqual((html.match(/data-student=/g) || []).length, layout.sheetsPerPage);
+    assert.match(html, /omr-compact-vertical-cut/);
+  });
+
+  it('leaves empty cells instead of stretching the last form', () => {
+    const html = buildA4CompactPages(1, 2, 90, () => '<svg data-student="1"></svg>');
+    assert.strictEqual((html.match(/class="omr-sheet-compact"/g) || []).length, 4);
+    assert.strictEqual((html.match(/data-student=/g) || []).length, 1);
   });
 });
