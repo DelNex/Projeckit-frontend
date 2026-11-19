@@ -35,7 +35,7 @@ test('extraction rejects oversized AI context instead of silently truncating it'
   const file = new File(['x'.repeat(LOCAL_DOCUMENT_MAX_CHARACTERS + 1)], 'large.txt');
   await assert.rejects(
     () => extractTextFromFiles([file]),
-    /200,000 readable characters/
+    /900,000 readable characters/
   );
 });
 
