@@ -31,4 +31,8 @@ jobs:
       - name: Schema contract and complete unit test suite
         run: npm test
       - name: Production build
+        # Build-time placeholders only; deployment environments supply the real public Supabase settings.
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://ci-projectkit.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-build-placeholder-anon-key
         run: npm run build
