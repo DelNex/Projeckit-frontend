@@ -70,10 +70,11 @@ test('production local document worker OCRs both photos and image-only PDFs usin
     { name: 'real_world_scan_photo.png', mimeType: 'image/png', buffer: image },
     { name: 'real_world_scan_image_only.pdf', mimeType: 'application/pdf', buffer: pdf },
   ]) {
+    const previousResult = await output.textContent();
     await input.setInputFiles(file);
     await expect.poll(async () => {
       const value = await output.textContent();
-      return Boolean(value && value !== 'RUNNING' && value !== 'WAITING');
+      return Boolean(value && value !== 'RUNNING' && value !== 'WAITING' && value !== previousResult);
     }, { timeout: 180_000 }).toBe(true);
     const result = JSON.parse(await output.textContent() || '{}') as {
       outcome: string;
