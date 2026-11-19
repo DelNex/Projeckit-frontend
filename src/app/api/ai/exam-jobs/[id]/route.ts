@@ -1,5 +1,5 @@
 import { after, NextResponse } from 'next/server';
-import { runGroqExamJob } from '@/lib/server/groq-exam-worker';
+import { runGroqExamJob, runNextGroqExamJob } from '@/lib/server/groq-exam-worker';
 
 export const maxDuration = 60;
 import { createClient } from '@/lib/supabase/server';
@@ -30,7 +30,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     let recoveryJobId: string | null = null;
 
     if (job.provider === 'groq_api' && ['queued', 'needs_attention'].includes(job.status)) {
-      recoveryJobId = job.id;
+      // Let the shared dispatcher choose the least-loaded tenant's oldest job.
     } else if (job.provider === 'groq_api' && job.status === 'running') {
       const repairJobId = typeof job.progress?.repairJobId === 'string' ? job.progress.repairJobId : null;
       if (repairJobId) {
@@ -42,27 +42,23 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
           .eq('parent_job_id', job.id)
           .maybeSingle();
         const repairLeaseExpired = Boolean(repairJob?.lease_expires_at) && Date.parse(repairJob.lease_expires_at) <= Date.now();
-        if (repairJob?.provider === 'groq_api' && (
-          ['queued', 'needs_attention'].includes(repairJob.status)
-          || (repairJob.status === 'running' && repairLeaseExpired)
-        )) recoveryJobId = repairJob.id;
+        if (repairJob?.provider === 'groq_api' && repairJob.status === 'running' && repairLeaseExpired) recoveryJobId = repairJob.id;
       } else if (leaseExpired || !job.lease_expires_at) {
         recoveryJobId = job.id;
       }
     }
 
-    if (recoveryJobId) {
-      after(async () => {
-        try {
-          await runGroqExamJob(recoveryJobId!, admin);
-        } catch (error) {
-          console.error('[Groq worker] Status-poll recovery failed:', error instanceof Error ? error.message : 'unknown error');
-        }
-      });
-    }
+    after(async () => {
+      try {
+        if (recoveryJobId) await runGroqExamJob(recoveryJobId, admin);
+        else await runNextGroqExamJob(admin);
+      } catch (error) {
+        console.error('[Exam worker] Status-poll dispatch failed:', error instanceof Error ? error.message : 'unknown error');
+      }
+    });
     let queuePosition: number | null = null;
     if (job.status === 'queued') {
-      const count = await admin.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('status', 'queued').lte('created_at', job.created_at);
+      const count = await admin.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('provider', 'groq_api').eq('status', 'queued').lte('created_at', job.created_at);
       queuePosition = count.count || 1;
     }
     return NextResponse.json({ id: job.id, tosId: job.tos_id, status: job.status, progress: job.progress, error: job.error, resultSummary: job.result_summary, queuePosition }, { headers: { 'Cache-Control': 'no-store' } });
