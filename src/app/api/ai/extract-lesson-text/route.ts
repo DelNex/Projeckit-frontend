@@ -81,7 +81,7 @@ export async function POST(request: Request) {
     await logSystemEvent({ severity: 'error', source: 'api.ai.extract-lesson-text', message: err instanceof Error ? err.message : 'Lesson extraction failed.', method: 'POST', route: '/api/ai/extract-lesson-text', code: 'LESSON_EXTRACTION_FAILURE' });
     console.error('[ExtractLessonText] Extraction failed:', err);
     return NextResponse.json(
-      { error: err.message || 'Failed to extract text from lesson documents.' },
+      { error: 'Could not extract text from this lesson file. Check that it is a supported, readable document and try again.' },
       { status: 400 }
     );
   }
