@@ -59,6 +59,10 @@ Local extraction now accepts up to 900,000 readable characters per generation jo
 - Retain separate, current lockfile-based SBOMs and review dependency audit findings before production deployment.
 
 
+## School administration access
+
+School-wide academic configuration (school year, grading periods, sections, subjects, and audit history) is restricted to approved school administrators. Teachers retain read access needed by their teaching workflows, but cannot mutate school-wide configuration or read administrative audit logs. The database migration `20261119133200_restrict_school_configuration_writes_to_admins.sql` must be applied before promoting this release; it replaces the old tenant-wide write policies and adds a database trigger as defense in depth.
+
 ## Production environment sanity check
 
 - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` identify the Supabase project used by browser/session clients.
