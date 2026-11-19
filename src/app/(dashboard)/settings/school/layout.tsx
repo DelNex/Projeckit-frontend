@@ -8,11 +8,11 @@ export default async function SchoolSettingsLayout({ children }: { children: Rea
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role,status,archived_at')
+    .select('role,status,archived_at,is_platform_admin')
     .eq('id', user.id)
     .maybeSingle();
 
-  if (!profile || profile.role !== 'admin' || profile.status !== 'approved' || profile.archived_at) {
+  if (!profile || (profile.role !== 'admin' && !profile.is_platform_admin) || profile.status !== 'approved' || profile.archived_at) {
     redirect('/dashboard');
   }
 
