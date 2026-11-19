@@ -1,8 +1,6 @@
 /**
  * Captures unhandled Next.js server errors as a last-resort observability path.
- *
- * Expected API failures should still be logged at their route boundaries,
- * where richer request and tenant context is available.
+ * Expected API failures are logged at their route boundary with richer context.
  */
 export async function onRequestError(
   error: unknown,
@@ -20,7 +18,7 @@ export async function onRequestError(
     revalidateReason?: string;
   },
 ) {
-  // The system logger depends on Node-only server facilities.
+  // The logger uses Node crypto and the server-only Supabase service client.
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
 
   try {
