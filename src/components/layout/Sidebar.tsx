@@ -50,7 +50,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
             .select('role,status,archived_at,is_platform_admin')
             .eq('id', user.id)
             .maybeSingle();
-          const approvedAdmin = profile?.role === 'admin' && profile.status === 'approved' && !profile.archived_at;
+          const approvedAdmin = profile?.status === 'approved' && !profile.archived_at && (profile.role === 'admin' || profile.is_platform_admin);
           setIsTenantAdmin(Boolean(approvedAdmin));
           setIsPlatformAdmin(Boolean(approvedAdmin && profile.is_platform_admin));
         }
