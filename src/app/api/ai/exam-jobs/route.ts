@@ -76,8 +76,16 @@ export async function POST(request: Request) {
       caller.admin!.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('created_by', caller.user!.id).neq('status', 'cancelled').or('status.neq.failed,attempts.gt.0').gte('created_at', new Date(Date.now() - 3600000).toISOString()),
       caller.admin!.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('tenant_id', caller.profile!.tenant_id).neq('status', 'cancelled').or('status.neq.failed,attempts.gt.0').gte('created_at', new Date(Date.now() - 86400000).toISOString()),
     ]);
-    const userLimit = Number(process.env.AI_HOURLY_USER_LIMIT) || tenant.data?.ai_hourly_user_limit || 5;
-    const schoolLimit = Number(process.env.AI_DAILY_SCHOOL_LIMIT) || tenant.data?.ai_daily_school_limit || 100;
+    const configuredUserLimit = Number(process.env.AI_HOURLY_USER_LIMIT);
+    const tenantUserLimit = Number(tenant.data?.ai_hourly_user_limit);
+    const configuredSchoolLimit = Number(process.env.AI_DAILY_SCHOOL_LIMIT);
+    const tenantSchoolLimit = Number(tenant.data?.ai_daily_school_limit);
+    const userLimit = Number.isInteger(configuredUserLimit) && configuredUserLimit > 0
+      ? Math.min(configuredUserLimit, 1_000)
+      : Number.isInteger(tenantUserLimit) && tenantUserLimit > 0 ? Math.min(tenantUserLimit, 1_000) : 5;
+    const schoolLimit = Number.isInteger(configuredSchoolLimit) && configuredSchoolLimit > 0
+      ? Math.min(configuredSchoolLimit, 10_000)
+      : Number.isInteger(tenantSchoolLimit) && tenantSchoolLimit > 0 ? Math.min(tenantSchoolLimit, 10_000) : 100;
     if ((hourly.count || 0) >= userLimit) return NextResponse.json({ error: `Hourly rate limit reached (${userLimit} exam generations per hour). Please wait before generating again.` }, { status: 429 });
     if ((daily.count || 0) >= schoolLimit) return NextResponse.json({ error: `Your school has reached the daily limit of ${schoolLimit} exam generations per day.` }, { status: 429 });
 
@@ -95,7 +103,7 @@ export async function POST(request: Request) {
       payload.partialQuestions = Array.isArray(tos.questions) ? tos.questions.filter((question: any) => Number(question?.item_number) !== body.repairItemNumber) : [];
     }
     if (Buffer.byteLength(JSON.stringify(payload), 'utf8') > 1_572_864) return NextResponse.json({ error: 'The lesson text and exam blueprint exceed the 1.5 MB queue limit. Reduce the material and try again.' }, { status: 413 });
-    const job = await getExamAiProvider().enqueue(caller.admin!, { tenantId: caller.profile!.tenant_id, tosId: tos.id, createdBy: caller.user!.id, payload, jobKind: Number.isInteger(body.repairItemNumber) ? 'repair' : 'full' });
+    const job = await getExamAiProvider().enqueue(caller.admin!, { tenantId: caller.profile!.tenant_id, tosId: tos.id, createdBy: caller.user!.id, payload, jobKind: Number.isInteger(body.repairItemNumber) ? 'repair' : 'full', hourlyLimit: userLimit, dailyLimit: schoolLimit });
     if (!job.reused && ['queued', 'needs_attention'].includes(job.status)) {
       after(async () => {
         try { await runNextGroqExamJob(caller.admin!); }
