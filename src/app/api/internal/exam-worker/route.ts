@@ -22,6 +22,13 @@ export async function POST(request: Request) {
   if (!isAuthorized(request)) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
   try {
     const admin = createAdminClient();
+    const { error: readinessError } = await admin
+      .from('platform_settings')
+      .select('id')
+      .limit(1);
+    if (readinessError) {
+      throw new Error(`Supabase service-role connectivity check failed: ${readinessError.message}`);
+    }
     after(async () => {
       try {
         const [expired, cleaned] = await Promise.all([
