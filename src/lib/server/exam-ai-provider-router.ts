@@ -72,8 +72,8 @@ async function readProviderResponse(response: Response, provider: ProviderId): P
   return parseQuestionContent(content);
 }
 
-async function requestProvider(provider: ProviderConfig, messages: Array<{ role: string; content: string }>, schema: Record<string, unknown>): Promise<string> {
-  const timeout = AbortSignal.timeout(45_000);
+async function requestProvider(provider: ProviderConfig, messages: Array<{ role: string; content: string }>, schema: Record<string, unknown>, timeoutMs: number): Promise<string> {
+  const timeout = AbortSignal.timeout(timeoutMs);
   let response: Response;
   if (provider.id === 'gemini') {
     const system = messages.find((message) => message.role === 'system')?.content || '';
@@ -120,14 +120,24 @@ export async function requestExamQuestionsFromProviders(
   const providers = providerConfigs();
   if (!providers.length) throw new Error('No exam AI provider is configured. Add at least one server-side provider API key.');
   const failures: string[] = [];
+  // The caller is a 60-second Next.js route. Keep provider failover inside a
+  // 50-second budget so the job lease can be renewed/finalized safely.
+  const totalBudgetMs = Math.max(10_000, Math.min(Number(process.env.AI_PROVIDER_TOTAL_TIMEOUT_MS || 50_000), 50_000));
+  const providerTimeoutMs = Math.max(3_000, Math.min(Number(process.env.AI_PROVIDER_TIMEOUT_MS || 18_000), 25_000));
+  const deadline = Date.now() + totalBudgetMs;
   for (const provider of providers) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs < 2_000) {
+      failures.push('Provider failover time budget expired');
+      break;
+    }
     const cooldown = cooldownUntil.get(provider.id) || 0;
     if (cooldown > Date.now()) {
       failures.push(`${provider.id} is rate-limited until its cooldown expires`);
       continue;
     }
     try {
-      return await requestProvider(provider, messages, schema);
+      return await requestProvider(provider, messages, schema, Math.min(providerTimeoutMs, remainingMs - 1_000));
     } catch (error) {
       const message = error instanceof Error ? error.message : `${provider.id} request failed`;
       failures.push(message.slice(0, 240));
