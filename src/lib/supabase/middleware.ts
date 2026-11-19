@@ -50,7 +50,7 @@ export async function updateSession(request: NextRequest) {
   // assessment pages and must not be reachable without a session.
   const protectedRoots = [
     '/dashboard', '/assessments', '/students', '/analytics', '/settings',
-    '/admin', '/app-hub', '/tos', '/reports',
+    '/admin', '/app-hub', '/tos', '/reports', '/',
   ];
   const isProtectedRoute = protectedRoots.some(
     (root) => pathname === root || pathname.startsWith(`${root}/`)
