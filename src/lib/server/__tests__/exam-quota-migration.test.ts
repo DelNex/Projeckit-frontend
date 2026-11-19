@@ -31,7 +31,11 @@ test('exam queue migration serializes quota checks before inserting jobs', async
   assert.match(indexMigration, /idx_exam_generation_jobs_tenant_id_fk/);
   assert.match(securityMigration, /archived_at IS NULL/);
   assert.match(securityMigration, /Tenant members can view profiles/);
-  assert.match(securityMigration, /Approved tenant members can view grading periods/);
   assert.match(securityMigration, /Tenant members can insert own audit events/);
+  assert.match(securityMigration, /action NOT IN/);
+  assert.match(securityMigration, /'SYSTEM_ERROR'/);
+  assert.match(securityMigration, /guard_grading_period_writes/);
+  assert.match(securityMigration, /IF auth\.uid\(\) IS NULL THEN/);
+  assert.match(securityMigration, /REVOKE ALL ON FUNCTION public\.guard_grading_period_writes/);
   assert.doesNotMatch(securityMigration, /CREATE POLICY "Tenant admins can insert audit logs"/);
 });
