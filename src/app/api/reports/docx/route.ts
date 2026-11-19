@@ -292,7 +292,9 @@ export async function GET(request: Request) {
           ].join(' | ')),
         ];
         const pdf = createSimpleReportPdf('TEST RESULTS', `${header.schoolName} | ${header.subject} | ${header.term} | S.Y. ${header.schoolYear}`, lines);
-        return new NextResponse(pdf, { headers: pdfResponseHeaders(`Test_Results_${baseName}.pdf`) });
+        const pdfBuffer = new ArrayBuffer(pdf.byteLength);
+        new Uint8Array(pdfBuffer).set(pdf);
+        return new NextResponse(pdfBuffer, { headers: pdfResponseHeaders(`Test_Results_${baseName}.pdf`) });
       }
       const buffer = await createTermResultsDocx(header, metrics);
       return new NextResponse(new Uint8Array(buffer), { headers: responseHeaders(`Test_Results_${baseName}.docx`) });
@@ -352,7 +354,9 @@ export async function GET(request: Request) {
         ...formatRows(ranked),
       ];
       const pdf = createSimpleReportPdf('MOST AND LEAST LEARNED', `${header.schoolName} | ${header.subject} | ${header.term} | S.Y. ${header.schoolYear}`, lines);
-      return new NextResponse(pdf, { headers: pdfResponseHeaders(`Most_Least_Learned_${baseName}.pdf`) });
+      const pdfBuffer = new ArrayBuffer(pdf.byteLength);
+      new Uint8Array(pdfBuffer).set(pdf);
+      return new NextResponse(pdfBuffer, { headers: pdfResponseHeaders(`Most_Least_Learned_${baseName}.pdf`) });
     }
     const buffer = await createMostLeastLearnedDocx(header, ranked);
     return new NextResponse(new Uint8Array(buffer), { headers: responseHeaders(`Most_Least_Learned_${baseName}.docx`) });
