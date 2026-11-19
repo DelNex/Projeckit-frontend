@@ -56,7 +56,7 @@ function slotsFromJob(job: any): TosBlueprintSlot[] {
 async function auditFinishedJob(admin: any, job: any, status: string, count: number) {
   await admin.from('audit_logs').insert({
     tenant_id: job.tenant_id, user_id: job.created_by, action: 'AI_EXAM_GENERATION',
-    details: { job_id: job.id, item_count: count, target_items: slotsFromJob(job).length, status, source: 'helper_queue' },
+    details: { job_id: job.id, item_count: count, target_items: slotsFromJob(job).length, status, source: 'groq_api' },
   });
 }
 
@@ -113,7 +113,7 @@ export async function finalizeExamJob(jobId: string, responseText: string, admin
     let { data: child, error: childError } = await admin.from('exam_generation_jobs').insert({
       tenant_id: job.tenant_id, tos_id: job.tos_id, created_by: job.created_by,
       job_kind: 'repair', parent_job_id: rootId,
-      repair_round: job.repair_round + 1, payload: childPayload, status: 'queued', provider: 'helper_queue',
+      repair_round: job.repair_round + 1, payload: childPayload, status: 'queued', provider: 'groq_api',
     }).select('id').single();
     // Multiple completion callbacks can race. The partial unique index lets
     // the first callback create a round; later callbacks reuse that job.
@@ -129,7 +129,7 @@ export async function finalizeExamJob(jobId: string, responseText: string, admin
   }
 
   if (!questions.length) {
-    const failureText = 'Gemini did not return valid exam questions. Your existing TOS exam was kept; check the helper and try again later.';
+    const failureText = 'Groq did not return valid exam questions. Your existing TOS exam was kept; review the generation error and try again.';
     const { data: finishedRoot } = await admin.from('exam_generation_jobs').update({ status: 'failed', error: failureText, finished_at: new Date().toISOString(), updated_at: new Date().toISOString(), payload: {} }).eq('id', rootId).eq('status', 'running').select('id').maybeSingle();
     if (rootId !== jobId) await admin.from('exam_generation_jobs').update({ status: 'failed', error: failureText, finished_at: new Date().toISOString(), updated_at: new Date().toISOString(), payload: {} }).eq('id', jobId).eq('status', 'running');
     if (finishedRoot) await auditFinishedJob(admin, root, 'failed', 0);
