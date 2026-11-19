@@ -15,4 +15,8 @@ test('exam queue migration serializes quota checks before inserting jobs', async
   assert.match(migration, /FOR UPDATE/);
   assert.match(migration, /REVOKE ALL ON FUNCTION public\.enqueue_groq_exam_generation_job/);
   assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.enqueue_groq_exam_generation_job/);
+  assert.match(migration, /archived_at IS NULL/);
+  assert.match(migration, /Tenant members can view profiles/);
+  assert.match(migration, /idx_exam_generation_jobs_created_by/);
+  assert.match(migration, /idx_exam_generation_jobs_tenant_id/);
 });
