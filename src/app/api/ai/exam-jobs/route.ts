@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     if (teacherInstructions.length > 4000) return NextResponse.json({ error: 'Teacher instructions must be 4,000 characters or fewer.' }, { status: 400 });
     const documents = Array.isArray(body.lessonDocuments) ? body.lessonDocuments : body.lessonText?.trim() ? [{ name: 'Lesson materials', text: body.lessonText }] : [];
     if (!documents.length || documents.some((doc) => !doc || typeof doc.name !== 'string' || typeof doc.text !== 'string')) return NextResponse.json({ error: 'Upload or extract lesson text before generating an exam.' }, { status: 400 });
-    if (documents.reduce((sum, doc) => sum + doc.text.length, 0) > 500_000) return NextResponse.json({ error: 'These lessons contain more than 500,000 characters. Split them into smaller uploads.' }, { status: 413 });
+    if (documents.reduce((sum, doc) => sum + doc.text.length, 0) > 200_000) return NextResponse.json({ error: 'These lessons contain more than 200,000 characters for one generation job. Split the material into smaller uploads or generate a smaller exam.' }, { status: 413 });
 
     const { data: activeJob, error: activeJobError } = await caller.admin!.from('exam_generation_jobs')
       .select('id,status,created_at,provider')
