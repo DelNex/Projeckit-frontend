@@ -16,7 +16,7 @@ CREATE POLICY "Tenant admins can insert academic configs"
       AND EXISTS (
         SELECT 1 FROM public.profiles p
         WHERE p.id = (SELECT auth.uid())
-          AND p.tenant_id = public.academic_configs.tenant_id
+          AND p.tenant_id = academic_configs.tenant_id
           AND p.role = 'admin'
           AND p.status = 'approved'
           AND p.archived_at IS NULL
@@ -30,7 +30,7 @@ CREATE POLICY "Tenant admins can update academic configs"
       AND EXISTS (
         SELECT 1 FROM public.profiles p
         WHERE p.id = (SELECT auth.uid())
-          AND p.tenant_id = public.academic_configs.tenant_id
+          AND p.tenant_id = academic_configs.tenant_id
           AND p.role = 'admin'
           AND p.status = 'approved'
           AND p.archived_at IS NULL
@@ -42,7 +42,7 @@ CREATE POLICY "Tenant admins can update academic configs"
       AND EXISTS (
         SELECT 1 FROM public.profiles p
         WHERE p.id = (SELECT auth.uid())
-          AND p.tenant_id = public.academic_configs.tenant_id
+          AND p.tenant_id = academic_configs.tenant_id
           AND p.role = 'admin'
           AND p.status = 'approved'
           AND p.archived_at IS NULL
@@ -56,7 +56,7 @@ CREATE POLICY "Tenant admins can delete academic configs"
       AND EXISTS (
         SELECT 1 FROM public.profiles p
         WHERE p.id = (SELECT auth.uid())
-          AND p.tenant_id = public.academic_configs.tenant_id
+          AND p.tenant_id = academic_configs.tenant_id
           AND p.role = 'admin'
           AND p.status = 'approved'
           AND p.archived_at IS NULL
@@ -81,7 +81,7 @@ CREATE POLICY "Tenant admins can insert sections"
     EXISTS (
       SELECT 1 FROM public.academic_configs c
       JOIN public.profiles p ON p.id = (SELECT auth.uid())
-      WHERE c.id = public.sections.config_id
+      WHERE c.id = sections.config_id
         AND c.tenant_id = p.tenant_id
         AND p.role = 'admin'
         AND p.status = 'approved'
@@ -95,7 +95,7 @@ CREATE POLICY "Tenant admins can update sections"
     EXISTS (
       SELECT 1 FROM public.academic_configs c
       JOIN public.profiles p ON p.id = (SELECT auth.uid())
-      WHERE c.id = public.sections.config_id
+      WHERE c.id = sections.config_id
         AND c.tenant_id = p.tenant_id
         AND p.role = 'admin'
         AND p.status = 'approved'
@@ -107,7 +107,7 @@ CREATE POLICY "Tenant admins can update sections"
     EXISTS (
       SELECT 1 FROM public.academic_configs c
       JOIN public.profiles p ON p.id = (SELECT auth.uid())
-      WHERE c.id = public.sections.config_id
+      WHERE c.id = sections.config_id
         AND c.tenant_id = p.tenant_id
         AND p.role = 'admin'
         AND p.status = 'approved'
@@ -121,7 +121,7 @@ CREATE POLICY "Tenant admins can delete sections"
     EXISTS (
       SELECT 1 FROM public.academic_configs c
       JOIN public.profiles p ON p.id = (SELECT auth.uid())
-      WHERE c.id = public.sections.config_id
+      WHERE c.id = sections.config_id
         AND c.tenant_id = p.tenant_id
         AND p.role = 'admin'
         AND p.status = 'approved'
@@ -147,7 +147,7 @@ CREATE POLICY "Tenant admins can insert subjects"
     EXISTS (
       SELECT 1 FROM public.academic_configs c
       JOIN public.profiles p ON p.id = (SELECT auth.uid())
-      WHERE c.id = public.subjects.config_id
+      WHERE c.id = subjects.config_id
         AND c.tenant_id = p.tenant_id
         AND p.role = 'admin'
         AND p.status = 'approved'
@@ -161,7 +161,7 @@ CREATE POLICY "Tenant admins can update subjects"
     EXISTS (
       SELECT 1 FROM public.academic_configs c
       JOIN public.profiles p ON p.id = (SELECT auth.uid())
-      WHERE c.id = public.subjects.config_id
+      WHERE c.id = subjects.config_id
         AND c.tenant_id = p.tenant_id
         AND p.role = 'admin'
         AND p.status = 'approved'
@@ -173,7 +173,7 @@ CREATE POLICY "Tenant admins can update subjects"
     EXISTS (
       SELECT 1 FROM public.academic_configs c
       JOIN public.profiles p ON p.id = (SELECT auth.uid())
-      WHERE c.id = public.subjects.config_id
+      WHERE c.id = subjects.config_id
         AND c.tenant_id = p.tenant_id
         AND p.role = 'admin'
         AND p.status = 'approved'
@@ -187,7 +187,7 @@ CREATE POLICY "Tenant admins can delete subjects"
     EXISTS (
       SELECT 1 FROM public.academic_configs c
       JOIN public.profiles p ON p.id = (SELECT auth.uid())
-      WHERE c.id = public.subjects.config_id
+      WHERE c.id = subjects.config_id
         AND c.tenant_id = p.tenant_id
         AND p.role = 'admin'
         AND p.status = 'approved'
@@ -212,7 +212,7 @@ CREATE POLICY "Tenant admins can insert grading periods"
       AND EXISTS (
         SELECT 1 FROM public.profiles p
         WHERE p.id = (SELECT auth.uid())
-          AND p.tenant_id = public.grading_periods.tenant_id
+          AND p.tenant_id = grading_periods.tenant_id
           AND p.role = 'admin'
           AND p.status = 'approved'
           AND p.archived_at IS NULL
@@ -226,7 +226,7 @@ CREATE POLICY "Tenant admins can update grading periods"
       AND EXISTS (
         SELECT 1 FROM public.profiles p
         WHERE p.id = (SELECT auth.uid())
-          AND p.tenant_id = public.grading_periods.tenant_id
+          AND p.tenant_id = grading_periods.tenant_id
           AND p.role = 'admin'
           AND p.status = 'approved'
           AND p.archived_at IS NULL
@@ -238,7 +238,7 @@ CREATE POLICY "Tenant admins can update grading periods"
       AND EXISTS (
         SELECT 1 FROM public.profiles p
         WHERE p.id = (SELECT auth.uid())
-          AND p.tenant_id = public.grading_periods.tenant_id
+          AND p.tenant_id = grading_periods.tenant_id
           AND p.role = 'admin'
           AND p.status = 'approved'
           AND p.archived_at IS NULL
@@ -252,7 +252,7 @@ CREATE POLICY "Tenant admins can delete grading periods"
       AND EXISTS (
         SELECT 1 FROM public.profiles p
         WHERE p.id = (SELECT auth.uid())
-          AND p.tenant_id = public.grading_periods.tenant_id
+          AND p.tenant_id = grading_periods.tenant_id
           AND p.role = 'admin'
           AND p.status = 'approved'
           AND p.archived_at IS NULL
@@ -271,7 +271,7 @@ CREATE POLICY "Tenant admins can read audit logs"
       AND EXISTS (
         SELECT 1 FROM public.profiles p
         WHERE p.id = (SELECT auth.uid())
-          AND p.tenant_id = public.audit_logs.tenant_id
+          AND p.tenant_id = audit_logs.tenant_id
           AND p.role = 'admin'
           AND p.status = 'approved'
           AND p.archived_at IS NULL
