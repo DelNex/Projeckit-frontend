@@ -1,0 +1,17 @@
+-- ============================================================
+-- DEV / LOCAL ONLY
+-- ============================================================
+-- This repository does not run production seed writes.
+-- Keep this example commented so "supabase db reset" cannot insert
+-- synthetic learner records into a linked or production database.
+--
+-- Reviewed local fixture example (run only in an isolated local DB):
+--
+-- INSERT INTO public.students (id, tenant_id, config_id, section_id, lrn, name, section_name)
+-- SELECT gen_random_uuid(), t.id, c.id, s.id, '000000000001', 'Demo Student', s.name
+-- FROM public.tenants t
+-- JOIN public.academic_configs c ON c.tenant_id = t.id
+-- JOIN public.sections s ON s.config_id = c.id
+-- WHERE t.name = 'LOCAL DEMO TENANT'
+--   AND s.name = 'LOCAL DEMO SECTION'
+-- ON CONFLICT (tenant_id, lrn) DO NOTHING;
