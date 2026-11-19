@@ -3,10 +3,6 @@ name: Refresh dependency lockfile
 on:
   push:
     branches: ["perf/production-api-lazy-loading"]
-    paths:
-      - "package.json"
-      - "package-lock.json"
-      - ".github/workflows/refresh-dependency-lock.yml"
 
 permissions:
   contents: write
