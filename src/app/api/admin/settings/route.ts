@@ -1,3 +1,4 @@
+import { logSystemEvent } from '@/lib/server/system-logger';
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -49,6 +50,7 @@ export async function GET() {
       canEdit: caller!.role === 'admin' || caller!.is_platform_admin === true,
     });
   } catch (error) {
+    await logSystemEvent({ severity: 'error', source: 'api.admin.settings', message: error instanceof Error ? error.message : 'Could not load school settings.', method: 'GET', route: '/api/admin/settings', code: 'ADMIN_SETTINGS_READ_FAILURE' });
     console.error('[admin/settings GET]', error);
     return NextResponse.json({ error: 'Could not load school settings.' }, { status: 500 });
   }
@@ -77,6 +79,7 @@ export async function PUT(request: Request) {
     if (result.status < 300) clearUploadLimitsCache(caller!.tenant_id!);
     return NextResponse.json(result.body, { status: result.status });
   } catch (error) {
+    await logSystemEvent({ severity: 'error', source: 'api.admin.settings', message: error instanceof Error ? error.message : 'Could not save school settings.', method: 'PUT', route: '/api/admin/settings', code: 'ADMIN_SETTINGS_WRITE_FAILURE' });
     console.error('[admin/settings PUT]', error);
     return NextResponse.json({ error: 'Could not save school settings.' }, { status: 500 });
   }
