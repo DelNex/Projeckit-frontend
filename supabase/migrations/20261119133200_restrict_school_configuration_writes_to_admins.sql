@@ -501,7 +501,7 @@ AS $function$
 DECLARE
   target_tenant uuid;
 BEGIN
-  IF COALESCE(auth.role(), '') NOT IN ('anon', 'authenticated') THEN
+  IF auth.uid() IS NULL AND COALESCE(current_setting('request.jwt.claim.role', true), '') NOT IN ('anon', 'authenticated') THEN
     IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
     RETURN NEW;
   END IF;
@@ -544,6 +544,7 @@ GRANT EXECUTE ON FUNCTION public.is_current_user_admin() TO authenticated, servi
 GRANT EXECUTE ON FUNCTION public.is_platform_admin() TO authenticated, service_role;
 
 REVOKE ALL ON FUNCTION public.guard_grading_period_writes() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.check_profile_updates() FROM PUBLIC, anon, authenticated;
 
 -- Grading-period RPCs remain available to signed-in users, but their writes
 -- are checked by trg_guard_grading_period_writes before any row is changed.
