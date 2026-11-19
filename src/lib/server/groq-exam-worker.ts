@@ -95,6 +95,7 @@ async function requestGroqQuestions(payload: Record<string, any>): Promise<strin
       model,
       messages: buildGroqMessages(payload),
       temperature: 0.2,
+      reasoning_effort: 'low',
       max_completion_tokens: 8192,
       response_format: {
         type: 'json_schema',
