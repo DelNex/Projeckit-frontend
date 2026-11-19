@@ -49,7 +49,7 @@ test('rejects empty or excessively large extracted lesson materials', () => {
   assert.throws(() => buildGroqMessages({ prompt: 'Create questions.', lessonChunks: [] }), /contains no readable text/i);
   assert.throws(() => buildGroqMessages({
     prompt: 'Create questions.',
-    lessonChunks: [{ text: 'x'.repeat(200_001) }],
+    lessonChunks: [{ text: 'x'.repeat(900_001) }],
   }), /too large/i);
 });
 
