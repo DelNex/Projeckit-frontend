@@ -57,3 +57,48 @@ Local extraction now accepts up to 900,000 readable characters per generation jo
 - Scanned/image-only PDFs still require OCR or a text-based source. The local OCR engine is not yet integrated; do not treat image-only PDFs as supported until a pinned, self-hosted OCR runtime and language assets are added and tested.
 - OpenCV quality depends on camera and printing conditions. Calibration and a recorded validation dataset remain release tasks.
 - Retain separate, current lockfile-based SBOMs and review dependency audit findings before production deployment.
+
+
+## Scheduled exam queue dispatch
+
+The authenticated endpoint `POST /api/internal/ai/dispatch` lets a trusted scheduler process one queued Groq exam job even when no teacher has the application open. It accepts either `Authorization: Bearer <secret>` or `x-cron-secret: <secret>`. The secret must be at least 32 characters and is compared using a constant-time byte comparison. The endpoint is server-only, returns no queue payload, and relies on the existing database claim/lease RPC to prevent duplicate workers.
+
+Configure `AI_DISPATCH_CRON_SECRET` in the Netlify environment for the branch deployment. Use a randomly generated value of at least 32 characters. Store the same value in Supabase Vault as `projectkit_ai_dispatch_secret`; do not put it in SQL source, browser variables, or Git. Supabase Cron can then call the Netlify branch URL every minute using `pg_cron` and `pg_net`. Keep the schedule disabled until the Netlify variable and Vault secret are both configured.
+
+Example Supabase SQL after enabling `pg_cron`, `pg_net`, and Vault:
+
+```sql
+select vault.create_secret('https://YOUR-BRANCH-NETLIFY-HOST', 'projectkit_app_url');
+select vault.create_secret('YOUR_RANDOM_32_PLUS_CHARACTER_SECRET', 'projectkit_ai_dispatch_secret');
+
+select cron.schedule(
+  'projectkit-ai-dispatch',
+  '* * * * *',
+  $$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'projectkit_app_url')
+      || '/api/internal/ai/dispatch',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || (
+        select decrypted_secret from vault.decrypted_secrets
+        where name = 'projectkit_ai_dispatch_secret'
+      )
+    ),
+    body := jsonb_build_object('source', 'supabase-cron')
+  );
+  $$
+);
+```
+
+Replace the host with the branch deployment's HTTPS hostname. Do not use the main production alias for this temporary test. Check `cron.job_run_details` and Netlify function logs after enabling. To stop dispatching, unschedule the job from Supabase Cron. The dispatcher processes at most one job per invocation; it does not increase the existing provider or database concurrency limits.
+
+## Error capture
+
+`src/instrumentation.ts` exports Next.js `onRequestError` for unhandled server-side errors. It dynamically loads the Node-only structured logger only in the Node runtime, includes the request/route context and error digest, and must never replace the original application error if logging fails. Route handlers should continue logging expected failures at their boundaries with their richer tenant and job context.
+
+## Large-document and OCR roadmap
+
+The current browser extraction path supports text-based PDF, DOCX, PPTX, TXT, and Markdown. Image-only PDFs are not supported yet. Do not advertise OCR support until a self-hosted browser OCR runtime, language assets, worker lifecycle, cancellation, page-level confidence, and real-device tests are included.
+
+For large documents, the next architecture step is private object storage with short-lived signed upload URLs and resumable TUS uploads, plus a small database manifest containing tenant ownership, source hash, page/chunk metadata, and object paths. Keep source files private and avoid embedding extracted lesson text in job rows. Supabase recommends TUS resumable uploads for files larger than 6 MB and unstable networks. Chunking and retrieval should be introduced with migration/backfill tests before changing the existing queue payload contract.
