@@ -1,4 +1,7 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
+import { runGroqExamJob } from '@/lib/server/groq-exam-worker';
+
+export const maxDuration = 60;
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { buildExamPrompt, buildSlotsFromTos, toLessonChunks } from '@/lib/server/exam-jobs';
@@ -38,6 +41,9 @@ export async function POST(request: Request) {
       .maybeSingle();
     if (activeJobError) throw activeJobError;
     if (activeJob) {
+      if (['queued', 'needs_attention'].includes(activeJob.status)) {
+        after(async () => { try { await runGroqExamJob(activeJob.id, caller.admin!); } catch (error) { console.error('[Groq worker] Existing job processing failed:', error instanceof Error ? error.message : 'unknown error'); } });
+      }
       const position = activeJob.status === 'queued'
         ? await caller.admin!.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('status', 'queued').lte('created_at', activeJob.created_at)
         : null;
@@ -51,18 +57,15 @@ export async function POST(request: Request) {
       .eq('tos_id', tos.id)
       .is('parent_job_id', null)
       .eq('status', 'failed')
-      .ilike('error', '%Gemini did not return valid exam questions%')
+      .ilike('error', '%Groq%')
       .gte('updated_at', retryAfter)
       .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle();
     if (recentFailureError) throw recentFailureError;
-    if (recentFailure) return NextResponse.json({ error: 'The last generation for this TOS failed. Check the helper status and wait two minutes before retrying; the existing exam was not changed.' }, { status: 429 });
+    if (recentFailure) return NextResponse.json({ error: 'The last AI generation for this TOS failed. Check the error and wait two minutes before retrying; the existing exam was not changed.' }, { status: 429 });
 
-    const { data: helper } = await caller.admin!.from('helper_status').select('state,last_seen_at').order('last_seen_at', { ascending: false }).limit(1).maybeSingle();
-    const helperAge = helper?.last_seen_at ? Math.max(0, Math.floor((Date.now() - Date.parse(helper.last_seen_at)) / 1000)) : null;
-    const helperAvailable = helperAge !== null && helperAge < 45 && ['idle', 'busy'].includes(helper?.state || '');
-    if (!helperAvailable) return NextResponse.json({ error: 'The Gemini helper is unavailable. No job was created. Start the helper and try again.' }, { status: 503 });
+    if (!process.env.GROQ_API_KEY) return NextResponse.json({ error: 'Groq AI is not configured. Add GROQ_API_KEY to the server environment.' }, { status: 503 });
 
     const [tenant, hourly, daily] = await Promise.all([
       caller.admin!.from('tenants').select('ai_hourly_user_limit,ai_daily_school_limit').eq('id', caller.profile!.tenant_id).maybeSingle(),
@@ -89,6 +92,12 @@ export async function POST(request: Request) {
     }
     if (Buffer.byteLength(JSON.stringify(payload), 'utf8') > 1_572_864) return NextResponse.json({ error: 'The lesson text and exam blueprint exceed the 1.5 MB queue limit. Reduce the material and try again.' }, { status: 413 });
     const job = await getExamAiProvider().enqueue(caller.admin!, { tenantId: caller.profile!.tenant_id, tosId: tos.id, createdBy: caller.user!.id, payload, jobKind: Number.isInteger(body.repairItemNumber) ? 'repair' : 'full' });
+    if (!job.reused && ['queued', 'needs_attention'].includes(job.status)) {
+      after(async () => {
+        try { await runGroqExamJob(job.id, caller.admin!); }
+        catch (error) { console.error('[Groq worker] Exam job failed:', error instanceof Error ? error.message : 'unknown error'); }
+      });
+    }
     const { count } = await caller.admin!.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('status', 'queued').lte('created_at', job.createdAt);
     return NextResponse.json({ id: job.id, status: job.status, reused: job.reused, queuePosition: job.status === 'queued' ? count || 1 : null }, { status: 202, headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
