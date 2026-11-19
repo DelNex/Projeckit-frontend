@@ -16,7 +16,7 @@ test('exam context retrieval prefers lesson sections relevant to the requested c
   const messages = buildGroqMessages(payload);
   assert.match(messages[1].content, /Photosynthesis converts light energy/);
   assert.doesNotMatch(messages[1].content, /solar system contains planets/);
-  assert.match(messages[1].content, /Source section 2\/10/);
+  assert.match(messages[1].content, /Source ID source-2; section 2\/10/);
 });
 
 test('provider registry exposes only providers with server-side credentials', () => {
