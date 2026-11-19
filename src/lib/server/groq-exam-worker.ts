@@ -157,6 +157,29 @@ export function chooseNextExamJob(queuedJobs: Array<{ id: string; tenant_id: str
     )[0];
 }
 
+/** Select up to four distinct jobs while preserving the two-per-school fairness cap. */
+export function chooseNextExamJobs(
+  queuedJobs: Array<{ id: string; tenant_id: string; created_at: string }>,
+  activeJobs: Array<{ tenant_id: string }>,
+  limit = 4,
+) {
+  const pending = [...queuedJobs];
+  const projectedActive = [...activeJobs];
+  const selected: typeof pending = [];
+  const safeLimit = Number.isInteger(limit) ? Math.max(0, Math.min(4, limit)) : 4;
+
+  while (selected.length < safeLimit) {
+    const next = chooseNextExamJob(pending, projectedActive);
+    if (!next) break;
+    selected.push(next);
+    const index = pending.findIndex((job) => job.id === next.id);
+    if (index >= 0) pending.splice(index, 1);
+    projectedActive.push({ tenant_id: next.tenant_id });
+  }
+
+  return selected;
+}
+
 export async function runNextGroqExamJob(admin = createAdminClient()): Promise<void> {
   const now = new Date().toISOString();
   const [queuedResult, staleResult] = await Promise.all([
@@ -179,18 +202,21 @@ export async function runNextGroqExamJob(admin = createAdminClient()): Promise<v
     .sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
   if (!queuedJobs.length) return;
 
-  const tenantIds = [...new Set(queuedJobs.map((job: any) => job.tenant_id).filter(Boolean))];
   const { data: activeJobs, error: activeError } = await admin
     .from('exam_generation_jobs')
     .select('tenant_id')
     .eq('provider', 'groq_api')
     .eq('status', 'running')
-    .gt('lease_expires_at', now)
-    .in('tenant_id', tenantIds);
+    .gt('lease_expires_at', now);
   if (activeError) throw new Error('Could not inspect active exam workers.');
 
-  const nextJob = chooseNextExamJob(queuedJobs as any, activeJobs || []);
-  if (nextJob) await runGroqExamJob(nextJob.id, admin);
+  const availableSlots = Math.max(0, 4 - (activeJobs || []).length);
+  const nextJobs = chooseNextExamJobs(queuedJobs as any, activeJobs || [], availableSlots);
+  if (!nextJobs.length) return;
+
+  const results = await Promise.allSettled(nextJobs.map((job) => runGroqExamJob(job.id, admin)));
+  const failed = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+  if (failed) throw failed.reason;
 }
 
 export async function runGroqExamJob(jobId: string, admin = createAdminClient(), repairDepth = 0, jobDeadline = Date.now() + 50_000): Promise<void> {
