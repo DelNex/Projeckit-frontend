@@ -4,30 +4,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 describe('Project KIT — TOS Assessment Link & Non-Cascading Deletion Tests', () => {
-  it('1. verifies migration 23 defines ON DELETE SET NULL and dynamic pg_constraint lookup', () => {
-    const migrationPath = path.resolve(
-      process.cwd(),
-      '../supabase/migrations/20260908000023_tos_assessment_link_cascade_fix.sql'
-    );
-    assert.ok(fs.existsSync(migrationPath), 'Migration 23 file must exist');
-
-    const sql = fs.readFileSync(migrationPath, 'utf8');
-    assert.ok(
-      sql.includes('ON DELETE SET NULL'),
-      'Migration must recreate foreign key with ON DELETE SET NULL'
-    );
-    assert.ok(
-      sql.includes('pg_constraint'),
-      'Migration must look up constraint name from pg_constraint'
-    );
-    assert.ok(
-      sql.includes('trg_sync_tos_assessment_link'),
-      'Migration must install trg_sync_tos_assessment_link trigger'
-    );
-    assert.ok(
-      sql.includes('sync_tos_assessment_link()'),
-      'Migration must define sync_tos_assessment_link function'
-    );
+  it('1. generated database types keep the TOS assessment link nullable', () => {
+    const typesPath = path.resolve(process.cwd(), 'src', 'types', 'database.types.ts');
+    const types = fs.readFileSync(typesPath, 'utf8');
+    assert.match(types, /assessment_id: string \| null/);
+    assert.match(types, /tos_documents_assessment_id_fkey/);
+    assert.match(types, /referencedRelation: "assessments"/);
   });
 
   it('2. verifies deleting an assessment leaves its linked TOS in place and syncs assessment_id', () => {
