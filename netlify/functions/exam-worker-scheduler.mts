@@ -22,7 +22,7 @@ export default async (request: Request) => {
       method: "POST",
       headers: { Authorization: `Bearer ${secret}` },
       cache: "no-store",
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(4_000),
     });
 
     if (!response.ok) {
