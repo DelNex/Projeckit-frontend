@@ -30,7 +30,7 @@ import {
   renderOmrMasterSvg,
   VisibleHeaderFields,
 } from '../rendering/svg-renderer';
-import { A5_TWO_UP_PRINT_SIZE, buildA5TwoUpPages, buildA4CompactPages, getA4CompactLayout } from '../rendering/personalized-print-layout';
+import { A5_TWO_UP_PRINT_SIZE, buildA5TwoUpPages, buildA4CompactPages, getA4CompactLayout, getCompactOmrPageHeight } from '../rendering/personalized-print-layout';
 import { generateCanonicalGeometry } from '../geometry/canonical-geometry';
 
 export interface OmrPrintModalStudent {
@@ -115,15 +115,7 @@ export function OmrPrintModal({
   // unchanged. The shorter sheets can then be tiled vertically on A4.
   const printGeometry = useMemo(() => {
     if (!geometry || !isHalfSheet || geometry.config.itemCount >= 60) return geometry;
-    const rowsPerColumn = geometry.layout.answerArea.rowsPerCol;
-    // The base geometry distributes unused vertical space through the header.
-    // Undo that 3/4 shift to recover the true content cursor before compacting.
-    const baseAnswerY = geometry.layout.answerArea.y;
-    const shiftedSectionBottom = geometry.layout.sectionBar.bottomLineY;
-    const contentCursorY = Math.max(0, 4 * shiftedSectionBottom - 3 * (baseAnswerY - 8));
-    const minimumHeight = Math.ceil(
-      23 + contentCursorY + 8 + 26 + 16 + 19 * Math.max(0, rowsPerColumn - 1) + 2
-    );
+    const minimumHeight = getCompactOmrPageHeight(geometry);
     return generateCanonicalGeometry({
       ...geometry.config,
       sheetFormat: 'HALF',
