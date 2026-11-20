@@ -589,9 +589,9 @@ body { background: var(--pk-canvas); color: var(--pk-ink); }
   transition-property: color, background-color, border-color, box-shadow, transform, opacity;
   transition-duration: 150ms;
 }
-.pk-main button:not(:disabled), .pk-auth button:not(:disabled) { cursor: pointer; }
-.pk-main button:disabled, .pk-auth button:disabled { cursor: not-allowed; }
-.pk-main button:focus-visible, .pk-auth button:focus-visible,
+.pk-shell button:not(:disabled), .pk-main button:not(:disabled), .pk-auth button:not(:disabled) { cursor: pointer; }
+.pk-shell button:disabled, .pk-main button:disabled, .pk-auth button:disabled { cursor: not-allowed; }
+.pk-shell button:focus-visible, .pk-main button:focus-visible, .pk-auth button:focus-visible,
 .pk-main a:focus-visible, .pk-auth a:focus-visible {
   outline: 2px solid var(--pk-brand);
   outline-offset: 2px;
@@ -695,7 +695,7 @@ body { background: var(--pk-canvas); color: var(--pk-ink); }
 }
 @media (max-width: 639px) {
   .pk-main { padding-left: 12px !important; padding-right: 12px !important; }
-  .pk-main button, .pk-auth button { min-height: 40px; }
+  .pk-shell button, .pk-main button, .pk-auth button { min-height: 40px; }
   .pk-main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
   .pk-main select, .pk-main textarea,
   .pk-auth input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
@@ -726,7 +726,7 @@ body { background: var(--pk-canvas); color: var(--pk-ink); }
   .pk-omr-viewfinder .pk-omr-control-bar { bottom: 4px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .pk-main button, .pk-auth button { transition: none; }
+  .pk-shell button, .pk-main button, .pk-auth button { transition: none; }
 }
 
 /* Shared overflow behavior for long forms, data tables and nested modal panels. */
@@ -747,3 +747,7 @@ body { background: var(--pk-canvas); color: var(--pk-ink); }
 .pk-omr-answer-card[data-state="BLANK"] { border-style: solid; }
 .pk-omr-viewfinder .pk-omr-status { background: rgba(16, 21, 29, .88); }
 .pk-omr-viewfinder .barcode-laser-trail { background: linear-gradient(to top, rgba(69, 104, 245, .28), transparent); }
+
+.pk-main .pk-omr-overlay { max-width: none !important; }
+.pk-omr-review-counts { flex-wrap: wrap; }
+.pk-omr-review-summary [class*="text-emerald-"], .pk-omr-review-summary [class*="text-amber-"], .pk-omr-review-summary [class*="text-red-"] { color: #c5d1ff; }
