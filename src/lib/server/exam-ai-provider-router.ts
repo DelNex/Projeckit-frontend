@@ -10,6 +10,11 @@ type ProviderConfig = {
 
 const cooldownUntil = new Map<ProviderId, number>();
 
+/** Clears process-local cooldown state for isolated adapter tests. */
+export function resetExamProviderCooldownsForTests(): void {
+  cooldownUntil.clear();
+}
+
 /** HTTP 400-class request errors need correction, not an immediate retry against the same provider. */
 export function isRetryableProviderStatus(status: number): boolean {
   return status === 408 || status === 409 || status === 429 || status >= 500;
@@ -18,8 +23,8 @@ export function isRetryableProviderStatus(status: number): boolean {
 function providerConfigs(): ProviderConfig[] {
   const env: Record<ProviderId, ProviderConfig | null> = {
     groq: process.env.GROQ_API_KEY ? { id: 'groq', key: process.env.GROQ_API_KEY, model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b' } : null,
-    openrouter: process.env.OPENROUTER_API_KEY ? { id: 'openrouter', key: process.env.OPENROUTER_API_KEY, model: process.env.OPENROUTER_MODEL || 'openai/gpt-oss-120b:free' } : null,
-    gemini: process.env.GEMINI_API_KEY ? { id: 'gemini', key: process.env.GEMINI_API_KEY, model: process.env.GEMINI_MODEL || 'gemini-2.5-flash' } : null,
+    openrouter: process.env.OPENROUTER_API_KEY ? { id: 'openrouter', key: process.env.OPENROUTER_API_KEY, model: process.env.OPENROUTER_MODEL || 'openrouter/free' } : null,
+    gemini: process.env.GEMINI_API_KEY ? { id: 'gemini', key: process.env.GEMINI_API_KEY, model: process.env.GEMINI_MODEL || 'gemini-3.8-flash' } : null,
     cloudflare: process.env.CLOUDFLARE_API_TOKEN && process.env.CLOUDFLARE_ACCOUNT_ID
       ? { id: 'cloudflare', key: process.env.CLOUDFLARE_API_TOKEN, model: process.env.CLOUDFLARE_MODEL || '@cf/meta/llama-3.1-8b-instruct' }
       : null,
@@ -148,8 +153,7 @@ export async function requestExamQuestionsFromProviders(
   }
   const failures: string[] = [];
   let lastStatus: number | null = null;
-  let lastRetryable = false;
-  let lastRetryAfterMs: number | null = null;
+  let retryableFailure: { status: number | null; retryAfterMs: number | null; rateLimit: Record<string, string | null> | null } | null = null;
   let lastRateLimit: Record<string, string | null> | null = null;
   // The caller is a 60-second Next.js route. Keep provider failover inside a
   // 50-second budget so the job lease can be renewed/finalized safely.
@@ -186,9 +190,8 @@ export async function requestExamQuestionsFromProviders(
         || error instanceof SyntaxError
         || /timeout|fetch failed|network|returned no questions/i.test(message);
       lastStatus = status;
-      lastRetryable = retryable;
-      lastRetryAfterMs = retryAfterMs;
       lastRateLimit = rateLimit;
+      if (retryable) retryableFailure = { status, retryAfterMs, rateLimit };
       const safeDetail = message.replace(/\s+/g, ' ').slice(0, 180);
       failures.push(`${provider.id}${status ? ` HTTP ${status}` : ''}: ${safeDetail}`);
       await logSystemEvent({
@@ -197,11 +200,17 @@ export async function requestExamQuestionsFromProviders(
         message: 'An AI provider could not complete an exam batch.',
         metadata: { provider: provider.id, status, retryable, detail: safeDetail, attempt: failures.length },
       });
-      if (!retryable) break;
+      // Continue to the next configured provider even for provider-specific 4xx
+      // errors. One model may reject a schema or credential while another works.
     }
   }
   throw Object.assign(
     new Error(`No configured AI provider could complete this batch. ${failures.join(' | ').slice(0, 700)}`),
-    { status: lastStatus, retryable: lastRetryable, retryAfterMs: lastRetryAfterMs, rateLimit: lastRateLimit },
+    {
+      status: retryableFailure?.status ?? lastStatus,
+      retryable: Boolean(retryableFailure),
+      retryAfterMs: retryableFailure?.retryAfterMs ?? null,
+      rateLimit: retryableFailure?.rateLimit ?? lastRateLimit,
+    },
   );
 }

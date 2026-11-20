@@ -20,7 +20,7 @@ import { printOmrAnswerKey, exportOmrAnswerKeyDocx } from '../omr-answer-key-exp
 import { useToast } from '@/components/ui/toast';
 import { createClient } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
-import { useExamGenerationJob, type ExamAiPreflight } from '@/lib/exam-generation-client';
+import { useExamGenerationJob } from '@/lib/exam-generation-client';
 import { clearPendingLessonExtraction, extractTextFromFiles, resumePendingLessonExtraction } from '@/lib/lesson-parser';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { ExamDraftEditor } from '@/components/assessment/ExamDraftEditor';
@@ -30,7 +30,6 @@ interface TosExamModalProps {
   onClose: () => void;
   tos: TosDocument | null;
   schoolName: string;
-  preflight?: ExamAiPreflight | null;
 }
 
 interface CompetencyMaterial {
@@ -46,11 +45,10 @@ export function TosExamModal({
   onClose,
   tos,
   schoolName,
-  preflight,
 }: TosExamModalProps) {
   const { toast } = useToast();
   const supabase = createClient();
-  const generationJob = useExamGenerationJob(tos?.id, preflight);
+  const generationJob = useExamGenerationJob(tos?.id);
 
   const [examDate, setExamDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [materials, setMaterials] = useState<Record<string, CompetencyMaterial>>({});
@@ -66,7 +64,7 @@ export function TosExamModal({
     if (generationJob.savedQuestions) setQuestions(generationJob.savedQuestions);
     if (generationJob.job && ['queued', 'running'].includes(generationJob.job.status)) {
       setIsGenerating(true);
-      setGenerationProgress(generationJob.job.progress?.label || (generationJob.job.status === 'queued' ? `Queued (position ${generationJob.job.queuePosition || 1}). Groq AI will process this exam in the background.` : 'Groq is generating your exam.'));
+      setGenerationProgress(generationJob.job.progress?.label || (generationJob.job.status === 'queued' ? `Queued (position ${generationJob.job.queuePosition || 1}). AI will process this exam in the background.` : 'AI is generating your exam.'));
     } else if (generationJob.job?.status === 'needs_attention') {
       setIsGenerating(false);
       setGenerationProgress('');
@@ -302,7 +300,7 @@ export function TosExamModal({
 
       const queued = await generationJob.start(lessonDocuments.length ? { lessonDocuments } : { lessonText: combinedText });
       setGenerationProgress(queued.status === 'queued'
-        ? `Queued (position ${queued.queuePosition || 1}). Groq AI will process this exam in the background.`
+        ? `Queued (position ${queued.queuePosition || 1}). AI will process this exam in the background.`
         : queued.status === 'running' ? 'Groq is already generating questions for this TOS.' : 'This TOS already has a job that needs worker attention.');
     } catch (err: any) {
       console.error('Exam generation error:', err);
@@ -394,16 +392,12 @@ export function TosExamModal({
 
               <button
                 onClick={handleGenerateExam}
-                disabled={isGenerating || generationJob.isStarting || !generationJob.isPreflightReady || generationJob.helperState !== 'online' || (generationJob.quotaAvailable && Boolean(generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0))) || generationJob.retryAfterSeconds > 0 || ['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')}
-                title={!generationJob.isPreflightReady || generationJob.helperState === 'checking' ? 'Checking Groq server configuration…' : generationJob.helperState === 'offline' ? 'Groq AI is offline. Configure GROQ_API_KEY on the server.' : generationJob.retryAfterSeconds > 0 ? `Retry available in ${generationJob.retryAfterSeconds}s` : undefined}
+                disabled={isGenerating || generationJob.isStarting || (generationJob.quotaAvailable && Boolean(generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0))) || ['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all disabled:opacity-50"
               >
                 {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                 <span>{isGenerating ? 'Generating...' : 'Generate Exam'}</span>
               </button>
-              <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold ${generationJob.helperState === 'offline' ? 'border-slate-300 text-slate-600' : generationJob.helperState === 'needs_attention' ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-emerald-300 bg-emerald-50 text-emerald-800'}`}>
-                Groq AI {generationJob.helperState === 'needs_attention' ? 'needs attention' : generationJob.helperState === 'checking' ? 'checking…' : generationJob.helperState === 'unavailable' ? 'status unavailable' : generationJob.helperState}
-              </span>
               <button
                 onClick={() => setShowTeacherCopyModal(true)}
                 disabled={questions.length === 0}
@@ -434,33 +428,14 @@ export function TosExamModal({
               </div>
             )}
 
-            {(!generationJob.isPreflightReady || generationJob.helperState === 'checking') && !isGenerating && (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">Checking Groq availability and your generation allowance…</div>
-            )}
-            {generationJob.helperState === 'unavailable' && !isGenerating && (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">Could not verify Groq availability. Refresh this TOS before starting generation.</div>
-            )}
-            {generationJob.helperState === 'offline' && !isGenerating && (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">Groq AI is not configured on the server. Please contact your school administrator.</div>
-            )}
             {generationJob.quotaAvailable && generationJob.quota && (
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
                 Generation allowance: {generationJob.quota.hourly.remaining}/{generationJob.quota.hourly.limit} this hour · {generationJob.quota.daily.remaining}/{generationJob.quota.daily.limit} for your school today.
               </p>
             )}
-            {generationJob.helperState === 'busy' && generationJob.retryAfterSeconds > 0 && (
+            {generationJob.job?.status === 'failed' && (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                Groq is temporarily at its shared generation limit. Project KIT has paused new exam requests and will recheck availability automatically. Try again in about {generationJob.retryAfterSeconds} seconds.
-              </div>
-            )}
-            {generationJob.helperState !== 'busy' && generationJob.retryAfterSeconds > 0 && (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                A recent generation for this TOS did not complete. You can safely try again in about {generationJob.retryAfterSeconds} seconds. Your saved TOS and existing questions were not changed.
-              </div>
-            )}
-            {generationJob.job?.status === 'failed' && generationJob.retryAfterSeconds <= 0 && (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                The last generation attempt did not complete. Your saved TOS and existing questions were not changed. Check Groq availability before trying again.
+                The last generation attempt did not complete. Your saved TOS and existing questions were not changed. You can try generating again.
               </div>
             )}
             {generationJob.quotaAvailable && generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0) && (
@@ -468,10 +443,6 @@ export function TosExamModal({
                 {generationJob.quota.hourly.remaining <= 0 ? 'You have reached your hourly exam-generation limit.' : 'Your school has reached its daily exam-generation limit.'} Please wait before generating another exam.
               </div>
             )}
-            {generationJob.helperState === 'needs_attention' && generationJob.job?.status !== 'needs_attention' && (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">An earlier AI generation job needs attention. Resolve or cancel it before starting another generation.</div>
-            )}
-
             {isGenerating && (
               <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center gap-3 text-xs text-emerald-900 dark:text-emerald-100">
                 <Loader2 className="h-5 w-5 animate-spin text-emerald-600 shrink-0" />
@@ -480,7 +451,7 @@ export function TosExamModal({
                   : generationJob.job?.status === 'running'
                     ? `${generationJob.job.progress?.label || generationProgress} This is running in the background, you can leave this page.`
                     : generationJob.job?.status === 'queued'
-                      ? `Queued (position ${generationJob.job.queuePosition || 1}). Groq AI will process this exam in the background. This is running in the background, you can leave this page.`
+                      ? `Queued (position ${generationJob.job.queuePosition || 1}). AI will process this exam in the background. This is running in the background, you can leave this page.`
                       : generationProgress}</span>
                 {['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '') && <button onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="ml-auto rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700">Cancel</button>}
               </div>
