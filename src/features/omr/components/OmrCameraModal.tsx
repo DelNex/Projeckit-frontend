@@ -629,14 +629,15 @@ export function OmrCameraModal({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-0 sm:p-4 animate-in fade-in duration-200"
+      aria-labelledby="pk-omr-title"
+      className="pk-omr-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-0 sm:p-4 animate-in fade-in duration-200"
     >
-      <div className="relative flex h-full w-full flex-col overflow-hidden bg-gray-900 border-0 sm:border sm:border-gray-800 shadow-2xl text-white sm:h-auto sm:max-h-[94vh] sm:max-w-4xl sm:rounded-3xl">
+      <div className="pk-omr-dialog relative flex h-full w-full flex-col overflow-hidden bg-gray-900 border-0 sm:border sm:border-gray-800 shadow-2xl text-white sm:h-auto sm:max-h-[94vh] sm:max-w-4xl sm:rounded-3xl">
         {/* Header with Compact Stepper */}
-        <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-3.5 py-2.5 sm:px-6 sm:py-3.5 bg-gray-900 z-10">
+        <div className="pk-omr-header flex shrink-0 items-center justify-between border-b border-gray-800 px-3.5 py-2.5 sm:px-6 sm:py-3.5 bg-gray-900 z-10">
           <div className="flex items-center gap-2 min-w-0">
             <Camera className="h-4 w-4 sm:h-5 sm:w-5 text-blue-400 shrink-0" />
-            <h3 className="text-xs sm:text-base font-bold truncate">
+            <h3 id="pk-omr-title" className="text-xs sm:text-base font-bold truncate">
               {title ||
                 (isAnswerKey
                   ? 'Master Answer Key Camera Scanner'
@@ -695,7 +696,7 @@ export function OmrCameraModal({
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 flex flex-col p-2 sm:p-5 min-h-0 overflow-hidden">
+        <div className="pk-omr-body flex-1 flex flex-col p-2 sm:p-5 min-h-0 overflow-hidden">
 
           {phase === 'saved' ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-4 py-12 text-center">
@@ -712,7 +713,7 @@ export function OmrCameraModal({
                   .
                 </p>
               </div>
-              <div className="flex gap-3 pt-2">
+              <div className="pk-omr-success-actions flex gap-3 pt-2">
                 <button
                   type="button"
                   onClick={handleScanAnother}

@@ -563,3 +563,168 @@ body { background: var(--pk-canvas); color: var(--pk-ink); }
   --color-fuchsia-900: #1b307c;
   --color-fuchsia-950: #111d4d;
 }
+
+
+/* --------------------------------------------------------------------------
+   Project KIT responsive system — shared by teacher, admin and auth screens.
+   Three visual anchors: neutral canvas, readable ink, one blue accent.
+   -------------------------------------------------------------------------- */
+:root {
+  --pk-control-height: 42px;
+  --pk-control-radius: 10px;
+  --pk-content-gutter: clamp(12px, 2vw, 24px);
+}
+.pk-main, .pk-auth { min-width: 0; width: 100%; }
+.pk-main > *, .pk-auth > * { min-width: 0; }
+.pk-main :where(.flex, .grid) > *, .pk-auth :where(.flex, .grid) > * { min-width: 0; }
+.pk-main :where(img, video, canvas, svg), .pk-auth :where(img, video, canvas) { max-width: 100%; }
+.pk-main :where(h1, h2, h3), .pk-auth :where(h1, h2, h3) {
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+.pk-main :where(p, label, td, th), .pk-auth :where(p, label) { overflow-wrap: anywhere; }
+.pk-main button, .pk-auth button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+  transition-duration: 150ms;
+}
+.pk-main button:not(:disabled), .pk-auth button:not(:disabled) { cursor: pointer; }
+.pk-main button:disabled, .pk-auth button:disabled { cursor: not-allowed; }
+.pk-main button:focus-visible, .pk-auth button:focus-visible,
+.pk-main a:focus-visible, .pk-auth a:focus-visible {
+  outline: 2px solid var(--pk-brand);
+  outline-offset: 2px;
+}
+.pk-main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.pk-main select, .pk-main textarea,
+.pk-auth input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.pk-auth select, .pk-auth textarea {
+  min-width: 0;
+  max-width: 100%;
+  border-radius: var(--pk-control-radius);
+}
+.pk-main input:focus-visible, .pk-main select:focus-visible, .pk-main textarea:focus-visible,
+.pk-auth input:focus-visible, .pk-auth select:focus-visible, .pk-auth textarea:focus-visible {
+  border-color: var(--pk-brand);
+  outline: 2px solid color-mix(in srgb, var(--pk-brand) 20%, transparent);
+  outline-offset: 1px;
+}
+.pk-main table { max-width: 100%; }
+.pk-main [role="dialog"], .pk-auth [role="dialog"] { max-width: calc(100vw - 24px); }
+.pk-main .fixed.inset-0.z-50 > :not(.pk-omr-dialog) {
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.pk-main .fixed.inset-0.z-50 { padding-top: max(12px, env(safe-area-inset-top)); padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+
+/* Auth is a single focused task, not a dashboard card squeezed into a phone. */
+.pk-auth { min-height: 100dvh; padding-top: max(24px, env(safe-area-inset-top)); padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+.pk-auth > div { width: 100%; min-width: 0; }
+.pk-auth section { width: min(100%, 30rem); margin-inline: auto; }
+.pk-auth section input { min-height: 44px; font-size: 16px; }
+
+/* Tables remain data-dense, but scrolling is deliberate, visible and touch-safe. */
+.pk-data-table-scroll {
+  max-width: 100%;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+.pk-data-table-scroll:focus-visible { outline: 2px solid var(--pk-brand); outline-offset: -2px; }
+.pk-data-table-scroll table { width: 100%; }
+.pk-data-table-scroll th { white-space: nowrap; }
+.pk-data-table-scroll td { vertical-align: middle; }
+.pk-main :where(.rounded-2xl, .rounded-3xl) { min-width: 0; }
+
+/* OMR capture is a dedicated workspace: the sheet must stay visible, controls
+   stay reachable, and the result grid owns the remaining viewport height. */
+.pk-omr-overlay {
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  overscroll-behavior: none;
+}
+.pk-omr-dialog {
+  width: 100%;
+  height: 100%;
+  max-height: 100dvh;
+  min-height: 0;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.pk-omr-header { min-height: 52px; padding-top: max(10px, env(safe-area-inset-top)); }
+.pk-omr-body { min-height: 0; overscroll-behavior: contain; }
+.pk-omr-viewfinder {
+  min-height: 0 !important;
+  height: 100%;
+  flex: 1 1 auto;
+  isolation: isolate;
+}
+.pk-omr-viewfinder video { object-fit: contain; }
+.pk-omr-viewfinder .barcode-laser-assembly > div:last-child { background: var(--pk-brand); box-shadow: 0 0 8px color-mix(in srgb, var(--pk-brand) 65%, transparent); }
+.pk-omr-review { min-height: 0; }
+.pk-omr-review-summary, .pk-omr-review-learner { background: #202936; border-color: #394554; }
+.pk-omr-review-summary { padding: 12px; }
+.pk-omr-answer-scroll { flex: 1 1 0; min-height: 0; max-height: none !important; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.pk-omr-answer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pk-omr-answer-card { min-width: 0; border-color: #394554; background: #171e28; }
+.pk-omr-answer-actions { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.pk-omr-answer-actions button { min-width: 0; min-height: 36px; padding-inline: 2px; }
+.pk-omr-review-footer { padding-top: 12px; }
+.pk-omr-review-footer button { min-height: 42px; }
+.pk-omr-success-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.pk-omr-viewfinder button { min-width: 44px; min-height: 44px; }
+.pk-omr-viewfinder label { min-width: 44px; min-height: 44px; }
+.pk-omr-dialog button:focus-visible { outline-color: #9eb2ff; }
+.pk-omr-dialog select { min-height: 42px; }
+.pk-omr-status { max-width: min(80%, 34rem); text-align: center; }
+
+@media (min-width: 640px) {
+  .pk-omr-dialog {
+    width: min(100%, 56rem);
+    height: auto;
+    max-height: min(94dvh, 900px);
+    border-radius: 22px;
+    padding-bottom: 0;
+  }
+  .pk-omr-header { padding-top: 14px; }
+  .pk-omr-viewfinder { min-height: 340px !important; }
+  .pk-omr-answer-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (min-width: 900px) {
+  .pk-omr-answer-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+@media (max-width: 639px) {
+  .pk-main { padding-left: 12px !important; padding-right: 12px !important; }
+  .pk-main button, .pk-auth button { min-height: 40px; }
+  .pk-main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  .pk-main select, .pk-main textarea,
+  .pk-auth input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  .pk-auth select, .pk-auth textarea { font-size: 16px; }
+  .pk-auth section { padding: 22px; }
+  .pk-omr-overlay { padding: 0; }
+  .pk-omr-dialog { border-radius: 0; }
+  .pk-omr-header { min-height: 50px; padding-left: 12px; padding-right: 12px; }
+  .pk-omr-body { padding: 8px; }
+  .pk-omr-viewfinder { min-height: 220px !important; border-radius: 14px; }
+  .pk-omr-review-summary { padding: 10px; }
+  .pk-omr-answer-grid { gap: 8px; }
+  .pk-omr-answer-card { padding: 8px; }
+  .pk-omr-review-footer { gap: 8px; }
+  .pk-omr-review-footer button { width: 100%; }
+  .pk-omr-success-actions { flex-direction: column; width: 100%; }
+  .pk-omr-success-actions button { width: 100%; justify-content: center; }
+}
+@media (max-width: 380px) {
+  .pk-omr-review-summary { font-size: 11px; }
+  .pk-omr-review-summary .pk-omr-review-counts { gap: 6px; flex-wrap: wrap; }
+  .pk-omr-answer-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  .pk-omr-header { min-height: 42px; padding-block: 4px; }
+  .pk-omr-viewfinder { min-height: 180px !important; }
+  .pk-omr-viewfinder .pk-omr-viewfinder-hud { inset: 8px; }
+  .pk-omr-viewfinder .pk-omr-control-bar { bottom: 4px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pk-main button, .pk-auth button { transition: none; }
+}

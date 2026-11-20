@@ -64,14 +64,14 @@ export function CameraViewfinder({
   const isBarcodeMode = mode === 'barcode';
 
   return (
-    <div className="relative flex-1 w-full h-full min-h-[380px] sm:min-h-[500px] bg-black rounded-2xl sm:rounded-3xl overflow-hidden flex items-center justify-center select-none">
+    <div className="pk-omr-viewfinder relative flex-1 w-full h-full min-h-[220px] sm:min-h-[340px] bg-black rounded-2xl sm:rounded-3xl overflow-hidden flex items-center justify-center select-none">
       {/* Live Video Feed */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted
-        className="absolute inset-0 w-full h-full object-cover"
+        className="absolute inset-0 w-full h-full object-contain"
       />
 
       {/* Camera Initializing Overlay */}
@@ -83,7 +83,7 @@ export function CameraViewfinder({
       )}
 
       {/* Viewfinder Alignment HUD */}
-      <div className="pointer-events-none absolute inset-2.5 sm:inset-5 flex flex-col justify-between z-10">
+      <div className="pk-omr-viewfinder-hud pointer-events-none absolute inset-2.5 sm:inset-5 flex flex-col justify-between z-10">
         {/* Top Header: Corner Indicators & AI Status Pill */}
         <div className="flex items-start justify-between w-full">
           {/* Top-Left Registration Marker Indicator */}
@@ -162,7 +162,7 @@ export function CameraViewfinder({
               {/* Directional Flipping Trail */}
               <div className="barcode-laser-trail absolute inset-x-0 bottom-0 h-8 pointer-events-none origin-bottom" />
               {/* Solid Laser Beam Line */}
-              <div className="h-0.5 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)]" />
+              <div className="h-0.5 bg-blue-500 shadow-[0_0_8px_rgba(69,104,245,0.65)]" />
             </div>
 
             <div className="flex items-center gap-1 text-[10px] font-bold text-blue-300 z-10">
@@ -221,7 +221,7 @@ export function CameraViewfinder({
       )}
 
       {/* Floating Bottom Touch Controls Bar */}
-      <div className="absolute bottom-3 inset-x-0 flex items-center justify-center gap-3 sm:gap-6 px-4 pointer-events-auto z-20">
+      <div className="pk-omr-control-bar absolute bottom-3 inset-x-0 flex items-center justify-center gap-3 sm:gap-6 px-4 pointer-events-auto z-20">
         {/* Left Control: Upload File Alternative */}
         <label
           className="flex h-11 w-11 items-center justify-center rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 transition cursor-pointer shadow-lg active:scale-95 shrink-0"

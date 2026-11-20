@@ -192,7 +192,7 @@ export function DataTable<TData, TValue = any>({
         <p className="px-4 pt-3 text-[11px] text-gray-500 sm:hidden" aria-hidden="true">
           Swipe sideways to see all columns
         </p>
-        <div className="overflow-x-auto custom-scrollbar touch-pan-x focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" tabIndex={0} role="region" aria-label={`${tableLabel}. Swipe sideways to see more columns.`}>
+        <div className="pk-data-table-scroll overflow-x-auto custom-scrollbar touch-pan-x focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" tabIndex={0} role="region" aria-label={`${tableLabel}. Swipe sideways to see more columns.`}>
           <table className="w-full text-left text-xs border-collapse" style={{ minWidth: `${Math.max(560, columns.length * 112)}px` }}>
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/70 dark:border-gray-800 dark:bg-gray-800/40 text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">

@@ -67,7 +67,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col bg-slate-50 px-4 py-8 dark:bg-gray-950 sm:px-6 sm:py-12 lg:px-8">
+    <main className="pk-auth flex min-h-screen flex-col bg-slate-50 px-4 py-8 dark:bg-gray-950 sm:px-6 sm:py-12 lg:px-8">
       <div className="flex w-full flex-1 items-center justify-center">
       <section className="w-full max-w-md space-y-7 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-9">
         {/* Brand Header */}
