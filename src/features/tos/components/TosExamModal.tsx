@@ -73,9 +73,8 @@ export function TosExamModal({
     } else if (generationJob.job && ['completed', 'partial', 'failed', 'cancelled'].includes(generationJob.job.status)) {
       setIsGenerating(false);
       setGenerationProgress('');
-      if (generationJob.job.status === 'failed') toast.error(generationJob.job.error || 'Exam generation failed. Try again.');
     }
-  }, [generationJob.savedQuestions, generationJob.job?.id, generationJob.job?.status, generationJob.job?.progress?.label, generationJob.job?.queuePosition, generationJob.job?.error, toast]);
+  }, [generationJob.savedQuestions, generationJob.job?.id, generationJob.job?.status, generationJob.job?.progress?.label, generationJob.job?.queuePosition, generationJob.job?.error]);
 
   // Initialize state
   useEffect(() => {
@@ -449,9 +448,19 @@ export function TosExamModal({
                 Generation allowance: {generationJob.quota.hourly.remaining}/{generationJob.quota.hourly.limit} this hour · {generationJob.quota.daily.remaining}/{generationJob.quota.daily.limit} for your school today.
               </p>
             )}
-            {generationJob.retryAfterSeconds > 0 && (
+            {generationJob.helperState === 'busy' && generationJob.retryAfterSeconds > 0 && (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                The previous attempt for this TOS failed recently. You can retry in about {generationJob.retryAfterSeconds} seconds.
+                Groq is temporarily at its shared generation limit. Project KIT has paused new exam requests and will recheck availability automatically. Try again in about {generationJob.retryAfterSeconds} seconds.
+              </div>
+            )}
+            {generationJob.helperState !== 'busy' && generationJob.retryAfterSeconds > 0 && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                A recent generation for this TOS did not complete. You can safely try again in about {generationJob.retryAfterSeconds} seconds. Your saved TOS and existing questions were not changed.
+              </div>
+            )}
+            {generationJob.job?.status === 'failed' && generationJob.retryAfterSeconds <= 0 && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                The last generation attempt did not complete. Your saved TOS and existing questions were not changed. Check Groq availability before trying again.
               </div>
             )}
             {generationJob.quotaAvailable && generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0) && (

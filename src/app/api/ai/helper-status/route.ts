@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   // This is a read-only preview for the teacher UI. The enqueue RPC remains
   // authoritative and applies the same quotas atomically when a job is created.
   const admin = createAdminClient();
-  const [tenantResult, hourlyResult, dailyResult, recentFailureResult] = await Promise.all([
+  const [tenantResult, hourlyResult, dailyResult, recentFailureResult, providerRateLimitResult] = await Promise.all([
     admin.from('tenants').select('ai_hourly_user_limit,ai_daily_school_limit').eq('id', profile.tenant_id).maybeSingle(),
     admin.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('created_by', user.id)
       .neq('status', 'cancelled').or('status.neq.failed,attempts.gt.0')
@@ -31,11 +31,14 @@ export async function GET(request: Request) {
       .neq('status', 'cancelled').or('status.neq.failed,attempts.gt.0')
       .gte('created_at', new Date(now - 24 * 60 * 60_000).toISOString()),
     tosId
-      ? supabase.from('exam_generation_jobs').select('id,updated_at').eq('tenant_id', profile.tenant_id).eq('tos_id', tosId)
-        .is('parent_job_id', null).eq('status', 'failed')
-        .gte('updated_at', new Date(now - 2 * 60_000).toISOString())
+      ? supabase.from('exam_generation_jobs').select('id,updated_at,progress').eq('tenant_id', profile.tenant_id).eq('tos_id', tosId)
+        .is('parent_job_id', null).eq('status', 'failed').ilike('error', '%HTTP 429%')
+        .gte('updated_at', new Date(now - 15 * 60_000).toISOString())
         .order('updated_at', { ascending: false }).limit(1).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
+    admin.from('exam_generation_jobs').select('id,status,error,progress,updated_at').eq('provider', 'groq_api')
+      .in('status', ['queued', 'failed']).gte('updated_at', new Date(now - 15 * 60_000).toISOString())
+      .order('updated_at', { ascending: false }).limit(25),
   ]);
 
   const quotaAvailable = !tenantResult.error && !hourlyResult.error && !dailyResult.error;
@@ -43,13 +46,27 @@ export async function GET(request: Request) {
   const dailyLimit = Math.max(1, Math.trunc(Number(process.env.AI_DAILY_SCHOOL_LIMIT) || Number(tenantResult.data?.ai_daily_school_limit) || 100));
   const hourlyUsed = hourlyResult.count || 0;
   const dailyUsed = dailyResult.count || 0;
-  const retryAt = recentFailureResult.data?.updated_at
-    ? Date.parse(recentFailureResult.data.updated_at) + 2 * 60_000
+  const tosFailureProgress = recentFailureResult.data?.progress && typeof recentFailureResult.data.progress === 'object' ? recentFailureResult.data.progress : {};
+  const tosRetryAt = recentFailureResult.data?.updated_at
+    ? (Date.parse(String(tosFailureProgress.providerRetryAt || '')) || (Date.parse(recentFailureResult.data.updated_at) + 2 * 60_000))
     : 0;
+  // Groq TPM limits apply to the API-key organization, not an individual TOS
+  // or teacher. Share the persisted cooldown across serverless instances.
+  const providerRateLimit = (providerRateLimitResult.data || []).find((job: any) => {
+    const progress = job.progress && typeof job.progress === 'object' ? job.progress : {};
+    return Number(progress.providerStatus) === 429 || /HTTP 429/i.test(String(job.error || ''));
+  }) as any;
+  const providerProgress = providerRateLimit?.progress && typeof providerRateLimit.progress === 'object' ? providerRateLimit.progress : {};
+  const persistedProviderRetryAt = Date.parse(String(providerProgress.providerRetryAt || '')) || 0;
+  const providerRetryAt = providerRateLimit
+    ? (persistedProviderRetryAt || (Date.parse(providerRateLimit.updated_at) + 2 * 60_000))
+    : 0;
+  const retryAt = Math.max(tosRetryAt, providerRetryAt);
   const retryAfterSeconds = Math.max(0, Math.ceil((retryAt - now) / 1000));
 
   return NextResponse.json({
-    state: providers.length ? 'online' : 'offline',
+    state: !providers.length ? 'offline' : providerRetryAt > now ? 'busy' : 'online',
+    providerCooldown: providerRetryAt > now ? { retryAt: new Date(providerRetryAt).toISOString(), retryAfterSeconds: Math.ceil((providerRetryAt - now) / 1000) } : null,
     provider,
     providers,
     model,

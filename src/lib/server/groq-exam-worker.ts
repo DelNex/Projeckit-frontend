@@ -332,10 +332,11 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'AI exam generation failed.';
-    const providerError = error as Error & { status?: number; retryable?: boolean; retryAfterMs?: number | null };
+    const providerError = error as Error & { status?: number; retryable?: boolean; retryAfterMs?: number | null; rateLimit?: Record<string, string | null> | null };
     const status = Number(providerError.status) || null;
     const attempts = Number(claimed.attempts) || 1;
     const maxAttempts = Math.max(1, Number(claimed.max_attempts) || 3);
+    const providerRetryDelayMs = status === 429 ? getExamProviderRetryDelayMs(providerError.retryAfterMs, attempts) : null;
     if (providerError.retryable && attempts < maxAttempts) {
       const retryAfterMs = getExamProviderRetryDelayMs(providerError.retryAfterMs, attempts);
       const now = Date.now();
@@ -346,6 +347,7 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
         progress: {
           stage: 'waiting_for_provider',
           label: `Groq is temporarily busy. Retrying automatically in about ${Math.ceil(retryAfterMs / 1000)} seconds.`,
+          ...(status === 429 ? { providerStatus: 429, providerRetryAt: retryAt, rateLimit: providerError.rateLimit || null } : {}),
         },
         finished_at: null,
         updated_at: new Date(now).toISOString(),
@@ -367,8 +369,10 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
       severity: 'error', source: 'exam.generation-worker', code: 'EXAM_GENERATION_FAILED',
       message, metadata: { jobId, repairDepth, providerStatus: status, attempts, maxAttempts },
     });
+    const providerRetryAt = providerRetryDelayMs ? new Date(Date.now() + providerRetryDelayMs).toISOString() : null;
     const { data: failedOwnedJob } = await admin.from('exam_generation_jobs').update({
       status: 'failed',
+      ...(status === 429 ? { progress: { stage: 'provider_rate_limited', providerStatus: 429, providerRetryAt, retryAfterMs: providerRetryDelayMs, rateLimit: providerError.rateLimit || null } } : {}),
       error: message.slice(0, 500),
       finished_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -382,6 +386,7 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
     if (failedOwnedJob && claimed.parent_job_id) {
       await admin.from('exam_generation_jobs').update({
         status: 'failed',
+        ...(status === 429 ? { progress: { stage: 'provider_rate_limited', providerStatus: 429, providerRetryAt, retryAfterMs: providerRetryDelayMs, rateLimit: providerError.rateLimit || null } } : {}),
         error: message.slice(0, 500),
         finished_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
