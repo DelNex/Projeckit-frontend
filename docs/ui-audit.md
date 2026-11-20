@@ -79,4 +79,4 @@ This pass is a source-level responsive and interaction audit. GitHub Actions pro
 - TypeScript check: pending latest branch run.
 - Schema contract and complete unit test suite: pending latest branch run.
 - Production build: pending latest branch run.
-- Visual viewport review: pending browser screenshot coverage.
+- Login and registration layout smoke tests: added for 320px, 390px, 768px and 1440px viewports; checks document overflow, control bounds, mobile input sizing and button hit targets. These are DOM geometry checks, not screenshot-based visual review.
