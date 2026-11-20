@@ -451,7 +451,7 @@ export function TosExamModal({
                   : generationJob.job?.status === 'running'
                     ? `${generationJob.job.progress?.label || generationProgress} This is running in the background, you can leave this page.`
                     : generationJob.job?.status === 'queued'
-                      ? `Queued (position ${generationJob.job.queuePosition || 1}). Groq AI will process this exam in the background. This is running in the background, you can leave this page.`
+                      ? `Queued (position ${generationJob.job.queuePosition || 1}). AI will process this exam in the background. This is running in the background, you can leave this page.`
                       : generationProgress}</span>
                 {['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '') && <button onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="ml-auto rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700">Cancel</button>}
               </div>
