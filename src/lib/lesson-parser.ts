@@ -268,7 +268,7 @@ export async function resumePendingLessonExtraction(
 ): Promise<(LessonExtractionClientResult & { teacherInstructions?: string }) | null> {
   const pending = readPending(tosId, contextId);
   if (!pending) return null;
-  const documents: Array<{ name: string; text: string }> = [];
+  const documents: Array<{ name: string; text: string; lowConfidencePages?: number[] }> = [];
   for (const [index, job] of pending.jobs.entries()) {
     const result = await waitForJob(job, index + 1, pending.jobs.length, onProgress);
     documents.push({ name: result.name || job.fileName, text: result.text, lowConfidencePages: result.lowConfidencePages });
