@@ -40,6 +40,12 @@ type ExtractionJob = {
   documents?: Array<{ name: string; text: string; lowConfidencePages?: number[] }>;
 };
 
+export interface LessonStorageAdapter {
+  getUserId(): Promise<string | null>;
+  upload(storagePath: string, file: File): Promise<void>;
+  remove(storagePaths: string[]): Promise<void>;
+}
+
 type PendingExtractionRecord = {
   tosId: string;
   contextId: string;
@@ -76,6 +82,26 @@ function readPending(tosId: string, contextId = 'exam-generator'): PendingExtrac
 
 export function clearPendingLessonExtraction(tosId: string, contextId = 'exam-generator') {
   if (typeof window !== 'undefined') window.localStorage.removeItem(pendingKey(tosId, contextId));
+}
+
+async function createSupabaseStorageAdapter(): Promise<LessonStorageAdapter> {
+  const supabase = createClient();
+  return {
+    getUserId: async () => {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user) return null;
+      return user.id;
+    },
+    upload: async (storagePath, file) => {
+      const { error } = await supabase.storage.from(LESSON_UPLOAD_BUCKET).upload(storagePath, file, {
+        contentType: file.type || 'application/octet-stream', cacheControl: '3600', upsert: false,
+      });
+      if (error) throw new Error(error.message || 'Could not upload ' + file.name + '. Check your connection and retry.');
+    },
+    remove: async (storagePaths) => {
+      if (storagePaths.length) await supabase.storage.from(LESSON_UPLOAD_BUCKET).remove(storagePaths);
+    },
+  };
 }
 
 function wait(ms: number) {
@@ -163,6 +189,7 @@ export async function extractTextFromFiles(
     tosId?: string;
     contextId?: string;
     teacherInstructions?: string;
+    storageAdapter?: LessonStorageAdapter;
   },
 ): Promise<LessonExtractionClientResult> {
   if (!files?.length) throw new Error('No files selected for text extraction.');
@@ -173,9 +200,9 @@ export async function extractTextFromFiles(
     }
   }
 
-  const supabase = createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) throw new Error('Your session expired. Sign in again before uploading lesson files.');
+  const storage = options?.storageAdapter || await createSupabaseStorageAdapter();
+  const userId = await storage.getUserId();
+  if (!userId) throw new Error('Your session expired. Sign in again before uploading lesson files.');
 
   const uploaded: Array<{ storagePath: string; fileName: string; mimeType: string; size: number }> = [];
   try {
@@ -184,13 +211,8 @@ export async function extractTextFromFiles(
       if (!ALLOWED_FILE_EXTENSIONS.has(extension)) {
         throw new Error("'" + file.name + "' is not a supported lesson file.");
       }
-      const storagePath = user.id + '/ocr-source/' + crypto.randomUUID() + '.' + extension;
-      const { error: uploadError } = await supabase.storage.from(LESSON_UPLOAD_BUCKET).upload(storagePath, file, {
-        contentType: file.type || 'application/octet-stream',
-        cacheControl: '3600',
-        upsert: false,
-      });
-      if (uploadError) throw new Error(uploadError.message || 'Could not upload ' + file.name + '. Check your connection and retry.');
+      const storagePath = userId + '/ocr-source/' + crypto.randomUUID() + '.' + extension;
+      await storage.upload(storagePath, file);
       uploaded.push({
         storagePath,
         fileName: file.name,
@@ -232,12 +254,9 @@ export async function extractTextFromFiles(
     }
     return buildResult(documents);
   } catch (error) {
-    if (uploaded.length) {
-      await supabase.storage.from(LESSON_UPLOAD_BUCKET).remove(uploaded.map((file) => file.storagePath)).catch(() => undefined);
-    }
+    if (uploaded.length) await storage.remove(uploaded.map((file) => file.storagePath)).catch(() => undefined);
     throw error;
   }
-
 }
 
 export async function resumePendingLessonExtraction(
