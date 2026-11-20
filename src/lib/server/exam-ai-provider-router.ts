@@ -113,7 +113,11 @@ async function requestProvider(provider: ProviderConfig, messages: Array<{ role:
       },
       body: JSON.stringify({
         model: provider.model, messages, temperature: 0.2, max_completion_tokens: 8192,
-        response_format: { type: 'json_schema', json_schema: { name: 'project_kit_exam_questions', strict: true, schema } },
+        // Groq's strict JSON Schema mode rejects parts of our valid nested schema on some model versions.
+        // Request JSON mode from Groq and keep full schema enforcement in validateExamQuestions/finalizeExamJob.
+        response_format: isGroq
+          ? { type: 'json_object' }
+          : { type: 'json_schema', json_schema: { name: 'project_kit_exam_questions', strict: true, schema } },
       }),
       signal: timeout, cache: 'no-store',
     });
