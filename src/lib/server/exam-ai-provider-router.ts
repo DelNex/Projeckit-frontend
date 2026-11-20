@@ -128,7 +128,14 @@ export async function requestExamQuestionsFromProviders(
   jobDeadline?: number,
 ): Promise<string> {
   const providers = providerConfigs();
-  if (!providers.length) throw new Error('No exam AI provider is configured. Add at least one server-side provider API key.');
+  if (!providers.length) {
+    await logSystemEvent({
+      severity: 'error', source: 'exam.provider-router', code: 'AI_PROVIDER_NOT_CONFIGURED',
+      message: 'Exam generation was requested but no server-side AI provider key is configured.',
+      metadata: { configuredProviderCount: 0 },
+    });
+    throw new Error('No exam AI provider is configured. Add at least one server-side provider API key.');
+  }
   const failures: string[] = [];
   // The caller is a 60-second Next.js route. Keep provider failover inside a
   // 50-second budget so the job lease can be renewed/finalized safely.
@@ -145,7 +152,13 @@ export async function requestExamQuestionsFromProviders(
     }
     const cooldown = cooldownUntil.get(provider.id) || 0;
     if (cooldown > Date.now()) {
+      const retryAfterMs = cooldown - Date.now();
       failures.push(`${provider.id} is rate-limited until its cooldown expires`);
+      await logSystemEvent({
+        severity: 'warn', source: 'exam.provider-router', code: 'AI_PROVIDER_COOLDOWN_ACTIVE',
+        message: 'An exam provider was skipped because its rate-limit cooldown is still active.',
+        metadata: { provider: provider.id, retryAfterMs },
+      });
       continue;
     }
     try {
