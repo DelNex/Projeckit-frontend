@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import { buildTosBlueprintSlots } from '@/lib/exam-types';
 import { useExamGenerationJob } from '@/lib/exam-generation-client';
-import { getLocalDocumentCapacity } from '@/lib/local-document-engine';
 import { EXAM_SOURCE_FILE_ACCEPT, isSupportedExamSourceFileName } from '@/lib/exam-generation-files';
 
 interface ExamGeneratorModalProps {
@@ -168,15 +167,15 @@ export function ExamGeneratorModal({
     }
 
     const validFiles: File[] = [];
-    const capacity = await getLocalDocumentCapacity();
+    const maxFileBytes = 20 * 1024 * 1024;
     for (const file of incoming) {
       if (!isSupportedExamSourceFileName(file.name)) {
         toast.error(`'${file.name}' is not supported. Use PDF, DOCX, PPTX, TXT, Markdown, or an image file.`);
         return;
       }
 
-      if (file.size > capacity.maxFileBytes) {
-        toast.error(`This file is ${Math.ceil(file.size / (1024 * 1024))} MB. The server accepts files up to ${capacity.maxFileMb} MB each.`);
+      if (file.size > maxFileBytes) {
+        toast.error(`This file is ${Math.ceil(file.size / (1024 * 1024))} MB. The server accepts files up to 20 MB each.`);
         return;
       }
 
