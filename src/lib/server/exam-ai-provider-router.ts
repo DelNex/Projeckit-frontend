@@ -58,12 +58,14 @@ async function readProviderResponse(response: Response, provider: ProviderId): P
   const body: any = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 429) {
-      cooldownUntil.set(provider, Date.now() + parseRetryAfter(response.headers.get('retry-after')));
+      const retryAfterMs = parseRetryAfter(response.headers.get('retry-after'));
+      cooldownUntil.set(provider, Date.now() + retryAfterMs);
     }
     const detail = String(body?.error?.message || body?.message || body?.errors?.[0]?.message || 'Provider request failed').slice(0, 180);
     throw Object.assign(new Error(`${provider} returned HTTP ${response.status}: ${detail}`), {
       status: response.status,
       retryable: isRetryableProviderStatus(response.status),
+      retryAfterMs: response.status === 429 ? parseRetryAfter(response.headers.get('retry-after')) : null,
     });
   }
 
@@ -137,6 +139,9 @@ export async function requestExamQuestionsFromProviders(
     throw new Error('No exam AI provider is configured. Add at least one server-side provider API key.');
   }
   const failures: string[] = [];
+  let lastStatus: number | null = null;
+  let lastRetryable = false;
+  let lastRetryAfterMs: number | null = null;
   // The caller is a 60-second Next.js route. Keep provider failover inside a
   // 50-second budget so the job lease can be renewed/finalized safely.
   const totalSetting = Number(process.env.AI_PROVIDER_TOTAL_TIMEOUT_MS || 50_000);
@@ -166,9 +171,13 @@ export async function requestExamQuestionsFromProviders(
     } catch (error) {
       const message = error instanceof Error ? error.message : `${provider.id} request failed`;
       const status = Number((error as Error & { status?: number }).status) || null;
+      const retryAfterMs = Number((error as Error & { retryAfterMs?: number }).retryAfterMs) || null;
       const retryable = Boolean((error as Error & { retryable?: boolean }).retryable)
         || error instanceof SyntaxError
         || /timeout|fetch failed|network|returned no questions/i.test(message);
+      lastStatus = status;
+      lastRetryable = retryable;
+      lastRetryAfterMs = retryAfterMs;
       const safeDetail = message.replace(/\s+/g, ' ').slice(0, 180);
       failures.push(`${provider.id}${status ? ` HTTP ${status}` : ''}: ${safeDetail}`);
       await logSystemEvent({
@@ -180,5 +189,8 @@ export async function requestExamQuestionsFromProviders(
       if (!retryable) break;
     }
   }
-  throw new Error(`No configured AI provider could complete this batch. ${failures.join(' | ').slice(0, 700)}`);
+  throw Object.assign(
+    new Error(`No configured AI provider could complete this batch. ${failures.join(' | ').slice(0, 700)}`),
+    { status: lastStatus, retryable: lastRetryable, retryAfterMs: lastRetryAfterMs },
+  );
 }

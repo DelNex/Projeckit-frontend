@@ -26,6 +26,14 @@ export function splitExamSlotsIntoBatches<T>(slots: readonly T[]): T[][] {
   return batches;
 }
 
+/** Respect provider Retry-After while bounding queued retries to 15 minutes. */
+export function getExamProviderRetryDelayMs(retryAfterMs: number | null | undefined, attempt: number): number {
+  const safeAttempt = Number.isFinite(attempt) ? Math.max(1, Math.trunc(attempt)) : 1;
+  const fallback = 30_000 * (2 ** Math.min(4, safeAttempt - 1));
+  const requested = Number.isFinite(retryAfterMs) && Number(retryAfterMs) > 0 ? Number(retryAfterMs) : fallback;
+  return Math.max(1_000, Math.min(15 * 60_000, requested));
+}
+
 const QUESTION_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -206,6 +214,8 @@ export async function runNextGroqExamJobs(admin = createAdminClient(), limit = 4
       .select('id,tenant_id,created_at')
       .eq('provider', 'groq_api')
       .in('status', ['queued', 'needs_attention'])
+      // For queued retries, lease_expires_at is the durable not-before time.
+      .or(`lease_expires_at.is.null,lease_expires_at.lte.${now}`)
       .order('created_at', { ascending: true })
       .limit(100),
     admin.from('exam_generation_jobs')
@@ -322,9 +332,40 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'AI exam generation failed.';
+    const providerError = error as Error & { status?: number; retryable?: boolean; retryAfterMs?: number | null };
+    const status = Number(providerError.status) || null;
+    const attempts = Number(claimed.attempts) || 1;
+    const maxAttempts = Math.max(1, Number(claimed.max_attempts) || 3);
+    if (providerError.retryable && attempts < maxAttempts) {
+      const retryAfterMs = getExamProviderRetryDelayMs(providerError.retryAfterMs, attempts);
+      const now = Date.now();
+      const retryAt = new Date(now + retryAfterMs).toISOString();
+      const { data: retryJob } = await admin.from('exam_generation_jobs').update({
+        status: 'queued',
+        error: 'Groq is temporarily busy. Your exam is safely queued and will retry automatically.',
+        progress: {
+          stage: 'waiting_for_provider',
+          label: `Groq is temporarily busy. Retrying automatically in about ${Math.ceil(retryAfterMs / 1000)} seconds.`,
+        },
+        finished_at: null,
+        updated_at: new Date(now).toISOString(),
+        payload,
+        claimed_by: null,
+        // A queued job with a future lease timestamp is not eligible for claim.
+        lease_expires_at: retryAt,
+      }).eq('id', jobId).eq('claimed_by', workerId).eq('status', 'running').select('id').maybeSingle();
+      if (retryJob) {
+        await logSystemEvent({
+          severity: 'warn', source: 'exam.generation-worker', code: 'EXAM_PROVIDER_RETRY_SCHEDULED',
+          message: 'An exam job was requeued after a temporary AI provider failure.',
+          metadata: { jobId, providerStatus: status, attempt: attempts, maxAttempts, retryAfterMs },
+        });
+        return;
+      }
+    }
     await logSystemEvent({
       severity: 'error', source: 'exam.generation-worker', code: 'EXAM_GENERATION_FAILED',
-      message, metadata: { jobId, repairDepth },
+      message, metadata: { jobId, repairDepth, providerStatus: status, attempts, maxAttempts },
     });
     const { data: failedOwnedJob } = await admin.from('exam_generation_jobs').update({
       status: 'failed',

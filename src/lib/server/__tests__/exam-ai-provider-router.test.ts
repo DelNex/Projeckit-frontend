@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildGroqMessages, chooseNextExamJob } from '../groq-exam-worker';
+import { buildGroqMessages, chooseNextExamJob, getExamProviderRetryDelayMs } from '../groq-exam-worker';
 import { buildExamPrompt } from '../exam-jobs';
 import { getConfiguredExamProviders } from '../exam-ai-provider-router';
 
@@ -197,4 +197,39 @@ test('Cloudflare adapter preserves the model path and parses Workers AI response
       else process.env[name] = previous[name];
     }
   }
+});
+
+test('Groq 429 preserves Retry-After metadata for the durable worker retry', async () => {
+  const names = ['GROQ_API_KEY', 'AI_PROVIDER_ORDER'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  try {
+    process.env.GROQ_API_KEY = 'test-groq-key';
+    process.env.AI_PROVIDER_ORDER = 'groq';
+    global.fetch = (async () => new Response(JSON.stringify({
+      error: { message: 'Rate limit reached for tokens per minute' },
+    }), {
+      status: 429,
+      headers: { 'content-type': 'application/json', 'retry-after': '12' },
+    })) as typeof fetch;
+    const { requestExamQuestionsFromProviders } = await import('../exam-ai-provider-router');
+    await assert.rejects(
+      requestExamQuestionsFromProviders([{ role: 'user', content: 'Create one question.' }], { type: 'object' }),
+      (error: any) => error.status === 429 && error.retryable === true && error.retryAfterMs === 12_000,
+    );
+  } finally {
+    global.fetch = originalFetch;
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
+test('Groq retry delay respects Retry-After and applies bounded exponential backoff', () => {
+  assert.equal(getExamProviderRetryDelayMs(12_000, 1), 12_000);
+  assert.equal(getExamProviderRetryDelayMs(null, 1), 30_000);
+  assert.equal(getExamProviderRetryDelayMs(null, 2), 60_000);
+  assert.equal(getExamProviderRetryDelayMs(null, 3), 120_000);
+  assert.equal(getExamProviderRetryDelayMs(60 * 60_000, 1), 15 * 60_000);
 });
