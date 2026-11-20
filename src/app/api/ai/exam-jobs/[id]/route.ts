@@ -64,7 +64,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       const count = await admin.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('provider', 'groq_api').eq('status', 'queued').lte('created_at', job.created_at);
       queuePosition = count.count || 1;
     }
-    return NextResponse.json({ id: job.id, tosId: job.tos_id, status: job.status, progress: job.progress, error: job.status === 'failed' ? teacherExamErrorMessage(job.error) : job.error, resultSummary: job.result_summary, queuePosition }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ id: job.id, tosId: job.tos_id, status: job.status, progress: job.progress, error: job.error ? teacherExamErrorMessage(job.error) : null, resultSummary: job.result_summary, queuePosition }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     await logSystemEvent({
       severity: 'error', source: 'exam.jobs.status', code: 'EXAM_JOB_STATUS_FAILED',
