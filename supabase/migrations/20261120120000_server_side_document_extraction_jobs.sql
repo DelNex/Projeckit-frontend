@@ -2,12 +2,12 @@
 -- Original documents and extracted results remain in the existing private lesson-uploads bucket.
 create table if not exists public.document_extraction_jobs (
   id uuid primary key default gen_random_uuid(),
-  tenant_id uuid not null,
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
   created_by uuid not null references auth.users(id) on delete cascade,
   source_path text not null,
   source_name text not null,
   source_mime text not null,
-  source_bytes bigint not null check (source_bytes > 0 and source_bytes <= 52428800),
+  source_bytes bigint not null check (source_bytes > 0 and source_bytes <= 20971520),
   result_path text,
   status text not null default 'queued'
     check (status in ('queued','processing','completed','failed','cancelled')),
@@ -37,7 +37,6 @@ grant all on public.document_extraction_jobs to service_role;
 create or replace function public.claim_document_extraction_job(p_worker_id text, p_lease_seconds integer default 180)
 returns setof public.document_extraction_jobs
 language plpgsql
-security definer
 set search_path = public, pg_temp
 as $$
 begin
