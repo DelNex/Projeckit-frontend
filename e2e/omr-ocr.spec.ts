@@ -1,123 +1,68 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { deflateSync } from 'node:zlib';
-import { PNG } from 'pngjs';
 import { expect, test } from '@playwright/test';
 
-function createImageOnlyPdf(pngBytes: Buffer): Buffer {
-  const png = PNG.sync.read(pngBytes);
-  const rgb = Buffer.alloc(png.width * png.height * 3);
-  for (let source = 0, target = 0; source < png.data.length; source += 4) {
-    rgb[target++] = png.data[source];
-    rgb[target++] = png.data[source + 1];
-    rgb[target++] = png.data[source + 2];
-  }
-  const compressed = deflateSync(rgb);
-  const content = Buffer.from('q\n' + png.width + ' 0 0 ' + png.height + ' 0 0 cm\n/Im0 Do\nQ\n');
-  const objects: Buffer[] = [
-    Buffer.from('<< /Type /Catalog /Pages 2 0 R >>'),
-    Buffer.from('<< /Type /Pages /Kids [3 0 R] /Count 1 >>'),
-    Buffer.from('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + png.width + ' ' + png.height + '] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>'),
-    Buffer.concat([
-      Buffer.from('<< /Type /XObject /Subtype /Image /Width ' + png.width + ' /Height ' + png.height + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length ' + compressed.length + ' >>\nstream\n'),
-      compressed,
-      Buffer.from('\nendstream'),
-    ]),
-    Buffer.concat([
-      Buffer.from('<< /Length ' + content.length + ' >>\nstream\n'),
-      content,
-      Buffer.from('endstream'),
-    ]),
-  ];
+test('lesson OCR validation uses backend jobs and does not load browser OCR assets', async ({ page }) => {
+  test.setTimeout(90_000);
+  const jobs = new Map<string, { name: string; text: string }>();
+  const requests: string[] = [];
+  let nextJob = 0;
 
-  const parts: Buffer[] = [Buffer.from('%PDF-1.4\n')];
-  const offsets: number[] = [];
-  let offset = parts[0].length;
-  for (let index = 0; index < objects.length; index += 1) {
-    offsets.push(offset);
-    const object = Buffer.concat([
-      Buffer.from((index + 1) + ' 0 obj\n'),
-      objects[index],
-      Buffer.from('\nendobj\n'),
-    ]);
-    parts.push(object);
-    offset += object.length;
-  }
+  await page.route('**/api/backend/ai/lesson-extraction/jobs', async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const id = '00000000-0000-4000-8000-' + String(++nextJob).padStart(12, '0');
+    const fixture = nextJob === 1
+      ? { name: 'photosynthesis_lesson_photo.png', text: 'PHOTOSYNTHESIS. Plants use light energy to make chemical energy.' }
+      : nextJob === 2
+        ? { name: 'photosynthesis_lesson_scanned.pdf', text: '[Page 1]\\nPHOTOSYNTHESIS. Carbon dioxide and water produce glucose and oxygen.' }
+        : { name: 'real_world_scan_photo.png', text: 'Lesson notes. Learning objectives and classroom activity.' };
+    jobs.set(id, fixture);
+    requests.push('POST');
+    await route.fulfill({ status: 202, contentType: 'application/json', body: JSON.stringify({ jobs: [{ id, fileName: fixture.name, status: 'queued' }] }) });
+  });
 
-  const xrefOffset = offset;
-  const xref = 'xref\n0 ' + (objects.length + 1) + '\n0000000000 65535 f \n' +
-    offsets.map((value) => String(value).padStart(10, '0') + ' 00000 n \n').join('');
-  parts.push(Buffer.from(xref + 'trailer\n<< /Size ' + (objects.length + 1) + ' /Root 1 0 R >>\nstartxref\n' + xrefOffset + '\n%%EOF'));
-  return Buffer.concat(parts);
-}
+  await page.route('**/api/backend/ai/lesson-extraction/jobs/*', async (route) => {
+    const id = route.request().url().split('/').pop() || '';
+    const fixture = jobs.get(id);
+    if (!fixture) return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ message: 'Job not found.' }) });
+    requests.push('GET');
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id,
+        status: 'completed',
+        progress: { stage: 'completed', percent: 100, label: 'Lesson document is ready' },
+        documents: [{ name: fixture.name, text: fixture.text, lowConfidencePages: [] }],
+      }),
+    });
+  });
 
-test('production local document worker OCRs both photos and image-only PDFs using same-origin assets', async ({ page }) => {
-  test.setTimeout(240_000);
-  const ocrRequests: string[] = [];
+  const browserOcrRequests: string[] = [];
   page.on('request', (request) => {
-    if (request.url().includes('/ocr/')) ocrRequests.push(request.url());
+    if (request.url().includes('/ocr/')) browserOcrRequests.push(request.url());
   });
 
   await page.goto('/omr-validation');
-  const lessonPngBase64 = await page.evaluate(async () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 2200;
-    canvas.height = 460;
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('Could not create the scanned lesson fixture.');
-    context.fillStyle = '#ffffff';
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.fillStyle = '#111111';
-    context.font = 'bold 76px Arial';
-    context.fillText('PHOTOSYNTHESIS', 60, 125);
-    context.font = '54px Arial';
-    context.fillText('Plants use light energy to make chemical energy.', 60, 235);
-    context.fillText('Carbon dioxide and water produce glucose and oxygen.', 60, 335);
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Could not encode the scanned lesson fixture.')), 'image/png');
-    });
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    let binary = '';
-    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
-      binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-    }
-    return btoa(binary);
-  });
-  const lessonImage = Buffer.from(lessonPngBase64, 'base64');
-  const lessonPdf = createImageOnlyPdf(lessonImage);
-  const fixturePath = path.resolve('src/features/omr/__tests__/fixtures/real_world_scan.png');
-  expect(fs.existsSync(fixturePath)).toBe(true);
-  const realWorldImage = fs.readFileSync(fixturePath);
   const output = page.getByTestId('ocr-browser-result');
   const input = page.getByTestId('ocr-file-input');
 
-  for (const file of [
-    { name: 'photosynthesis_lesson_photo.png', mimeType: 'image/png', buffer: lessonImage },
-    { name: 'photosynthesis_lesson_scanned.pdf', mimeType: 'application/pdf', buffer: lessonPdf },
-    { name: 'real_world_scan_photo.png', mimeType: 'image/png', buffer: realWorldImage },
-  ]) {
-    const previousResult = await output.textContent();
+  const files = [
+    { name: 'photosynthesis_lesson_photo.png', mimeType: 'image/png', buffer: Buffer.from('photo fixture') },
+    { name: 'photosynthesis_lesson_scanned.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 test fixture') },
+    { name: 'real_world_scan_photo.png', mimeType: 'image/png', buffer: Buffer.from('scan fixture') },
+  ];
+
+  for (const file of files) {
     await input.setInputFiles(file);
     await expect.poll(async () => {
       const value = await output.textContent();
-      return Boolean(value && value !== 'RUNNING' && value !== 'WAITING' && value !== previousResult);
-    }, { timeout: 180_000 }).toBe(true);
-    const result = JSON.parse(await output.textContent() || '{}') as {
-      outcome: string;
-      text?: string;
-      error?: string;
-      lowConfidencePages?: number[];
-    };
-    expect(result, result.error || 'Local OCR did not complete').toMatchObject({ outcome: 'PASS' });
+      return Boolean(value && value !== 'RUNNING' && value !== 'WAITING');
+    }).toBe(true);
+    const result = JSON.parse(await output.textContent() || '{}') as { outcome: string; text?: string; error?: string };
+    expect(result, result.error || 'Server extraction result was not returned').toMatchObject({ outcome: 'PASS' });
     expect((result.text || '').length).toBeGreaterThan(10);
-    if (file.name.endsWith('.pdf')) expect(result.text).toContain('[Page 1]');
-    if (file.name.startsWith('photosynthesis_')) {
-      expect((result.text || '').toUpperCase()).toContain('PHOTOSYNTHESIS');
-      expect((result.text || '').toUpperCase()).toContain('CHEMICAL ENERGY');
-    }
   }
 
-  expect(ocrRequests.length).toBeGreaterThan(0);
-  expect(ocrRequests.every((url) => new URL(url).origin === new URL(page.url()).origin)).toBe(true);
-  expect(ocrRequests.some((url) => /cdn\.jsdelivr|unpkg\.com|tessdata\.projectnaptha/i.test(url))).toBe(false);
+  expect(requests.filter((method) => method === 'POST')).toHaveLength(3);
+  expect(requests.filter((method) => method === 'GET')).toHaveLength(3);
+  expect(browserOcrRequests).toHaveLength(0);
 });
