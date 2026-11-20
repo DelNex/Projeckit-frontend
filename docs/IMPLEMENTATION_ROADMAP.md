@@ -94,5 +94,5 @@ Acceptance: administrators can identify a failed request from its request ID wit
 - Keep Supabase/Postgres as the existing source of truth; do not add Redis unless measured queue throughput justifies it.
 - Use Supabase Storage for private source objects and PostgreSQL for metadata, manifests, and job state.
 - Evaluate `pgmq` separately; do not migrate away from the current lease-based queue until comparative tests prove a benefit.
-- Keep lesson OCR on the backend and make remote AI provider use explicit and policy-compliant. The browser must not run lesson OCR or retain original lesson files in IndexedDB.
+- Keep lesson OCR on the backend and make remote AI provider use explicit and policy-compliant. The lesson-generation upload path must not run OCR on the phone or retain original lesson files in browser storage.
 - Do not claim end-to-end success until browser, database, worker, provider, and saved-exam results are all verified.
