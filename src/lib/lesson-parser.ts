@@ -8,7 +8,7 @@
 
 export interface LessonExtractionClientResult {
   text: string;
-  documents: Array<{ name: string; text: string }>;
+  documents: Array<{ name: string; text: string; lowConfidencePages?: number[] }>;
   charCount: number;
   filesProcessed: number;
   truncated: boolean;
@@ -124,7 +124,7 @@ async function waitForJob(
   throw new Error('Document processing is taking longer than expected. The job is saved on the server. Return later and try again.');
 }
 
-function buildResult(documents: Array<{ name: string; text: string }>): LessonExtractionClientResult {
+function buildResult(documents: Array<{ name: string; text: string; lowConfidencePages?: number[] }>): LessonExtractionClientResult {
   const charCount = documents.reduce((total, document) => total + document.text.length, 0);
   if (charCount > MAX_CHARACTERS) {
     throw new Error('These documents contain more than 900,000 readable characters. Split them into smaller chapter groups.');
@@ -185,10 +185,10 @@ export async function extractTextFromFiles(
     } satisfies PendingExtractionRecord));
   }
 
-  const documents: Array<{ name: string; text: string }> = [];
+  const documents: Array<{ name: string; text: string; lowConfidencePages?: number[] }> = [];
   for (const [index, job] of data.jobs.entries()) {
     const result = await waitForJob(job, index + 1, files.length, options?.onProgress);
-    documents.push({ name: result.name || job.fileName, text: result.text });
+    documents.push({ name: result.name || job.fileName, text: result.text, lowConfidencePages: result.lowConfidencePages });
   }
   return buildResult(documents);
 }
@@ -202,7 +202,7 @@ export async function resumePendingLessonExtraction(
   const documents: Array<{ name: string; text: string }> = [];
   for (const [index, job] of pending.jobs.entries()) {
     const result = await waitForJob(job, index + 1, pending.jobs.length, onProgress);
-    documents.push({ name: result.name || job.fileName, text: result.text });
+    documents.push({ name: result.name || job.fileName, text: result.text, lowConfidencePages: result.lowConfidencePages });
   }
   return { ...buildResult(documents), teacherInstructions: pending.teacherInstructions };
 }
