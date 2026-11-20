@@ -1,9 +1,9 @@
 /**
  * Project KIT — Server-side lesson document extraction.
  *
- * The browser only uploads original files and checks job progress.
+ * The browser uploads original files and checks job progress.
  * PDF parsing, image OCR, and document extraction run on the backend.
- * Closing this page does not stop a queued extraction job.
+ * The backend job continues if the teacher closes this page.
  */
 
 export interface LessonExtractionClientResult {
@@ -35,10 +35,42 @@ type ExtractionJob = {
   documents?: Array<{ name: string; text: string; lowConfidencePages?: number[] }>;
 };
 
+type PendingExtractionRecord = {
+  tosId: string;
+  jobs: Array<{ id: string; fileName: string }>;
+  teacherInstructions?: string;
+  createdAt: number;
+};
+
 const MAX_FILES = 5;
 const MAX_CHARACTERS = 900_000;
 const POLL_INTERVAL_MS = 2500;
 const JOB_TIMEOUT_MS = 30 * 60 * 1000;
+const PENDING_JOB_KEY_PREFIX = 'projectkit:lesson-ocr:';
+
+function pendingKey(tosId: string) {
+  return PENDING_JOB_KEY_PREFIX + tosId;
+}
+
+function readPending(tosId: string): PendingExtractionRecord | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(pendingKey(tosId));
+    if (!raw) return null;
+    const value = JSON.parse(raw) as PendingExtractionRecord;
+    if (value.tosId !== tosId || !Array.isArray(value.jobs) || Date.now() - value.createdAt > 24 * 60 * 60 * 1000) {
+      window.localStorage.removeItem(pendingKey(tosId));
+      return null;
+    }
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPendingLessonExtraction(tosId: string) {
+  if (typeof window !== 'undefined') window.localStorage.removeItem(pendingKey(tosId));
+}
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -68,7 +100,6 @@ async function waitForJob(
       cache: 'no-store',
     });
     const data = await readJson(response) as ExtractionJob;
-
     const stage = data.progress?.stage === 'ocr' ? 'ocr' : 'extracting';
     onProgress?.({
       stage,
@@ -78,7 +109,6 @@ async function waitForJob(
       fileCount,
       fileName: job.fileName,
     });
-
     if (data.status === 'completed') {
       const document = data.documents?.[0];
       if (!document || typeof document.text !== 'string' || !document.text.trim()) {
@@ -94,6 +124,20 @@ async function waitForJob(
   throw new Error('Document processing is taking longer than expected. The job is saved on the server. Return later and try again.');
 }
 
+function buildResult(documents: Array<{ name: string; text: string }>): LessonExtractionClientResult {
+  const charCount = documents.reduce((total, document) => total + document.text.length, 0);
+  if (charCount > MAX_CHARACTERS) {
+    throw new Error('These documents contain more than 900,000 readable characters. Split them into smaller chapter groups.');
+  }
+  return {
+    text: documents.map((document) => '--- ' + document.name + ' ---\\n' + document.text).join('\\n\\n'),
+    documents,
+    charCount,
+    filesProcessed: documents.length,
+    truncated: false,
+  };
+}
+
 export async function extractTextFromFile(file: File): Promise<string> {
   const result = await extractTextFromFiles([file]);
   return result.text;
@@ -101,14 +145,22 @@ export async function extractTextFromFile(file: File): Promise<string> {
 
 export async function extractTextFromFiles(
   files: File[],
-  options?: { onProgress?: (progress: LessonExtractionProgress) => void },
+  options?: {
+    onProgress?: (progress: LessonExtractionProgress) => void;
+    tosId?: string;
+    teacherInstructions?: string;
+  },
 ): Promise<LessonExtractionClientResult> {
   if (!files?.length) throw new Error('No files selected for text extraction.');
   if (files.length > MAX_FILES) throw new Error('Maximum 5 files allowed per upload.');
+  for (const file of files) {
+    if (file.size > 20 * 1024 * 1024) {
+      throw new Error("'" + file.name + "' is larger than the 20 MB per-file upload limit.");
+    }
+  }
 
   const form = new FormData();
   for (const file of files) form.append('files', file, file.name);
-
   const response = await fetch('/api/backend/ai/lesson-extraction/jobs', {
     method: 'POST',
     body: form,
@@ -118,26 +170,39 @@ export async function extractTextFromFiles(
   if (!Array.isArray(data.jobs) || data.jobs.length !== files.length) {
     throw new Error('The server did not accept all lesson files. Please retry the upload.');
   }
-
-  const documents: Array<{ name: string; text: string }> = [];
-  for (const [index, job] of data.jobs.entries()) {
+  for (const job of data.jobs) {
     if (!job || typeof job.id !== 'string' || typeof job.fileName !== 'string') {
       throw new Error('The server returned an invalid document processing job.');
     }
+  }
+
+  if (options?.tosId && typeof window !== 'undefined') {
+    window.localStorage.setItem(pendingKey(options.tosId), JSON.stringify({
+      tosId: options.tosId,
+      jobs: data.jobs,
+      teacherInstructions: options.teacherInstructions,
+      createdAt: Date.now(),
+    } satisfies PendingExtractionRecord));
+  }
+
+  const documents: Array<{ name: string; text: string }> = [];
+  for (const [index, job] of data.jobs.entries()) {
     const result = await waitForJob(job, index + 1, files.length, options?.onProgress);
     documents.push({ name: result.name || job.fileName, text: result.text });
   }
+  return buildResult(documents);
+}
 
-  const charCount = documents.reduce((total, document) => total + document.text.length, 0);
-  if (charCount > MAX_CHARACTERS) {
-    throw new Error('These documents contain more than 900,000 readable characters. Split them into smaller chapter groups.');
+export async function resumePendingLessonExtraction(
+  tosId: string,
+  onProgress?: (progress: LessonExtractionProgress) => void,
+): Promise<(LessonExtractionClientResult & { teacherInstructions?: string }) | null> {
+  const pending = readPending(tosId);
+  if (!pending) return null;
+  const documents: Array<{ name: string; text: string }> = [];
+  for (const [index, job] of pending.jobs.entries()) {
+    const result = await waitForJob(job, index + 1, pending.jobs.length, onProgress);
+    documents.push({ name: result.name || job.fileName, text: result.text });
   }
-  const text = documents.map((document) => '--- ' + document.name + ' ---\\n' + document.text).join('\\n\\n');
-  return {
-    text,
-    documents,
-    charCount,
-    filesProcessed: documents.length,
-    truncated: false,
-  };
+  return { ...buildResult(documents), teacherInstructions: pending.teacherInstructions };
 }
