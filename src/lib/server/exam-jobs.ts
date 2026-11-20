@@ -188,3 +188,25 @@ export async function finalizeExamJob(jobId: string, responseText: string, admin
 export function buildSlotsFromTos(rows: any[], targetItems: number): TosBlueprintSlot[] {
   return buildTosBlueprintSlots(rows, targetItems);
 }
+
+
+/**
+ * Convert internal generation failures into clear teacher-facing guidance.
+ * Raw provider and validation details remain in the system event logs and job
+ * records for administrators; never expose them in the teacher UI.
+ */
+export function teacherExamErrorMessage(error: unknown): string {
+  const raw = typeof error === 'string' ? error : '';
+  const message = raw.toLowerCase();
+
+  if (/schema|invalid json|json parse|malformed|response_format|groq|provider returned|question batch/.test(message)) {
+    return "We couldn't prepare the questions correctly. Your saved exam was not changed. Please try again. If the problem continues, contact your school administrator.";
+  }
+  if (/lesson|source material|readable text|extract|ocr|scan|document/.test(message)) {
+    return "We couldn't read the lesson materials. Please check that the files are clear and try uploading them again.";
+  }
+  if (/timeout|timed out|rate limit|temporar|unavailable|network|fetch failed/.test(message)) {
+    return "Exam generation is temporarily unavailable or taking longer than expected. Please try again shortly. Your saved exam was not changed.";
+  }
+  return "We couldn't finish creating your exam. Your saved exam was not changed. Please try again. If the problem continues, contact your school administrator.";
+}

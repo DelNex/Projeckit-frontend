@@ -5,7 +5,7 @@ import { runNextGroqExamJob } from '@/lib/server/groq-exam-worker';
 export const maxDuration = 60;
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { buildExamPrompt, buildSlotsFromTos, toLessonChunks } from '@/lib/server/exam-jobs';
+import { buildExamPrompt, buildSlotsFromTos, toLessonChunks, teacherExamErrorMessage } from '@/lib/server/exam-jobs';
 import { ExamQuotaError, getExamAiProvider } from '@/lib/server/exam-ai-provider';
 import { getConfiguredExamProviders } from '@/lib/server/exam-ai-provider-router';
 import { logSystemEvent } from '@/lib/server/system-logger';
@@ -115,14 +115,14 @@ export async function POST(request: Request) {
       const retryAt = Date.parse(recentFailure.updated_at) + 2 * 60_000;
       const retryAfterSeconds = Math.max(1, Math.ceil((retryAt - Date.now()) / 1000));
       return NextResponse.json({
-        error: 'The previous AI generation failed: ' + (recentFailure.error || 'No provider error details were saved.'),
+        error: teacherExamErrorMessage(recentFailure.error),
         code: 'EXAM_TOS_RETRY_COOLDOWN',
         retryAfterSeconds,
         failedJobId: recentFailure.id,
-        message: `Wait ${retryAfterSeconds} seconds before retrying. The existing exam was not changed.`,
+        message: `Please wait ${retryAfterSeconds} seconds before trying again. Your existing exam was not changed.`,
       }, { status: 429, headers: { 'Retry-After': String(retryAfterSeconds), 'Cache-Control': 'no-store' } });
     }
-    if (!getConfiguredExamProviders().length) return NextResponse.json({ error: 'No exam AI provider is configured. Add at least one server-side provider key.' }, { status: 503 });
+    if (!getConfiguredExamProviders().length) return NextResponse.json({ error: 'Exam creation is temporarily unavailable. Please contact your school administrator.' }, { status: 503 });
 
     const [tenant, hourly, daily] = await Promise.all([
       caller.admin!.from('tenants').select('ai_hourly_user_limit,ai_daily_school_limit').eq('id', caller.profile!.tenant_id).maybeSingle(),
@@ -225,7 +225,7 @@ export async function GET(request: Request) {
         : { data: [] };
       const parentsById = new Map((parents || []).map((parent: any) => [parent.id, parent]));
       const latestByTos: Record<string, any> = {};
-      for (const job of jobs || []) if (!latestByTos[job.tos_id]) latestByTos[job.tos_id] = (job.parent_job_id && parentsById.get(job.parent_job_id)) || job;
+      for (const job of jobs || []) if (!latestByTos[job.tos_id]) { const latest = (job.parent_job_id && parentsById.get(job.parent_job_id)) || job; latestByTos[job.tos_id] = latest.error ? { ...latest, error: teacherExamErrorMessage(latest.error) } : latest; }
       return NextResponse.json({ jobsByTosId: latestByTos }, { headers: { 'Cache-Control': 'no-store' } });
     }
     let job: any = jobs?.[0];
@@ -235,7 +235,7 @@ export async function GET(request: Request) {
       if (parent) job = parent;
     }
     const position = job.status === 'queued' ? await admin.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('provider', 'groq_api').eq('status', 'queued').lte('created_at', job.created_at) : null;
-    return NextResponse.json({ job: { ...job, queuePosition: position?.count || null } }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ job: { ...job, error: job.error ? teacherExamErrorMessage(job.error) : null, queuePosition: position?.count || null } }, { headers: { 'Cache-Control': 'no-store' } });
   } catch {
     return NextResponse.json({ error: 'Could not load exam generation status.' }, { status: 503 });
   }
