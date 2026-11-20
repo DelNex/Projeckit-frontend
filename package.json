@@ -15,7 +15,6 @@
     "build:consolidated": "node ../scripts/build-consolidated.mjs",
     "test": "node scripts/check-schema-contract.mjs && node node_modules/tsx/dist/cli.mjs --test \"src/**/__tests__/*.test.ts\"",
     "test:omr:browser": "playwright test --config=playwright.omr.config.ts",
-    "postinstall": "node scripts/copy-ocr-assets.mjs",
     "test:ui:browser": "playwright test --config=playwright.ui.config.ts"
   },
   "dependencies": {
