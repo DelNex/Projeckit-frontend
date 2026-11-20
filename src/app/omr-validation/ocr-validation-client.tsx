@@ -1,25 +1,32 @@
 'use client';
 
 import { useState } from 'react';
-import { extractLocalDocument, type LocalDocumentProgress } from '@/lib/local-document-engine';
+import { extractTextFromFiles, type LessonExtractionProgress } from '@/lib/lesson-parser';
 
-export function LocalOcrValidation() {
+export function ServerOcrValidation({ mockStorage = false }: { mockStorage?: boolean }) {
   const [result, setResult] = useState('WAITING');
   const [progress, setProgress] = useState('');
 
   const handleFile = async (file?: File) => {
     if (!file) return;
     setResult('RUNNING');
-    setProgress('Starting local extraction…');
+    setProgress('Uploading the file to the server…');
     try {
-      const document = await extractLocalDocument(file, {
-        onProgress: (value: LocalDocumentProgress) => setProgress(value.message),
+      const extraction = await extractTextFromFiles([file], {
+        ...(mockStorage ? { storageAdapter: {
+          getUserId: async () => '00000000-0000-4000-8000-000000000001',
+          upload: async () => undefined,
+          remove: async () => undefined,
+        } } : {}),
+        onProgress: (value: LessonExtractionProgress) => setProgress(value.message),
       });
+      const document = extraction.documents[0];
       setResult(JSON.stringify({
         outcome: 'PASS',
         name: document.name,
         text: document.text,
-        lowConfidencePages: document.lowConfidencePages,
+        lowConfidencePages: document.lowConfidencePages || [],
+        notice: extraction.notice,
       }));
     } catch (error) {
       setResult(JSON.stringify({
@@ -31,7 +38,7 @@ export function LocalOcrValidation() {
 
   return (
     <section style={{ fontFamily: 'sans-serif', padding: 24 }}>
-      <h2>Local document OCR validation</h2>
+      <h2>Server-side document OCR validation</h2>
       <label>
         Upload a scanned PDF or photo
         <input

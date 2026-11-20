@@ -18,25 +18,24 @@ Status: implementation added; verification and scheduler activation pending.
 
 Acceptance: a queued job is processed after the teacher closes the browser; concurrent invocations do not claim the same job; failed dispatches remain retryable; the existing exam is never overwritten by a failed job.
 
-## Phase 1 — Local-first document intelligence
+## Phase 1 — Server-side lesson document intelligence
 
-Status: OCR runtime and browser integration implemented; cancellation, in-app review, and broader classroom validation remain open.
+Status: backend OCR queue and frontend integration added on `feat/backend-ocr-no-cost`; database migration, Render deployment, Supabase wake-up schedule, and full verification remain pending.
 
-- [x] Add a pinned, self-hosted browser OCR runtime (Tesseract.js 7.0.0) with local WebAssembly core, English/Tagalog language assets, and a Web Worker.
-- [x] OCR image-only PDF pages and photographs locally; preserve PDF page numbers, extracted text, and page-level confidence flags.
-- [x] Detect raster PDF pages with almost no selectable text and stop generation rather than silently feeding incomplete lesson content to AI. OCR processing now runs locally; this detector routes likely scans into the OCR path.
-- [x] Report extraction/OCR progress, cap PDF render buffers at 12 megapixels, and terminate OCR workers after each document.
-- [x] Flag low-confidence pages and show a teacher review notice before exam generation.
-- [ ] Add user-triggered cancellation and an in-app preview/review workflow for low-confidence pages.
-- [x] Keep original documents in browser IndexedDB and process them locally; original file bytes are not uploaded to Supabase or sent to AI providers.
-- [x] Compress extracted lesson text in the browser with gzip before uploading it to the existing private `lesson-uploads` bucket.
-- [x] Replace large lesson text in new job payloads with a versioned manifest, source hash, size metadata, and document counts.
-- [x] Retrieve, decompress, and verify the source object in the API and worker; enforce owner-scoped paths and size/character limits.
-- [x] Delete uploaded source objects after successful completion, terminal failure, or cancellation.
-- [x] Clean stale source objects older than 24 hours when that user next starts a job, while preserving every path referenced by an active job. Compressed text is capped below the 6 MB TUS threshold; original large files stay local.
-- [ ] Add resumable upload recovery only if measured compressed payload sizes exceed the 6 MB threshold.
+- [x] Move lesson PDF/image OCR and document extraction off the teacher's device and into the existing NestJS backend.
+- [x] Store original files in the existing private `lesson-uploads` bucket and keep job metadata in Supabase PostgreSQL.
+- [x] Add a durable OCR queue with atomic `SKIP LOCKED` claims, leases, retry limits, and recoverable job states.
+- [x] Process text PDFs, mixed text/scanned PDFs, image files, DOCX, PPTX, TXT, and Markdown on the server.
+- [x] Run scanned PDF OCR one page at a time with Tesseract, Poppler, and English/Filipino language data.
+- [x] Return page-level low-confidence warnings and server-side progress to the teacher.
+- [x] Persist the OCR job references in the same browser so the main exam modal can resume extraction and continue exam generation after the teacher returns.
+- [x] Remove original source files after processing and expire extracted result objects/job rows after 7 days.
+- [x] Keep OCR at one active job per backend process to protect the existing free Render memory limit.
+- [ ] Apply the `document_extraction_jobs` migration to Supabase.
+- [ ] Deploy the backend and frontend branches, set `OCR_DISPATCH_SECRET`, and configure Supabase Cron/Vault to wake the free Render service.
+- [ ] Verify clean and scanned PDFs, mixed PDFs, images, DOCX, PPTX, low-confidence warnings, retry after restart, and tenant isolation on the deployed service.
 
-Acceptance: CI now runs the production build in Chromium and OCRs a known lesson photo, a generated image-only lesson PDF, and a real-world scan photo using same-origin assets. Still validate real classroom scans, multi-page mixed PDFs, multi-file sources, interrupted uploads, retry/resume, cross-tenant access denial, and a large file on a low-memory phone. Confirm original file bytes never enter the AI provider request.
+Acceptance: OCR does not execute on the phone; a teacher can close the browser after the upload is accepted; the Render worker completes the durable job; reopening the same TOS modal in the same browser resumes the saved extraction and starts exam generation. The wake-up schedule and Render free-instance-hour usage must be verified before claiming unattended processing is live.
 
 ## Phase 2 — Evidence-grounded AI generation
 
@@ -95,5 +94,5 @@ Acceptance: administrators can identify a failed request from its request ID wit
 - Keep Supabase/Postgres as the existing source of truth; do not add Redis unless measured queue throughput justifies it.
 - Use Supabase Storage for private source objects and PostgreSQL for metadata, manifests, and job state.
 - Evaluate `pgmq` separately; do not migrate away from the current lease-based queue until comparative tests prove a benefit.
-- Keep OCR local by default and make remote AI provider use explicit and policy-compliant.
+- Keep lesson OCR on the backend and make remote AI provider use explicit and policy-compliant. The lesson-generation upload path must not run OCR on the phone or retain original lesson files in browser storage.
 - Do not claim end-to-end success until browser, database, worker, provider, and saved-exam results are all verified.
