@@ -837,7 +837,7 @@ function AnalyticsContent() {
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300 flex items-center justify-between">
           <span>{error}</span>
-          <button
+          <button type="button"
             onClick={() => void loadData(true)}
             className="inline-flex items-center gap-1 font-bold underline hover:text-red-900"
           >
@@ -861,7 +861,7 @@ function AnalyticsContent() {
                 Last updated: {lastUpdated.toLocaleTimeString()}
               </span>
             )}
-            <button
+            <button type="button"
               onClick={handleRefresh}
               disabled={refreshing}
               className="px-3.5 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition flex items-center gap-1.5"
@@ -869,7 +869,7 @@ function AnalyticsContent() {
               <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-blue-600' : ''}`} />
               Refresh
             </button>
-            <button
+            <button type="button"
               onClick={handleExportDocx}
               disabled={exporting}
               className="px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-xs transition flex items-center gap-1.5 print:hidden"
@@ -878,7 +878,7 @@ function AnalyticsContent() {
               <FileDown className="w-3.5 h-3.5" />
               Export DOCX
             </button>
-            <button
+            <button type="button"
               onClick={handleExportExcel}
               disabled={exporting}
               className="px-3.5 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/60 shadow-xs transition flex items-center gap-1.5 print:hidden"
@@ -1000,7 +1000,7 @@ function AnalyticsContent() {
       {/* Tab Navigation Bar (Matching Legacy Navigation) */}
       <div className="border-b border-gray-200 dark:border-gray-800 print:hidden">
         <nav className="flex space-x-3 overflow-x-auto no-scrollbar">
-          <button
+          <button type="button"
             onClick={() => setActiveTab('sectional')}
             className={`py-2.5 px-4 text-xs font-semibold border-b-2 whitespace-nowrap transition-colors ${
               activeTab === 'sectional'
@@ -1010,7 +1010,7 @@ function AnalyticsContent() {
           >
             Class / Sectional Achievement (MPS %)
           </button>
-          <button
+          <button type="button"
             onClick={() => setActiveTab('longitudinal')}
             className={`py-2.5 px-4 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
               activeTab === 'longitudinal'
@@ -1020,7 +1020,7 @@ function AnalyticsContent() {
           >
             Year-over-Year Growth Trends
           </button>
-          <button
+          <button type="button"
             onClick={() => setActiveTab('cognitive')}
             className={`py-2.5 px-4 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
               activeTab === 'cognitive'
@@ -1030,7 +1030,7 @@ function AnalyticsContent() {
           >
             Cognitive Domain Mastery
           </button>
-          <button
+          <button type="button"
             onClick={() => setActiveTab('item-analysis')}
             className={`py-2.5 px-4 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
               activeTab === 'item-analysis'
@@ -1040,7 +1040,7 @@ function AnalyticsContent() {
           >
             Psychometric Item Analysis Matrix
           </button>
-          <button
+          <button type="button"
             onClick={() => setActiveTab('reports')}
             className={`py-2.5 px-4 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
               activeTab === 'reports'

@@ -153,7 +153,7 @@ export default function TenantsPage() {
         </div>
 
         {isPlatformAdmin && (
-          <button
+          <button type="button"
             onClick={() => setIsModalOpen(true)}
             className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition"
           >
@@ -166,7 +166,7 @@ export default function TenantsPage() {
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300 flex items-center justify-between">
           <span>{error}</span>
-          <button 
+          <button type="button" 
             onClick={fetchTenants}
             className="inline-flex items-center gap-1 font-bold underline hover:text-red-900"
           >
@@ -191,7 +191,7 @@ export default function TenantsPage() {
                 : 'No school tenant is currently associated with your account.'}
             </p>
             {isPlatformAdmin && (
-              <button
+              <button type="button"
                 onClick={() => setIsModalOpen(true)}
                 className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
               >
@@ -230,7 +230,7 @@ export default function TenantsPage() {
                       {new Date(t.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-4 sm:px-6 py-4 text-right">
-                      <button
+                      <button type="button"
                         onClick={() => handleStartEdit(t)}
                         className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
                       >
@@ -254,7 +254,7 @@ export default function TenantsPage() {
               <h3 className="text-base font-bold text-gray-900 dark:text-white">
                 Provision School Tenant
               </h3>
-              <button
+              <button type="button"
                 onClick={() => setIsModalOpen(false)}
                 className="rounded-lg p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
               >
@@ -320,7 +320,7 @@ export default function TenantsPage() {
               <h3 className="text-base font-bold text-gray-900 dark:text-white">
                 Edit School Details
               </h3>
-              <button
+              <button type="button"
                 onClick={() => setEditingTenant(null)}
                 className="rounded-lg p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
               >

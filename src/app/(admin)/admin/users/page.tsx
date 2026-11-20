@@ -971,7 +971,7 @@ export default function AllAccountsPage() {
           <div className="p-8 text-center text-xs text-rose-500">
             <AlertTriangle className="h-8 w-8 mx-auto mb-2 text-rose-500" />
             <p className="font-bold">{error}</p>
-            <button
+            <button type="button"
               onClick={() => fetchUsers()}
               className="mt-3 text-blue-600 underline font-semibold"
             >
@@ -1877,7 +1877,7 @@ export default function AllAccountsPage() {
               <h3 className="text-base font-bold text-gray-900 dark:text-white">
                 {schoolModalUser.tenant_id ? 'Change School Assignment' : 'Assign School'}
               </h3>
-              <button
+              <button type="button"
                 onClick={() => setSchoolModalUser(null)}
                 className="rounded-lg p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
               >

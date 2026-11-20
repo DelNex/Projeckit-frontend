@@ -427,7 +427,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
-          <button
+          <button type="button"
             onClick={() => loadDashboardData(true)}
             disabled={refreshing}
             className="inline-flex items-center justify-center gap-2 px-3.5 py-2 text-xs font-bold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 shadow-2xs transition disabled:opacity-50"
@@ -453,7 +453,7 @@ export default function DashboardPage() {
             <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
             <span>{error}</span>
           </div>
-          <button
+          <button type="button"
             onClick={() => loadDashboardData(false)}
             className="inline-flex items-center gap-1 font-bold underline hover:text-red-900 ml-4"
           >
