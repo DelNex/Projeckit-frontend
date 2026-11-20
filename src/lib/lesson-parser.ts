@@ -37,6 +37,7 @@ type ExtractionJob = {
 
 type PendingExtractionRecord = {
   tosId: string;
+  contextId: string;
   jobs: Array<{ id: string; fileName: string }>;
   teacherInstructions?: string;
   createdAt: number;
@@ -48,18 +49,18 @@ const POLL_INTERVAL_MS = 2500;
 const JOB_TIMEOUT_MS = 30 * 60 * 1000;
 const PENDING_JOB_KEY_PREFIX = 'projectkit:lesson-ocr:';
 
-function pendingKey(tosId: string) {
-  return PENDING_JOB_KEY_PREFIX + tosId;
+function pendingKey(tosId: string, contextId = 'exam-generator') {
+  return PENDING_JOB_KEY_PREFIX + tosId + ':' + contextId;
 }
 
-function readPending(tosId: string): PendingExtractionRecord | null {
+function readPending(tosId: string, contextId = 'exam-generator'): PendingExtractionRecord | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = window.localStorage.getItem(pendingKey(tosId));
+    const raw = window.localStorage.getItem(pendingKey(tosId, contextId));
     if (!raw) return null;
     const value = JSON.parse(raw) as PendingExtractionRecord;
-    if (value.tosId !== tosId || !Array.isArray(value.jobs) || Date.now() - value.createdAt > 24 * 60 * 60 * 1000) {
-      window.localStorage.removeItem(pendingKey(tosId));
+    if (value.tosId !== tosId || value.contextId !== contextId || !Array.isArray(value.jobs) || Date.now() - value.createdAt > 24 * 60 * 60 * 1000) {
+      window.localStorage.removeItem(pendingKey(tosId, contextId));
       return null;
     }
     return value;
@@ -68,8 +69,8 @@ function readPending(tosId: string): PendingExtractionRecord | null {
   }
 }
 
-export function clearPendingLessonExtraction(tosId: string) {
-  if (typeof window !== 'undefined') window.localStorage.removeItem(pendingKey(tosId));
+export function clearPendingLessonExtraction(tosId: string, contextId = 'exam-generator') {
+  if (typeof window !== 'undefined') window.localStorage.removeItem(pendingKey(tosId, contextId));
 }
 
 function wait(ms: number) {
@@ -155,6 +156,7 @@ export async function extractTextFromFiles(
   options?: {
     onProgress?: (progress: LessonExtractionProgress) => void;
     tosId?: string;
+    contextId?: string;
     teacherInstructions?: string;
   },
 ): Promise<LessonExtractionClientResult> {
@@ -184,8 +186,9 @@ export async function extractTextFromFiles(
   }
 
   if (options?.tosId && typeof window !== 'undefined') {
-    window.localStorage.setItem(pendingKey(options.tosId), JSON.stringify({
+    window.localStorage.setItem(pendingKey(options.tosId, options.contextId), JSON.stringify({
       tosId: options.tosId,
+      contextId: options.contextId || 'exam-generator',
       jobs: data.jobs,
       teacherInstructions: options.teacherInstructions,
       createdAt: Date.now(),
@@ -203,8 +206,9 @@ export async function extractTextFromFiles(
 export async function resumePendingLessonExtraction(
   tosId: string,
   onProgress?: (progress: LessonExtractionProgress) => void,
+  contextId = 'exam-generator',
 ): Promise<(LessonExtractionClientResult & { teacherInstructions?: string }) | null> {
-  const pending = readPending(tosId);
+  const pending = readPending(tosId, contextId);
   if (!pending) return null;
   const documents: Array<{ name: string; text: string }> = [];
   for (const [index, job] of pending.jobs.entries()) {
