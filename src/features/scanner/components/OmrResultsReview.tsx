@@ -123,7 +123,7 @@ export function OmrResultsReview({
             </label>
             {selectedStudent ? (
               <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
-                <CheckCircle2 className="h-3.5 w-3.5" /> Ready to Persist
+                <CheckCircle2 className="h-3.5 w-3.5" /> Ready to save
               </span>
             ) : (
               <span className="text-[11px] font-bold text-amber-400">
@@ -266,7 +266,7 @@ export function OmrResultsReview({
           ) : (
             <>
               <Save className="h-4 w-4" />
-              <span>Confirm & Save to Supabase</span>
+              <span>Confirm & Save Results</span>
             </>
           )}
         </button>

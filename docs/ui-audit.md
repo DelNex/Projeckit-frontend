@@ -13,7 +13,7 @@ This pass is a source-level responsive and interaction audit. GitHub Actions pro
 ## Global system applied
 
 - One neutral surface family, readable ink, and one blue accent. Legacy Tailwind color families are mapped to the accent scale so status and feature surfaces no longer introduce unrelated colors.
-- Consistent focus-visible outlines, disabled cursor behavior, tap handling, and button transition behavior across the app shell, teacher/admin pages, and authentication.
+- Consistent focus-visible outlines, disabled cursor behavior, tap handling, and button transition behavior across the app shell, teacher/admin pages, and authentication. All action-only buttons now declare `type="button"` explicitly, avoiding accidental form submission from modal close, retry, tab, and row-action controls.
 - Minimum button targets of 36px at desktop and 40px at mobile, with 44px controls in the camera viewfinder.
 - Inputs, selects, textareas, images, charts and flex/grid children are constrained to their available width.
 - Horizontal data tables remain horizontally scrollable with touch momentum and keyboard focus instead of forcing the entire page wider than the viewport.
@@ -56,7 +56,7 @@ This pass is a source-level responsive and interaction audit. GitHub Actions pro
 - `ExamDraftEditor`, `ExamDraftControls`, `TosEditor`: common control sizing, palette and responsive overflow behavior applied through the app shell.
 - `AppFooter`, `ThemeToggle`, `NavigationProgress`: reviewed as shared shell elements; no data or navigation behavior intentionally changed.
 
-## OMR scanner changes
+## Button behavior audit\n\nA source-level pass found action buttons without explicit types across the admin, analytics, assessment, reports, TOS, student, and shared shell components. They were made explicit as `type="button"`; existing explicit submit buttons were preserved. This prevents incidental form submission/reload when a teacher clicks a tab, retry action, row action, modal close, or inline editor control.\n\n## OMR scanner changes
 
 1. Camera modal now has an accessible title association and a named, safe-area-aware full-screen mobile layout.
 2. Camera viewfinder uses `object-contain` so the live preview does not crop the edges of the answer sheet. The previous fixed 380px mobile / 500px desktop minimum height was replaced by a viewport-aware flexible region.

@@ -757,3 +757,15 @@ body { background: var(--pk-canvas); color: var(--pk-ink); }
 @media (max-width: 639px) {
   .pk-shell button, .pk-main button, .pk-auth button { min-height: 40px; }
 }
+
+/* Final control polish shared by every route. */
+.pk-shell button:not(.rounded-full), .pk-main button:not(.rounded-full), .pk-auth button:not(.rounded-full) {
+  border-radius: 10px;
+}
+.pk-main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.pk-main select, .pk-main textarea,
+.pk-auth input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.pk-auth select, .pk-auth textarea { min-height: 42px; }
+.pk-main h1, .pk-auth h1 { font-size: clamp(1.35rem, 2.1vw, 1.8rem); line-height: 1.2; font-weight: 750; letter-spacing: -.035em; }
+.pk-main h2, .pk-auth h2 { line-height: 1.25; letter-spacing: -.025em; }
+.pk-main .pk-omr-viewfinder button, .pk-main .pk-omr-viewfinder label { min-height: 44px; min-width: 44px; }

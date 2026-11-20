@@ -299,7 +299,7 @@ export function OmrCameraModal({
   const processImageBlob = async (blob: Blob) => {
     setIsProcessing(true);
     setErrorMessage(null);
-    setStatusMessage('Evaluating OMR bubbles with client engine…');
+    setStatusMessage('Reading answer bubbles…');
 
     try {
       setCapturedBlob(blob);
@@ -367,7 +367,7 @@ export function OmrCameraModal({
       setEditableItems(omrResult.items.map((item) => ({ ...item })));
       setPhase('review');
       if (!omrResult.fiducialDetected) {
-        setStatusMessage('Low marker alignment confidence. Please review and verify answers below.');
+        setStatusMessage('Some sheet markers were unclear. Review flagged answers before saving.');
       } else {
         setStatusMessage(null);
       }
@@ -706,7 +706,7 @@ export function OmrCameraModal({
               <div className="space-y-1">
                 <h4 className="text-lg font-bold text-white">Scan Verified & Saved</h4>
                 <p className="text-xs text-gray-400 max-w-sm mx-auto">
-                  Answers were scored and saved to Supabase for{' '}
+                  Answers were reviewed and saved for{' '}
                   <span className="font-semibold text-emerald-300">
                     {matchedStudent?.name || 'Learner'}
                   </span>
