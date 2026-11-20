@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildGroqMessages, chooseNextExamJob } from '../groq-exam-worker';
+import { buildExamPrompt } from '../exam-jobs';
 import { getConfiguredExamProviders } from '../exam-ai-provider-router';
 
 test('exam context retrieval prefers lesson sections relevant to the requested competency', () => {
@@ -17,6 +18,19 @@ test('exam context retrieval prefers lesson sections relevant to the requested c
   assert.match(messages[1].content, /Photosynthesis converts light energy/);
   assert.doesNotMatch(messages[1].content, /solar system contains planets/);
   assert.match(messages[1].content, /Source ID source-2; section 2\/10/);
+});
+
+test('exam prompt matches the strict provider schema object wrapper', () => {
+  const prompt = buildExamPrompt([{
+    item_number: 1,
+    competency_id: 'BIO-1',
+    competency_code: 'BIO-1',
+    competency_description: 'Explain photosynthesis',
+    cognitive_level: 'understanding',
+  }]);
+  assert.match(prompt, /valid JSON object with a top-level "questions" array/);
+  assert.match(prompt, /"questions":\[\{"item_number":1/);
+  assert.doesNotMatch(prompt, /valid JSON array/);
 });
 
 test('provider registry exposes only providers with server-side credentials', () => {
