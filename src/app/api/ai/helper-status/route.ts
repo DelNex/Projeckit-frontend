@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { getConfiguredExamProviders } from '@/lib/server/exam-ai-provider-router';
 
 export async function GET(request: Request) {
@@ -20,9 +21,10 @@ export async function GET(request: Request) {
 
   // This is a read-only preview for the teacher UI. The enqueue RPC remains
   // authoritative and applies the same quotas atomically when a job is created.
+  const admin = createAdminClient();
   const [tenantResult, hourlyResult, dailyResult, recentFailureResult] = await Promise.all([
-    supabase.from('tenants').select('ai_hourly_user_limit,ai_daily_school_limit').eq('id', profile.tenant_id).maybeSingle(),
-    supabase.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('created_by', user.id)
+    admin.from('tenants').select('ai_hourly_user_limit,ai_daily_school_limit').eq('id', profile.tenant_id).maybeSingle(),
+    admin.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('created_by', user.id)
       .neq('status', 'cancelled').or('status.neq.failed,attempts.gt.0')
       .gte('created_at', new Date(now - 60 * 60_000).toISOString()),
     supabase.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('tenant_id', profile.tenant_id)
