@@ -318,7 +318,7 @@ export function ExamGeneratorModal({
                 {generationJob.job?.status === 'needs_attention'
                   ? 'The AI generation job needs attention. Review the error and retry.'
                   : generationJob.job?.status === 'queued'
-                    ? `Queued (position ${generationJob.job.queuePosition || 1}). Groq AI will process this exam in the background. This is running in the background, you can leave this page.`
+                    ? `Queued (position ${generationJob.job.queuePosition || 1}). AI will process this exam in the background. This is running in the background, you can leave this page.`
                     : generationJob.job?.status === 'running'
                       ? `${generationJob.job.progress?.label || 'AI is writing your exam.'} This is running in the background, you can leave this page.`
                       : generationJob.job?.status === 'failed'
