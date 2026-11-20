@@ -6,6 +6,11 @@
  * The backend job continues if the teacher closes this page.
  */
 
+import { createClient } from '@/lib/supabase/client';
+
+const LESSON_UPLOAD_BUCKET = 'lesson-uploads';
+const ALLOWED_FILE_EXTENSIONS = new Set(['pdf','docx','pptx','txt','md','png','jpg','jpeg','webp','bmp','tif','tiff']);
+
 export interface LessonExtractionClientResult {
   text: string;
   documents: Array<{ name: string; text: string; lowConfidencePages?: number[] }>;
@@ -168,21 +173,69 @@ export async function extractTextFromFiles(
     }
   }
 
-  const form = new FormData();
-  for (const file of files) form.append('files', file, file.name);
-  const response = await fetch('/api/backend/ai/lesson-extraction/jobs', {
-    method: 'POST',
-    body: form,
-    cache: 'no-store',
-  });
-  const data = await readJson(response) as { jobs?: Array<{ id: string; fileName: string }> };
-  if (!Array.isArray(data.jobs) || data.jobs.length !== files.length) {
-    throw new Error('The server did not accept all lesson files. Please retry the upload.');
-  }
-  for (const job of data.jobs) {
-    if (!job || typeof job.id !== 'string' || typeof job.fileName !== 'string') {
-      throw new Error('The server returned an invalid document processing job.');
+  const supabase = createClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) throw new Error('Your session expired. Sign in again before uploading lesson files.');
+
+  const uploaded: Array<{ storagePath: string; fileName: string; mimeType: string; size: number }> = [];
+  try {
+    for (const file of files) {
+      const extension = file.name.toLowerCase().split('.').pop() || '';
+      if (!ALLOWED_FILE_EXTENSIONS.has(extension)) {
+        throw new Error("'" + file.name + "' is not a supported lesson file.");
+      }
+      const storagePath = user.id + '/ocr-source/' + crypto.randomUUID() + '.' + extension;
+      const { error: uploadError } = await supabase.storage.from(LESSON_UPLOAD_BUCKET).upload(storagePath, file, {
+        contentType: file.type || 'application/octet-stream',
+        cacheControl: '3600',
+        upsert: false,
+      });
+      if (uploadError) throw new Error(uploadError.message || 'Could not upload ' + file.name + '. Check your connection and retry.');
+      uploaded.push({
+        storagePath,
+        fileName: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        size: file.size,
+      });
     }
+
+    const response = await fetch('/api/backend/ai/lesson-extraction/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: uploaded }),
+      cache: 'no-store',
+    });
+    const data = await readJson(response) as { jobs?: Array<{ id: string; fileName: string }> };
+    if (!Array.isArray(data.jobs) || data.jobs.length !== files.length) {
+      throw new Error('The server did not accept all lesson files. Please retry the upload.');
+    }
+    for (const job of data.jobs) {
+      if (!job || typeof job.id !== 'string' || typeof job.fileName !== 'string') {
+        throw new Error('The server returned an invalid document processing job.');
+      }
+    }
+
+    if (options?.tosId && typeof window !== 'undefined') {
+      window.localStorage.setItem(pendingKey(options.tosId, options.contextId), JSON.stringify({
+        tosId: options.tosId,
+        contextId: options.contextId || 'exam-generator',
+        jobs: data.jobs,
+        teacherInstructions: options.teacherInstructions,
+        createdAt: Date.now(),
+      } satisfies PendingExtractionRecord));
+    }
+
+    const documents: Array<{ name: string; text: string; lowConfidencePages?: number[] }> = [];
+    for (const [index, job] of data.jobs.entries()) {
+      const result = await waitForJob(job, index + 1, files.length, options?.onProgress);
+      documents.push({ name: result.name || job.fileName, text: result.text, lowConfidencePages: result.lowConfidencePages });
+    }
+    return buildResult(documents);
+  } catch (error) {
+    if (uploaded.length) {
+      await supabase.storage.from(LESSON_UPLOAD_BUCKET).remove(uploaded.map((file) => file.storagePath)).catch(() => undefined);
+    }
+    throw error;
   }
 
   if (options?.tosId && typeof window !== 'undefined') {
