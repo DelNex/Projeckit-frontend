@@ -10,6 +10,11 @@ type ProviderConfig = {
 
 const cooldownUntil = new Map<ProviderId, number>();
 
+/** Clears process-local cooldown state for isolated adapter tests. */
+export function resetExamProviderCooldownsForTests(): void {
+  cooldownUntil.clear();
+}
+
 /** HTTP 400-class request errors need correction, not an immediate retry against the same provider. */
 export function isRetryableProviderStatus(status: number): boolean {
   return status === 408 || status === 409 || status === 429 || status >= 500;
