@@ -4,7 +4,7 @@
 
 This branch moves lesson-file extraction out of the browser and into the existing NestJS backend. It does not add a paid queue, another hosting service, or a new database.
 
-The frontend uploads original files through its authenticated same-origin backend proxy. The backend stores each original in the existing private `lesson-uploads` Supabase Storage bucket and inserts a row into `document_extraction_jobs`. A database RPC claims jobs with `FOR UPDATE SKIP LOCKED`, so two backend requests cannot claim the same job.
+The browser uploads original files directly to the existing private `lesson-uploads` Supabase Storage bucket using the signed-in user's storage policy. It then sends only the owner-scoped object paths and file metadata through the authenticated same-origin backend proxy. The backend verifies each stored object and inserts rows into `document_extraction_jobs`. This keeps large file bytes out of the Next.js serverless request. A database RPC claims jobs with `FOR UPDATE SKIP LOCKED`, so two backend requests cannot claim the same job.
 
 The Render process runs one OCR job at a time. It uses:
 - `pdf-parse` for text-based PDFs
