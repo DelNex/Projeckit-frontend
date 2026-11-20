@@ -49,8 +49,8 @@ type GenerationStep =
 
 const STEP_LABELS: Record<GenerationStep, string> = {
   idle: 'Ready to start',
-  uploading: 'Preparing local lesson file(s)...',
-  extracting: 'Extracting text from document(s)...',
+  uploading: 'Uploading lesson file(s)...',
+  extracting: 'Extracting text on the server...',
   analyzing: 'Analyzing lesson coverage against TOS...',
   generating: 'Writing questions from your lesson...',
   validating: 'Checking question count and answers...',
@@ -135,7 +135,7 @@ export function ExamGeneratorModal({
       }
 
       if (file.size > capacity.maxFileBytes) {
-        toast.error(`This file is ${Math.ceil(file.size / (1024 * 1024))} MB. This device can currently process files up to ${capacity.maxFileMb} MB.`);
+        toast.error(`This file is ${Math.ceil(file.size / (1024 * 1024))} MB. The server accepts files up to ${capacity.maxFileMb} MB each.`);
         return;
       }
 
@@ -181,14 +181,14 @@ export function ExamGeneratorModal({
       : [];
 
     try {
-      // Process documents locally; original files never leave this browser.
+      // Upload original documents; extraction and OCR run on the backend.
       if (selectedFiles.length > 0) {
         setCurrentStep('extracting');
-        setExtractionProgress('Starting local document extraction…');
+        setExtractionProgress('Uploading files to the secure processing queue…');
         const extractResult = await extractTextFromFiles(selectedFiles, {
           onProgress: (progress) => setExtractionProgress(progress.message + ' (' + progress.fileIndex + '/' + progress.fileCount + ')'),
         });
-        setExtractionProgress('Local extraction complete.');
+        setExtractionProgress('Server-side extraction complete.');
         lessonDocuments = [...extractResult.documents, ...lessonDocuments];
         extractedLessonText = (extractResult.text + (extractedLessonText ? `\n\n${extractedLessonText}` : '')).trim();
 
@@ -293,7 +293,7 @@ export function ExamGeneratorModal({
             {/* Stepper Dots */}
             <div className="flex items-center justify-between gap-1">
               {[
-                { key: 'uploading', label: 'Prepare locally' },
+                { key: 'uploading', label: 'Upload' },
                 { key: 'extracting', label: 'Extract' },
                 { key: 'analyzing', label: 'Analyze' },
                 { key: 'generating', label: 'Generate' },
