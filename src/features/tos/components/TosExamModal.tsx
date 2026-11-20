@@ -20,7 +20,7 @@ import { printOmrAnswerKey, exportOmrAnswerKeyDocx } from '../omr-answer-key-exp
 import { useToast } from '@/components/ui/toast';
 import { createClient } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
-import { useExamGenerationJob } from '@/lib/exam-generation-client';
+import { useExamGenerationJob, type ExamAiPreflight } from '@/lib/exam-generation-client';
 import { clearPendingLessonExtraction, extractTextFromFiles, resumePendingLessonExtraction } from '@/lib/lesson-parser';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { ExamDraftEditor } from '@/components/assessment/ExamDraftEditor';
@@ -30,6 +30,7 @@ interface TosExamModalProps {
   onClose: () => void;
   tos: TosDocument | null;
   schoolName: string;
+  preflight?: ExamAiPreflight | null;
 }
 
 interface CompetencyMaterial {
@@ -45,10 +46,11 @@ export function TosExamModal({
   onClose,
   tos,
   schoolName,
+  preflight,
 }: TosExamModalProps) {
   const { toast } = useToast();
   const supabase = createClient();
-  const generationJob = useExamGenerationJob(tos?.id);
+  const generationJob = useExamGenerationJob(tos?.id, preflight);
 
   const [examDate, setExamDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [materials, setMaterials] = useState<Record<string, CompetencyMaterial>>({});
