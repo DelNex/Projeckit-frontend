@@ -7,13 +7,49 @@
     --font-outfit: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     color-scheme: light;
     
-    --color-brand-50: #eff6ff;
-    --color-brand-100: #dbeafe;
-    --color-brand-500: #3b82f6;
-    --color-brand-600: #2563eb;
-    --color-brand-700: #1d4ed8;
-    --color-canvas: #f8fafc;
-    --color-ink: #0f172a;
+    --font-outfit: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --color-brand-50: #eef2ff;
+    --color-brand-100: #dce4ff;
+    --color-brand-500: #4568f5;
+    --color-brand-600: #3157e8;
+    --color-brand-700: #2646c8;
+    --color-canvas: #f5f6f8;
+    --color-ink: #17212b;
+    --color-blue-50: #eef2ff;
+    --color-blue-100: #dce4ff;
+    --color-blue-200: #c5d1ff;
+    --color-blue-300: #9eb2ff;
+    --color-blue-400: #718dfb;
+    --color-blue-500: #4568f5;
+    --color-blue-600: #3157e8;
+    --color-blue-700: #2646c8;
+    --color-blue-800: #20399f;
+    --color-blue-900: #1b307c;
+    --color-emerald-50: #eef2ff;
+    --color-emerald-100: #dce4ff;
+    --color-emerald-500: #4568f5;
+    --color-emerald-600: #3157e8;
+    --color-emerald-700: #2646c8;
+    --color-amber-50: #eef2ff;
+    --color-amber-100: #dce4ff;
+    --color-amber-500: #4568f5;
+    --color-amber-600: #3157e8;
+    --color-amber-700: #2646c8;
+    --color-red-50: #eef2ff;
+    --color-red-100: #dce4ff;
+    --color-red-500: #4568f5;
+    --color-red-600: #3157e8;
+    --color-red-700: #2646c8;
+    --color-rose-50: #eef2ff;
+    --color-rose-100: #dce4ff;
+    --color-rose-500: #4568f5;
+    --color-rose-600: #3157e8;
+    --color-rose-700: #2646c8;
+    --color-indigo-50: #eef2ff;
+    --color-indigo-100: #dce4ff;
+    --color-indigo-500: #4568f5;
+    --color-indigo-600: #3157e8;
+    --color-indigo-700: #2646c8;
   }
 
   :root.dark,
@@ -220,3 +256,120 @@
   background: linear-gradient(to top, rgba(239, 68, 68, 0.4), transparent);
 }
 
+
+
+/* Project KIT UI system — neutral surfaces, deep ink, one brand accent. */
+:root {
+  --pk-canvas: #f5f6f8;
+  --pk-surface: #ffffff;
+  --pk-surface-muted: #f0f2f5;
+  --pk-ink: #17212b;
+  --pk-muted: #687482;
+  --pk-line: #e4e8ed;
+  --pk-brand: #3157e8;
+  --pk-brand-soft: #eef2ff;
+  --pk-radius: 16px;
+  --pk-shadow: 0 12px 32px rgba(23, 33, 43, .07);
+}
+.dark {
+  --pk-canvas: #10151d;
+  --pk-surface: #171e28;
+  --pk-surface-muted: #202936;
+  --pk-ink: #f4f6f8;
+  --pk-muted: #a0aab6;
+  --pk-line: #2b3542;
+  --pk-brand: #8298ff;
+  --pk-brand-soft: #252f50;
+  --pk-shadow: 0 12px 32px rgba(0, 0, 0, .24);
+}
+body { background: var(--pk-canvas); color: var(--pk-ink); }
+::selection { background: var(--pk-brand); color: white; }
+
+/* App frame */
+.pk-shell { background: var(--pk-canvas); color: var(--pk-ink); }
+.pk-main { background: var(--pk-canvas); scrollbar-gutter: stable; }
+.pk-sidebar { background: var(--pk-surface) !important; border-color: var(--pk-line) !important; }
+.pk-sidebar > div:first-child { border-color: var(--pk-line) !important; }
+.pk-brand-mark { background: var(--pk-ink) !important; color: white !important; border-radius: 12px !important; letter-spacing: -.04em; }
+.pk-nav-link { border: 0 !important; border-radius: 10px !important; min-height: 42px !important; color: var(--pk-muted) !important; }
+.pk-nav-link:hover { background: var(--pk-surface-muted) !important; color: var(--pk-ink) !important; }
+.pk-nav-link[aria-current="page"], .pk-nav-link.pk-active { background: var(--pk-brand-soft) !important; color: var(--pk-brand) !important; font-weight: 650 !important; }
+.pk-nav-link svg { color: currentColor !important; }
+.pk-signout { color: var(--pk-muted) !important; }
+.pk-signout:hover { background: var(--pk-surface-muted) !important; color: var(--pk-ink) !important; }
+.pk-header { background: var(--pk-surface) !important; border-color: var(--pk-line) !important; box-shadow: 0 1px 0 rgba(23,33,43,.025); }
+.pk-ai-launcher { border: 1px solid var(--pk-line) !important; background: var(--pk-brand-soft) !important; color: var(--pk-brand) !important; }
+.pk-ai-launcher:hover { filter: brightness(.97); }
+.pk-profile-trigger { border-color: var(--pk-line) !important; background: var(--pk-surface) !important; }
+.pk-profile-trigger:hover, .pk-profile-menu a:hover { background: var(--pk-surface-muted) !important; }
+.pk-avatar { background: var(--pk-ink) !important; color: white !important; }
+.pk-profile-menu { background: var(--pk-surface) !important; border-color: var(--pk-line) !important; box-shadow: var(--pk-shadow) !important; }
+
+/* Consistent surfaces across dashboards, tables and forms. */
+.pk-main .bg-white { background-color: var(--pk-surface); }
+.pk-main .border-slate-200, .pk-main .border-gray-200 { border-color: var(--pk-line); }
+.pk-main .shadow-sm { box-shadow: 0 2px 8px rgba(23,33,43,.035); }
+.pk-main .rounded-2xl { border-radius: var(--pk-radius); }
+.pk-main input:not([type="checkbox"]):not([type="radio"]), .pk-main select, .pk-main textarea {
+  border-color: var(--pk-line);
+}
+.pk-main :focus-visible { outline-color: var(--pk-brand); }
+.dark .pk-main .bg-white { background-color: var(--pk-surface); }
+
+/* Reduced, consistent motion; preserve the user's motion preference. */
+@media (prefers-reduced-motion: no-preference) {
+  .pk-nav-link, .pk-header button, .pk-profile-menu, .pk-main a, .pk-main button {
+    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+  }
+}
+
+
+/* Stackable toast notifications: one restrained visual language for every state. */
+.pk-toast-stack {
+  position: fixed;
+  z-index: 9999;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  width: min(400px, calc(100vw - 32px));
+  max-height: min(72vh, 620px);
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  padding: 2px 4px 8px 2px;
+  pointer-events: none;
+  scrollbar-width: thin;
+}
+.pk-toast {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  overflow: hidden;
+  padding: 15px 14px;
+  border: 1px solid var(--pk-line);
+  border-radius: 14px;
+  background: var(--pk-surface);
+  color: var(--pk-ink);
+  box-shadow: var(--pk-shadow);
+  pointer-events: auto;
+}
+.pk-toast-icon { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border-radius: 10px; background: var(--pk-brand-soft); color: var(--pk-brand); }
+.pk-toast-copy { min-width: 0; flex: 1; padding-top: 1px; }
+.pk-toast-copy strong { display: block; margin-bottom: 3px; font-size: 12px; font-weight: 700; line-height: 1.3; }
+.pk-toast-copy p { margin: 0; color: var(--pk-muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.pk-toast-action { margin-top: 9px; border: 0; background: transparent; padding: 0; color: var(--pk-brand); font-size: 12px; font-weight: 700; cursor: pointer; }
+.pk-toast-dismiss { display: grid; width: 28px; height: 28px; flex: 0 0 28px; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--pk-muted); cursor: pointer; }
+.pk-toast-dismiss:hover { background: var(--pk-surface-muted); color: var(--pk-ink); }
+.pk-toast-progress { position: absolute; right: 0; bottom: 0; left: 0; height: 2px; transform-origin: left; background: var(--pk-brand); animation: pk-toast-life linear forwards; }
+.pk-toast-enter { animation: pk-toast-in 180ms cubic-bezier(.2,.8,.2,1) both; }
+@keyframes pk-toast-in { from { opacity: 0; transform: translate3d(0,-8px,0) scale(.985); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } }
+@keyframes pk-toast-life { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (max-width: 640px) {
+  .pk-toast-stack { top: 10px; right: 10px; left: 10px; width: auto; max-height: 58vh; }
+  .pk-toast { padding: 13px 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pk-toast-enter { animation: none; }
+  .pk-toast-progress { animation: none; }
+}

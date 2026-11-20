@@ -149,7 +149,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
         aria-modal={isOpen ? true : undefined}
         aria-label={isAdminMode ? 'Administration navigation' : 'School navigation'}
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex w-[min(84vw,18rem)] flex-col border-r border-slate-200 bg-white dark:border-gray-800 dark:bg-gray-900 lg:static lg:h-full lg:w-64 lg:shrink-0 lg:translate-x-0 sidebar-transition',
+          'pk-sidebar fixed inset-y-0 left-0 z-50 flex w-[min(84vw,18rem)] flex-col border-r border-slate-200 bg-white dark:border-gray-800 dark:bg-gray-900 lg:static lg:h-full lg:w-64 lg:shrink-0 lg:translate-x-0 sidebar-transition',
           isOpen ? 'translate-x-0 shadow-2xl lg:shadow-none' : '-translate-x-full'
         )}
       >
@@ -157,8 +157,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
         <div className="flex min-h-[76px] items-center justify-between border-b border-slate-200 px-5 dark:border-gray-800">
           <Link href={isAdminMode ? '/admin' : '/dashboard'} className="flex items-center gap-3">
             <div className={cn(
-              "flex h-10 w-10 items-center justify-center rounded-lg font-bold text-white",
-              isAdminMode ? "bg-slate-800" : "bg-blue-700"
+              "pk-brand-mark flex h-10 w-10 items-center justify-center rounded-lg font-bold text-white"
             )}>
               {isAdminMode ? <Shield className="h-5 w-5" /> : 'KIT'}
             </div>
@@ -210,9 +209,9 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
                           if (window.innerWidth < 1024) onClose();
                         }}
                         className={cn(
-                          'flex min-h-11 items-center gap-3 rounded-lg border-l-2 px-3 text-sm font-medium transition-colors duration-150',
+                          'pk-nav-link flex min-h-11 items-center gap-3 rounded-lg border-l-2 px-3 text-sm font-medium transition-colors duration-150',
                           isActive
-                            ? 'border-blue-700 bg-blue-50 text-blue-800 dark:border-blue-400 dark:bg-blue-950/50 dark:text-blue-200 font-semibold'
+                            ? 'pk-active border-blue-700 bg-blue-50 text-blue-800 dark:border-blue-400 dark:bg-blue-950/50 dark:text-blue-200 font-semibold'
                             : 'border-transparent text-slate-700 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800'
                         )}
                       >
@@ -233,7 +232,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
             </h3>
             <button
               onClick={handleSignOut}
-              className="w-full flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/30 transition-colors"
+              className="pk-signout w-full flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors"
             >
               <LogOut className="h-5 w-5 text-red-500" />
               <span>Sign out</span>
