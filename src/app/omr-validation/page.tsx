@@ -10,5 +10,5 @@ export default function OmrValidationPage() {
   const validationEnabled = process.env.NODE_ENV === 'development'
     || process.env.OMR_BROWSER_VALIDATION === 'true';
   if (!validationEnabled) notFound();
-  return <><OmrBrowserValidation /><ServerOcrValidation /></>;
+  return <><OmrBrowserValidation /><ServerOcrValidation mockStorage={process.env.OMR_BROWSER_VALIDATION === 'true'} /></>;
 }
