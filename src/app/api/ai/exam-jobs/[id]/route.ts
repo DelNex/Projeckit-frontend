@@ -7,6 +7,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { jobBelongsToTenant } from '@/lib/server/exam-jobs';
 import { logSystemEvent } from '@/lib/server/system-logger';
 import { deleteCompressedLessonSource } from '@/lib/server/lesson-source-storage';
+import { getTeacherExamFailureMessage } from '@/lib/server/exam-teacher-errors';
 
 async function scopedJob(id: string) {
   const supabase = await createClient();
@@ -64,7 +65,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       const count = await admin.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('provider', 'groq_api').eq('status', 'queued').lte('created_at', job.created_at);
       queuePosition = count.count || 1;
     }
-    return NextResponse.json({ id: job.id, tosId: job.tos_id, status: job.status, progress: job.progress, error: job.error, resultSummary: job.result_summary, queuePosition }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ id: job.id, tosId: job.tos_id, status: job.status, progress: job.progress && typeof job.progress === 'object' ? { stage: job.progress.stage, label: job.progress.label, completedChunks: job.progress.completedChunks, totalChunks: job.progress.totalChunks } : job.progress, error: ['failed', 'needs_attention'].includes(job.status) ? getTeacherExamFailureMessage(job.error, job.progress) : null, resultSummary: job.result_summary, queuePosition }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     await logSystemEvent({
       severity: 'error', source: 'exam.jobs.status', code: 'EXAM_JOB_STATUS_FAILED',

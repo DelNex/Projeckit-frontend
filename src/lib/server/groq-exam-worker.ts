@@ -29,7 +29,9 @@ export function splitExamSlotsIntoBatches<T>(slots: readonly T[]): T[][] {
 /** Respect provider Retry-After while bounding queued retries to 15 minutes. */
 export function getExamProviderRetryDelayMs(retryAfterMs: number | null | undefined, attempt: number): number {
   const safeAttempt = Number.isFinite(attempt) ? Math.max(1, Math.trunc(attempt)) : 1;
-  const fallback = 30_000 * (2 ** Math.min(4, safeAttempt - 1));
+  // Keep recovery responsive when every configured provider is temporarily unavailable.
+  // Explicit Retry-After headers still take precedence.
+  const fallback = [5_000, 15_000, 30_000, 60_000, 120_000][Math.min(4, safeAttempt - 1)];
   const requested = Number.isFinite(retryAfterMs) && Number(retryAfterMs) > 0 ? Number(retryAfterMs) : fallback;
   return Math.max(1_000, Math.min(15 * 60_000, requested));
 }
@@ -343,10 +345,10 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
       const retryAt = new Date(now + retryAfterMs).toISOString();
       const { data: retryJob } = await admin.from('exam_generation_jobs').update({
         status: 'queued',
-        error: 'Groq is temporarily busy. Your exam is safely queued and will retry automatically.',
+        error: 'AI providers are temporarily unavailable. Your exam is safely queued and will retry automatically.',
         progress: {
           stage: 'waiting_for_provider',
-          label: `Groq is temporarily busy. Retrying automatically in about ${Math.ceil(retryAfterMs / 1000)} seconds.`,
+          label: `AI providers are temporarily unavailable. Retrying automatically in about ${Math.ceil(retryAfterMs / 1000)} seconds.`,
           ...(status === 429 ? { providerStatus: 429, providerRetryAt: retryAt, rateLimit: providerError.rateLimit || null } : {}),
         },
         finished_at: null,
@@ -372,7 +374,11 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
     const providerRetryAt = providerRetryDelayMs ? new Date(Date.now() + providerRetryDelayMs).toISOString() : null;
     const { data: failedOwnedJob } = await admin.from('exam_generation_jobs').update({
       status: 'failed',
-      ...(status === 429 ? { progress: { stage: 'provider_rate_limited', providerStatus: 429, providerRetryAt, retryAfterMs: providerRetryDelayMs, rateLimit: providerError.rateLimit || null } } : {}),
+      progress: {
+        stage: 'failed',
+        label: 'We could not finish generating this exam because the AI providers did not complete the request.',
+        ...(status === 429 ? { providerStatus: 429, providerRetryAt, retryAfterMs: providerRetryDelayMs, rateLimit: providerError.rateLimit || null } : {}),
+      },
       error: message.slice(0, 500),
       finished_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -386,7 +392,11 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
     if (failedOwnedJob && claimed.parent_job_id) {
       await admin.from('exam_generation_jobs').update({
         status: 'failed',
-        ...(status === 429 ? { progress: { stage: 'provider_rate_limited', providerStatus: 429, providerRetryAt, retryAfterMs: providerRetryDelayMs, rateLimit: providerError.rateLimit || null } } : {}),
+        progress: {
+          stage: 'failed',
+          label: 'We could not finish generating this exam because the AI providers did not complete the request.',
+          ...(status === 429 ? { providerStatus: 429, providerRetryAt, retryAfterMs: providerRetryDelayMs, rateLimit: providerError.rateLimit || null } : {}),
+        },
         error: message.slice(0, 500),
         finished_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),

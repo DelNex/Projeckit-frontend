@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ExamQuestion, CognitiveDomain } from '@/lib/exam-types';
 import { useToast } from '@/components/ui/toast';
 import { friendlyError } from '@/lib/errors';
@@ -81,6 +81,7 @@ export function ExamDraftEditor({
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [regeneratingItem, setRegeneratingItem] = useState<number | null>(null);
+  const handledSavedQuestionsJobId = useRef<string | null>(null);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const draft = useExamDraft(tosId, questions, setQuestions);
 
@@ -88,13 +89,17 @@ export function ExamDraftEditor({
   useEffect(() => { onQuestionsChange?.(questions); }, [onQuestionsChange, questions]);
 
   useEffect(() => {
-    if (generationJob.savedQuestions) draft.acceptServerQuestions(generationJob.savedQuestions);
+    const jobId = generationJob.job?.id;
+    if (generationJob.savedQuestions && jobId && handledSavedQuestionsJobId.current !== jobId) {
+      handledSavedQuestionsJobId.current = jobId;
+      if (!draft.dirty) draft.acceptServerQuestions(generationJob.savedQuestions);
+    }
     if (generationJob.job && ['completed', 'partial', 'failed', 'cancelled'].includes(generationJob.job.status)) {
       setRegeneratingItem(null);
       if (generationJob.job.status === 'failed') toast.error(generationJob.job.error || 'Question regeneration failed.');
       else if (generationJob.job.status === 'completed' && regeneratingItem !== null) toast.success(`Question ${regeneratingItem} regenerated and saved.`);
     }
-  }, [generationJob.savedQuestions, generationJob.job?.id, generationJob.job?.status, generationJob.job?.error, regeneratingItem, toast, draft.acceptServerQuestions]);
+  }, [generationJob.savedQuestions, generationJob.job?.id, generationJob.job?.status, generationJob.job?.error, regeneratingItem, toast, draft.acceptServerQuestions, draft.dirty]);
 
   const isDemo = Boolean(
     isSampleDemo ||

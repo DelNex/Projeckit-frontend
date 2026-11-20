@@ -137,7 +137,7 @@ test('queue dispatcher prefers the least-loaded school, then the oldest job', ()
 });
 
 test('Groq adapter uses the configured chat endpoint and parses structured question JSON', async () => {
-  const names = ['GROQ_API_KEY', 'GROQ_MODEL', 'AI_PROVIDER_ORDER'];
+  const names = ['GROQ_API_KEY', 'GROQ_MODEL', 'GROQ_SERVICE_TIER', 'AI_PROVIDER_ORDER'];
   const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   const originalFetch = global.fetch;
   try {
@@ -150,7 +150,7 @@ test('Groq adapter uses the configured chat endpoint and parses structured quest
       const body = JSON.parse(String(init?.body));
       assert.equal(body.model, 'openai/gpt-oss-120b');
       assert.equal(body.response_format.type, 'json_schema');
-      assert.equal(body.service_tier, 'auto');
+      assert.equal(body.service_tier, undefined);
       return new Response(JSON.stringify({
         choices: [{ message: { content: JSON.stringify({ questions: [{ item_number: 1 }] }) } }],
       }), { status: 200, headers: { 'content-type': 'application/json' } });
@@ -234,9 +234,9 @@ test('Groq 429 preserves Retry-After metadata for the durable worker retry', asy
 
 test('Groq retry delay respects Retry-After and applies bounded exponential backoff', () => {
   assert.equal(getExamProviderRetryDelayMs(12_000, 1), 12_000);
-  assert.equal(getExamProviderRetryDelayMs(null, 1), 30_000);
-  assert.equal(getExamProviderRetryDelayMs(null, 2), 60_000);
-  assert.equal(getExamProviderRetryDelayMs(null, 3), 120_000);
+  assert.equal(getExamProviderRetryDelayMs(null, 1), 5_000);
+  assert.equal(getExamProviderRetryDelayMs(null, 2), 15_000);
+  assert.equal(getExamProviderRetryDelayMs(null, 3), 30_000);
   assert.equal(getExamProviderRetryDelayMs(60 * 60_000, 1), 15 * 60_000);
 });
 
@@ -259,6 +259,10 @@ test('OpenRouter adapter sends the OpenAI-compatible structured-output request',
       assert.equal(headers.get('x-title'), 'Project KIT');
       const body = JSON.parse(String(init?.body));
       assert.equal(body.model, 'openrouter/free');
+      assert.equal(body.max_tokens, 8192);
+      assert.equal(body.max_completion_tokens, undefined);
+      assert.deepEqual(body.provider, { require_parameters: true });
+      assert.deepEqual(body.reasoning, { effort: 'low' });
       assert.equal(body.response_format.type, 'json_schema');
       assert.deepEqual(body.response_format.json_schema.schema, schema);
       return new Response(JSON.stringify({
@@ -308,6 +312,125 @@ test('provider router continues to Gemini when OpenRouter rejects a model-specif
     assert.equal(calls, 2);
   } finally {
     global.fetch = originalFetch;
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
+test('OpenRouter empty content falls through to Gemini instead of stalling the job', async () => {
+  resetExamProviderCooldownsForTests();
+  const names = ['OPENROUTER_API_KEY', 'GEMINI_API_KEY', 'AI_PROVIDER_ORDER'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  let calls = 0;
+  try {
+    process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
+    process.env.GEMINI_API_KEY = 'test-gemini-key';
+    process.env.AI_PROVIDER_ORDER = 'openrouter,gemini';
+    global.fetch = (async (input: RequestInfo | URL) => {
+      calls += 1;
+      if (String(input).includes('openrouter.ai')) {
+        return new Response(JSON.stringify({ choices: [{ message: { content: '' } }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({
+        candidates: [{ content: { parts: [{ text: '```json\n{"questions":[{"item_number":7}]}\n```' }] } }],
+      }), { status: 200 });
+    }) as typeof fetch;
+    const { requestExamQuestionsFromProviders } = await import('../exam-ai-provider-router');
+    const result = await requestExamQuestionsFromProviders([{ role: 'user', content: 'Create one question.' }], { type: 'object' });
+    assert.deepEqual(JSON.parse(result), [{ item_number: 7 }]);
+    assert.equal(calls, 2);
+  } finally {
+    global.fetch = originalFetch;
+    resetExamProviderCooldownsForTests();
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
+test('Groq HTTP 400 immediately tries the next configured provider', async () => {
+  resetExamProviderCooldownsForTests();
+  const names = ['GROQ_API_KEY', 'OPENROUTER_API_KEY', 'AI_PROVIDER_ORDER'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  let calls = 0;
+  try {
+    process.env.GROQ_API_KEY = 'test-groq-key';
+    process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
+    process.env.AI_PROVIDER_ORDER = 'groq,openrouter';
+    global.fetch = (async (input: RequestInfo | URL) => {
+      calls += 1;
+      if (String(input).includes('api.groq.com')) {
+        return new Response(JSON.stringify({ error: { message: 'Unsupported service tier' } }), { status: 400 });
+      }
+      return new Response(JSON.stringify({ choices: [{ message: { content: '{"questions":[{"item_number":8}]}' } }] }), { status: 200 });
+    }) as typeof fetch;
+    const { requestExamQuestionsFromProviders } = await import('../exam-ai-provider-router');
+    const result = await requestExamQuestionsFromProviders([{ role: 'user', content: 'Create one question.' }], { type: 'object' });
+    assert.deepEqual(JSON.parse(result), [{ item_number: 8 }]);
+    assert.equal(calls, 2);
+  } finally {
+    global.fetch = originalFetch;
+    resetExamProviderCooldownsForTests();
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
+test('401 and 403 provider failures use a short credential cooldown', async () => {
+  resetExamProviderCooldownsForTests();
+  const names = ['GROQ_API_KEY', 'AI_PROVIDER_ORDER'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  let calls = 0;
+  try {
+    process.env.GROQ_API_KEY = 'test-groq-key';
+    process.env.AI_PROVIDER_ORDER = 'groq';
+    global.fetch = (async () => {
+      calls += 1;
+      return new Response(JSON.stringify({ error: { message: 'invalid API key' } }), { status: 401 });
+    }) as typeof fetch;
+    const { requestExamQuestionsFromProviders } = await import('../exam-ai-provider-router');
+    await assert.rejects(requestExamQuestionsFromProviders([{ role: 'user', content: 'Create one.' }], { type: 'object' }));
+    await assert.rejects(requestExamQuestionsFromProviders([{ role: 'user', content: 'Create one.' }], { type: 'object' }));
+    assert.equal(calls, 1);
+  } finally {
+    global.fetch = originalFetch;
+    resetExamProviderCooldownsForTests();
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
+
+test('Gemini 503 preserves a provider Retry-After header for the queued retry', async () => {
+  resetExamProviderCooldownsForTests();
+  const names = ['GEMINI_API_KEY', 'AI_PROVIDER_ORDER'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  try {
+    process.env.GEMINI_API_KEY = 'test-gemini-key';
+    process.env.AI_PROVIDER_ORDER = 'gemini';
+    global.fetch = (async () => new Response(JSON.stringify({ error: { message: 'model overloaded' } }), {
+      status: 503,
+      headers: { 'content-type': 'application/json', 'retry-after': '10' },
+    })) as typeof fetch;
+    const { requestExamQuestionsFromProviders } = await import('../exam-ai-provider-router');
+    await assert.rejects(
+      requestExamQuestionsFromProviders([{ role: 'user', content: 'Create one question.' }], { type: 'object' }),
+      (error: any) => error.status === 503 && error.retryable === true && error.retryAfterMs === 10_000,
+    );
+  } finally {
+    global.fetch = originalFetch;
+    resetExamProviderCooldownsForTests();
     for (const name of names) {
       if (previous[name] === undefined) delete process.env[name];
       else process.env[name] = previous[name];

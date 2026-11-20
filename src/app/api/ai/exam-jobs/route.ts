@@ -9,6 +9,7 @@ import { buildExamPrompt, buildSlotsFromTos, toLessonChunks } from '@/lib/server
 import { ExamQuotaError, getExamAiProvider } from '@/lib/server/exam-ai-provider';
 import { getConfiguredExamProviders } from '@/lib/server/exam-ai-provider-router';
 import { logSystemEvent } from '@/lib/server/system-logger';
+import { getTeacherExamFailureMessage } from '@/lib/server/exam-teacher-errors';
 import { isLessonSourceManifest, type LessonSourceManifest } from '@/lib/lesson-source';
 import { cleanupStaleLessonSourcesForUser, deleteCompressedLessonSource, readCompressedLessonDocuments } from '@/lib/server/lesson-source-storage';
 
@@ -105,29 +106,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ id: activeJob.id, status: activeJob.status, reused: true, queuePosition: position?.count || null }, { status: 202, headers: { 'Cache-Control': 'no-store' } });
     }
 
-    const retryAfter = new Date(Date.now() - 2 * 60_000).toISOString();
+    const retryWindowStart = new Date(Date.now() - 15 * 60_000).toISOString();
     const { data: recentFailure, error: recentFailureError } = await caller.admin!.from('exam_generation_jobs')
       .select('id,updated_at,error,progress').eq('tenant_id', caller.profile!.tenant_id).eq('tos_id', tos.id)
-      .is('parent_job_id', null).eq('status', 'failed').ilike('error', '%HTTP 429%').gte('updated_at', retryAfter)
+      .eq('created_by', caller.user!.id).is('parent_job_id', null).eq('status', 'failed')
+      .gte('updated_at', retryWindowStart)
       .order('updated_at', { ascending: false }).limit(1).maybeSingle();
     if (recentFailureError) throw recentFailureError;
     if (recentFailure) {
-      const failureProgress = recentFailure.progress && typeof recentFailure.progress === 'object' ? recentFailure.progress : {};
-      const retryAt = Date.parse(String(failureProgress.providerRetryAt || '')) || (Date.parse(recentFailure.updated_at) + 2 * 60_000);
-      const retryAfterSeconds = Math.max(1, Math.ceil((retryAt - Date.now()) / 1000));
-      await logSystemEvent({
-        severity: 'warn', source: 'exam.jobs.quota', code: 'EXAM_TOS_RETRY_COOLDOWN',
-        message: 'Exam generation was blocked by the per-TOS retry cooldown.',
-        method: 'POST', route: '/api/ai/exam-jobs', requestId,
-        metadata: { tosId: tos.id, retryAfterSeconds },
-      });
-      return NextResponse.json({
-        error: 'The previous AI generation failed: ' + (recentFailure.error || 'No provider error details were saved.'),
-        code: 'EXAM_TOS_RETRY_COOLDOWN',
-        retryAfterSeconds,
-        failedJobId: recentFailure.id,
-        message: `Wait ${retryAfterSeconds} seconds before retrying. The existing exam was not changed.`,
-      }, { status: 429, headers: { 'Retry-After': String(retryAfterSeconds), 'Cache-Control': 'no-store' } });
+      const failureProgress = recentFailure.progress && typeof recentFailure.progress === 'object' ? recentFailure.progress as Record<string, unknown> : {};
+      const providerStatus = Number(failureProgress.providerStatus) || Number(String(recentFailure.error || '').match(/HTTP\s+(\d{3})/i)?.[1]) || 0;
+      const explicitRetryAt = Date.parse(String(failureProgress.providerRetryAt || ''));
+      const retryAt = providerStatus === 429
+        ? (Number.isFinite(explicitRetryAt) && explicitRetryAt > 0 ? explicitRetryAt : Date.parse(recentFailure.updated_at) + 2 * 60_000)
+        : 0;
+      const retryAfterSeconds = Math.max(0, Math.ceil((retryAt - Date.now()) / 1000));
+      if (providerStatus === 429 && retryAfterSeconds > 0) {
+        await logSystemEvent({
+          severity: 'warn', source: 'exam.jobs.quota', code: 'EXAM_TOS_RETRY_COOLDOWN',
+          message: 'Exam generation was blocked by the per-TOS retry cooldown.',
+          method: 'POST', route: '/api/ai/exam-jobs', requestId,
+          metadata: { tosId: tos.id, retryAfterSeconds },
+        });
+        return NextResponse.json({
+          error: getTeacherExamFailureMessage(recentFailure.error, failureProgress),
+          code: 'EXAM_TOS_RETRY_COOLDOWN',
+          retryAfterSeconds,
+          failedJobId: recentFailure.id,
+          message: `Please wait ${retryAfterSeconds} seconds before trying again. Your existing exam was not changed.`,
+        }, { status: 429, headers: { 'Retry-After': String(retryAfterSeconds), 'Cache-Control': 'no-store' } });
+      }
     }
     if (!getConfiguredExamProviders().length) return NextResponse.json({ error: 'No exam AI provider is configured. Add at least one server-side provider key.' }, { status: 503 });
 
@@ -256,7 +264,20 @@ export async function GET(request: Request) {
         : { data: [] };
       const parentsById = new Map((parents || []).map((parent: any) => [parent.id, parent]));
       const latestByTos: Record<string, any> = {};
-      for (const job of jobs || []) if (!latestByTos[job.tos_id]) latestByTos[job.tos_id] = (job.parent_job_id && parentsById.get(job.parent_job_id)) || job;
+      for (const job of jobs || []) {
+        if (latestByTos[job.tos_id]) continue;
+        const selected = (job.parent_job_id && parentsById.get(job.parent_job_id)) || job;
+        latestByTos[job.tos_id] = {
+          ...selected,
+          error: ['failed', 'needs_attention'].includes(selected.status) ? getTeacherExamFailureMessage(selected.error, selected.progress) : null,
+          progress: selected.progress && typeof selected.progress === 'object' ? {
+            stage: selected.progress.stage,
+            label: selected.progress.label,
+            completedChunks: selected.progress.completedChunks,
+            totalChunks: selected.progress.totalChunks,
+          } : selected.progress,
+        };
+      }
       return NextResponse.json({ jobsByTosId: latestByTos }, { headers: { 'Cache-Control': 'no-store' } });
     }
     let job: any = jobs?.[0];
@@ -266,7 +287,17 @@ export async function GET(request: Request) {
       if (parent) job = parent;
     }
     const position = job.status === 'queued' ? await admin.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('provider', 'groq_api').eq('status', 'queued').lte('created_at', job.created_at) : null;
-    return NextResponse.json({ job: { ...job, queuePosition: position?.count || null } }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ job: {
+      ...job,
+      error: ['failed', 'needs_attention'].includes(job.status) ? getTeacherExamFailureMessage(job.error, job.progress) : null,
+      progress: job.progress && typeof job.progress === 'object' ? {
+        stage: job.progress.stage,
+        label: job.progress.label,
+        completedChunks: job.progress.completedChunks,
+        totalChunks: job.progress.totalChunks,
+      } : job.progress,
+      queuePosition: position?.count || null,
+    } }, { headers: { 'Cache-Control': 'no-store' } });
   } catch {
     return NextResponse.json({ error: 'Could not load exam generation status.' }, { status: 503 });
   }
