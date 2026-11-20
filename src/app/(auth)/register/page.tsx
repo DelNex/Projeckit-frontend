@@ -143,7 +143,7 @@ export default function RegisterPage() {
                   placeholder="name@deped.gov.ph"
                   className="mt-1.5 block min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-sm text-gray-900 outline-none transition-colors placeholder:text-gray-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-600/15 dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:focus:border-blue-500"
                 />
-                <span className="mt-1 block text-[11px] text-gray-400 dark:text-gray-500">
+                <span className="mt-1 block text-[11px] text-gray-600 dark:text-gray-400">
                   Must be an official account ending in <strong className="text-blue-600 dark:text-blue-400 font-semibold">@deped.gov.ph</strong>
                 </span>
               </div>

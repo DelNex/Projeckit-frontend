@@ -30,6 +30,7 @@ export interface CameraViewfinderProps {
   matchedStudentName?: string | null;
   onCapture: () => void;
   onCycleCamera: () => void;
+  onRetryCamera: () => void;
   onUploadFile: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onClose: () => void;
   isProcessing: boolean;
@@ -50,6 +51,7 @@ export function CameraViewfinder({
   matchedStudentName,
   onCapture,
   onCycleCamera,
+  onRetryCamera,
   onUploadFile,
   isProcessing,
   capturePrompt = false,
@@ -76,9 +78,28 @@ export function CameraViewfinder({
 
       {/* Camera Initializing Overlay */}
       {!cameraState.isStreaming && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-xs z-10 gap-2.5 text-gray-300 text-xs">
-          <RefreshCw className="h-7 w-7 animate-spin text-blue-400" />
-          <span className="font-medium">{cameraState.statusText || 'Initializing camera preview…'}</span>
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/85 px-5 text-center text-xs text-gray-200 backdrop-blur-xs">
+          {cameraState.error || ['denied', 'unavailable', 'error'].includes(cameraState.permissionState) ? (
+            <>
+              <Camera className="h-8 w-8 text-gray-400" />
+              <div className="max-w-sm space-y-1">
+                <p className="font-semibold text-white">Camera unavailable</p>
+                <p className="leading-relaxed text-gray-300">{cameraState.error || cameraState.statusText || 'Allow camera access in your browser settings, or upload a clear answer-sheet photo.'}</p>
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button type="button" onClick={onRetryCamera} className="min-h-11 rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300">Try camera again</button>
+                <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-gray-600 bg-gray-800 px-4 py-2 font-semibold text-white transition hover:bg-gray-700 focus-within:ring-2 focus-within:ring-blue-300">
+                  <Upload className="h-4 w-4" /> Upload answer sheet
+                  <input type="file" accept="image/*" onChange={onUploadFile} className="sr-only" aria-label="Upload answer sheet image" />
+                </label>
+              </div>
+            </>
+          ) : (
+            <>
+              <RefreshCw className="h-7 w-7 animate-spin text-blue-400" />
+              <span className="font-medium">{cameraState.statusText || 'Initializing camera preview…'}</span>
+            </>
+          )}
         </div>
       )}
 

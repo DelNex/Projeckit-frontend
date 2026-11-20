@@ -156,6 +156,7 @@ export default function AuditLogsPage() {
 
       {/* Unified DataTable Component */}
       <DataTable
+        mobileLayout="cards"
         tableLabel="Audit activity"
         columns={columns}
         data={logs}

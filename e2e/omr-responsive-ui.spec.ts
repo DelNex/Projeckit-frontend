@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 const routes = ['/login', '/register'];
 const viewports = [
@@ -51,6 +52,16 @@ for (const route of routes) {
       } else {
         expect(layout.buttonHeights.every((height) => height >= 36), 'desktop buttons must keep a consistent minimum target').toBe(true);
       }
+
+      const accessibility = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+        .analyze();
+      expect(
+        accessibility.violations.map(({ id, impact, description, nodes }) => ({
+          id, impact, description, affected: nodes.map((node) => ({ target: node.target, summary: node.failureSummary })),
+        })),
+        'authentication page should have no automated WCAG A/AA violations',
+      ).toEqual([]);
     });
   }
 }
