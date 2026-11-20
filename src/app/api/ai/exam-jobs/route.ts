@@ -114,6 +114,12 @@ export async function POST(request: Request) {
     if (recentFailure) {
       const retryAt = Date.parse(recentFailure.updated_at) + 2 * 60_000;
       const retryAfterSeconds = Math.max(1, Math.ceil((retryAt - Date.now()) / 1000));
+      await logSystemEvent({
+        severity: 'warn', source: 'exam.jobs.quota', code: 'EXAM_TOS_RETRY_COOLDOWN',
+        message: 'Exam generation was blocked by the per-TOS retry cooldown.',
+        method: 'POST', route: '/api/ai/exam-jobs', requestId,
+        metadata: { tosId: tos.id, retryAfterSeconds },
+      });
       return NextResponse.json({
         error: 'The previous AI generation failed: ' + (recentFailure.error || 'No provider error details were saved.'),
         code: 'EXAM_TOS_RETRY_COOLDOWN',
@@ -134,8 +140,24 @@ export async function POST(request: Request) {
     if (tenant.error) throw tenant.error;
     const userLimit = Math.max(1, Math.trunc(Number(process.env.AI_HOURLY_USER_LIMIT) || Number(tenant.data?.ai_hourly_user_limit) || 5));
     const schoolLimit = Math.max(1, Math.trunc(Number(process.env.AI_DAILY_SCHOOL_LIMIT) || Number(tenant.data?.ai_daily_school_limit) || 100));
-    if ((hourly.count || 0) >= userLimit) return NextResponse.json({ error: 'Hourly rate limit reached (' + userLimit + ' exam generations per hour). Please wait before generating again.' }, { status: 429 });
-    if ((daily.count || 0) >= schoolLimit) return NextResponse.json({ error: 'Your school has reached the daily limit of ' + schoolLimit + ' exam generations per day.' }, { status: 429 });
+    if ((hourly.count || 0) >= userLimit) {
+      await logSystemEvent({
+        severity: 'warn', source: 'exam.jobs.quota', code: 'EXAM_HOURLY_USER_LIMIT_REACHED',
+        message: 'Exam generation was blocked by the per-teacher hourly limit.',
+        method: 'POST', route: '/api/ai/exam-jobs', requestId,
+        metadata: { tosId: tos.id, used: hourly.count || 0, limit: userLimit },
+      });
+      return NextResponse.json({ error: 'Hourly rate limit reached (' + userLimit + ' exam generations per hour). Please wait before generating again.', code: 'EXAM_HOURLY_USER_LIMIT_REACHED' }, { status: 429 });
+    }
+    if ((daily.count || 0) >= schoolLimit) {
+      await logSystemEvent({
+        severity: 'warn', source: 'exam.jobs.quota', code: 'EXAM_DAILY_SCHOOL_LIMIT_REACHED',
+        message: 'Exam generation was blocked by the school daily limit.',
+        method: 'POST', route: '/api/ai/exam-jobs', requestId,
+        metadata: { tosId: tos.id, used: daily.count || 0, limit: schoolLimit },
+      });
+      return NextResponse.json({ error: 'Your school has reached the daily limit of ' + schoolLimit + ' exam generations per day.', code: 'EXAM_DAILY_SCHOOL_LIMIT_REACHED' }, { status: 429 });
+    }
 
     if (body.repairItemNumber !== undefined && (!Number.isInteger(body.repairItemNumber) || body.repairItemNumber < 1 || body.repairItemNumber > 90)) {
       return NextResponse.json({ error: 'repairItemNumber must be a whole item number from 1 to 90.' }, { status: 400 });
@@ -187,6 +209,14 @@ export async function POST(request: Request) {
       const message = error.limit === 'hourly'
         ? 'Hourly rate limit reached. Please wait before generating another exam.'
         : 'Your school has reached its daily exam-generation limit.';
+      await logSystemEvent({
+        severity: 'warn', source: 'exam.jobs.quota', code: error.message,
+        message: error.limit === 'hourly'
+          ? 'The exam queue rejected a job because the teacher hourly quota was reached.'
+          : 'The exam queue rejected a job because the school daily quota was reached.',
+        method: 'POST', route: '/api/ai/exam-jobs', requestId,
+        metadata: { limit: error.limit },
+      });
       return NextResponse.json({ error: message, code: error.message, requestId }, { status: 429 });
     }
     if (error instanceof SyntaxError) return NextResponse.json({ error: 'The request must be valid JSON.', requestId }, { status: 400 });
