@@ -21,7 +21,7 @@ import { useToast } from '@/components/ui/toast';
 import { createClient } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { useExamGenerationJob } from '@/lib/exam-generation-client';
-import { extractTextFromFiles } from '@/lib/lesson-parser';
+import { clearPendingLessonExtraction, extractTextFromFiles, resumePendingLessonExtraction } from '@/lib/lesson-parser';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { ExamDraftEditor } from '@/components/assessment/ExamDraftEditor';
 
@@ -137,6 +137,49 @@ export function TosExamModal({
     fetchExistingAssessment();
   }, [isOpen, tos?.id]);
 
+  useEffect(() => {
+    if (!isOpen || !tos?.id || !Array.isArray(tos.rows)) return;
+    let cancelled = false;
+    tos.rows.forEach((row, index) => {
+      const competencyId = row.id || row.code || String(index + 1);
+      void resumePendingLessonExtraction(tos.id, (progress) => {
+        if (cancelled) return;
+        setMaterials((previous) => ({
+          ...previous,
+          [competencyId]: { ...previous[competencyId], competencyId, isUploading: true, progress: progress.message },
+        }));
+      }, competencyId).then((resumed) => {
+        if (cancelled || !resumed) return;
+        setMaterials((previous) => ({
+          ...previous,
+          [competencyId]: {
+            ...previous[competencyId],
+            competencyId,
+            files: [...(previous[competencyId]?.files || []), ...resumed.documents],
+            isUploading: false,
+            error: undefined,
+            progress: resumed.notice,
+          },
+        }));
+        clearPendingLessonExtraction(tos.id, competencyId);
+        if (resumed.notice) toast.info(resumed.notice);
+        toast.success('Recovered saved lesson files for competency ' + (index + 1) + '.');
+      }).catch((error) => {
+        if (cancelled) return;
+        setMaterials((previous) => ({
+          ...previous,
+          [competencyId]: {
+            ...previous[competencyId],
+            competencyId,
+            isUploading: false,
+            error: error instanceof Error ? error.message : 'Could not resume lesson processing.',
+          },
+        }));
+      });
+    });
+    return () => { cancelled = true; };
+  }, [isOpen, tos?.id]);
+
   if (!isOpen || !tos) return null;
 
   const totalQuestions = tos.target_items || 50;
@@ -156,11 +199,14 @@ export function TosExamModal({
 
     try {
       const extraction = await extractTextFromFiles(Array.from(filesList), {
+        tosId: tos?.id,
+        contextId: competencyId,
         onProgress: (progress) => setMaterials((prev) => ({
           ...prev,
           [competencyId]: { ...prev[competencyId], isUploading: true, progress: progress.message },
         })),
       });
+      if (tos?.id) clearPendingLessonExtraction(tos.id, competencyId);
       if (extraction.notice) toast.info(extraction.notice);
       const extractedFiles = extraction.documents;
 
