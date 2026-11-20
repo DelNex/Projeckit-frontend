@@ -7,7 +7,7 @@ import {
     LogOut,
     Menu,
     Settings,
-    Sparkles,
+    Bot,
     User,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -101,7 +101,7 @@ export function Header({ onToggleSidebar, sidebarOpen = false, title }: HeaderPr
             className="pk-ai-launcher relative flex h-10 items-center gap-1.5 rounded-lg px-2.5 sm:px-3 text-xs font-semibold transition"
             title="Open AI Copilot (Ctrl + J)"
           >
-            <Sparkles className="h-4 w-4 text-blue-700 dark:text-blue-300" />
+            <Bot className="h-4 w-4" />
             <span className="hidden sm:inline">AI Copilot</span>
             <kbd className="hidden lg:inline-flex rounded bg-blue-100/70 px-1.5 py-0.5 text-[9px] font-mono text-blue-600 dark:bg-blue-900/60 dark:text-blue-300">
               Ctrl+J

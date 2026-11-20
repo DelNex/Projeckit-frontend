@@ -157,7 +157,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
         <div className="flex min-h-[76px] items-center justify-between border-b border-slate-200 px-5 dark:border-gray-800">
           <Link href={isAdminMode ? '/admin' : '/dashboard'} className="flex items-center gap-3">
             <div className={cn(
-              "pk-brand-mark flex h-10 w-10 items-center justify-center rounded-lg font-bold text-white"
+              "pk-brand-mark flex items-center justify-center font-bold"
             )}>
               {isAdminMode ? <Shield className="h-5 w-5" /> : 'KIT'}
             </div>
