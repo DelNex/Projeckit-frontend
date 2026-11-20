@@ -710,7 +710,7 @@ export function TosEditor({
         <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap shrink-0">
           {/* View Mode Switcher */}
           <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-xl flex items-center gap-1 text-xs">
-            <button
+            <button type="button"
               onClick={() => setViewMode('worksheet')}
               className={cn(
                 'px-3 py-1.5 rounded-lg font-semibold transition',
@@ -721,7 +721,7 @@ export function TosEditor({
             >
               Worksheet Editor
             </button>
-            <button
+            <button type="button"
               onClick={() => setViewMode('preview')}
               className={cn(
                 'px-3 py-1.5 rounded-lg font-semibold transition',
@@ -733,7 +733,7 @@ export function TosEditor({
               DepEd Print Preview
             </button>
             {generatedQuestions.length > 0 && (
-              <button
+              <button type="button"
                 onClick={() => setViewMode('exam')}
                 className={cn(
                   'px-3 py-1.5 rounded-lg font-semibold transition flex items-center gap-1.5',
@@ -761,7 +761,7 @@ export function TosEditor({
 
           {isEditing ? (
             <div className="flex items-center gap-2">
-              <button
+              <button type="button"
                 onClick={() => handleSaveTos(false)}
                 disabled={saving}
                 className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-xs transition flex items-center gap-1.5 shrink-0"
@@ -778,7 +778,7 @@ export function TosEditor({
               </button>
             </div>
           ) : (
-            <button
+            <button type="button"
               onClick={() => {
                 if (linkedAssessmentId || assessmentId) {
                   setIsLinkedWarningModalOpen(true);
@@ -792,7 +792,7 @@ export function TosEditor({
             </button>
           )}
 
-          <button
+          <button type="button"
             onClick={() => setIsHelpOpen(true)}
             className="px-3.5 py-2 text-xs font-semibold text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition flex items-center gap-1.5 shrink-0"
           >
@@ -1477,7 +1477,7 @@ export function TosEditor({
                 {isEditing && (
                   <tr className="bg-emerald-50/40 dark:bg-emerald-950/10 border-t-2 border-dashed border-emerald-300 dark:border-emerald-800">
                       <td className="px-3 py-2 text-center">
-                        <button
+                        <button type="button"
                           onClick={handleCommitInlineRow}
                           title="Add this competency row"
                           className="h-7 w-7 flex items-center justify-center rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm shadow-xs transition"
@@ -1527,7 +1527,7 @@ export function TosEditor({
                         Items &amp; Cognitive domains will be computed automatically
                       </td>
                       <td className="px-3 py-2 text-center">
-                        <button
+                        <button type="button"
                           onClick={handleCommitInlineRow}
                           className="px-2.5 py-1 text-xs font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-lg transition"
                         >
@@ -1825,7 +1825,7 @@ export function TosEditor({
                 <HelpCircle className="h-5 w-5 text-blue-600" />
                 How to use the TOS Worksheet
               </h3>
-              <button
+              <button type="button"
                 onClick={() => setIsHelpOpen(false)}
                 className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
               >
@@ -1888,13 +1888,13 @@ export function TosEditor({
               Are you sure you want to delete {rowsToDelete.length} competency row(s)? This will update the Table of Specifications.
             </p>
             <div className="flex justify-end gap-3 pt-2">
-              <button
+              <button type="button"
                 onClick={() => setIsDeleteModalOpen(false)}
                 className="px-4 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded-xl hover:bg-gray-200"
               >
                 Cancel
               </button>
-              <button
+              <button type="button"
                 onClick={handleConfirmBulkDelete}
                 className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs"
               >

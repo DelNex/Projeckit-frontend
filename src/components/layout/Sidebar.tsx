@@ -169,7 +169,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
             </div>
           </Link>
 
-          <button
+          <button type="button"
             onClick={onClose}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 lg:hidden dark:hover:bg-gray-800"
             aria-label="Close sidebar"
@@ -228,7 +228,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
             <h3 className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-gray-500">
               SESSION
             </h3>
-            <button
+            <button type="button"
               onClick={handleSignOut}
               className="pk-signout w-full flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors"
             >

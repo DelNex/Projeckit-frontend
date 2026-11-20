@@ -476,7 +476,7 @@ export default function TosPage() {
           </div>
 
           {/* Refresh Button */}
-          <button
+          <button type="button"
             onClick={() => loadData()}
             disabled={loading}
             className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 shadow-sm transition-colors"
@@ -487,7 +487,7 @@ export default function TosPage() {
           </button>
 
           {/* Create TOS Button */}
-          <button
+          <button type="button"
             onClick={() => {
               setEditingTos(null);
               setIsCreateEditOpen(true);
@@ -567,7 +567,7 @@ export default function TosPage() {
         <div className="p-8 rounded-3xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-center space-y-3">
           <AlertTriangle className="h-8 w-8 text-rose-600 dark:text-rose-400 mx-auto" />
           <h3 className="text-base font-bold text-rose-900 dark:text-rose-100">{fetchError}</h3>
-          <button
+          <button type="button"
             onClick={() => loadData()}
             className="px-4 py-2 rounded-xl text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 shadow-sm"
           >
@@ -591,7 +591,7 @@ export default function TosPage() {
                 : 'Define competencies and instructional days to automatically allocate Bloom domains and generate standardized tests.'}
             </p>
           </div>
-          <button
+          <button type="button"
             onClick={() => {
               setEditingTos(null);
               setIsCreateEditOpen(true);

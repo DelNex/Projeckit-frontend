@@ -75,7 +75,7 @@ export function Header({ onToggleSidebar, sidebarOpen = false, title }: HeaderPr
       <header className="pk-header sticky top-0 z-40 flex min-h-16 w-full min-w-0 items-center justify-between border-b border-slate-200 bg-white px-3 sm:min-h-[72px] sm:px-6 dark:border-gray-800 dark:bg-gray-900">
         {/* Left: Mobile Toggle & Page Title */}
         <div className="flex min-w-0 items-center gap-2 sm:gap-4">
-          <button
+          <button type="button"
             onClick={onToggleSidebar}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-100 lg:hidden dark:border-gray-800 dark:text-gray-400 dark:hover:bg-gray-800"
             aria-label="Toggle Navigation"
@@ -96,7 +96,7 @@ export function Header({ onToggleSidebar, sidebarOpen = false, title }: HeaderPr
         {/* Right: AI Copilot, Theme Toggle, Profile Menu */}
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
           {/* AI Copilot Launcher Button */}
-          <button
+          <button type="button"
             onClick={() => setIsAiModalOpen(true)}
             className="pk-ai-launcher relative flex h-10 items-center gap-1.5 rounded-lg px-2.5 sm:px-3 text-xs font-semibold transition"
             title="Open AI Copilot (Ctrl + J)"
@@ -113,7 +113,7 @@ export function Header({ onToggleSidebar, sidebarOpen = false, title }: HeaderPr
 
           {/* User Profile Dropdown */}
           <div className="relative">
-            <button
+            <button type="button"
               onClick={() => setDropdownOpen(!dropdownOpen)}
               aria-expanded={dropdownOpen}
               aria-haspopup="menu"
@@ -168,7 +168,7 @@ export function Header({ onToggleSidebar, sidebarOpen = false, title }: HeaderPr
                     <span>School Settings</span>
                   </Link>
                   <div className="my-1 border-t border-gray-100 dark:border-gray-800" />
-                  <button
+                  <button type="button"
                     onClick={handleSignOut}
                     role="menuitem"
                     className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
