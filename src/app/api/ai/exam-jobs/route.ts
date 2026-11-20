@@ -111,7 +111,17 @@ export async function POST(request: Request) {
       .is('parent_job_id', null).eq('status', 'failed').gte('updated_at', retryAfter)
       .order('updated_at', { ascending: false }).limit(1).maybeSingle();
     if (recentFailureError) throw recentFailureError;
-    if (recentFailure) return NextResponse.json({ error: 'The last AI generation for this TOS failed. Check the error and wait two minutes before retrying; the existing exam was not changed.' }, { status: 429 });
+    if (recentFailure) {
+      const retryAt = Date.parse(recentFailure.updated_at) + 2 * 60_000;
+      const retryAfterSeconds = Math.max(1, Math.ceil((retryAt - Date.now()) / 1000));
+      return NextResponse.json({
+        error: 'The previous AI generation failed: ' + (recentFailure.error || 'No provider error details were saved.'),
+        code: 'EXAM_TOS_RETRY_COOLDOWN',
+        retryAfterSeconds,
+        failedJobId: recentFailure.id,
+        message: `Wait ${retryAfterSeconds} seconds before retrying. The existing exam was not changed.`,
+      }, { status: 429, headers: { 'Retry-After': String(retryAfterSeconds), 'Cache-Control': 'no-store' } });
+    }
     if (!getConfiguredExamProviders().length) return NextResponse.json({ error: 'No exam AI provider is configured. Add at least one server-side provider key.' }, { status: 503 });
 
     const [tenant, hourly, daily] = await Promise.all([

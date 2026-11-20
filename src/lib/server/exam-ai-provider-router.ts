@@ -10,6 +10,11 @@ type ProviderConfig = {
 
 const cooldownUntil = new Map<ProviderId, number>();
 
+/** HTTP 400-class request errors need correction, not an immediate retry against the same provider. */
+export function isRetryableProviderStatus(status: number): boolean {
+  return status === 408 || status === 409 || status === 429 || status >= 500;
+}
+
 function providerConfigs(): ProviderConfig[] {
   const env: Record<ProviderId, ProviderConfig | null> = {
     groq: process.env.GROQ_API_KEY ? { id: 'groq', key: process.env.GROQ_API_KEY, model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b' } : null,
@@ -58,7 +63,7 @@ async function readProviderResponse(response: Response, provider: ProviderId): P
     const detail = String(body?.error?.message || body?.message || body?.errors?.[0]?.message || 'Provider request failed').slice(0, 180);
     throw Object.assign(new Error(`${provider} returned HTTP ${response.status}: ${detail}`), {
       status: response.status,
-      retryable: response.status === 400 || response.status === 401 || response.status === 403 || response.status === 404 || response.status === 408 || response.status === 409 || response.status === 422 || response.status === 429 || response.status >= 500,
+      retryable: isRetryableProviderStatus(response.status),
     });
   }
 
@@ -151,12 +156,13 @@ export async function requestExamQuestionsFromProviders(
       const retryable = Boolean((error as Error & { retryable?: boolean }).retryable)
         || error instanceof SyntaxError
         || /timeout|fetch failed|network|returned no questions/i.test(message);
-      failures.push(`${provider.id}${status ? ` HTTP ${status}` : ''}: ${retryable ? 'retryable failure' : 'non-retryable failure'}`);
+      const safeDetail = message.replace(/\s+/g, ' ').slice(0, 180);
+      failures.push(`${provider.id}${status ? ` HTTP ${status}` : ''}: ${safeDetail}`);
       await logSystemEvent({
         severity: retryable ? 'warn' : 'error', source: 'exam.provider-router',
         code: status === 429 ? 'AI_PROVIDER_RATE_LIMITED' : status ? 'AI_PROVIDER_HTTP_ERROR' : 'AI_PROVIDER_REQUEST_FAILED',
         message: 'An AI provider could not complete an exam batch.',
-        metadata: { provider: provider.id, status, retryable, attempt: failures.length },
+        metadata: { provider: provider.id, status, retryable, detail: safeDetail, attempt: failures.length },
       });
       if (!retryable) break;
     }

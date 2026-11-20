@@ -7,6 +7,7 @@ import {
 } from '../exam-types';
 import { randomizeAndBalanceExamQuestions } from '../exam-randomizer';
 import { isSupportedExamSourceFileName } from '../exam-generation-files';
+import { isRetryableProviderStatus } from '../server/exam-ai-provider-router';
 
 
 test('Project KIT — AI Exam Pipeline Requirements', async (t) => {
@@ -191,4 +192,15 @@ test('AI exam upload accepts every file type advertised by the picker', () => {
   for (const name of ['lesson.exe', 'lesson.zip', 'lesson', 'lesson.pdf.exe']) {
     assert.equal(isSupportedExamSourceFileName(name), false, name);
   }
+});
+
+
+test('Groq HTTP 400 is not classified as a retryable provider failure', () => {
+  assert.equal(isRetryableProviderStatus(400), false);
+  assert.equal(isRetryableProviderStatus(401), false);
+  assert.equal(isRetryableProviderStatus(403), false);
+  assert.equal(isRetryableProviderStatus(408), true);
+  assert.equal(isRetryableProviderStatus(409), true);
+  assert.equal(isRetryableProviderStatus(429), true);
+  assert.equal(isRetryableProviderStatus(500), true);
 });
