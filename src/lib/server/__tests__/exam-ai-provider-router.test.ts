@@ -150,6 +150,7 @@ test('Groq adapter uses the configured chat endpoint and parses structured quest
       const body = JSON.parse(String(init?.body));
       assert.equal(body.model, 'openai/gpt-oss-120b');
       assert.equal(body.response_format.type, 'json_schema');
+      assert.equal(body.service_tier, 'auto');
       return new Response(JSON.stringify({
         choices: [{ message: { content: JSON.stringify({ questions: [{ item_number: 1 }] }) } }],
       }), { status: 200, headers: { 'content-type': 'application/json' } });
@@ -210,12 +211,17 @@ test('Groq 429 preserves Retry-After metadata for the durable worker retry', asy
       error: { message: 'Rate limit reached for tokens per minute' },
     }), {
       status: 429,
-      headers: { 'content-type': 'application/json', 'retry-after': '12' },
+      headers: {
+        'content-type': 'application/json', 'retry-after': '12',
+        'x-ratelimit-limit-tokens': '8000', 'x-ratelimit-remaining-tokens': '0', 'x-ratelimit-reset-tokens': '8s',
+      },
     })) as typeof fetch;
     const { requestExamQuestionsFromProviders } = await import('../exam-ai-provider-router');
     await assert.rejects(
       requestExamQuestionsFromProviders([{ role: 'user', content: 'Create one question.' }], { type: 'object' }),
-      (error: any) => error.status === 429 && error.retryable === true && error.retryAfterMs === 12_000,
+      (error: any) => error.status === 429 && error.retryable === true && error.retryAfterMs === 12_000
+        && error.rateLimit?.limitTokens === '8000' && error.rateLimit?.remainingTokens === '0'
+        && error.rateLimit?.resetTokens === '8s',
     );
   } finally {
     global.fetch = originalFetch;
