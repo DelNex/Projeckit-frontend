@@ -21,6 +21,7 @@ export function useExamGenerationJob(tosId: string | undefined) {
   const [job, setJob] = useState<ExamGenerationJob | null>(null);
   const [helperState, setHelperState] = useState<HelperAvailability>('offline');
   const [isStarting, setIsStarting] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [savedQuestions, setSavedQuestions] = useState<ExamQuestion[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const startedAt = useRef(0);
@@ -50,7 +51,8 @@ export function useExamGenerationJob(tosId: string | undefined) {
 
   useEffect(() => {
     alive.current = true;
-    if (!tosId) return () => { alive.current = false; };
+    if (!tosId) { setIsInitialLoading(false); return () => { alive.current = false; }; }
+    setIsInitialLoading(true);
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const load = async () => {
@@ -64,9 +66,10 @@ export function useExamGenerationJob(tosId: string | undefined) {
         ]);
         if (cancelled) return;
         setJob(latest);
+        setIsInitialLoading(false);
         if (latest && ['queued', 'running', 'needs_attention'].includes(latest.status) && !startedAt.current) startedAt.current = Date.now();
         if (latest && ['completed', 'partial'].includes(latest.status)) await refreshJob(latest.id);
-      } catch (error) { if (!cancelled) setLoadError(error instanceof Error ? error.message : 'Could not load exam status.'); }
+      } catch (error) { if (!cancelled) { setLoadError(error instanceof Error ? error.message : 'Could not load exam status.'); setIsInitialLoading(false); } }
     };
     void load();
     const onFocus = () => { void load(); void refreshHelperStatus(); };
@@ -149,5 +152,5 @@ export function useExamGenerationJob(tosId: string | undefined) {
     setJob({ ...job, status: 'cancelled' });
   }, [job]);
 
-  return { job, helperState, isStarting, savedQuestions, loadError, start, cancel, refreshJob };
+  return { job, helperState, isStarting, isInitialLoading, savedQuestions, loadError, start, cancel, refreshJob };
 }
