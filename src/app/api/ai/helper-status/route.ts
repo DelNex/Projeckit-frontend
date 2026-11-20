@@ -31,7 +31,7 @@ export async function GET(request: Request) {
       .neq('status', 'cancelled').or('status.neq.failed,attempts.gt.0')
       .gte('created_at', new Date(now - 24 * 60 * 60_000).toISOString()),
     tosId
-      ? supabase.from('exam_generation_jobs').select('id,updated_at').eq('tenant_id', profile.tenant_id).eq('tos_id', tosId)
+      ? supabase.from('exam_generation_jobs').select('id,updated_at,progress').eq('tenant_id', profile.tenant_id).eq('tos_id', tosId)
         .is('parent_job_id', null).eq('status', 'failed').ilike('error', '%HTTP 429%')
         .gte('updated_at', new Date(now - 15 * 60_000).toISOString())
         .order('updated_at', { ascending: false }).limit(1).maybeSingle()
@@ -46,8 +46,9 @@ export async function GET(request: Request) {
   const dailyLimit = Math.max(1, Math.trunc(Number(process.env.AI_DAILY_SCHOOL_LIMIT) || Number(tenantResult.data?.ai_daily_school_limit) || 100));
   const hourlyUsed = hourlyResult.count || 0;
   const dailyUsed = dailyResult.count || 0;
+  const tosFailureProgress = recentFailureResult.data?.progress && typeof recentFailureResult.data.progress === 'object' ? recentFailureResult.data.progress : {};
   const tosRetryAt = recentFailureResult.data?.updated_at
-    ? Date.parse(recentFailureResult.data.updated_at) + 2 * 60_000
+    ? (Date.parse(String(tosFailureProgress.providerRetryAt || '')) || (Date.parse(recentFailureResult.data.updated_at) + 2 * 60_000))
     : 0;
   // Groq TPM limits apply to the API-key organization, not an individual TOS
   // or teacher. Share the persisted cooldown across serverless instances.
@@ -58,7 +59,7 @@ export async function GET(request: Request) {
   const providerProgress = providerRateLimit?.progress && typeof providerRateLimit.progress === 'object' ? providerRateLimit.progress : {};
   const persistedProviderRetryAt = Date.parse(String(providerProgress.providerRetryAt || '')) || 0;
   const providerRetryAt = providerRateLimit
-    ? Math.max(persistedProviderRetryAt, Date.parse(providerRateLimit.updated_at) + 2 * 60_000)
+    ? (persistedProviderRetryAt || (Date.parse(providerRateLimit.updated_at) + 2 * 60_000))
     : 0;
   const retryAt = Math.max(tosRetryAt, providerRetryAt);
   const retryAfterSeconds = Math.max(0, Math.ceil((retryAt - now) / 1000));
