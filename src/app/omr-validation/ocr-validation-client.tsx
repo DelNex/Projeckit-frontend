@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { extractTextFromFiles, type LessonExtractionProgress } from '@/lib/lesson-parser';
 
-export function LocalOcrValidation() {
+export function ServerOcrValidation() {
   const [result, setResult] = useState('WAITING');
   const [progress, setProgress] = useState('');
 
