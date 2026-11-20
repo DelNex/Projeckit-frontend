@@ -19,6 +19,7 @@ import {
 import { buildTosBlueprintSlots } from '@/lib/exam-types';
 import { useExamGenerationJob } from '@/lib/exam-generation-client';
 import { getLocalDocumentCapacity } from '@/lib/local-document-engine';
+import { isSupportedExamSourceFileName } from '@/lib/exam-generation-files';
 
 interface ExamGeneratorModalProps {
   isOpen: boolean;
@@ -70,6 +71,7 @@ export function ExamGeneratorModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const generatedTextRef = useRef('');
   const handledJobRef = useRef<string | null>(null);
+  const expectedJobIdRef = useRef<string | null>(null);
   const onExamGeneratedRef = useRef(onExamGenerated);
   const onCloseRef = useRef(onClose);
   onExamGeneratedRef.current = onExamGenerated;
@@ -91,8 +93,15 @@ export function ExamGeneratorModal({
   } | null>(null);
 
   useEffect(() => {
-    if (!generationJob.savedQuestions || !generationJob.job?.id || !['completed', 'partial'].includes(generationJob.job.status) || handledJobRef.current === generationJob.job.id) return;
+    if (!isOpen || !generationJob.job?.id || !['queued', 'running'].includes(generationJob.job.status)) return;
+    expectedJobIdRef.current = generationJob.job.id;
+  }, [isOpen, generationJob.job?.id, generationJob.job?.status]);
+
+  useEffect(() => {
+    if (!generationJob.savedQuestions || !generationJob.job?.id || !['completed', 'partial'].includes(generationJob.job.status)
+      || expectedJobIdRef.current !== generationJob.job.id || handledJobRef.current === generationJob.job.id) return;
     handledJobRef.current = generationJob.job.id;
+    expectedJobIdRef.current = null;
     setCurrentStep('done');
     setChunkProgress(null);
     toast.success(`Loaded ${generationJob.savedQuestions.length} saved exam questions.`);
@@ -110,7 +119,6 @@ export function ExamGeneratorModal({
   if (!isOpen) return null;
 
   const handleFilesSelect = async (files: FileList | File[]) => {
-    const validExts = ['.pdf', '.docx', '.pptx', '.txt', '.md'];
     const incoming = Array.from(files);
 
     if (selectedFiles.length + incoming.length > 5) {
@@ -121,11 +129,8 @@ export function ExamGeneratorModal({
     const validFiles: File[] = [];
     const capacity = await getLocalDocumentCapacity();
     for (const file of incoming) {
-      const lowerName = file.name.toLowerCase();
-      const isValid = validExts.some((ext) => lowerName.endsWith(ext));
-
-      if (!isValid) {
-        toast.error(`'${file.name}' is not supported. Use PDF, DOCX, PPTX, or TXT.`);
+      if (!isSupportedExamSourceFileName(file.name)) {
+        toast.error(`'${file.name}' is not supported. Use PDF, DOCX, PPTX, TXT, Markdown, or an image file.`);
         return;
       }
 
@@ -204,6 +209,7 @@ export function ExamGeneratorModal({
       if (!tosId) throw new Error('Save this Table of Specifications before generating an exam.');
       generatedTextRef.current = extractedLessonText;
       const queued = await generationJob.start({ lessonDocuments, teacherInstructions: teacherInstructions.trim() || undefined });
+      expectedJobIdRef.current = queued.id;
       const label = queued.status === 'queued'
         ? `Queued (position ${queued.queuePosition || 1}). Groq AI will process this exam in the background.`
         : queued.status === 'running' ? 'Groq is already generating questions for this TOS.' : 'This TOS already has an AI job that needs attention.';
