@@ -238,22 +238,6 @@ export async function extractTextFromFiles(
     throw error;
   }
 
-  if (options?.tosId && typeof window !== 'undefined') {
-    window.localStorage.setItem(pendingKey(options.tosId, options.contextId), JSON.stringify({
-      tosId: options.tosId,
-      contextId: options.contextId || 'exam-generator',
-      jobs: data.jobs,
-      teacherInstructions: options.teacherInstructions,
-      createdAt: Date.now(),
-    } satisfies PendingExtractionRecord));
-  }
-
-  const documents: Array<{ name: string; text: string; lowConfidencePages?: number[] }> = [];
-  for (const [index, job] of data.jobs.entries()) {
-    const result = await waitForJob(job, index + 1, files.length, options?.onProgress);
-    documents.push({ name: result.name || job.fileName, text: result.text, lowConfidencePages: result.lowConfidencePages });
-  }
-  return buildResult(documents);
 }
 
 export async function resumePendingLessonExtraction(
