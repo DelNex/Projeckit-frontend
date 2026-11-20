@@ -50,11 +50,11 @@ interface StudentScoreRecord {
 }
 
 const TIER_CONFIG = [
-  { key: 'mastered', label: 'Mastered', range: '96–100%', min: 96, color: '#10B981', bgClass: 'bg-emerald-500', textClass: 'text-emerald-700 dark:text-emerald-400' },
-  { key: 'closely', label: 'Closely Approximating Mastery', range: '86–95%', min: 86, color: '#3B82F6', bgClass: 'bg-blue-500', textClass: 'text-blue-700 dark:text-blue-400' },
-  { key: 'moving', label: 'Moving Towards Mastery', range: '66–85%', min: 66, color: '#F59E0B', bgClass: 'bg-amber-500', textClass: 'text-amber-700 dark:text-amber-400' },
-  { key: 'average', label: 'Average / Low', range: '35–65%', min: 35, color: '#6366F1', bgClass: 'bg-indigo-500', textClass: 'text-indigo-700 dark:text-indigo-400' },
-  { key: 'atRisk', label: 'Very Low / At Risk', range: '<35%', min: 0, color: '#EF4444', bgClass: 'bg-rose-500', textClass: 'text-rose-700 dark:text-rose-400' },
+  { key: 'mastered', label: 'Mastered', range: '96–100%', min: 96, color: '#4568f5', bgClass: 'bg-emerald-500', textClass: 'text-emerald-700 dark:text-emerald-400' },
+  { key: 'closely', label: 'Closely Approximating Mastery', range: '86–95%', min: 86, color: '#6e88f7', bgClass: 'bg-blue-500', textClass: 'text-blue-700 dark:text-blue-400' },
+  { key: 'moving', label: 'Moving Towards Mastery', range: '66–85%', min: 66, color: '#8da1f9', bgClass: 'bg-amber-500', textClass: 'text-amber-700 dark:text-amber-400' },
+  { key: 'average', label: 'Average / Low', range: '35–65%', min: 35, color: '#b4c2ff', bgClass: 'bg-indigo-500', textClass: 'text-indigo-700 dark:text-indigo-400' },
+  { key: 'atRisk', label: 'Very Low / At Risk', range: '<35%', min: 0, color: '#dce4ff', bgClass: 'bg-rose-500', textClass: 'text-rose-700 dark:text-rose-400' },
 ];
 
 export default function DashboardPage() {
@@ -413,7 +413,7 @@ export default function DashboardPage() {
   }, [learnerTierData]);
 
   return (
-    <div className="space-y-6 sm:space-y-8 min-w-0 pb-12">
+    <div className="pk-dashboard space-y-6 sm:space-y-8 min-w-0 pb-12">
       {/* Executive Page Header Matching Legacy */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-gray-200 dark:border-gray-800 pb-5">
         <div>
@@ -427,7 +427,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
-          <button
+          <button type="button"
             onClick={() => loadDashboardData(true)}
             disabled={refreshing}
             className="inline-flex items-center justify-center gap-2 px-3.5 py-2 text-xs font-bold text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 shadow-2xs transition disabled:opacity-50"
@@ -453,7 +453,7 @@ export default function DashboardPage() {
             <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
             <span>{error}</span>
           </div>
-          <button
+          <button type="button"
             onClick={() => loadDashboardData(false)}
             className="inline-flex items-center gap-1 font-bold underline hover:text-red-900 ml-4"
           >
@@ -465,7 +465,7 @@ export default function DashboardPage() {
       {/* KPI Cards Grid Matching Legacy 4-Card Architecture */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* KPI Card 1: Average MPS */}
-        <div className="p-5 sm:p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xs transition-all hover:shadow-xs">
+        <div className="pk-kpi-card p-5 sm:p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xs transition-all hover:shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
               Average MPS
@@ -498,7 +498,7 @@ export default function DashboardPage() {
         </div>
 
         {/* KPI Card 2: Total Students Assessed */}
-        <div className="p-5 sm:p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xs transition-all hover:shadow-xs">
+        <div className="pk-kpi-card p-5 sm:p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xs transition-all hover:shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
               Total Students Assessed
@@ -521,7 +521,7 @@ export default function DashboardPage() {
         </div>
 
         {/* KPI Card 3: At-Risk Learners */}
-        <div className="p-5 sm:p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xs transition-all hover:shadow-xs">
+        <div className="pk-kpi-card p-5 sm:p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xs transition-all hover:shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
               At-Risk Learners
@@ -544,7 +544,7 @@ export default function DashboardPage() {
         </div>
 
         {/* KPI Card 4: Class Sections */}
-        <div className="p-5 sm:p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xs transition-all hover:shadow-xs">
+        <div className="pk-kpi-card p-5 sm:p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xs transition-all hover:shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
               Class Sections
@@ -617,6 +617,8 @@ export default function DashboardPage() {
                 <svg
                   viewBox={`0 0 ${trendSvgCoords.width} ${trendSvgCoords.height}`}
                   className="w-full h-auto max-h-72 select-none"
+                  role="group"
+                  aria-label="Mean percentage score by academic quarter. The dashed line marks the 75 percent target. Focus a data point to hear its value."
                 >
                   {/* Horizontal Grid lines */}
                   {[0, 25, 50, 75, 100].map((val) => {
@@ -651,14 +653,14 @@ export default function DashboardPage() {
                     y1={trendSvgCoords.benchmarkY}
                     x2={trendSvgCoords.width - trendSvgCoords.paddingX}
                     y2={trendSvgCoords.benchmarkY}
-                    stroke="#F59E0B"
+                    stroke="#3157e8"
                     strokeWidth="1.5"
                     strokeDasharray="4 4"
                   />
 
                   {/* Area fill */}
                   {trendSvgCoords.areaD && (
-                    <path d={trendSvgCoords.areaD} fill="#dbeafe" fillOpacity="0.7" />
+                    <path d={trendSvgCoords.areaD} fill="#dce4ff" fillOpacity="0.7" />
                   )}
 
                   {/* Trend Path line */}
@@ -666,7 +668,7 @@ export default function DashboardPage() {
                     <path
                       d={trendSvgCoords.pathD}
                       fill="none"
-                      stroke="#2563EB"
+                      stroke="#3157e8"
                       strokeWidth="3"
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -680,7 +682,13 @@ export default function DashboardPage() {
                     return (
                       <g
                         key={pt.key}
-                        className="cursor-pointer group"
+                        className="cursor-pointer group outline-none"
+                        role="img"
+                        tabIndex={0}
+                        aria-label={`${pt.label}: ${pt.mps}% mean percentage score, ${Math.abs(delta)} percentage points ${delta >= 0 ? 'above' : 'below'} the 75% target`}
+                        onFocus={() => setHoveredPoint({ quarter: pt.label, mps: pt.mps || 0, delta, x: pt.x, y: pt.y })}
+                        onBlur={() => setHoveredPoint(null)}
+                        onClick={() => setHoveredPoint({ quarter: pt.label, mps: pt.mps || 0, delta, x: pt.x, y: pt.y })}
                         onMouseEnter={() =>
                           setHoveredPoint({
                             quarter: pt.label,
@@ -692,11 +700,13 @@ export default function DashboardPage() {
                         }
                         onMouseLeave={() => setHoveredPoint(null)}
                       >
+                        <circle cx={pt.x} cy={pt.y} r="14" fill="transparent" />
+                        <circle cx={pt.x} cy={pt.y} r="12" fill="none" stroke="#3157e8" strokeWidth="2" className="opacity-0 group-focus:opacity-100" />
                         <circle
                           cx={pt.x}
                           cy={pt.y}
                           r="6"
-                          fill="#2563EB"
+                          fill="#3157e8"
                           stroke="#FFFFFF"
                           strokeWidth="2.5"
                           className="transition-transform group-hover:scale-125"
@@ -731,6 +741,8 @@ export default function DashboardPage() {
                 {hoveredPoint && (
                   <div
                     className="pointer-events-none absolute -top-2 rounded-lg bg-gray-900 px-3 py-1.5 text-xs text-white shadow-lg transition-all dark:bg-gray-800"
+                    role="status"
+                    aria-live="polite"
                     style={{
                       left: `${Math.min(trendSvgCoords.width - 120, Math.max(20, hoveredPoint.x - 50))}px`,
                       top: `${Math.max(10, hoveredPoint.y - 45)}px`,
@@ -794,7 +806,12 @@ export default function DashboardPage() {
                 {/* Donut Chart Visual */}
                 <div className="flex justify-center items-center py-2">
                   <div className="relative w-40 h-40">
-                    <svg viewBox="0 0 140 140" className="w-full h-full -rotate-90 transform">
+                    <svg
+                      viewBox="0 0 140 140"
+                      className="w-full h-full -rotate-90 transform"
+                      role="img"
+                      aria-label={`Learner mastery distribution for ${learnerTierData.totalStudents} scanned students. Exact counts are listed below the chart.`}
+                    >
                       {/* Background circle track */}
                       <circle
                         cx="70"

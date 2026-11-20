@@ -59,13 +59,13 @@ export function OmrResultsReview({
   const hasIssues = ambiguousCount > 0 || multipleCount > 0 || erasedCount > 0;
 
   return (
-    <div className="flex flex-col h-full space-y-4">
+    <div className="pk-omr-review flex flex-col h-full min-h-0 space-y-3 sm:space-y-4">
       {/* Top Summary Bar */}
-      <div className="rounded-2xl bg-gray-800/80 border border-gray-700/80 p-3.5 space-y-2 shrink-0">
+      <div className="pk-omr-review-summary rounded-2xl bg-gray-800/80 border border-gray-700/80 p-3.5 space-y-2 shrink-0">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-gray-200">
-              {isAnswerKeyMode ? 'Detected Answer Key' : 'Scan Results Verification'}
+              {isAnswerKeyMode ? 'Detected Answer Key' : `Scan Results · ${items.length}/${totalItems} items`}
             </span>
             <span
               className={cn(
@@ -81,7 +81,7 @@ export function OmrResultsReview({
             </span>
           </div>
 
-          <div className="flex items-center gap-2 text-[11px] font-semibold text-gray-300">
+          <div className="pk-omr-review-counts flex items-center gap-2 text-[11px] font-semibold text-gray-300">
             <span className="flex items-center gap-1 text-emerald-400">
               <span className="h-2 w-2 rounded-full bg-emerald-400" />
               {markedCount} Marked
@@ -98,6 +98,7 @@ export function OmrResultsReview({
                 {ambiguousCount} Faint
               </span>
             )}
+            {erasedCount > 0 && <span className="flex items-center gap-1 text-gray-300">{erasedCount} Erased</span>}
             <span className="text-gray-400">({blankCount} Blank)</span>
           </div>
         </div>
@@ -114,7 +115,7 @@ export function OmrResultsReview({
 
       {/* Learner Assignment (Examinee Mode only) */}
       {!isAnswerKeyMode && (
-        <div className="rounded-2xl bg-gray-800/60 border border-gray-700/80 p-3 space-y-1.5 shrink-0">
+        <div className="pk-omr-review-learner rounded-2xl bg-gray-800/60 border border-gray-700/80 p-3 space-y-1.5 shrink-0">
           <div className="flex items-center justify-between">
             <label className="text-xs font-bold text-gray-200 flex items-center gap-1.5">
               <UserCheck className="h-3.5 w-3.5 text-blue-400" />
@@ -122,7 +123,7 @@ export function OmrResultsReview({
             </label>
             {selectedStudent ? (
               <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
-                <CheckCircle2 className="h-3.5 w-3.5" /> Ready to Persist
+                <CheckCircle2 className="h-3.5 w-3.5" /> Ready to save
               </span>
             ) : (
               <span className="text-[11px] font-bold text-amber-400">
@@ -147,8 +148,8 @@ export function OmrResultsReview({
       )}
 
       {/* Answer Items Grid */}
-      <div className="flex-1 overflow-y-auto max-h-[380px] sm:max-h-[440px] pr-1 space-y-2">
-        <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+      <div className="pk-omr-answer-scroll flex-1 min-h-0 overflow-y-auto pr-1 space-y-2">
+        <div className="pk-omr-answer-grid grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
           {items.map((item) => {
             const isMarked = item.state === 'MARKED' && Boolean(item.selectedChoice);
             const isMultiple = item.state === 'MULTIPLE_MARK';
@@ -158,8 +159,11 @@ export function OmrResultsReview({
             return (
               <div
                 key={item.itemNumber}
+                data-state={item.state}
+                role="group"
+                aria-label={`Item ${item.itemNumber}, ${item.state.toLowerCase().replace('_', ' ')}`}
                 className={cn(
-                  'rounded-xl border p-2 flex flex-col justify-between transition-all bg-gray-900/60',
+                  'pk-omr-answer-card rounded-xl border p-2 flex flex-col justify-between transition-all bg-gray-900/60',
                   isMultiple
                     ? 'border-red-600/80 bg-red-950/30'
                     : isAmbiguous
@@ -187,7 +191,7 @@ export function OmrResultsReview({
                 </div>
 
                 {/* Choice Buttons for manual correction */}
-                <div className="flex items-center justify-between gap-1">
+                <div className="pk-omr-answer-actions flex items-center justify-between gap-1" role="group" aria-label={`Answer choices for item ${item.itemNumber}`}>
                   {choices.map((choice) => {
                     const isSelected = item.selectedChoice === choice;
                     return (
@@ -195,6 +199,8 @@ export function OmrResultsReview({
                         key={choice}
                         type="button"
                         onClick={() => onUpdateItem(item.itemNumber, isSelected ? null : choice)}
+                        aria-pressed={isSelected}
+                        aria-label={`Item ${item.itemNumber}: ${choice}${isSelected ? ", selected" : ""}`}
                         className={cn(
                           'flex-1 py-1 rounded text-xs font-bold transition cursor-pointer text-center',
                           isSelected
@@ -209,6 +215,8 @@ export function OmrResultsReview({
                   <button
                     type="button"
                     title="Mark as Blank"
+                    aria-pressed={item.state === "BLANK" && !item.selectedChoice}
+                    aria-label={`Item ${item.itemNumber}: mark blank`}
                     onClick={() => onUpdateItem(item.itemNumber, null)}
                     className={cn(
                       'px-1.5 py-1 rounded text-[10px] font-bold transition cursor-pointer',
@@ -227,7 +235,7 @@ export function OmrResultsReview({
       </div>
 
       {/* Footer Actions */}
-      <div className="flex flex-col-reverse sm:flex-row items-center justify-between gap-3 pt-3 border-t border-gray-800 shrink-0">
+      <div className="pk-omr-review-footer flex flex-col-reverse sm:flex-row items-center justify-between gap-3 pt-3 border-t border-gray-800 shrink-0">
         <button
           type="button"
           onClick={onScanAnother}
@@ -258,7 +266,7 @@ export function OmrResultsReview({
           ) : (
             <>
               <Save className="h-4 w-4" />
-              <span>Confirm & Save to Supabase</span>
+              <span>Confirm & Save Results</span>
             </>
           )}
         </button>

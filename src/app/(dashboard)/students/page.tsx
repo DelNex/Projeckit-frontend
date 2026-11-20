@@ -775,7 +775,7 @@ export default function StudentsPage() {
             <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
             <span>Bulk Import</span>
           </button>
-          <button
+          <button type="button"
             onClick={openAddModal}
             className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700 transition"
           >
@@ -796,7 +796,7 @@ export default function StudentsPage() {
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300 flex items-center justify-between">
           <span>{error}</span>
-          <button
+          <button type="button"
             onClick={fetchStudents}
             className="inline-flex items-center gap-1 font-bold underline hover:text-red-900"
           >
@@ -992,6 +992,7 @@ export default function StudentsPage() {
 
       {/* Unified DataTable Component */}
       <DataTable
+        mobileLayout="cards"
         tableLabel={activeTab === 'active' ? 'Student list' : 'Archived students'}
         columns={columns}
         data={displayedStudents}

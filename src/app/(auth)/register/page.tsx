@@ -67,7 +67,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col bg-slate-50 px-4 py-8 dark:bg-gray-950 sm:px-6 sm:py-12 lg:px-8">
+    <main className="pk-auth flex min-h-screen flex-col bg-slate-50 px-4 py-8 dark:bg-gray-950 sm:px-6 sm:py-12 lg:px-8">
       <div className="flex w-full flex-1 items-center justify-center">
       <section className="w-full max-w-md space-y-7 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-9">
         {/* Brand Header */}
@@ -143,7 +143,7 @@ export default function RegisterPage() {
                   placeholder="name@deped.gov.ph"
                   className="mt-1.5 block min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-sm text-gray-900 outline-none transition-colors placeholder:text-gray-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-600/15 dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:focus:border-blue-500"
                 />
-                <span className="mt-1 block text-[11px] text-gray-400 dark:text-gray-500">
+                <span className="mt-1 block text-[11px] text-gray-600 dark:text-gray-400">
                   Must be an official account ending in <strong className="text-blue-600 dark:text-blue-400 font-semibold">@deped.gov.ph</strong>
                 </span>
               </div>

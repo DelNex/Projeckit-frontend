@@ -622,7 +622,7 @@ function AssessmentsContent() {
                 <span>Open</span>
                 <ArrowUpRight className="h-3.5 w-3.5" />
               </Link>
-              <button
+              <button type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleDeleteClick(a);
@@ -655,7 +655,7 @@ function AssessmentsContent() {
           </p>
         </div>
 
-        <button
+        <button type="button"
           onClick={() => setIsCreateModalOpen(true)}
           className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700 transition"
         >
@@ -667,7 +667,7 @@ function AssessmentsContent() {
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300 flex items-center justify-between">
           <span>{error}</span>
-          <button
+          <button type="button"
             onClick={fetchAssessments}
             className="inline-flex items-center gap-1 font-bold underline hover:text-red-900"
           >
@@ -678,6 +678,7 @@ function AssessmentsContent() {
 
       {/* Unified DataTable Component */}
       <DataTable
+        mobileLayout="cards"
         tableLabel="Item Analysis Assessments"
         columns={columns}
         data={filteredAssessments}
@@ -715,7 +716,7 @@ function AssessmentsContent() {
               <h3 className="text-base font-bold text-gray-900 dark:text-white">
                 Create New Assessment
               </h3>
-              <button
+              <button type="button"
                 onClick={() => setIsCreateModalOpen(false)}
                 className="rounded-lg p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
               >

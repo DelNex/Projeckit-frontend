@@ -1056,7 +1056,7 @@ export default function AssessmentWorkspacePage({
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300 flex items-center justify-between">
           <span>{error}</span>
-          <button 
+          <button type="button" 
             onClick={loadAssessmentData}
             className="inline-flex items-center gap-1 font-bold underline hover:text-red-900"
           >
@@ -1077,7 +1077,7 @@ export default function AssessmentWorkspacePage({
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (
-              <button
+              <button type="button"
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
                 className={cn(
@@ -1136,14 +1136,14 @@ export default function AssessmentWorkspacePage({
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                  <button
+                  <button type="button"
                     onClick={() => setIsAnswerKeyScannerOpen(true)}
                     className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-3.5 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-gray-900 dark:text-emerald-400 dark:hover:bg-emerald-950/40 transition"
                   >
                     <Camera className="h-3.5 w-3.5" />
                     <span>Scan Key via OMR</span>
                   </button>
-                  <button
+                  <button type="button"
                     onClick={handleSaveKey}
                     disabled={savingKey}
                     className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition"
@@ -1161,7 +1161,7 @@ export default function AssessmentWorkspacePage({
                     Presets:
                   </span>
                   {choicesList.map((letter) => (
-                    <button
+                    <button type="button"
                       key={letter}
                       onClick={() => applyPresetAll(letter)}
                       className="px-2.5 py-1 rounded-lg border border-gray-200 bg-white dark:bg-gray-800 dark:border-gray-700 font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition text-[11px]"
@@ -1169,14 +1169,14 @@ export default function AssessmentWorkspacePage({
                       All {letter}
                     </button>
                   ))}
-                  <button
+                  <button type="button"
                     onClick={applyPatternAlternating}
                     className="px-2.5 py-1 rounded-lg border border-gray-200 bg-white dark:bg-gray-800 dark:border-gray-700 font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition text-[11px] flex items-center gap-1"
                   >
                     <Sparkles className="h-3 w-3" />
                     <span>Pattern ({choicesList.join('')})</span>
                   </button>
-                  <button
+                  <button type="button"
                     onClick={handleClearAll}
                     className="px-2.5 py-1 rounded-lg border border-rose-200 bg-white dark:bg-gray-800 dark:border-rose-900/40 font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition text-[11px]"
                   >
@@ -1186,7 +1186,7 @@ export default function AssessmentWorkspacePage({
 
                 {/* Option Count Switcher (3, 4, or 5 Choices) */}
                 <div className="flex items-center gap-1 bg-white dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700 text-xs shrink-0">
-                  <button
+                  <button type="button"
                     onClick={() => setNumChoices(3)}
                     className={cn(
                       'px-2 py-0.5 rounded-lg text-[11px] font-bold transition',
@@ -1197,7 +1197,7 @@ export default function AssessmentWorkspacePage({
                   >
                     3 Choices (A-C)
                   </button>
-                  <button
+                  <button type="button"
                     onClick={() => setNumChoices(4)}
                     className={cn(
                       'px-2 py-0.5 rounded-lg text-[11px] font-bold transition',
@@ -1208,7 +1208,7 @@ export default function AssessmentWorkspacePage({
                   >
                     4 Choices (A-D)
                   </button>
-                  <button
+                  <button type="button"
                     onClick={() => setNumChoices(5)}
                     className={cn(
                       'px-2 py-0.5 rounded-lg text-[11px] font-bold transition',
@@ -1236,7 +1236,7 @@ export default function AssessmentWorkspacePage({
                       </span>
                     )}
                   </div>
-                  <button
+                  <button type="button"
                     onClick={() => {
                       setOmrDetectedKey({});
                       setOmrKeyMismatches([]);
@@ -1353,14 +1353,14 @@ export default function AssessmentWorkspacePage({
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
-                  <button
+                  <button type="button"
                     onClick={() => setIsPrintModalOpen(true)}
                     className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-bold text-gray-700 shadow-xs hover:bg-gray-50 transition dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
                   >
                     <Printer className="h-4 w-4" />
                     <span>Print OMR Sheets</span>
                   </button>
-                  <button
+                  <button type="button"
                     onClick={() => setIsScannerOpen(true)}
                     className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 transition"
                   >
@@ -1498,14 +1498,14 @@ export default function AssessmentWorkspacePage({
                     </a>
                     {isEditingIa ? (
                       <>
-                        <button
+                        <button type="button"
                           onClick={handleSaveIa}
                           className="px-3.5 py-1.5 text-xs font-semibold text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 shadow-xs transition flex items-center gap-1.5"
                         >
                           <Save className="w-3.5 h-3.5" />
                           Save Changes
                         </button>
-                        <button
+                        <button type="button"
                           onClick={handleCancelEditIa}
                           className="px-3.5 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition"
                         >
@@ -1514,7 +1514,7 @@ export default function AssessmentWorkspacePage({
                       </>
                     ) : (
                       <>
-                        <button
+                        <button type="button"
                           onClick={handleStartEditIa}
                           className="px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-xs transition flex items-center gap-1.5"
                         >
@@ -1700,14 +1700,14 @@ export default function AssessmentWorkspacePage({
                       </p>
                     </div>
                     <div className="flex items-center gap-2 pt-2">
-                      <button
+                      <button type="button"
                         onClick={() => handleTabChange('omr')}
                         className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-xs transition flex items-center gap-1.5"
                       >
                         <Camera className="w-3.5 h-3.5" />
                         Go to OMR Scanner
                       </button>
-                      <button
+                      <button type="button"
                         onClick={handleStartEditIa}
                         className="px-4 py-2 text-xs font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition flex items-center gap-1.5"
                       >

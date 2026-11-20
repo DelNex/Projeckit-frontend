@@ -139,7 +139,7 @@ export function ConfirmationModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
+      className="pk-confirm-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
       onClick={(e) => {
         if (e.target === e.currentTarget && !isLoading) {
           onClose();
@@ -148,7 +148,7 @@ export function ConfirmationModal({
     >
       <div
         ref={modalRef}
-        className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-gray-900 transition-all scale-100"
+        className="pk-confirm-panel w-full max-w-md max-h-[min(90dvh,720px)] overflow-y-auto overscroll-contain rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-gray-900 transition-all scale-100"
         role="dialog"
         aria-modal="true"
         aria-labelledby="confirmation-modal-title"

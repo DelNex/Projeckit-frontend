@@ -71,7 +71,7 @@ export default function ReportsPage() {
           <h1 className="mt-1 text-2xl font-black text-gray-900 dark:text-white">Section reports</h1>
           <p className="mt-1 max-w-2xl text-sm text-gray-500">Choose a section to download question papers, teacher copies, TOS and analysis DOCX files, or print its OMR sheets.</p>
         </div>
-        <button onClick={() => void loadReports()} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-gray-200 px-3 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
+        <button type="button" onClick={() => void loadReports()} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-gray-200 px-3 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
           <RefreshCw className="h-4 w-4" /> Refresh
         </button>
       </header>
@@ -89,7 +89,7 @@ export default function ReportsPage() {
         <>
           <section aria-label="Choose section" className="flex flex-wrap gap-2">
             {sections.map((item) => (
-              <button key={item.id} onClick={() => setSelectedSection(item.id)} aria-pressed={selectedSection === item.id}
+              <button type="button" key={item.id} onClick={() => setSelectedSection(item.id)} aria-pressed={selectedSection === item.id}
                 className={`rounded-xl border px-4 py-2.5 text-left text-sm transition ${selectedSection === item.id ? 'border-blue-600 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-200' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300'}`}>
                 <span className="block font-bold">{item.name}</span>
                 {item.grade && <span className="text-xs opacity-70">{item.grade}</span>}

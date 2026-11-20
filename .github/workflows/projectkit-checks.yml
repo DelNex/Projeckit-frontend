@@ -2,7 +2,7 @@ name: Project KIT checks
 
 on:
   push:
-    branches: ["main", "feat/**"]
+    branches: ["main", "feat/**", "ui-redesign"]
   pull_request:
     branches: ["main"]
   workflow_dispatch:

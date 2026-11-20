@@ -837,7 +837,7 @@ function AnalyticsContent() {
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300 flex items-center justify-between">
           <span>{error}</span>
-          <button
+          <button type="button"
             onClick={() => void loadData(true)}
             className="inline-flex items-center gap-1 font-bold underline hover:text-red-900"
           >
@@ -861,7 +861,7 @@ function AnalyticsContent() {
                 Last updated: {lastUpdated.toLocaleTimeString()}
               </span>
             )}
-            <button
+            <button type="button"
               onClick={handleRefresh}
               disabled={refreshing}
               className="px-3.5 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-700 transition flex items-center gap-1.5"
@@ -869,7 +869,7 @@ function AnalyticsContent() {
               <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-blue-600' : ''}`} />
               Refresh
             </button>
-            <button
+            <button type="button"
               onClick={handleExportDocx}
               disabled={exporting}
               className="px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-xs transition flex items-center gap-1.5 print:hidden"
@@ -878,7 +878,7 @@ function AnalyticsContent() {
               <FileDown className="w-3.5 h-3.5" />
               Export DOCX
             </button>
-            <button
+            <button type="button"
               onClick={handleExportExcel}
               disabled={exporting}
               className="px-3.5 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-900/60 shadow-xs transition flex items-center gap-1.5 print:hidden"
@@ -1000,7 +1000,7 @@ function AnalyticsContent() {
       {/* Tab Navigation Bar (Matching Legacy Navigation) */}
       <div className="border-b border-gray-200 dark:border-gray-800 print:hidden">
         <nav className="flex space-x-3 overflow-x-auto no-scrollbar">
-          <button
+          <button type="button"
             onClick={() => setActiveTab('sectional')}
             className={`py-2.5 px-4 text-xs font-semibold border-b-2 whitespace-nowrap transition-colors ${
               activeTab === 'sectional'
@@ -1010,7 +1010,7 @@ function AnalyticsContent() {
           >
             Class / Sectional Achievement (MPS %)
           </button>
-          <button
+          <button type="button"
             onClick={() => setActiveTab('longitudinal')}
             className={`py-2.5 px-4 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
               activeTab === 'longitudinal'
@@ -1020,7 +1020,7 @@ function AnalyticsContent() {
           >
             Year-over-Year Growth Trends
           </button>
-          <button
+          <button type="button"
             onClick={() => setActiveTab('cognitive')}
             className={`py-2.5 px-4 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
               activeTab === 'cognitive'
@@ -1030,7 +1030,7 @@ function AnalyticsContent() {
           >
             Cognitive Domain Mastery
           </button>
-          <button
+          <button type="button"
             onClick={() => setActiveTab('item-analysis')}
             className={`py-2.5 px-4 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
               activeTab === 'item-analysis'
@@ -1040,7 +1040,7 @@ function AnalyticsContent() {
           >
             Psychometric Item Analysis Matrix
           </button>
-          <button
+          <button type="button"
             onClick={() => setActiveTab('reports')}
             className={`py-2.5 px-4 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
               activeTab === 'reports'
@@ -1357,7 +1357,27 @@ function AnalyticsContent() {
                 )}
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              <div className="grid gap-3 sm:hidden" aria-label="Item analysis results" role="list">
+                {itemAnalysisRows.map((row) => (
+                  <article key={row.itemNumber} role="listitem" className="rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Item {row.itemNumber} · {row.code}</p>
+                        <p className="mt-1 text-xs font-semibold leading-relaxed text-gray-900 dark:text-white">{row.description}</p>
+                      </div>
+                      <span className="shrink-0 rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">Key {row.key}</span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <div className="rounded-lg bg-gray-50 p-2 dark:bg-gray-800"><p className="text-[10px] text-gray-500">Correct responses</p><p className="mt-0.5 text-sm font-bold text-gray-900 dark:text-white">{row.Ri} <span className="text-[10px] font-medium text-gray-500">/ {row.N}</span></p></div>
+                      <div className="rounded-lg bg-gray-50 p-2 dark:bg-gray-800"><p className="text-[10px] text-gray-500">Difficulty (P)</p><p className="mt-0.5 text-sm font-bold text-gray-900 dark:text-white">{row.pIndex.toFixed(2)} <span className="text-[10px] font-medium text-gray-500">{row.difficultyCategory}</span></p></div>
+                      <div className="rounded-lg bg-gray-50 p-2 dark:bg-gray-800"><p className="text-[10px] text-gray-500">Discrimination (D)</p><p className="mt-0.5 text-sm font-bold text-gray-900 dark:text-white">{row.dIndex > 0 ? `+${row.dIndex.toFixed(2)}` : row.dIndex.toFixed(2)} <span className="text-[10px] font-medium text-gray-500">{row.discriminationCategory}</span></p></div>
+                      <div className="rounded-lg bg-gray-50 p-2 dark:bg-gray-800"><p className="text-[10px] text-gray-500">Recommendation</p><p className="mt-0.5 text-sm font-bold text-gray-900 dark:text-white">{row.action}</p></div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <div className="hidden overflow-x-auto sm:block">
                 <table className="w-full text-left border-collapse table-fixed min-w-[640px]">
                   <thead>
                     <tr className="border-b border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/60 text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">
@@ -1448,6 +1468,7 @@ function AnalyticsContent() {
                   </tfoot>
                 </table>
               </div>
+              </>
             )}
           </div>
         </div>
@@ -1502,7 +1523,26 @@ function AnalyticsContent() {
                 </Link>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              <div className="grid gap-3 sm:hidden" aria-label="Consolidated section reports" role="list">
+                {consolidatedReportsData.map((row) => (
+                  <article key={row.sectionName} role="listitem" className="rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900">
+                    <div className="flex items-center justify-between gap-3">
+                      <h4 className="min-w-0 truncate text-sm font-bold text-gray-900 dark:text-white">{row.sectionName}</h4>
+                      <span className="shrink-0 rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">{row.mps !== null ? `${row.mps.toFixed(1)}% MPS` : 'No scans'}</span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <div className="rounded-lg bg-gray-50 p-2 dark:bg-gray-800"><p className="text-[10px] text-gray-500">Enrolled</p><p className="mt-0.5 text-sm font-bold text-gray-900 dark:text-white">{row.enrolledStudents}</p></div>
+                      <div className="rounded-lg bg-gray-50 p-2 dark:bg-gray-800"><p className="text-[10px] text-gray-500">Scanned</p><p className="mt-0.5 text-sm font-bold text-gray-900 dark:text-white">{row.scannedStudents}</p></div>
+                      <div className="rounded-lg bg-gray-50 p-2 dark:bg-gray-800"><p className="text-[10px] text-gray-500">Mean score</p><p className="mt-0.5 text-sm font-bold text-gray-900 dark:text-white">{row.meanScore !== null ? row.meanScore.toFixed(1) : '—'}</p></div>
+                      <div className="rounded-lg bg-gray-50 p-2 dark:bg-gray-800"><p className="text-[10px] text-gray-500">Std. deviation</p><p className="mt-0.5 text-sm font-bold text-gray-900 dark:text-white">{row.standardDeviation !== null ? row.standardDeviation.toFixed(2) : '—'}</p></div>
+                      <div className="rounded-lg bg-gray-50 p-2 dark:bg-gray-800"><p className="text-[10px] text-gray-500">Outstanding</p><p className="mt-0.5 text-sm font-bold text-gray-900 dark:text-white">{row.outstandingCount}</p></div>
+                      <div className="rounded-lg bg-gray-50 p-2 dark:bg-gray-800"><p className="text-[10px] text-gray-500">Did not meet</p><p className="mt-0.5 text-sm font-bold text-gray-900 dark:text-white">{row.didNotMeetCount}</p></div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <div className="hidden overflow-x-auto sm:block">
                 <table className="w-full text-left border-collapse table-fixed min-w-[640px]">
                   <thead>
                     <tr className="border-b border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/60 text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">
@@ -1555,6 +1595,7 @@ function AnalyticsContent() {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </div>
         </div>

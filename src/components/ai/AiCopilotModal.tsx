@@ -11,6 +11,7 @@ import {
     Paperclip,
     Send,
     Sparkles,
+    StopCircle,
     ThumbsDown,
     ThumbsUp,
     Trash2,
@@ -18,7 +19,9 @@ import {
     X
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 interface ChatMessage {
   id: string;
@@ -53,6 +56,9 @@ export function AiCopilotModal({
   assessmentTitle,
 }: AiCopilotModalProps) {
   const pathname = usePathname();
+  const dialogId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const activeAssistantMessageIdRef = useRef<string | null>(null);
 
   // Active context state
   const [activeContextId, setActiveContextId] = useState<number | null>(assessmentId ?? null);
@@ -164,15 +170,43 @@ export function AiCopilotModal({
     }
   }, [showSidebar, aiInfo]);
 
-  // Keyboard escape listener
+  // Keep keyboard focus inside the dialog and return it to the launcher on close.
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+    if (!isOpen) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const selector = 'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
+    const frame = window.requestAnimationFrame(() => {
+      const first = dialogRef.current?.querySelector<HTMLElement>(selector);
+      (first || dialogRef.current)?.focus();
+    });
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        abortControllerRef.current?.abort();
         onClose();
+        return;
       }
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(selector) || [])
+        .filter((element) => element.offsetWidth > 0 || element.offsetHeight > 0);
+      if (!focusable.length) { event.preventDefault(); dialogRef.current?.focus(); return; }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener('keydown', handleKeyDown);
+      abortControllerRef.current?.abort();
+      setIsStreaming(false);
+      setMessages((current) => current.map((message) => message.status === 'streaming'
+        ? { ...message, content: message.content ? `${message.content}\n\nGeneration stopped.` : 'Generation stopped.', status: 'complete' }
+        : message));
+      activeAssistantMessageIdRef.current = null;
+      previousFocus?.focus();
+    };
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -185,6 +219,7 @@ export function AiCopilotModal({
     setInputQuery('');
     const userMsgId = `usr-${Date.now()}`;
     const assistantMsgId = `ast-${Date.now()}`;
+    activeAssistantMessageIdRef.current = assistantMsgId;
 
     // Add user message & placeholder assistant message
     setMessages((prev) => [
@@ -237,6 +272,7 @@ export function AiCopilotModal({
           );
         },
         onDone: () => {
+          activeAssistantMessageIdRef.current = null;
           setIsStreaming(false);
           setMessages((prev) =>
             prev.map((msg) =>
@@ -245,6 +281,7 @@ export function AiCopilotModal({
           );
         },
         onError: async (streamErr) => {
+          if (abortController.signal.aborted) return;
           console.warn('Streaming error, falling back to chat POST:', streamErr);
           // Fallback to standard chat endpoint if stream failed
           try {
@@ -268,12 +305,13 @@ export function AiCopilotModal({
               )
             );
           } finally {
+            activeAssistantMessageIdRef.current = null;
             setIsStreaming(false);
           }
         },
       });
     } catch (err: any) {
-      if (err?.name === 'AbortError') return;
+      if (err?.name === 'AbortError' || abortController.signal.aborted) return;
 
       // Direct fallback call
       try {
@@ -297,9 +335,20 @@ export function AiCopilotModal({
           )
         );
       } finally {
+        activeAssistantMessageIdRef.current = null;
         setIsStreaming(false);
       }
     }
+  };
+
+  const handleStopGeneration = () => {
+    abortControllerRef.current?.abort();
+    const activeId = activeAssistantMessageIdRef.current;
+    if (activeId) setMessages((prev) => prev.map((message) => message.id === activeId
+      ? { ...message, content: message.content ? `${message.content}\n\nGeneration stopped.` : 'Generation stopped.', status: 'complete' }
+      : message));
+    activeAssistantMessageIdRef.current = null;
+    setIsStreaming(false);
   };
 
   // Handle module upload
@@ -365,8 +414,8 @@ export function AiCopilotModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative flex h-[620px] max-h-[92vh] w-full max-w-4xl overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-900">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm animate-in fade-in duration-200 sm:items-center sm:p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <div ref={dialogRef} id={dialogId} role="dialog" aria-modal="true" aria-labelledby={`${dialogId}-title`} aria-describedby={`${dialogId}-description`} tabIndex={-1} className="relative flex h-[100dvh] max-h-[100dvh] w-full max-w-5xl overflow-hidden rounded-none border border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-900 sm:h-[min(760px,92dvh)] sm:max-h-[92dvh] sm:rounded-3xl">
         {/* Main Chat Pane */}
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Modal Header */}
@@ -377,14 +426,14 @@ export function AiCopilotModal({
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
+                  <h2 id={`${dialogId}-title`} className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
                     Project KIT AI Copilot
                   </h2>
                   <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600 dark:bg-blue-900/40 dark:text-blue-300">
                     DepEd Assistant
                   </span>
                 </div>
-                <p className="text-[11px] text-gray-400 leading-tight">
+                <p id={`${dialogId}-description`} className="text-[11px] text-gray-500 dark:text-gray-400 leading-tight">
                   Psychometrics, Table of Specifications &amp; OMR Guidance
                 </p>
               </div>
@@ -399,6 +448,9 @@ export function AiCopilotModal({
                   showSidebar && 'bg-blue-50 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400'
                 )}
                 title="Toggle System Info Sidebar"
+                aria-label="Toggle AI system information"
+                aria-expanded={showSidebar}
+                aria-controls={`${dialogId}-system-info`}
               >
                 <Info className="h-4 w-4" />
               </button>
@@ -408,6 +460,8 @@ export function AiCopilotModal({
                 onClick={handleClearChat}
                 className="flex h-8 w-8 items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:border-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 transition"
                 title="Clear Chat History"
+                aria-label="Clear chat history"
+                disabled={isStreaming || uploadingFile}
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -415,7 +469,8 @@ export function AiCopilotModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex h-8 w-8 items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:border-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 transition"
+                aria-label="Close AI Copilot"
+                className="flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:border-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 transition"
                 title="Close (Esc)"
               >
                 <X className="h-4 w-4" />
@@ -446,7 +501,8 @@ export function AiCopilotModal({
           )}
 
           {/* Messages Scroll Area */}
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 custom-scrollbar">
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 space-y-4 custom-scrollbar sm:px-6" role="log" aria-label="Conversation messages" aria-live="off" aria-relevant="additions text">
+            <p className="sr-only" role="status" aria-live="polite">{isStreaming ? 'AI Copilot is generating a response.' : 'AI Copilot is ready.'}</p>
             {messages.map((msg) => (
               <div
                 key={msg.id}
@@ -463,16 +519,21 @@ export function AiCopilotModal({
 
                 <div
                   className={cn(
-                    'max-w-[82%] rounded-2xl p-4 space-y-2 leading-relaxed shadow-2xs',
+                    'max-w-[90%] break-words rounded-2xl p-3 text-[13px] space-y-2 leading-relaxed shadow-2xs sm:max-w-[82%] sm:p-4',
                     msg.role === 'user'
                       ? 'bg-blue-600 text-white rounded-br-none'
                       : 'bg-gray-50 dark:bg-gray-800/70 text-gray-800 dark:text-gray-200 border border-gray-100 dark:border-gray-800 rounded-bl-none'
                   )}
                 >
                   {/* Content with basic bold / markdown parsing */}
-                  <div className="whitespace-pre-wrap select-text">
+                  <div className="select-text [&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_h1]:my-2 [&_h1]:text-base [&_h1]:font-bold [&_h2]:my-2 [&_h2]:text-sm [&_h2]:font-bold [&_h3]:my-2 [&_h3]:font-semibold [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-blue-500 [&_blockquote]:pl-3 [&_blockquote]:text-gray-600 dark:[&_blockquote]:text-gray-300 [&_a]:font-semibold [&_a]:text-blue-600 [&_a]:underline dark:[&_a]:text-blue-400 [&_table]:my-2 [&_table]:w-full [&_table]:text-left [&_th]:border-b [&_th]:border-gray-300 [&_th]:px-2 [&_th]:py-1 [&_td]:border-b [&_td]:border-gray-200 [&_td]:px-2 [&_td]:py-1 dark:[&_th]:border-gray-700 dark:[&_td]:border-gray-800">
                     {msg.content ? (
-                      msg.content
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+                        a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer noopener">{children}</a>,
+                        pre: ({ children }) => <pre className="my-2 max-w-full overflow-x-auto rounded-lg bg-gray-950 p-3 text-[11px] text-gray-100">{children}</pre>,
+                        code: ({ children, className }) => <code className={cn('rounded bg-gray-200/80 px-1 py-0.5 font-mono text-[0.9em] dark:bg-gray-700/80', className)}>{children}</code>,
+                        table: ({ children }) => <div className="my-2 max-w-full overflow-x-auto"><table>{children}</table></div>,
+                      }}>{msg.content}</ReactMarkdown>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-gray-400">
                         <Loader2 className="h-3.5 w-3.5 animate-spin" /> Thinking...
@@ -494,6 +555,7 @@ export function AiCopilotModal({
                           onClick={() => handleCopy(msg.content, msg.id)}
                           className="flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition"
                           title="Copy response"
+                          aria-label={copiedId === msg.id ? 'Response copied' : 'Copy response'}
                         >
                           {copiedId === msg.id ? (
                             <>
@@ -516,6 +578,8 @@ export function AiCopilotModal({
                             msg.feedback === 'like' && 'text-blue-600 dark:text-blue-400 font-bold'
                           )}
                           title="Helpful"
+                          aria-label="Mark response helpful"
+                          aria-pressed={msg.feedback === 'like'}
                         >
                           <ThumbsUp className="h-3 w-3" />
                         </button>
@@ -528,6 +592,8 @@ export function AiCopilotModal({
                             msg.feedback === 'dislike' && 'text-red-500 font-bold'
                           )}
                           title="Not helpful"
+                          aria-label="Mark response not helpful"
+                          aria-pressed={msg.feedback === 'dislike'}
                         >
                           <ThumbsDown className="h-3 w-3" />
                         </button>
@@ -547,7 +613,7 @@ export function AiCopilotModal({
           </div>
 
           {/* Quick Suggested Prompt Chips */}
-          <div className="border-t border-gray-100 bg-gray-50/50 px-6 py-2.5 dark:border-gray-800 dark:bg-gray-900/50">
+          <div className="border-t border-gray-100 bg-gray-50/50 px-3 py-2.5 dark:border-gray-800 dark:bg-gray-900/50 sm:px-6">
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
               <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 shrink-0 mr-1">
                 Suggested:
@@ -558,7 +624,7 @@ export function AiCopilotModal({
                   type="button"
                   onClick={() => handleSendMessage(chip)}
                   disabled={isStreaming}
-                  className="shrink-0 rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-medium text-gray-700 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-600 dark:border-gray-800 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-500 dark:hover:bg-blue-900/30 dark:hover:text-blue-300 transition"
+                  className="shrink-0 rounded-full border border-gray-200 bg-white px-3 py-2 text-[11px] font-medium text-gray-700 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 dark:border-gray-800 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-500 dark:hover:bg-blue-900/30 dark:hover:text-blue-300 transition"
                 >
                   {chip}
                 </button>
@@ -567,7 +633,7 @@ export function AiCopilotModal({
           </div>
 
           {/* Composer / Input Area */}
-          <div className="border-t border-gray-100 p-4 dark:border-gray-800">
+          <div className="shrink-0 border-t border-gray-100 px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 dark:border-gray-800 sm:p-4">
             {uploadMessage && (
               <div className="mb-2 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                 <Check className="h-3.5 w-3.5" />
@@ -580,7 +646,8 @@ export function AiCopilotModal({
                 e.preventDefault();
                 handleSendMessage();
               }}
-              className="flex items-center gap-2"
+              className="flex items-end gap-2"
+              aria-label="Send a message to AI Copilot"
             >
               {/* File upload button */}
               <input
@@ -588,13 +655,15 @@ export function AiCopilotModal({
                 ref={fileInputRef}
                 onChange={handleFileUpload}
                 accept=".pdf,.docx,.txt,.md"
-                className="hidden"
+                className="sr-only"
+                aria-label="Attach a curriculum or module document"
               />
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadingFile || isStreaming}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-100 dark:border-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 transition"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 dark:border-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 transition"
+                aria-label="Attach curriculum or module document"
                 title="Attach Curriculum / Module document (PDF, DOCX, TXT)"
               >
                 {uploadingFile ? (
@@ -604,43 +673,51 @@ export function AiCopilotModal({
                 )}
               </button>
 
-              <input
-                type="text"
+              <textarea
+                rows={1}
+                aria-label="Message AI Copilot"
                 value={inputQuery}
                 onChange={(e) => setInputQuery(e.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
                 placeholder={
                   activeContextTitle
                     ? `Ask anything about ${activeContextTitle}...`
                     : 'Ask anything about assessments, TOS, or psychometrics...'
                 }
                 disabled={isStreaming}
-                className="h-10 flex-1 rounded-xl border border-gray-200 bg-white px-4 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:border-blue-500"
+                className="max-h-32 min-h-11 flex-1 resize-y rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm font-medium text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:border-blue-500 sm:px-4"
               />
 
-              <button
-                type="submit"
-                disabled={!inputQuery.trim() || isStreaming}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-xs hover:bg-blue-700 disabled:opacity-40 disabled:pointer-events-none transition"
-              >
-                {isStreaming ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
+              {isStreaming ? (
+                <button type="button" onClick={handleStopGeneration} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 transition hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700" aria-label="Stop generating response" title="Stop generating">
+                  <StopCircle className="h-5 w-5" />
+                </button>
+              ) : (
+                <button type="submit" disabled={!inputQuery.trim()} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-xs transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40" aria-label="Send message">
                   <Send className="h-4 w-4" />
-                )}
-              </button>
+                </button>
+              )}
             </form>
           </div>
         </div>
 
         {/* Collapsible System Info Drawer */}
         {showSidebar && (
-          <div className="w-80 shrink-0 border-l border-gray-100 bg-gray-50/60 p-5 dark:border-gray-800 dark:bg-gray-900/60 overflow-y-auto custom-scrollbar text-xs">
-            <div className="flex items-center justify-between border-b border-gray-200 pb-3 dark:border-gray-800">
+          <>
+          <button type="button" className="absolute inset-0 z-10 bg-black/30 sm:hidden" aria-label="Close AI system information" onClick={() => setShowSidebar(false)} />
+          <div id={`${dialogId}-system-info`} className="absolute inset-x-0 bottom-0 z-20 max-h-[72%] w-full shrink-0 overflow-y-auto rounded-t-2xl border-t border-gray-100 bg-white p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] dark:border-gray-800 dark:bg-gray-900 sm:static sm:inset-auto sm:max-h-none sm:w-80 sm:rounded-none sm:border-l sm:border-t-0 sm:bg-gray-50/60 sm:p-5 sm:pb-5 sm:dark:bg-gray-900/60 custom-scrollbar text-xs">
+            <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-inherit pb-3 dark:border-gray-800">
               <span className="font-bold text-gray-900 dark:text-white">AI Engine Info</span>
               <button
                 type="button"
                 onClick={() => setShowSidebar(false)}
-                className="rounded p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                aria-label="Close AI system information"
+                className="flex h-10 w-10 items-center justify-center rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-200"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -736,6 +813,7 @@ export function AiCopilotModal({
               </div>
             )}
           </div>
+          </>
         )}
       </div>
     </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -30,106 +30,83 @@ interface ToastContextType {
 }
 
 const ToastContext = createContext<ToastContextType | null>(null);
+const MAX_VISIBLE_TOASTS = 5;
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
   const dismissToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+    const timer = timers.current.get(id);
+    if (timer) clearTimeout(timer);
+    timers.current.delete(id);
+    setToasts((current) => current.filter((toast) => toast.id !== id));
   }, []);
 
-  const showToast = useCallback(
-    ({ message, type, duration = 4000, action }: Omit<ToastItem, 'id'>) => {
-      const id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
-      const item: ToastItem = { id, message, type, duration, action };
+  const showToast = useCallback((input: Omit<ToastItem, 'id'>) => {
+    const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const item: ToastItem = { ...input, id, duration: input.duration ?? 4000 };
 
-      setToasts((prev) => [...prev, item]);
+    setToasts((current) => {
+      const next = [item, ...current];
+      next.slice(MAX_VISIBLE_TOASTS).forEach((removed) => {
+        const timer = timers.current.get(removed.id);
+        if (timer) clearTimeout(timer);
+        timers.current.delete(removed.id);
+      });
+      return next.slice(0, MAX_VISIBLE_TOASTS);
+    });
 
-      if (duration > 0) {
-        setTimeout(() => {
-          dismissToast(id);
-        }, duration);
-      }
+    if (item.duration && item.duration > 0) {
+      timers.current.set(id, setTimeout(() => dismissToast(id), item.duration));
+    }
+    return id;
+  }, [dismissToast]);
 
-      return id;
-    },
-    [dismissToast]
-  );
-
-  const success = useCallback(
-    (message: string, options?: { duration?: number; action?: ToastAction }) => {
-      showToast({ message, type: 'success', duration: options?.duration ?? 4000, action: options?.action });
-    },
-    [showToast]
-  );
-  const error = useCallback(
-    (message: string, options?: { duration?: number; action?: ToastAction }) => {
-      showToast({ message, type: 'error', duration: options?.duration ?? 5000, action: options?.action });
-    },
-    [showToast]
-  );
-  const info = useCallback(
-    (message: string, options?: { duration?: number; action?: ToastAction }) => {
-      showToast({ message, type: 'info', duration: options?.duration ?? 4000, action: options?.action });
-    },
-    [showToast]
-  );
+  const success = useCallback((message: string, options?: { duration?: number; action?: ToastAction }) => {
+    showToast({ message, type: 'success', duration: options?.duration ?? 4000, action: options?.action });
+  }, [showToast]);
+  const error = useCallback((message: string, options?: { duration?: number; action?: ToastAction }) => {
+    showToast({ message, type: 'error', duration: options?.duration ?? 5500, action: options?.action });
+  }, [showToast]);
+  const info = useCallback((message: string, options?: { duration?: number; action?: ToastAction }) => {
+    showToast({ message, type: 'info', duration: options?.duration ?? 4000, action: options?.action });
+  }, [showToast]);
   const toast = useMemo(() => ({ success, error, info }), [success, error, info]);
+
+  useEffect(() => () => {
+    timers.current.forEach((timer) => clearTimeout(timer));
+    timers.current.clear();
+  }, []);
 
   return (
     <ToastContext.Provider value={{ toast, showToast, dismissToast }}>
       {children}
-
-      {/* Toast Notification Container */}
-      <div
-        className="fixed top-4 right-4 sm:top-5 sm:right-5 z-[9999] flex flex-col gap-2.5 pointer-events-none max-w-sm w-full px-4 sm:px-0"
-        aria-live="polite"
-        role="region"
-      >
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={cn(
-              'pointer-events-auto rounded-2xl border p-4 shadow-xl backdrop-blur-md transition-all animate-in slide-in-from-top-4 duration-200 flex items-start justify-between gap-3 text-xs font-semibold',
-              t.type === 'success' &&
-                'bg-white dark:bg-gray-900 border-emerald-200 text-emerald-950 dark:border-emerald-800 dark:text-emerald-100 shadow-emerald-500/10',
-              t.type === 'error' &&
-                'bg-white dark:bg-gray-900 border-red-200 text-red-950 dark:border-red-800 dark:text-red-100 shadow-red-500/10',
-              t.type === 'info' &&
-                'bg-white dark:bg-gray-900 border-blue-200 text-blue-950 dark:border-blue-800 dark:text-blue-100 shadow-blue-500/10'
-            )}
-          >
-            <div className="flex items-start gap-2.5 min-w-0 flex-1">
-              {t.type === 'success' && <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />}
-              {t.type === 'error' && <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />}
-              {t.type === 'info' && <Info className="h-4 w-4 shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" />}
-              <span className="line-clamp-3 text-xs leading-snug break-words">{t.message}</span>
-            </div>
-
-            <div className="flex items-center gap-1.5 shrink-0">
-              {t.action && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    t.action?.onClick();
-                    dismissToast(t.id);
-                  }}
-                  className="rounded-lg bg-gray-900 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100 transition shadow-xs"
-                >
-                  {t.action.label}
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => dismissToast(t.id)}
-                className="rounded-lg p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition"
-                aria-label="Dismiss notification"
-              >
-                <X className="h-3.5 w-3.5" />
+      <div className="pk-toast-stack" aria-label="Notifications" aria-live="polite" aria-relevant="additions text" role="region">
+        {toasts.map((item) => {
+          const Icon = item.type === 'success' ? CheckCircle2 : item.type === 'error' ? AlertCircle : Info;
+          const label = item.type === 'success' ? 'Completed' : item.type === 'error' ? 'Something went wrong' : 'Notice';
+          return (
+            <article key={item.id} className={cn('pk-toast', 'pk-toast-enter')} role={item.type === 'error' ? 'alert' : 'status'}>
+              <span className="pk-toast-icon" aria-hidden="true"><Icon size={18} strokeWidth={2} /></span>
+              <div className="pk-toast-copy">
+                <strong>{label}</strong>
+                <p>{item.message}</p>
+                {item.action && (
+                  <button type="button" className="pk-toast-action" onClick={() => {
+                    try { item.action?.onClick(); } finally { dismissToast(item.id); }
+                  }}>{item.action.label}</button>
+                )}
+              </div>
+              <button type="button" className="pk-toast-dismiss" onClick={() => dismissToast(item.id)} aria-label="Dismiss notification">
+                <X size={16} />
               </button>
-            </div>
-          </div>
-        ))}
+              {item.duration !== 0 && <span className="pk-toast-progress" style={{ animationDuration: `${item.duration}ms` }} aria-hidden="true" />}
+            </article>
+          );
+        })}
       </div>
     </ToastContext.Provider>
   );
@@ -137,8 +114,6 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
 export function useToast() {
   const context = useContext(ToastContext);
-  if (!context) {
-    throw new Error('useToast must be used within a ToastProvider');
-  }
+  if (!context) throw new Error('useToast must be used within a ToastProvider');
   return context;
 }

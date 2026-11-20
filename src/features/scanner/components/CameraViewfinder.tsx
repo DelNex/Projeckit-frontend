@@ -30,6 +30,7 @@ export interface CameraViewfinderProps {
   matchedStudentName?: string | null;
   onCapture: () => void;
   onCycleCamera: () => void;
+  onRetryCamera: () => void;
   onUploadFile: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onClose: () => void;
   isProcessing: boolean;
@@ -50,6 +51,7 @@ export function CameraViewfinder({
   matchedStudentName,
   onCapture,
   onCycleCamera,
+  onRetryCamera,
   onUploadFile,
   isProcessing,
   capturePrompt = false,
@@ -64,26 +66,45 @@ export function CameraViewfinder({
   const isBarcodeMode = mode === 'barcode';
 
   return (
-    <div className="relative flex-1 w-full h-full min-h-[380px] sm:min-h-[500px] bg-black rounded-2xl sm:rounded-3xl overflow-hidden flex items-center justify-center select-none">
+    <div className="pk-omr-viewfinder relative flex-1 w-full h-full min-h-[220px] sm:min-h-[340px] bg-black rounded-2xl sm:rounded-3xl overflow-hidden flex items-center justify-center select-none">
       {/* Live Video Feed */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted
-        className="absolute inset-0 w-full h-full object-cover"
+        className="absolute inset-0 w-full h-full object-contain"
       />
 
       {/* Camera Initializing Overlay */}
       {!cameraState.isStreaming && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-xs z-10 gap-2.5 text-gray-300 text-xs">
-          <RefreshCw className="h-7 w-7 animate-spin text-blue-400" />
-          <span className="font-medium">{cameraState.statusText || 'Initializing camera preview…'}</span>
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/85 px-5 text-center text-xs text-gray-200 backdrop-blur-xs">
+          {cameraState.error || ['denied', 'unavailable', 'error'].includes(cameraState.permissionState) ? (
+            <>
+              <Camera className="h-8 w-8 text-gray-400" />
+              <div className="max-w-sm space-y-1">
+                <p className="font-semibold text-white">Camera unavailable</p>
+                <p className="leading-relaxed text-gray-300">{cameraState.error || cameraState.statusText || 'Allow camera access in your browser settings, or upload a clear answer-sheet photo.'}</p>
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button type="button" onClick={onRetryCamera} className="min-h-11 rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300">Try camera again</button>
+                <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-gray-600 bg-gray-800 px-4 py-2 font-semibold text-white transition hover:bg-gray-700 focus-within:ring-2 focus-within:ring-blue-300">
+                  <Upload className="h-4 w-4" /> Upload answer sheet
+                  <input type="file" accept="image/*" onChange={onUploadFile} className="sr-only" aria-label="Upload answer sheet image" />
+                </label>
+              </div>
+            </>
+          ) : (
+            <>
+              <RefreshCw className="h-7 w-7 animate-spin text-blue-400" />
+              <span className="font-medium">{cameraState.statusText || 'Initializing camera preview…'}</span>
+            </>
+          )}
         </div>
       )}
 
       {/* Viewfinder Alignment HUD */}
-      <div className="pointer-events-none absolute inset-2.5 sm:inset-5 flex flex-col justify-between z-10">
+      <div className="pk-omr-viewfinder-hud pointer-events-none absolute inset-2.5 sm:inset-5 flex flex-col justify-between z-10">
         {/* Top Header: Corner Indicators & AI Status Pill */}
         <div className="flex items-start justify-between w-full">
           {/* Top-Left Registration Marker Indicator */}
@@ -92,7 +113,7 @@ export function CameraViewfinder({
               className={cn(
                 'h-8 w-8 sm:h-11 sm:w-11 border-t-3 sm:border-t-4 border-l-3 sm:border-l-4 rounded-tl-lg sm:rounded-tl-xl transition-all duration-200',
                 corners >= 1
-                  ? 'border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]'
+                  ? 'border-emerald-400 shadow-[0_0_10px_rgba(69,104,245,0.4)]'
                   : 'border-white/30'
               )}
             />
@@ -111,13 +132,13 @@ export function CameraViewfinder({
             )}
 
             {/* AI Quality / Alignment Status Pill */}
-            <div className="flex items-center gap-1.5 rounded-full bg-black/75 backdrop-blur-md px-3 py-1 border border-white/10 text-[11px] sm:text-xs font-semibold text-white shadow-md">
+            <div className="pk-omr-status flex items-center gap-1.5 rounded-full bg-black/75 backdrop-blur-md px-3 py-1 border border-white/10 text-[11px] sm:text-xs font-semibold text-white shadow-md" role="status" aria-live="polite">
               <span
                 className={cn(
                   'h-2 w-2 rounded-full shrink-0',
                   isBarcodeMode
-                    ? detectedBarcode ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]' : 'bg-blue-400 animate-pulse'
-                    : isAligned ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]' : 'bg-amber-400 animate-pulse'
+                    ? detectedBarcode ? 'bg-emerald-400 shadow-[0_0_6px_rgba(69,104,245,0.45)]' : 'bg-blue-400 animate-pulse'
+                    : isAligned ? 'bg-emerald-400 shadow-[0_0_6px_rgba(69,104,245,0.45)]' : 'bg-amber-400 animate-pulse'
                 )}
               />
               <span className="truncate">
@@ -139,7 +160,7 @@ export function CameraViewfinder({
               className={cn(
                 'h-8 w-8 sm:h-11 sm:w-11 border-t-3 sm:border-t-4 border-r-3 sm:border-r-4 rounded-tr-lg sm:rounded-tr-xl transition-all duration-200',
                 corners >= 2
-                  ? 'border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]'
+                  ? 'border-emerald-400 shadow-[0_0_10px_rgba(69,104,245,0.4)]'
                   : 'border-white/30'
               )}
             />
@@ -162,7 +183,7 @@ export function CameraViewfinder({
               {/* Directional Flipping Trail */}
               <div className="barcode-laser-trail absolute inset-x-0 bottom-0 h-8 pointer-events-none origin-bottom" />
               {/* Solid Laser Beam Line */}
-              <div className="h-0.5 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)]" />
+              <div className="h-0.5 bg-blue-500 shadow-[0_0_8px_rgba(69,104,245,0.65)]" />
             </div>
 
             <div className="flex items-center gap-1 text-[10px] font-bold text-blue-300 z-10">
@@ -190,7 +211,7 @@ export function CameraViewfinder({
               className={cn(
                 'h-8 w-8 sm:h-11 sm:w-11 border-b-3 sm:border-b-4 border-l-3 sm:border-l-4 rounded-bl-lg sm:rounded-bl-xl transition-all duration-200',
                 corners >= 3
-                  ? 'border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]'
+                  ? 'border-emerald-400 shadow-[0_0_10px_rgba(69,104,245,0.4)]'
                   : 'border-white/30'
               )}
             />
@@ -202,7 +223,7 @@ export function CameraViewfinder({
               className={cn(
                 'h-8 w-8 sm:h-11 sm:w-11 border-b-3 sm:border-b-4 border-r-3 sm:border-r-4 rounded-br-lg sm:rounded-br-xl transition-all duration-200',
                 corners >= 4
-                  ? 'border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]'
+                  ? 'border-emerald-400 shadow-[0_0_10px_rgba(69,104,245,0.4)]'
                   : 'border-white/30'
               )}
             />
@@ -221,7 +242,7 @@ export function CameraViewfinder({
       )}
 
       {/* Floating Bottom Touch Controls Bar */}
-      <div className="absolute bottom-3 inset-x-0 flex items-center justify-center gap-3 sm:gap-6 px-4 pointer-events-auto z-20">
+      <div className="pk-omr-control-bar absolute bottom-3 inset-x-0 flex items-center justify-center gap-3 sm:gap-6 px-4 pointer-events-auto z-20">
         {/* Left Control: Upload File Alternative */}
         <label
           className="flex h-11 w-11 items-center justify-center rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 transition cursor-pointer shadow-lg active:scale-95 shrink-0"
@@ -248,7 +269,7 @@ export function CameraViewfinder({
             className={cn(
               'flex h-11 w-11 items-center justify-center rounded-full backdrop-blur-md border transition shadow-lg active:scale-95 shrink-0',
               isTorchOn
-                ? 'bg-amber-500/25 border-amber-400 text-amber-300 shadow-[0_0_14px_rgba(251,191,36,0.6)] ring-1 ring-amber-400/50'
+                ? 'bg-amber-500/25 border-amber-400 text-amber-300 shadow-[0_0_10px_rgba(69,104,245,0.4)] ring-1 ring-amber-400/50'
                 : 'bg-black/60 border-white/20 text-white/80 hover:bg-white/20 hover:text-white'
             )}
           >

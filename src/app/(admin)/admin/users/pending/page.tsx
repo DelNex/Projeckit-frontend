@@ -153,7 +153,7 @@ export default function PendingUsersPage() {
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300 flex items-center justify-between">
           <span>{error}</span>
-          <button 
+          <button type="button" 
             onClick={fetchPendingUsers}
             className="inline-flex items-center gap-1 font-bold underline hover:text-red-900"
           >
@@ -255,7 +255,7 @@ export default function PendingUsersPage() {
                       </td>
                       <td className="px-4 sm:px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <button
+                          <button type="button"
                             disabled={isBusy}
                             onClick={() => handleUpdateStatus(u.id, 'approved')}
                             className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50 transition"
@@ -263,7 +263,7 @@ export default function PendingUsersPage() {
                             <Check className="h-3.5 w-3.5" />
                             <span>Approve</span>
                           </button>
-                          <button
+                          <button type="button"
                             disabled={isBusy}
                             onClick={() => setRejectModal({ isOpen: true, user: u })}
                             className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-950/30 disabled:opacity-50 transition"

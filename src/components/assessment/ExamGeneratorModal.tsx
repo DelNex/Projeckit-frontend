@@ -256,7 +256,7 @@ export function ExamGeneratorModal({
             </div>
           </div>
 
-          <button onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" aria-label="Close while generation continues">
+          <button type="button" onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" aria-label="Close while generation continues">
             <X className="h-5 w-5" />
           </button>
         </div>

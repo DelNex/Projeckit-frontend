@@ -97,6 +97,7 @@ export function OmrCameraModal({
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   // Camera stream management
   const {
@@ -111,6 +112,40 @@ export function OmrCameraModal({
     preferredFacingMode: 'environment',
     onError: (err) => toast.error(err.message),
   });
+
+  // Keep keyboard focus inside the scanner dialog and restore it to the opener.
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const selector = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const frame = window.requestAnimationFrame(() => {
+      const first = dialogRef.current?.querySelector<HTMLElement>(selector);
+      (first || dialogRef.current)?.focus();
+    });
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        stopStream();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(selector) || [])
+        .filter((element) => element.offsetWidth > 0 || element.offsetHeight > 0);
+      if (!focusable.length) { event.preventDefault(); dialogRef.current?.focus(); return; }
+      if (event.shiftKey && document.activeElement === focusable[0]) {
+        event.preventDefault(); focusable[focusable.length - 1].focus();
+      } else if (!event.shiftKey && document.activeElement === focusable[focusable.length - 1]) {
+        event.preventDefault(); focusable[0].focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener('keydown', handleKeyDown);
+      previousFocus?.focus();
+    };
+  }, [isOpen, onClose, stopStream]);
 
   // Matched student derived from selectedStudentId or detected barcode
   const matchedStudent = useMemo(() => {
@@ -299,7 +334,7 @@ export function OmrCameraModal({
   const processImageBlob = async (blob: Blob) => {
     setIsProcessing(true);
     setErrorMessage(null);
-    setStatusMessage('Evaluating OMR bubbles with client engine…');
+    setStatusMessage('Reading answer bubbles…');
 
     try {
       setCapturedBlob(blob);
@@ -367,7 +402,7 @@ export function OmrCameraModal({
       setEditableItems(omrResult.items.map((item) => ({ ...item })));
       setPhase('review');
       if (!omrResult.fiducialDetected) {
-        setStatusMessage('Low marker alignment confidence. Please review and verify answers below.');
+        setStatusMessage('Some sheet markers were unclear. Review flagged answers before saving.');
       } else {
         setStatusMessage(null);
       }
@@ -629,14 +664,16 @@ export function OmrCameraModal({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-0 sm:p-4 animate-in fade-in duration-200"
+      aria-labelledby="pk-omr-title"
+      ref={dialogRef}
+      className="pk-omr-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-0 sm:p-4 animate-in fade-in duration-200"
     >
-      <div className="relative flex h-full w-full flex-col overflow-hidden bg-gray-900 border-0 sm:border sm:border-gray-800 shadow-2xl text-white sm:h-auto sm:max-h-[94vh] sm:max-w-4xl sm:rounded-3xl">
+      <div className="pk-omr-dialog relative flex h-full w-full flex-col overflow-hidden bg-gray-900 border-0 sm:border sm:border-gray-800 shadow-2xl text-white sm:h-auto sm:max-h-[94vh] sm:max-w-4xl sm:rounded-3xl">
         {/* Header with Compact Stepper */}
-        <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-3.5 py-2.5 sm:px-6 sm:py-3.5 bg-gray-900 z-10">
+        <div className="pk-omr-header flex shrink-0 items-center justify-between border-b border-gray-800 px-3.5 py-2.5 sm:px-6 sm:py-3.5 bg-gray-900 z-10">
           <div className="flex items-center gap-2 min-w-0">
             <Camera className="h-4 w-4 sm:h-5 sm:w-5 text-blue-400 shrink-0" />
-            <h3 className="text-xs sm:text-base font-bold truncate">
+            <h3 id="pk-omr-title" className="text-xs sm:text-base font-bold truncate">
               {title ||
                 (isAnswerKey
                   ? 'Master Answer Key Camera Scanner'
@@ -665,7 +702,7 @@ export function OmrCameraModal({
                 className={cn(
                   'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition border active:scale-95',
                   cameraState.isTorchOn
-                    ? 'bg-amber-500/25 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.5)] ring-1 ring-amber-400/50'
+                    ? 'bg-amber-500/25 border-amber-400 text-amber-300 shadow-[0_0_10px_rgba(69,104,245,0.4)] ring-1 ring-amber-400/50'
                     : 'bg-gray-800/90 border-gray-700 text-gray-300 hover:text-white hover:bg-gray-700'
                 )}
               >
@@ -695,7 +732,7 @@ export function OmrCameraModal({
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 flex flex-col p-2 sm:p-5 min-h-0 overflow-hidden">
+        <div className="pk-omr-body flex-1 flex flex-col p-2 sm:p-5 min-h-0 overflow-hidden">
 
           {phase === 'saved' ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-4 py-12 text-center">
@@ -705,14 +742,14 @@ export function OmrCameraModal({
               <div className="space-y-1">
                 <h4 className="text-lg font-bold text-white">Scan Verified & Saved</h4>
                 <p className="text-xs text-gray-400 max-w-sm mx-auto">
-                  Answers were scored and saved to Supabase for{' '}
+                  Answers were reviewed and saved for{' '}
                   <span className="font-semibold text-emerald-300">
                     {matchedStudent?.name || 'Learner'}
                   </span>
                   .
                 </p>
               </div>
-              <div className="flex gap-3 pt-2">
+              <div className="pk-omr-success-actions flex gap-3 pt-2">
                 <button
                   type="button"
                   onClick={handleScanAnother}
@@ -826,6 +863,7 @@ export function OmrCameraModal({
                 matchedStudentName={matchedStudent?.name}
                 onCapture={handleCapture}
                 onCycleCamera={cycleCamera}
+                onRetryCamera={() => void startStream()}
                 onUploadFile={handleUploadFile}
                 onClose={onClose}
                 isProcessing={isProcessing}

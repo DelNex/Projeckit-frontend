@@ -26,6 +26,8 @@ export interface ColumnDef<TData, TValue = any> {
     };
   }) => React.ReactNode;
   sortable?: boolean;
+  /** Hide this column from the compact card layout when it is secondary. */
+  mobileHidden?: boolean;
 }
 
 export interface DataTableProps<TData, TValue = any> {
@@ -44,6 +46,8 @@ export interface DataTableProps<TData, TValue = any> {
   onRowClick?: (row: TData) => void;
   onVisibleRowsChange?: (rows: TData[]) => void;
   onSearchChange?: (search: string) => void;
+  /** Render readable record cards on phones instead of requiring sideways table scrolling. */
+  mobileLayout?: 'scroll' | 'cards';
 }
 
 export function DataTable<TData, TValue = any>({
@@ -62,12 +66,14 @@ export function DataTable<TData, TValue = any>({
   onRowClick,
   onVisibleRowsChange,
   onSearchChange,
+  mobileLayout = 'scroll',
 }: DataTableProps<TData, TValue>) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
   const [searchFilter, setSearchFilter] = useState<string>('');
   const [pageIndex, setPageIndex] = useState<number>(0);
   const [pageSize, setPageSize] = useState<number>(initialPageSize);
+  const tableId = React.useId();
 
   // 1. Filtered data
   const filteredData = useMemo(() => {
@@ -132,6 +138,11 @@ export function DataTable<TData, TValue = any>({
     onVisibleRowsChange?.(paginatedData);
   }, [paginatedData, onVisibleRowsChange]);
 
+  // Keep the current page valid when a refresh, filter or archive action shrinks the dataset.
+  useEffect(() => {
+    setPageIndex((current) => Math.min(current, Math.max(0, Math.ceil(sortedData.length / pageSize) - 1)));
+  }, [sortedData.length, pageSize]);
+
   // Toggle sorting on column
   const handleSort = (key?: string) => {
     if (!key) return;
@@ -160,8 +171,10 @@ export function DataTable<TData, TValue = any>({
           {searchKey && (
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <label className="sr-only" htmlFor={`${tableId}-search`}>Search {tableLabel.toLowerCase()}</label>
               <input
-                type="text"
+                id={`${tableId}-search`}
+                type="search"
                 value={searchFilter}
                 onChange={(e) => handleSearchChange(e.target.value)}
                 placeholder={searchPlaceholder}
@@ -189,10 +202,55 @@ export function DataTable<TData, TValue = any>({
 
       {/* Main Table Container */}
       <div className="rounded-2xl sm:rounded-3xl border border-gray-200 bg-white shadow-2xs dark:border-gray-800 dark:bg-gray-900 overflow-hidden min-w-0">
-        <p className="px-4 pt-3 text-[11px] text-gray-500 sm:hidden" aria-hidden="true">
-          Swipe sideways to see all columns
-        </p>
-        <div className="overflow-x-auto custom-scrollbar touch-pan-x focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500" tabIndex={0} role="region" aria-label={`${tableLabel}. Swipe sideways to see more columns.`}>
+        {mobileLayout === 'scroll' && <p className="px-4 pt-3 text-[11px] text-gray-500 sm:hidden" aria-hidden="true">Swipe sideways to see all columns</p>}
+        {mobileLayout === 'cards' && (
+          <div className="grid gap-3 p-3 sm:hidden" role="list" aria-label={`${tableLabel} records`}>
+            {loading ? (
+              <div className="flex items-center justify-center gap-2 py-10 text-sm text-gray-500" role="status"><Loader2 className="h-5 w-5 animate-spin" />Loading records…</div>
+            ) : paginatedData.length ? paginatedData.map((item, rowIdx) => {
+              const rowId = (item as any)?.id || String(rowIdx);
+              const rowObj = { id: rowId, original: item, getValue: (key: string) => (item as any)?.[key] };
+              return (
+                <article
+                  key={rowId}
+                  role={onRowClick ? 'link' : 'listitem'}
+                  tabIndex={onRowClick ? 0 : undefined}
+                  aria-label={onRowClick ? `Open ${tableLabel} record ${rowIdx + 1}` : undefined}
+                  onClick={(event) => {
+                    if (!onRowClick || (event.target as HTMLElement).closest('a,button,input,select,textarea,[role="button"]')) return;
+                    onRowClick(item);
+                  }}
+                  onKeyDown={(event) => {
+                    if (!onRowClick || (event.key !== 'Enter' && event.key !== ' ')) return;
+                    if ((event.target as HTMLElement).closest('a,button,input,select,textarea,[role="button"]')) return;
+                    event.preventDefault();
+                    onRowClick(item);
+                  }}
+                  className={cn('min-w-0 rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-800 dark:bg-gray-900', onRowClick && 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600')}
+                >
+                  {columns.filter((col) => !col.mobileHidden).map((col, colIdx) => {
+                    const label = typeof col.header === 'string' ? col.header : col.accessorKey || col.id || `Field ${colIdx + 1}`;
+                    return (
+                      <div key={col.accessorKey || col.id || colIdx} className={cn('flex min-w-0 items-start justify-between gap-3 py-2', colIdx > 0 && 'border-t border-gray-100 dark:border-gray-800')}>
+                        <span className="w-28 shrink-0 pt-0.5 text-[11px] font-medium text-gray-500 dark:text-gray-400">{label}</span>
+                        <div className="min-w-0 flex-1 text-right text-xs text-gray-900 dark:text-gray-100 [&>*]:max-w-full [&>*]:min-w-0">
+                          {col.cell ? col.cell({ row: rowObj }) : col.accessorKey ? String((item as any)?.[col.accessorKey] ?? '—') : '—'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </article>
+              );
+            }) : (
+              <div className="rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center dark:border-gray-700">
+                <Inbox className="mx-auto mb-2 h-7 w-7 text-gray-400" />
+                <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{emptyTitle}</p>
+                <p className="mt-1 text-xs text-gray-500">{emptyDescription}</p>
+              </div>
+            )}
+          </div>
+        )}
+        <div className={cn('pk-data-table-scroll overflow-x-auto custom-scrollbar touch-pan-x focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500', mobileLayout === 'cards' && 'hidden sm:block')} tabIndex={0} role="region" aria-label={`${tableLabel}. Use the table view to compare all columns.`}>
           <table className="w-full text-left text-xs border-collapse" style={{ minWidth: `${Math.max(560, columns.length * 112)}px` }}>
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/70 dark:border-gray-800 dark:bg-gray-800/40 text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">
@@ -204,6 +262,7 @@ export function DataTable<TData, TValue = any>({
                   return (
                     <th
                       key={colKey}
+                      aria-sort={isSorted ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
                       className={cn(
                         'px-4 sm:px-6 py-4 select-none whitespace-nowrap',
                         canSort && 'hover:bg-gray-100/60 dark:hover:bg-gray-800/80 transition-colors'
@@ -260,7 +319,18 @@ export function DataTable<TData, TValue = any>({
                   return (
                     <tr
                       key={rowId}
-                      onClick={() => onRowClick?.(item)}
+                      onClick={(event) => {
+                        if ((event.target as HTMLElement).closest('a,button,input,select,textarea,[role="button"]')) return;
+                        onRowClick?.(item);
+                      }}
+                      onKeyDown={(event) => {
+                        if (!onRowClick || (event.key !== 'Enter' && event.key !== ' ')) return;
+                        if ((event.target as HTMLElement).closest('a,button,input,select,textarea,[role="button"]')) return;
+                        event.preventDefault();
+                        onRowClick(item);
+                      }}
+                      tabIndex={onRowClick ? 0 : undefined}
+                      aria-label={onRowClick ? `Open ${tableLabel} record ${rowIdx + 1}` : undefined}
                       className={cn(
                         'hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors',
                         onRowClick && 'cursor-pointer'
@@ -345,6 +415,7 @@ export function DataTable<TData, TValue = any>({
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
+                aria-label="Go to previous page"
                 onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
                 disabled={pageIndex === 0}
                 className="inline-flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-3 py-1.5 font-medium text-gray-700 shadow-2xs hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 transition"
@@ -353,12 +424,13 @@ export function DataTable<TData, TValue = any>({
                 <span>Prev</span>
               </button>
 
-              <span className="px-2 font-medium">
+              <span className="px-2 font-medium" aria-live="polite" aria-atomic="true">
                 Page {pageIndex + 1} of {totalPages}
               </span>
 
               <button
                 type="button"
+                aria-label="Go to next page"
                 onClick={() => setPageIndex((p) => Math.min(totalPages - 1, p + 1))}
                 disabled={pageIndex >= totalPages - 1}
                 className="inline-flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-3 py-1.5 font-medium text-gray-700 shadow-2xs hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 transition"
