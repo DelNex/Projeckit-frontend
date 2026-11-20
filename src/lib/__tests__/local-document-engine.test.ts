@@ -3,6 +3,18 @@ import { test } from 'node:test';
 import { extractTextFromFiles } from '../lesson-parser';
 import { getLocalDocumentCapacity, LOCAL_DOCUMENT_MAX_CHARACTERS } from '../local-document-engine';
 
+function mockStorage() {
+  const uploaded: string[] = [];
+  return {
+    uploaded,
+    adapter: {
+      getUserId: async () => 'teacher-1',
+      upload: async (storagePath: string) => { uploaded.push(storagePath); },
+      remove: async (paths: string[]) => { for (const path of paths) { const index = uploaded.indexOf(path); if (index >= 0) uploaded.splice(index, 1); } },
+    },
+  };
+}
+
 function mockExtraction(texts: string[]) {
   const originalFetch = globalThis.fetch;
   let index = 0;
@@ -24,9 +36,10 @@ function mockExtraction(texts: string[]) {
 
 test('lesson text is returned from the server extraction job', async () => {
   const restore = mockExtraction(['Chapter 1\n\nLearning objectives\nUnderstand the topic.']);
+  const storage = mockStorage();
   try {
     const file = new File(['ignored browser bytes'], 'lesson.txt', { type: 'text/plain' });
-    const result = await extractTextFromFiles([file]);
+    const result = await extractTextFromFiles([file], { storageAdapter: storage.adapter });
     assert.equal(result.filesProcessed, 1);
     assert.equal(result.documents[0].name, 'lesson-1.txt');
     assert.match(result.text, /Learning objectives/);
@@ -36,9 +49,10 @@ test('lesson text is returned from the server extraction job', async () => {
 
 test('multiple server jobs preserve document boundaries', async () => {
   const restore = mockExtraction(['First chapter', 'Second chapter']);
+  const storage = mockStorage();
   try {
     const files = [new File(['one'], 'chapter-1.txt'), new File(['two'], 'chapter-2.md')];
-    const result = await extractTextFromFiles(files);
+    const result = await extractTextFromFiles(files, { storageAdapter: storage.adapter });
     assert.equal(result.documents.length, 2);
     assert.match(result.text, /--- lesson-1.txt ---/);
     assert.match(result.text, /--- lesson-2.txt ---/);
@@ -53,9 +67,10 @@ test('server upload capacity is limited to 20 MB per file', async () => {
 
 test('extraction rejects oversized AI context instead of silently truncating it', async () => {
   const restore = mockExtraction(['x'.repeat(LOCAL_DOCUMENT_MAX_CHARACTERS + 1)]);
+  const storage = mockStorage();
   try {
     const file = new File(['ignored'], 'large.txt');
-    await assert.rejects(() => extractTextFromFiles([file]), /900,000 readable characters/);
+    await assert.rejects(() => extractTextFromFiles([file], { storageAdapter: storage.adapter }), /900,000 readable characters/);
   } finally { restore(); }
 });
 
