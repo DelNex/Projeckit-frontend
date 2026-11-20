@@ -24,7 +24,7 @@ function providerConfigs(): ProviderConfig[] {
   const env: Record<ProviderId, ProviderConfig | null> = {
     groq: process.env.GROQ_API_KEY ? { id: 'groq', key: process.env.GROQ_API_KEY, model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b' } : null,
     openrouter: process.env.OPENROUTER_API_KEY ? { id: 'openrouter', key: process.env.OPENROUTER_API_KEY, model: process.env.OPENROUTER_MODEL || 'openrouter/free' } : null,
-    gemini: process.env.GEMINI_API_KEY ? { id: 'gemini', key: process.env.GEMINI_API_KEY, model: process.env.GEMINI_MODEL || 'gemini-2.5-flash' } : null,
+    gemini: process.env.GEMINI_API_KEY ? { id: 'gemini', key: process.env.GEMINI_API_KEY, model: process.env.GEMINI_MODEL || 'gemini-3.8-flash' } : null,
     cloudflare: process.env.CLOUDFLARE_API_TOKEN && process.env.CLOUDFLARE_ACCOUNT_ID
       ? { id: 'cloudflare', key: process.env.CLOUDFLARE_API_TOKEN, model: process.env.CLOUDFLARE_MODEL || '@cf/meta/llama-3.1-8b-instruct' }
       : null,
