@@ -10,6 +10,9 @@ type ProviderConfig = {
 
 const cooldownUntil = new Map<ProviderId, number>();
 
+/** Skip providers with broken credentials briefly instead of paying for repeated 401/403 requests. */
+const AUTH_COOLDOWN_MS = 60_000;
+
 /** Clears process-local cooldown state for isolated adapter tests. */
 export function resetExamProviderCooldownsForTests(): void {
   cooldownUntil.clear();
@@ -18,6 +21,12 @@ export function resetExamProviderCooldownsForTests(): void {
 /** HTTP 400-class request errors need correction, not an immediate retry against the same provider. */
 export function isRetryableProviderStatus(status: number): boolean {
   return status === 408 || status === 409 || status === 429 || status >= 500;
+}
+
+/** Divide the remaining job budget between providers that have not been tried yet. */
+export function computeAttemptTimeoutMs(perProviderTimeoutMs: number, remainingBudgetMs: number, remainingProviders: number): number {
+  const share = Math.floor(remainingBudgetMs / Math.max(1, remainingProviders));
+  return Math.max(2_000, Math.min(perProviderTimeoutMs, share) - 1_000);
 }
 
 function providerConfigs(): ProviderConfig[] {
@@ -48,12 +57,20 @@ function parseRetryAfter(value: string | null): number {
   return Number.isFinite(date) ? Math.max(1_000, Math.min(date - Date.now(), 15 * 60_000)) : 60_000;
 }
 
+function extractJsonText(raw: string): string {
+  const text = raw.trim().replace(/^\x60{3}(?:json)?\s*/i, '').replace(/\s*\x60{3}$/i, '').trim();
+  if (text.startsWith('{') || text.startsWith('[')) return text;
+  const start = text.search(/[\[{]/);
+  const end = Math.max(text.lastIndexOf('}'), text.lastIndexOf(']'));
+  return start >= 0 && end > start ? text.slice(start, end + 1) : text;
+}
+
 function parseQuestionContent(raw: unknown): string {
   let text = '';
   if (typeof raw === 'string') text = raw;
   else if (raw && typeof raw === 'object') text = JSON.stringify(raw);
-  text = text.trim().replace(/^\x60{3}(?:json)?\s*/i, '').replace(/\s*\x60{3}$/i, '');
-  const parsed = JSON.parse(text);
+  if (!text.trim()) throw new Error('Provider returned an empty response body.');
+  const parsed = JSON.parse(extractJsonText(text));
   const questions = Array.isArray(parsed) ? parsed : parsed?.questions;
   if (!Array.isArray(questions) || !questions.length) throw new Error('Provider returned no questions.');
   return JSON.stringify(questions);
@@ -65,6 +82,8 @@ async function readProviderResponse(response: Response, provider: ProviderId): P
     if (response.status === 429) {
       const retryAfterMs = parseRetryAfter(response.headers.get('retry-after'));
       cooldownUntil.set(provider, Date.now() + retryAfterMs);
+    } else if (response.status === 401 || response.status === 403) {
+      cooldownUntil.set(provider, Date.now() + AUTH_COOLDOWN_MS);
     }
     const detail = String(body?.error?.message || body?.message || body?.errors?.[0]?.message || 'Provider request failed').slice(0, 180);
     const rateLimit = response.status === 429 ? {
@@ -76,7 +95,8 @@ async function readProviderResponse(response: Response, provider: ProviderId): P
     throw Object.assign(new Error(`${provider} returned HTTP ${response.status}: ${detail}`), {
       status: response.status,
       retryable: isRetryableProviderStatus(response.status),
-      retryAfterMs: response.status === 429 ? parseRetryAfter(response.headers.get('retry-after')) : null,
+      retryAfterMs: response.status === 429 || (response.status >= 500 && response.headers.has('retry-after'))
+        ? parseRetryAfter(response.headers.get('retry-after')) : null,
       rateLimit,
     });
   }
@@ -106,7 +126,10 @@ async function requestProvider(provider: ProviderConfig, messages: Array<{ role:
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents: [{ role: 'user', parts: [{ text: user }] }],
-        generationConfig: { responseMimeType: 'application/json', responseJsonSchema: schema, temperature: 0.2, maxOutputTokens: 8192 },
+        generationConfig: {
+          responseMimeType: 'application/json', responseJsonSchema: schema, temperature: 0.2, maxOutputTokens: 8192,
+          thinkingConfig: { thinkingBudget: Math.max(0, Math.min(1024, Number(process.env.GEMINI_THINKING_BUDGET ?? 512) || 0)) },
+        },
       }),
       signal: timeout, cache: 'no-store',
     });
@@ -126,8 +149,15 @@ async function requestProvider(provider: ProviderConfig, messages: Array<{ role:
         ...(provider.id === 'openrouter' ? { 'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://projectkit.app', 'X-Title': 'Project KIT' } : {}),
       },
       body: JSON.stringify({
-        model: provider.model, messages, temperature: 0.2, max_completion_tokens: 8192,
-        ...(isGroq ? { service_tier: process.env.GROQ_SERVICE_TIER || 'auto' } : {}),
+        model: provider.model,
+        messages,
+        temperature: 0.2,
+        ...(isGroq ? { max_completion_tokens: 8192, reasoning_effort: 'low' } : {
+          max_tokens: 8192,
+          provider: { require_parameters: true },
+          reasoning: { effort: 'low' },
+        }),
+        ...(isGroq && process.env.GROQ_SERVICE_TIER?.trim() ? { service_tier: process.env.GROQ_SERVICE_TIER.trim() } : {}),
         response_format: { type: 'json_schema', json_schema: { name: 'project_kit_exam_questions', strict: true, schema } },
       }),
       signal: timeout, cache: 'no-store',
@@ -162,7 +192,8 @@ export async function requestExamQuestionsFromProviders(
   const totalBudgetMs = Number.isFinite(totalSetting) ? Math.max(10_000, Math.min(totalSetting, 50_000)) : 50_000;
   const providerTimeoutMs = Number.isFinite(providerSetting) ? Math.max(3_000, Math.min(providerSetting, 25_000)) : 18_000;
   const deadline = Math.min(jobDeadline ?? Number.POSITIVE_INFINITY, Date.now() + totalBudgetMs);
-  for (const provider of providers) {
+  for (let index = 0; index < providers.length; index += 1) {
+    const provider = providers[index];
     const remainingMs = deadline - Date.now();
     if (remainingMs < 2_000) {
       failures.push('Provider failover time budget expired');
@@ -180,7 +211,8 @@ export async function requestExamQuestionsFromProviders(
       continue;
     }
     try {
-      return await requestProvider(provider, messages, schema, Math.min(providerTimeoutMs, remainingMs - 1_000));
+      const attemptTimeoutMs = computeAttemptTimeoutMs(providerTimeoutMs, remainingMs, providers.length - index);
+      return await requestProvider(provider, messages, schema, attemptTimeoutMs);
     } catch (error) {
       const message = error instanceof Error ? error.message : `${provider.id} request failed`;
       const status = Number((error as Error & { status?: number }).status) || null;
@@ -188,10 +220,18 @@ export async function requestExamQuestionsFromProviders(
       const rateLimit = (error as Error & { rateLimit?: Record<string, string | null> }).rateLimit || null;
       const retryable = Boolean((error as Error & { retryable?: boolean }).retryable)
         || error instanceof SyntaxError
-        || /timeout|fetch failed|network|returned no questions/i.test(message);
+        || /timeout|fetch failed|network|returned no questions|returned an empty response body/i.test(message);
       lastStatus = status;
       lastRateLimit = rateLimit;
-      if (retryable) retryableFailure = { status, retryAfterMs, rateLimit };
+      if (retryable) {
+        const nextFailure = { status, retryAfterMs, rateLimit };
+        if (!retryableFailure || (status === 429 && retryableFailure.status !== 429)
+          || (status !== 429 && retryableFailure.status !== 429)) {
+          retryableFailure = nextFailure;
+        } else if (status === 429 && retryableFailure.status === 429 && (retryAfterMs || 0) > (retryableFailure.retryAfterMs || 0)) {
+          retryableFailure = nextFailure;
+        }
+      }
       const safeDetail = message.replace(/\s+/g, ' ').slice(0, 180);
       failures.push(`${provider.id}${status ? ` HTTP ${status}` : ''}: ${safeDetail}`);
       await logSystemEvent({

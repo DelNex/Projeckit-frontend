@@ -19,10 +19,18 @@ export interface ExamGenerationQuota {
   hourly: { used: number; limit: number; remaining: number };
   daily: { used: number; limit: number; remaining: number };
 }
+export interface ExamGenerationRetryState {
+  retryUntil: number | null;
+  failedJobId: string | null;
+  lastError: string | null;
+  canRetry: boolean;
+}
 export function useExamGenerationJob(tosId: string | undefined) {
   const [job, setJob] = useState<ExamGenerationJob | null>(null);
   const [quota, setQuota] = useState<ExamGenerationQuota | null>(null);
+  const [retryState, setRetryState] = useState<ExamGenerationRetryState>({ retryUntil: null, failedJobId: null, lastError: null, canRetry: true });
   const [quotaAvailable, setQuotaAvailable] = useState(false);
+  const [retryClock, setRetryClock] = useState(Date.now());
   const [isStarting, setIsStarting] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [savedQuestions, setSavedQuestions] = useState<ExamQuestion[] | null>(null);
@@ -31,28 +39,56 @@ export function useExamGenerationJob(tosId: string | undefined) {
   const alive = useRef(true);
   const lastQuotaCheckAt = useRef(0);
   const quotaRequest = useRef<Promise<void> | null>(null);
+  const activeTosId = useRef(tosId);
+  activeTosId.current = tosId;
+
+  useEffect(() => {
+    setQuota(null);
+    setRetryState({ retryUntil: null, failedJobId: null, lastError: null, canRetry: true });
+    setQuotaAvailable(false);
+    setSavedQuestions(null);
+    setJob(null);
+    setLoadError(null);
+    lastQuotaCheckAt.current = 0;
+    quotaRequest.current = null;
+  }, [tosId]);
 
   const refreshQuota = useCallback(async (force = false) => {
     if (quotaRequest.current) return quotaRequest.current;
     if (!force && Date.now() - lastQuotaCheckAt.current < 30_000) return;
+    const requestedTosId = tosId;
     const request = (async () => {
       lastQuotaCheckAt.current = Date.now();
       try {
-        const response = await fetch('/api/ai/exam-quota', { cache: 'no-store' });
+        const response = await fetch(`/api/ai/exam-quota${tosId ? `?tosId=${encodeURIComponent(tosId)}` : ''}`, { cache: 'no-store' });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || 'Could not load generation limits.');
-        if (!alive.current) return;
+        if (!alive.current || activeTosId.current !== requestedTosId) return;
         setQuota(data.quota || null);
+        setRetryState({
+          retryUntil: Number(data.retryAfterSeconds) > 0 ? Date.now() + Number(data.retryAfterSeconds) * 1000 : null,
+          failedJobId: typeof data.failedJobId === 'string' ? data.failedJobId : null,
+          lastError: typeof data.lastError === 'string' ? data.lastError : null,
+          canRetry: data.canRetry !== false,
+        });
         setQuotaAvailable(Boolean(data.quotaAvailable));
       } catch {
-        if (alive.current) setQuotaAvailable(false);
+        if (alive.current && activeTosId.current === requestedTosId) setQuotaAvailable(false);
       } finally {
-        quotaRequest.current = null;
+        if (activeTosId.current === requestedTosId) quotaRequest.current = null;
       }
     })();
     quotaRequest.current = request;
     return request;
-  }, []);
+  }, [tosId]);
+
+  useEffect(() => {
+    if (!retryState.retryUntil || retryState.retryUntil <= Date.now()) return;
+    const timer = setInterval(() => setRetryClock(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [retryState.retryUntil]);
+
+  const retryAfterSeconds = retryState.retryUntil ? Math.max(0, Math.ceil((retryState.retryUntil - retryClock) / 1000)) : 0;
 
   const refreshJob = useCallback(async (id: string) => {
     const response = await fetch(`/api/ai/exam-jobs/${encodeURIComponent(id)}`, { cache: 'no-store' });
@@ -106,7 +142,7 @@ export function useExamGenerationJob(tosId: string | undefined) {
             if (['completed', 'partial'].includes(next.status)) await refreshJob(next.id);
             else if (['queued', 'running', 'needs_attention'].includes(next.status)) await refreshJob(next.id);
           }
-          await refreshQuota();
+          await refreshQuota(Boolean(latestData.job && latestData.job.status === 'failed'));
         } catch { /* next poll retries */ }
       }
       const delay = Date.now() - startedAt.current > 60_000 ? 8000 : 2500;
@@ -171,5 +207,5 @@ export function useExamGenerationJob(tosId: string | undefined) {
     setJob({ ...job, status: 'cancelled' });
   }, [job]);
 
-  return { job, isStarting, isInitialLoading, savedQuestions, loadError, quota, quotaAvailable, start, cancel, refreshJob };
+  return { job, isStarting, isInitialLoading, savedQuestions, loadError, quota, quotaAvailable, retryState, retryAfterSeconds, start, cancel, refreshJob };
 }

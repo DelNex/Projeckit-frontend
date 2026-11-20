@@ -265,6 +265,25 @@ export function validateExamQuestions(
 }
 
 /**
+ * Resolve a competency identifier consistently in the UI and exam blueprint.
+ * Legacy rows without an id/code use a deterministic description-based key,
+ * so reordering or inserting other rows does not shift their lesson materials.
+ */
+export function getTosCompetencyId(row: any): string {
+  const explicit = typeof row?.id === 'string' && row.id.trim() ? row.id.trim()
+    : typeof row?.code === 'string' && row.code.trim() ? row.code.trim() : '';
+  if (explicit) return explicit;
+  const description = String(row?.description || row?.competency || 'Learning Competency').trim().toLowerCase();
+  const signature = `${description}|${JSON.stringify(row?.domains || {})}|${Number(row?.daysTaught || row?.days || 0)}`;
+  let hash = 2166136261;
+  for (let index = 0; index < signature.length; index += 1) {
+    hash ^= signature.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `COMP-${(hash >>> 0).toString(36).toUpperCase()}`;
+}
+
+/**
  * Builds the slot allocation blueprint list from TOS rows.
  */
 export function buildTosBlueprintSlots(tosRows: any[], targetItems: number): TosBlueprintSlot[] {
@@ -272,7 +291,7 @@ export function buildTosBlueprintSlots(tosRows: any[], targetItems: number): Tos
   let currentItemNum = 1;
 
   for (const row of tosRows) {
-    const compId = row.id || row.code || `COMP-${currentItemNum}`;
+    const compId = getTosCompetencyId(row);
     const compCode = row.code || compId;
     const compDesc = row.description || row.competency || 'Learning Competency';
     const domains = row.domains || {};

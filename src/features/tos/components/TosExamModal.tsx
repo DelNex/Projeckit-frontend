@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   X,
   Sparkles,
@@ -14,7 +14,7 @@ import {
   Printer,
 } from 'lucide-react';
 import { TosDocument } from '@/types/tos';
-import { ExamQuestion } from '@/lib/exam-types';
+import { ExamQuestion, getTosCompetencyId } from '@/lib/exam-types';
 import { generateExamDocx, downloadBlob } from '../exam-word-export';
 import { printOmrAnswerKey, exportOmrAnswerKeyDocx } from '../omr-answer-key-export';
 import { useToast } from '@/components/ui/toast';
@@ -24,6 +24,7 @@ import { useExamGenerationJob } from '@/lib/exam-generation-client';
 import { clearPendingLessonExtraction, extractTextFromFiles, resumePendingLessonExtraction } from '@/lib/lesson-parser';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { ExamDraftEditor } from '@/components/assessment/ExamDraftEditor';
+import { clearLessonMaterials, loadLessonMaterials, saveLessonMaterials } from '@/lib/lesson-material-storage';
 
 interface TosExamModalProps {
   isOpen: boolean;
@@ -52,6 +53,9 @@ export function TosExamModal({
 
   const [examDate, setExamDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [materials, setMaterials] = useState<Record<string, CompetencyMaterial>>({});
+  const [materialsReadyForTos, setMaterialsReadyForTos] = useState<string | null>(null);
+  const materialsRef = useRef(materials);
+  materialsRef.current = materials;
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<string>('');
@@ -59,9 +63,24 @@ export function TosExamModal({
   const [sharedNotesConfirm, setSharedNotesConfirm] = useState(false);
   const [examDraftDirty, setExamDraftDirty] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  const handledSavedQuestionsJobId = useRef<string | null>(null);
+  const draftWasEditedRef = useRef(false);
+  const activeTosIdRef = useRef<string | null>(tos?.id || null);
 
   useEffect(() => {
-    if (generationJob.savedQuestions) setQuestions(generationJob.savedQuestions);
+    if (tos?.id && activeTosIdRef.current !== tos.id) {
+      activeTosIdRef.current = tos.id;
+      handledSavedQuestionsJobId.current = null;
+      draftWasEditedRef.current = false;
+    }
+  }, [tos?.id]);
+
+  useEffect(() => {
+    const jobId = generationJob.job?.id;
+    if (generationJob.savedQuestions && jobId && handledSavedQuestionsJobId.current !== jobId) {
+      handledSavedQuestionsJobId.current = jobId;
+      if (!examDraftDirty) setQuestions(generationJob.savedQuestions);
+    }
     if (generationJob.job && ['queued', 'running'].includes(generationJob.job.status)) {
       setIsGenerating(true);
       setGenerationProgress(generationJob.job.progress?.label || (generationJob.job.status === 'queued' ? `Queued (position ${generationJob.job.queuePosition || 1}). AI will process this exam in the background.` : 'AI is generating your exam.'));
@@ -72,7 +91,7 @@ export function TosExamModal({
       setIsGenerating(false);
       setGenerationProgress('');
     }
-  }, [generationJob.savedQuestions, generationJob.job?.id, generationJob.job?.status, generationJob.job?.progress?.label, generationJob.job?.queuePosition, generationJob.job?.error]);
+  }, [generationJob.savedQuestions, generationJob.job?.id, generationJob.job?.status, generationJob.job?.progress?.label, generationJob.job?.queuePosition, generationJob.job?.error, examDraftDirty]);
 
   // Initialize state
   useEffect(() => {
@@ -84,7 +103,7 @@ export function TosExamModal({
     if (currentTos.rows) {
       const initMats: Record<string, CompetencyMaterial> = {};
       currentTos.rows.forEach((r, idx) => {
-        const id = r.id || r.code || String(idx + 1);
+        const id = getTosCompetencyId(r);
         initMats[id] = {
           competencyId: id,
           files: [],
@@ -127,7 +146,9 @@ export function TosExamModal({
           ? tosQuestions
           : assessmentQuestions.length > 0 ? assessmentQuestions : tosQuestions;
 
-        setQuestions(savedQuestions as ExamQuestion[]);
+        if (!draftWasEditedRef.current && handledSavedQuestionsJobId.current === null) {
+          setQuestions(savedQuestions as ExamQuestion[]);
+        }
       } catch (e) {
         console.error('Failed to load linked assessment data:', e);
       }
@@ -140,7 +161,7 @@ export function TosExamModal({
     if (!isOpen || !tos?.id || !Array.isArray(tos.rows)) return;
     let cancelled = false;
     tos.rows.forEach((row, index) => {
-      const competencyId = row.id || row.code || String(index + 1);
+      const competencyId = getTosCompetencyId(row);
       void resumePendingLessonExtraction(tos.id, (progress) => {
         if (cancelled) return;
         setMaterials((previous) => ({
@@ -178,6 +199,60 @@ export function TosExamModal({
     });
     return () => { cancelled = true; };
   }, [isOpen, tos?.id]);
+
+  useEffect(() => {
+    if (!isOpen || !tos?.id) return;
+    let cancelled = false;
+    setMaterialsReadyForTos(null);
+    void loadLessonMaterials(tos.id).then((saved) => {
+      if (cancelled) return;
+      if (saved) {
+        setMaterials((previous) => {
+          const merged = { ...previous };
+          for (const [competencyId, files] of Object.entries(saved)) {
+            const current = merged[competencyId];
+            const combinedFiles = [...files, ...(current?.files || [])];
+            const seenFiles = new Set<string>();
+            const uniqueFiles = combinedFiles.filter((file) => {
+              const signature = `${file.name}:${file.text.length}:${file.text.slice(0, 32)}:${file.text.slice(-32)}`;
+              if (seenFiles.has(signature)) return false;
+              seenFiles.add(signature);
+              return true;
+            });
+            merged[competencyId] = {
+              competencyId,
+              files: uniqueFiles,
+              isUploading: current?.isUploading || false,
+              error: current?.error,
+              progress: current?.progress || 'Recovered saved lesson materials from this browser.',
+            };
+          }
+          return merged;
+        });
+      }
+      setMaterialsReadyForTos(tos.id);
+    }).catch((error) => {
+      console.warn('Could not recover saved lesson materials:', error);
+      if (!cancelled) {
+        setMaterialsReadyForTos(tos.id);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [isOpen, tos?.id]);
+
+  const materialPersistenceKey = Object.entries(materials).map(([competencyId, material]) =>
+    `${competencyId}:${material.files.map((file) => `${file.name}:${file.text.length}:${file.text.slice(0, 32)}:${file.text.slice(-32)}`).join('|')}`
+  ).join('||');
+
+  useEffect(() => {
+    if (!isOpen || !tos?.id || materialsReadyForTos !== tos.id) return;
+    const stored: Record<string, Array<{ name: string; text: string }>> = {};
+    for (const [competencyId, material] of Object.entries(materialsRef.current)) {
+      const files = material.files.filter((file) => file.text.trim()).map(({ name, text }) => ({ name, text }));
+      if (files.length) stored[competencyId] = files;
+    }
+    void saveLessonMaterials(tos.id, stored).catch((error) => console.warn('Could not save lesson materials:', error));
+  }, [isOpen, tos?.id, materialsReadyForTos, materialPersistenceKey]);
 
   if (!isOpen || !tos) return null;
 
@@ -234,6 +309,29 @@ export function TosExamModal({
     }
   };
 
+  const handleClearSavedMaterials = async () => {
+    if (!tos?.id) return;
+    setMaterials((previous) => Object.fromEntries(Object.entries(previous).map(([id, material]) => [id, { ...material, files: [] }])));
+    try { await clearLessonMaterials(tos.id); }
+    catch (error) { console.warn('Could not clear saved lesson materials:', error); }
+    toast.info('Saved lesson materials were cleared from this browser.');
+  };
+
+  const handleDraftDirtyChange = (dirty: boolean) => {
+    if (dirty) draftWasEditedRef.current = true;
+    setExamDraftDirty(dirty);
+  };
+
+  const handleQuestionsSaved = (saved: ExamQuestion[]) => {
+    setQuestions(saved);
+  };
+
+  const handleExamApproved = () => {
+    if (tos?.id) void clearLessonMaterials(tos.id).catch((error) => console.warn('Could not clear saved lesson materials:', error));
+    setMaterials((previous) => Object.fromEntries(Object.entries(previous).map(([id, material]) => [id, { ...material, files: [] }])));
+    toast.success('Exam approved and answer key synchronized.');
+  };
+
   const handleDeleteFile = (competencyId: string, fileIndex: number) => {
     setMaterials((prev) => {
       const current = prev[competencyId];
@@ -262,7 +360,7 @@ export function TosExamModal({
 
     // Check if any competency has no files
     const missingCompetencies = (tos.rows || []).filter((r, idx) => {
-      const id = r.id || String(idx + 1);
+      const id = getTosCompetencyId(r);
       return !materials[id] || materials[id].files.length === 0;
     });
 
@@ -279,14 +377,14 @@ export function TosExamModal({
       let combinedText = '';
       const lessonDocuments: Array<{ name: string; text: string; competencyId: string }> = [];
       (tos.rows || []).forEach((r, idx) => {
-        const id = r.id || String(idx + 1);
+        const id = getTosCompetencyId(r);
         const compFiles = materials[id]?.files || [];
         const compText = compFiles.map((f) => f.text).join('\n\n');
         if (compText) {
           compFiles.forEach((file) => lessonDocuments.push({
             name: `Competency ${idx + 1}: ${r.description} — ${file.name}`,
             text: file.text,
-            competencyId: r.id || r.code || String(idx + 1),
+            competencyId: getTosCompetencyId(r),
           }));
           combinedText += `\n\n--- COMPETENCY ${idx + 1}: ${r.description} ---\n${compText}`;
         }
@@ -392,7 +490,7 @@ export function TosExamModal({
 
               <button
                 onClick={handleGenerateExam}
-                disabled={isGenerating || generationJob.isStarting || (generationJob.quotaAvailable && Boolean(generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0))) || ['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')}
+                disabled={isGenerating || generationJob.isStarting || generationJob.retryAfterSeconds > 0 || (generationJob.quotaAvailable && Boolean(generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0))) || ['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all disabled:opacity-50"
               >
                 {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
@@ -435,7 +533,14 @@ export function TosExamModal({
             )}
             {generationJob.job?.status === 'failed' && (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                The last generation attempt did not complete. Your saved TOS and existing questions were not changed. You can try generating again.
+                <p className="font-semibold">{generationJob.retryState.lastError || generationJob.job.error || 'The last generation attempt did not complete. Your saved TOS and existing questions were not changed.'}</p>
+                {generationJob.retryAfterSeconds <= 0 && <p className="mt-1">You can try generating again. Your saved lesson materials are still available.</p>}
+              </div>
+            )}
+            {generationJob.retryAfterSeconds > 0 && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                <p className="font-semibold">Please wait before retrying this exam.</p>
+                <p className="mt-1">Retry available in {Math.floor(generationJob.retryAfterSeconds / 60)}:{String(generationJob.retryAfterSeconds % 60).padStart(2, '0')}. The server will check this limit again when you submit.</p>
               </div>
             )}
             {generationJob.quotaAvailable && generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0) && (
@@ -474,13 +579,16 @@ export function TosExamModal({
                   Learning Materials by Competency
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Choose lesson presentations, scanned PDFs, or photos from this device (PDF, DOCX, PPTX, TXT, Markdown, PNG, JPG, WebP). Files are extracted locally; each competency generates questions from its own materials.
+                  Choose lesson presentations, scanned PDFs, or photos from this device (PDF, DOCX, PPTX, TXT, Markdown, PNG, JPG, WebP). Extracted text is kept in this browser for up to 7 days so you can return after closing the page.
                 </p>
+                {Object.values(materials).some((material) => material.files.length > 0) && (
+                  <button type="button" onClick={handleClearSavedMaterials} className="mt-2 text-[11px] font-semibold text-rose-600 hover:text-rose-700 dark:text-rose-400">Clear saved lesson materials</button>
+                )}
               </div>
 
               <div className="space-y-3">
                 {(tos.rows || []).map((row, idx) => {
-                  const id = row.id || String(idx + 1);
+                  const id = getTosCompetencyId(row);
                   const mat = materials[id] || { competencyId: id, files: [], isUploading: false };
                   return (
                     <div
@@ -557,10 +665,10 @@ export function TosExamModal({
                 grade={tos.grade || undefined}
                 strand={tos.strand || undefined}
                 lessonText={Object.values(materials).flatMap((material) => material.files.map((file) => file.text)).join("\n\n")}
-                onQuestionsSaved={setQuestions}
+                onQuestionsSaved={handleQuestionsSaved}
                 onQuestionsChange={setQuestions}
-                onDraftDirtyChange={setExamDraftDirty}
-                onApproveSuccess={() => toast.success('Exam approved and answer key synchronized.')}
+                onDraftDirtyChange={handleDraftDirtyChange}
+                onApproveSuccess={handleExamApproved}
               />
             )}
           </div>
