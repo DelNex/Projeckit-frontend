@@ -496,7 +496,7 @@ export function TosExamModal({
 
                         <label className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-600 cursor-pointer shrink-0 transition-colors">
                           <Upload className="h-3.5 w-3.5" />
-                          <span>{mat.isUploading ? 'Extracting locally...' : 'Choose Files'}</span>
+                          <span>{mat.isUploading ? 'Processing on the server...' : 'Choose Files'}</span>
                           <input
                             type="file"
                             multiple
