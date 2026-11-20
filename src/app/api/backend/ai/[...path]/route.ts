@@ -45,7 +45,7 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
   });
   let body: BodyInit | undefined;
   if (request.method !== 'GET') {
-    if (endpoint === 'upload' || endpointPath === 'lesson-extraction/jobs') {
+    if (endpoint === 'upload') {
       const incoming = await request.formData();
       const outgoing = new FormData();
       for (const [key, value] of incoming.entries()) outgoing.append(key, value);
