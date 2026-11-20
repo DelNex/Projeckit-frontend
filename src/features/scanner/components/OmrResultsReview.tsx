@@ -65,7 +65,7 @@ export function OmrResultsReview({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-gray-200">
-              {isAnswerKeyMode ? 'Detected Answer Key' : 'Scan Results Verification'}
+              {isAnswerKeyMode ? 'Detected Answer Key' : `Scan Results · ${items.length}/${totalItems} items`}
             </span>
             <span
               className={cn(
@@ -98,6 +98,7 @@ export function OmrResultsReview({
                 {ambiguousCount} Faint
               </span>
             )}
+            {erasedCount > 0 && <span className="flex items-center gap-1 text-gray-300">{erasedCount} Erased</span>}
             <span className="text-gray-400">({blankCount} Blank)</span>
           </div>
         </div>
@@ -158,6 +159,8 @@ export function OmrResultsReview({
             return (
               <div
                 key={item.itemNumber}
+                data-state={item.state}
+                aria-label={`Item ${item.itemNumber}, ${item.state.toLowerCase().replace('_', ' ')}`}
                 className={cn(
                   'pk-omr-answer-card rounded-xl border p-2 flex flex-col justify-between transition-all bg-gray-900/60',
                   isMultiple
@@ -211,7 +214,7 @@ export function OmrResultsReview({
                   <button
                     type="button"
                     title="Mark as Blank"
-                    aria-pressed={!item.selectedChoice}
+                    aria-pressed={item.state === "BLANK" && !item.selectedChoice}
                     aria-label={`Item ${item.itemNumber}: mark blank`}
                     onClick={() => onUpdateItem(item.itemNumber, null)}
                     className={cn(

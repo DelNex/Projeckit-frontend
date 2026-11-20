@@ -92,7 +92,7 @@ export function CameraViewfinder({
               className={cn(
                 'h-8 w-8 sm:h-11 sm:w-11 border-t-3 sm:border-t-4 border-l-3 sm:border-l-4 rounded-tl-lg sm:rounded-tl-xl transition-all duration-200',
                 corners >= 1
-                  ? 'border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]'
+                  ? 'border-emerald-400 shadow-[0_0_10px_rgba(69,104,245,0.4)]'
                   : 'border-white/30'
               )}
             />
@@ -111,13 +111,13 @@ export function CameraViewfinder({
             )}
 
             {/* AI Quality / Alignment Status Pill */}
-            <div className="flex items-center gap-1.5 rounded-full bg-black/75 backdrop-blur-md px-3 py-1 border border-white/10 text-[11px] sm:text-xs font-semibold text-white shadow-md">
+            <div className="pk-omr-status flex items-center gap-1.5 rounded-full bg-black/75 backdrop-blur-md px-3 py-1 border border-white/10 text-[11px] sm:text-xs font-semibold text-white shadow-md" role="status" aria-live="polite">
               <span
                 className={cn(
                   'h-2 w-2 rounded-full shrink-0',
                   isBarcodeMode
-                    ? detectedBarcode ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]' : 'bg-blue-400 animate-pulse'
-                    : isAligned ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]' : 'bg-amber-400 animate-pulse'
+                    ? detectedBarcode ? 'bg-emerald-400 shadow-[0_0_6px_rgba(69,104,245,0.45)]' : 'bg-blue-400 animate-pulse'
+                    : isAligned ? 'bg-emerald-400 shadow-[0_0_6px_rgba(69,104,245,0.45)]' : 'bg-amber-400 animate-pulse'
                 )}
               />
               <span className="truncate">
@@ -139,7 +139,7 @@ export function CameraViewfinder({
               className={cn(
                 'h-8 w-8 sm:h-11 sm:w-11 border-t-3 sm:border-t-4 border-r-3 sm:border-r-4 rounded-tr-lg sm:rounded-tr-xl transition-all duration-200',
                 corners >= 2
-                  ? 'border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]'
+                  ? 'border-emerald-400 shadow-[0_0_10px_rgba(69,104,245,0.4)]'
                   : 'border-white/30'
               )}
             />
@@ -190,7 +190,7 @@ export function CameraViewfinder({
               className={cn(
                 'h-8 w-8 sm:h-11 sm:w-11 border-b-3 sm:border-b-4 border-l-3 sm:border-l-4 rounded-bl-lg sm:rounded-bl-xl transition-all duration-200',
                 corners >= 3
-                  ? 'border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]'
+                  ? 'border-emerald-400 shadow-[0_0_10px_rgba(69,104,245,0.4)]'
                   : 'border-white/30'
               )}
             />
@@ -202,7 +202,7 @@ export function CameraViewfinder({
               className={cn(
                 'h-8 w-8 sm:h-11 sm:w-11 border-b-3 sm:border-b-4 border-r-3 sm:border-r-4 rounded-br-lg sm:rounded-br-xl transition-all duration-200',
                 corners >= 4
-                  ? 'border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]'
+                  ? 'border-emerald-400 shadow-[0_0_10px_rgba(69,104,245,0.4)]'
                   : 'border-white/30'
               )}
             />
@@ -248,7 +248,7 @@ export function CameraViewfinder({
             className={cn(
               'flex h-11 w-11 items-center justify-center rounded-full backdrop-blur-md border transition shadow-lg active:scale-95 shrink-0',
               isTorchOn
-                ? 'bg-amber-500/25 border-amber-400 text-amber-300 shadow-[0_0_14px_rgba(251,191,36,0.6)] ring-1 ring-amber-400/50'
+                ? 'bg-amber-500/25 border-amber-400 text-amber-300 shadow-[0_0_10px_rgba(69,104,245,0.4)] ring-1 ring-amber-400/50'
                 : 'bg-black/60 border-white/20 text-white/80 hover:bg-white/20 hover:text-white'
             )}
           >

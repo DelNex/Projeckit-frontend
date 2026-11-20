@@ -666,7 +666,7 @@ export function OmrCameraModal({
                 className={cn(
                   'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition border active:scale-95',
                   cameraState.isTorchOn
-                    ? 'bg-amber-500/25 border-amber-400 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.5)] ring-1 ring-amber-400/50'
+                    ? 'bg-amber-500/25 border-amber-400 text-amber-300 shadow-[0_0_10px_rgba(69,104,245,0.4)] ring-1 ring-amber-400/50'
                     : 'bg-gray-800/90 border-gray-700 text-gray-300 hover:text-white hover:bg-gray-700'
                 )}
               >

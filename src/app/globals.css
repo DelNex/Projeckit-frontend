@@ -717,7 +717,7 @@ body { background: var(--pk-canvas); color: var(--pk-ink); }
 @media (max-width: 380px) {
   .pk-omr-review-summary { font-size: 11px; }
   .pk-omr-review-summary .pk-omr-review-counts { gap: 6px; flex-wrap: wrap; }
-  .pk-omr-answer-grid { grid-template-columns: minmax(0, 1fr); }
+  .pk-omr-answer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 }
 @media (max-height: 520px) and (orientation: landscape) {
   .pk-omr-header { min-height: 42px; padding-block: 4px; }
@@ -728,3 +728,22 @@ body { background: var(--pk-canvas); color: var(--pk-ink); }
 @media (prefers-reduced-motion: reduce) {
   .pk-main button, .pk-auth button { transition: none; }
 }
+
+/* Shared overflow behavior for long forms, data tables and nested modal panels. */
+.pk-main .overflow-x-auto, .pk-auth .overflow-x-auto {
+  max-width: 100%;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+.pk-main .fixed.inset-0.z-50 > *:not(.pk-omr-dialog) {
+  max-height: calc(100dvh - max(24px, env(safe-area-inset-top)) - max(24px, env(safe-area-inset-bottom)));
+  overscroll-behavior: contain;
+}
+.pk-omr-answer-card[data-state="MARKED"] { border-color: var(--pk-brand); }
+.pk-omr-answer-card[data-state="AMBIGUOUS"] { border-style: dashed; border-width: 2px; }
+.pk-omr-answer-card[data-state="MULTIPLE_MARK"] { border-width: 2px; }
+.pk-omr-answer-card[data-state="ERASED_MARK"] { border-style: double; border-width: 3px; }
+.pk-omr-answer-card[data-state="BLANK"] { border-style: solid; }
+.pk-omr-viewfinder .pk-omr-status { background: rgba(16, 21, 29, .88); }
+.pk-omr-viewfinder .barcode-laser-trail { background: linear-gradient(to top, rgba(69, 104, 245, .28), transparent); }
