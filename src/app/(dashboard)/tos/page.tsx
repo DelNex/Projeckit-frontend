@@ -23,7 +23,6 @@ import { TosViewModal } from '@/features/tos/components/TosViewModal';
 import { TosExamModal } from '@/features/tos/components/TosExamModal';
 import { SchemaHealthBanner } from '@/features/tos/components/SchemaHealthBanner';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
-import type { ExamAiPreflight } from '@/lib/exam-generation-client';
 
 export default function TosPage() {
   const { toast } = useToast();
@@ -33,7 +32,6 @@ export default function TosPage() {
   // Primary Data
   const [tosList, setTosList] = useState<TosDocument[]>([]);
   const [activeExamJobTos, setActiveExamJobTos] = useState<Set<string>>(new Set());
-  const [examAiPreflight, setExamAiPreflight] = useState<ExamAiPreflight | null>(null);
   const [sections, setSections] = useState<Array<{ id: string; name: string; track?: string; grade_level?: string }>>([]);
   const [gradingPeriods, setGradingPeriods] = useState<Array<{ id: string; name: string; is_current: boolean }>>([]);
   const [availableSchoolYears, setAvailableSchoolYears] = useState<string[]>([]);
@@ -63,35 +61,6 @@ export default function TosPage() {
     const interval = setInterval(refresh, 8000);
     return () => { active = false; clearInterval(interval); };
   }, [tosList]);
-
-  // Check the hosted exam provider as soon as the teacher opens the TOS page.
-  // The exam modal receives this result, so readiness is not first discovered
-  // only after the teacher presses Generate.
-  useEffect(() => {
-    if (!tenant?.tenantId) return;
-    let active = true;
-    const refreshPreflight = async () => {
-      try {
-        const response = await fetch('/api/ai/helper-status', { cache: 'no-store' });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || !active) return;
-        setExamAiPreflight({
-          state: data.state === 'online' ? 'online' : 'offline',
-          quota: data.quota || null,
-          quotaAvailable: Boolean(data.quotaAvailable),
-        });
-      } catch {
-        if (active) setExamAiPreflight({ state: 'unavailable', quota: null, quotaAvailable: false });
-      }
-    };
-    void refreshPreflight();
-    const onFocus = () => { void refreshPreflight(); };
-    window.addEventListener('focus', onFocus);
-    return () => {
-      active = false;
-      window.removeEventListener('focus', onFocus);
-    };
-  }, [tenant?.tenantId]);
 
   // Page Controls & Filters
   const [selectedSchoolYear, setSelectedSchoolYear] = useState<string>('');
@@ -691,7 +660,6 @@ export default function TosPage() {
         onClose={() => setExamModalTos(null)}
         tos={examModalTos}
         schoolName={tenant?.tenantName || ''}
-        preflight={examAiPreflight}
       />
 
       {/* 4. Delete Confirmation Modal with Linked Exam Warning */}
