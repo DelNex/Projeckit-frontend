@@ -6,6 +6,8 @@ import {
   validateExamQuestions,
 } from '../exam-types';
 import { randomizeAndBalanceExamQuestions } from '../exam-randomizer';
+import { isSupportedExamSourceFileName } from '../exam-generation-files';
+
 
 test('Project KIT — AI Exam Pipeline Requirements', async (t) => {
   await t.test('1. No fake questions: when AI is unconfigured and demo mode is off, reject with clear error', async () => {
@@ -179,4 +181,14 @@ test('Project KIT — AI Exam Pipeline Requirements', async (t) => {
       );
     });
   });
+});
+
+
+test('AI exam upload accepts every file type advertised by the picker', () => {
+  for (const name of ['lesson.pdf', 'lesson.docx', 'lesson.pptx', 'lesson.txt', 'lesson.md', 'scan.png', 'scan.jpg', 'scan.jpeg', 'scan.webp', 'scan.bmp', 'scan.tif', 'scan.tiff']) {
+    assert.equal(isSupportedExamSourceFileName(name), true, name);
+  }
+  for (const name of ['lesson.exe', 'lesson.zip', 'lesson', 'lesson.pdf.exe']) {
+    assert.equal(isSupportedExamSourceFileName(name), false, name);
+  }
 });
