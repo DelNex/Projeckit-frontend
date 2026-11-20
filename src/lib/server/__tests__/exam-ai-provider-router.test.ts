@@ -239,3 +239,75 @@ test('Groq retry delay respects Retry-After and applies bounded exponential back
   assert.equal(getExamProviderRetryDelayMs(null, 3), 120_000);
   assert.equal(getExamProviderRetryDelayMs(60 * 60_000, 1), 15 * 60_000);
 });
+
+
+test('OpenRouter adapter sends the OpenAI-compatible structured-output request', async () => {
+  const names = ['OPENROUTER_API_KEY', 'OPENROUTER_MODEL', 'AI_PROVIDER_ORDER'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  const schema = { type: 'object', properties: { questions: { type: 'array' } }, required: ['questions'] };
+  try {
+    process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
+    process.env.OPENROUTER_MODEL = 'openrouter/free';
+    process.env.AI_PROVIDER_ORDER = 'openrouter';
+    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      assert.equal(String(input), 'https://openrouter.ai/api/v1/chat/completions');
+      const headers = new Headers(init?.headers);
+      assert.equal(headers.get('authorization'), 'Bearer test-openrouter-key');
+      assert.equal(headers.get('http-referer'), 'https://projectkit.app');
+      assert.equal(headers.get('x-title'), 'Project KIT');
+      const body = JSON.parse(String(init?.body));
+      assert.equal(body.model, 'openrouter/free');
+      assert.equal(body.response_format.type, 'json_schema');
+      assert.deepEqual(body.response_format.json_schema.schema, schema);
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({ questions: [{ item_number: 3 }] }) } }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    const { requestExamQuestionsFromProviders } = await import('../exam-ai-provider-router');
+    const result = await requestExamQuestionsFromProviders([{ role: 'user', content: 'Create one item.' }], schema);
+    assert.deepEqual(JSON.parse(result), [{ item_number: 3 }]);
+  } finally {
+    global.fetch = originalFetch;
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
+test('provider router continues to Gemini when OpenRouter rejects a model-specific request', async () => {
+  const names = ['OPENROUTER_API_KEY', 'OPENROUTER_MODEL', 'GEMINI_API_KEY', 'AI_PROVIDER_ORDER'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  let calls = 0;
+  try {
+    process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
+    process.env.OPENROUTER_MODEL = 'openrouter/free';
+    process.env.GEMINI_API_KEY = 'test-gemini-key';
+    process.env.AI_PROVIDER_ORDER = 'openrouter,gemini';
+    global.fetch = (async (input: RequestInfo | URL) => {
+      calls += 1;
+      if (calls === 1) {
+        assert.equal(String(input), 'https://openrouter.ai/api/v1/chat/completions');
+        return new Response(JSON.stringify({ error: { message: 'Selected model does not support this schema.' } }), {
+          status: 400, headers: { 'content-type': 'application/json' },
+        });
+      }
+      assert.match(String(input), /generativelanguage\.googleapis\.com/);
+      return new Response(JSON.stringify({
+        candidates: [{ content: { parts: [{ text: JSON.stringify({ questions: [{ item_number: 4 }] }) }] } }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    const { requestExamQuestionsFromProviders } = await import('../exam-ai-provider-router');
+    const result = await requestExamQuestionsFromProviders([{ role: 'user', content: 'Create one item.' }], { type: 'object' });
+    assert.deepEqual(JSON.parse(result), [{ item_number: 4 }]);
+    assert.equal(calls, 2);
+  } finally {
+    global.fetch = originalFetch;
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
