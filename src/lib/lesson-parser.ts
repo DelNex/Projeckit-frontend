@@ -129,12 +129,19 @@ function buildResult(documents: Array<{ name: string; text: string; lowConfidenc
   if (charCount > MAX_CHARACTERS) {
     throw new Error('These documents contain more than 900,000 readable characters. Split them into smaller chapter groups.');
   }
+  const lowConfidence = documents.filter((document) => (document.lowConfidencePages || []).length > 0);
+  const notice = lowConfidence.length
+    ? 'OCR completed, but some pages may need teacher review: ' +
+      lowConfidence.map((document) => document.name + ' (page(s) ' + document.lowConfidencePages!.join(', ') + ')').join('; ') +
+      '. Check these pages against the original before generating an exam.'
+    : undefined;
   return {
     text: documents.map((document) => '--- ' + document.name + ' ---\\n' + document.text).join('\\n\\n'),
     documents,
     charCount,
     filesProcessed: documents.length,
     truncated: false,
+    ...(notice ? { notice } : {}),
   };
 }
 
