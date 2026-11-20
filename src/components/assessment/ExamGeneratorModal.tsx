@@ -145,7 +145,7 @@ export function ExamGeneratorModal({
     setCurrentStep('done');
     setChunkProgress(null);
     toast.success(`Loaded ${generationJob.savedQuestions.length} saved exam questions.`);
-    onExamGeneratedRef.current(generationJob.savedQuestions, generatedTextRef.current, 'Groq AI', generationJob.job?.resultSummary?.missingItems || [], false);
+    onExamGeneratedRef.current(generationJob.savedQuestions, generatedTextRef.current, 'AI provider', generationJob.job?.resultSummary?.missingItems || [], false);
     onCloseRef.current();
   }, [generationJob.savedQuestions, generationJob.job?.id, generationJob.job?.status, generationJob.job?.resultSummary?.missingItems, toast]);
 
