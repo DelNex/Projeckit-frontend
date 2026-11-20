@@ -24,7 +24,7 @@ Extracted text is gzip-compressed and saved back to the same private bucket. The
 - Up to 900,000 extracted characters across the lesson material.
 - One OCR job at a time per backend process.
 - English + Filipino Tesseract model. Filipino is the available packaged model used for Tagalog-heavy material; OCR quality still depends on scan quality.
-- The original source file is removed from Storage after successful extraction or terminal failure. The extracted result remains in Storage for the teacher's current flow.
+- The original source file is removed from Storage after successful extraction or terminal failure. The extracted result remains in Storage for up to 7 days, then the backend removes the result object and old job row.
 
 ## Database migration
 
