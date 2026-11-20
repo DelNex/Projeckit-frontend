@@ -108,7 +108,7 @@ export async function POST(request: Request) {
     const retryAfter = new Date(Date.now() - 2 * 60_000).toISOString();
     const { data: recentFailure, error: recentFailureError } = await caller.admin!.from('exam_generation_jobs')
       .select('id,updated_at,error').eq('tenant_id', caller.profile!.tenant_id).eq('tos_id', tos.id)
-      .is('parent_job_id', null).eq('status', 'failed').gte('updated_at', retryAfter)
+      .is('parent_job_id', null).eq('status', 'failed').ilike('error', '%HTTP 429%').gte('updated_at', retryAfter)
       .order('updated_at', { ascending: false }).limit(1).maybeSingle();
     if (recentFailureError) throw recentFailureError;
     if (recentFailure) {
