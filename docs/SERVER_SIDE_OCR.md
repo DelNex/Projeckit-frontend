@@ -22,7 +22,7 @@ Extracted text is gzip-compressed and saved back to the same private bucket. The
 - Up to 20 MB per file.
 - Up to 200 PDF pages for scanned-PDF OCR.
 - Up to 900,000 extracted characters across the lesson material.
-- One OCR job at a time per backend process.
+- One OCR job at a time per backend process. Render Free web services have 512 MB RAM and 0.1 CPU, so OCR can be slow; large PDFs should be split into smaller files.
 - English + Filipino Tesseract model. Filipino is the available packaged model used for Tagalog-heavy material; OCR quality still depends on scan quality.
 - The original source file is removed from Storage after successful extraction or terminal failure. The extracted result remains in Storage for up to 7 days, then the backend removes the result object and old job row.
 
@@ -48,7 +48,7 @@ Keep it server-only. Do not add it to any `NEXT_PUBLIC_*` variable or commit it 
 
 ## Wake-up schedule for a free Render service
 
-The worker runs inside the existing web service. Render Free web services spin down after 15 minutes without inbound traffic and wake on the next request. A durable job remains in Supabase during sleep, but the worker cannot run while the service is stopped.
+The worker runs inside the existing web service. Render Free web services have 512 MB RAM and 0.1 CPU, spin down after 15 minutes without inbound traffic, and take about a minute to wake. A durable job remains in Supabase during sleep, but the worker cannot run while the service is stopped. Render may restart a free service at any time, so a job may be reprocessed from the beginning after a restart.
 
 To let jobs continue after the teacher closes the browser, configure Supabase Cron to call the backend dispatch endpoint. In the connected Project KIT Supabase project, the private `lesson-uploads` bucket already exists (100 MB bucket limit), Vault is already installed, and `pg_cron`/`pg_net` are available but not installed. Enable the two missing extensions in the SQL Editor, then store the backend URL and the same secret in Vault:
 
