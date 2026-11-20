@@ -21,6 +21,7 @@ Extracted text is gzip-compressed and saved back to the same private bucket. The
 - Up to 5 files per upload.
 - Up to 20 MB per file.
 - Up to 200 PDF pages for scanned-PDF OCR.
+- Up to 200 PPTX slides per presentation.
 - Image uploads over 25 megapixels are rejected; accepted images are normalized to a maximum 2400-pixel edge before OCR.
 - Up to 900,000 extracted characters across the lesson material.
 - One OCR job at a time per backend process. Render Free web services have 512 MB RAM and 0.1 CPU, so OCR can be slow; large PDFs should be split into smaller files.
