@@ -19,7 +19,7 @@ import {
 import { buildTosBlueprintSlots } from '@/lib/exam-types';
 import { useExamGenerationJob } from '@/lib/exam-generation-client';
 import { getLocalDocumentCapacity } from '@/lib/local-document-engine';
-import { isSupportedExamSourceFileName } from '@/lib/exam-generation-files';
+import { EXAM_SOURCE_FILE_ACCEPT, isSupportedExamSourceFileName } from '@/lib/exam-generation-files';
 
 interface ExamGeneratorModalProps {
   isOpen: boolean;
@@ -357,7 +357,7 @@ export function ExamGeneratorModal({
                 ref={fileInputRef}
                 type="file"
                 multiple
-                accept=".pdf,.docx,.pptx,.txt,.md,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff"
+                accept={EXAM_SOURCE_FILE_ACCEPT}
                 onChange={(e) => {
                   if (e.target.files && e.target.files.length > 0) {
                     handleFilesSelect(e.target.files);
