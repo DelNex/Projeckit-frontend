@@ -29,7 +29,7 @@ export async function GET(request: Request) {
   let retryState = { retryAfterSeconds: 0, failedJobId: null as string | null, lastError: null as string | null, canRetry: true };
   if (tosId) {
     const { data: ownedTos, error: tosError } = await admin.from('tos_documents').select('id')
-      .eq('id', tosId).eq('tenant_id', profile.tenant_id).eq('created_by', user.id).maybeSingle();
+      .eq('id', tosId).eq('tenant_id', profile.tenant_id).maybeSingle();
     if (tosError || !ownedTos) return NextResponse.json({ error: 'The Table of Specifications was not found.' }, { status: 404, headers: { 'Cache-Control': 'no-store' } });
     const { data: failedJob, error: failedJobError } = await admin.from('exam_generation_jobs')
       .select('id,error,progress,updated_at').eq('tenant_id', profile.tenant_id).eq('created_by', user.id)
