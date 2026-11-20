@@ -1,4 +1,585 @@
-'like'}
+'use client';
+
+import { api } from '@/lib/api';
+import { cn } from '@/lib/utils';
+import {
+    Bot,
+    Check,
+    Copy,
+    Info,
+    Loader2,
+    Paperclip,
+    Send,
+    Sparkles,
+    StopCircle,
+    ThumbsDown,
+    ThumbsUp,
+    Trash2,
+    User,
+    X
+} from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+
+interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  status?: 'streaming' | 'complete' | 'error';
+  suggestedChips?: string[];
+  feedback?: 'like' | 'dislike' | null;
+}
+
+interface AiInfoState {
+  aiVersion?: string;
+  planner?: { status: string };
+  systemPromptLoaded?: boolean;
+  toolCount?: number;
+  tools?: { name?: string; id?: string; description?: string }[];
+  session?: { displayName?: string; role?: string; tenantName?: string };
+}
+
+interface AiCopilotModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  assessmentId?: number | null;
+  assessmentTitle?: string | null;
+}
+
+export function AiCopilotModal({
+  isOpen,
+  onClose,
+  assessmentId,
+  assessmentTitle,
+}: AiCopilotModalProps) {
+  const pathname = usePathname();
+  const dialogId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const activeAssistantMessageIdRef = useRef<string | null>(null);
+
+  // Active context state
+  const [activeContextId, setActiveContextId] = useState<number | null>(assessmentId ?? null);
+  const [activeContextTitle, setActiveContextTitle] = useState<string | null>(assessmentTitle ?? null);
+
+  // Messages & input state
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: 'welcome-msg',
+      role: 'assistant',
+      content:
+        "Hello! I am your **Project KIT AI Copilot**. I can help you analyze item difficulty, interpret discrimination indices, suggest test revisions, and guide OMR evaluation.",
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      status: 'complete',
+    },
+  ]);
+  const [inputQuery, setInputQuery] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // System info sidebar state
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [aiInfo, setAiInfo] = useState<AiInfoState | null>(null);
+  const [loadingInfo, setLoadingInfo] = useState(false);
+
+  // File upload state
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Derive screen slug from pathname
+  const pageSlug = useMemo(() => {
+    if (!pathname || pathname === '/') return 'dashboard';
+    const parts = pathname.split('/').filter(Boolean);
+    return parts[parts.length - 1] || 'dashboard';
+  }, [pathname]);
+
+  // Context-aware prompt suggestions
+  const suggestedChips = useMemo(() => {
+    if (pageSlug === 'item-analysis' || pathname.includes('analytics')) {
+      return [
+        'Explain difficulty index (p)',
+        'What does discrimination (D) mean?',
+        'Which items require revision?',
+        'How to improve test validity?',
+      ];
+    }
+    if (pageSlug === 'assessments' || pathname.includes('assessments')) {
+      return [
+        'How do I calibrate the OMR camera?',
+        'Guide me through TOS setup',
+        'Check assessment passing benchmark',
+        'How to print student answer sheets?',
+      ];
+    }
+    if (pageSlug === 'students') {
+      return [
+        'Validate DepEd 12-digit LRN rules',
+        'How to organize sections for scanning?',
+        'What to do if a student transferred?',
+      ];
+    }
+    return [
+      'Summarize quarterly academic performance',
+      'Which sections need academic intervention?',
+      'Explain DepEd MPS calculation standards',
+      'What can you help me with?',
+    ];
+  }, [pageSlug, pathname]);
+
+  // Sync assessment context from props or route
+  useEffect(() => {
+    if (assessmentId) {
+      setActiveContextId(assessmentId);
+      setActiveContextTitle(assessmentTitle || `Assessment #${assessmentId}`);
+    } else if (typeof window !== 'undefined') {
+      const sp = new URLSearchParams(window.location.search);
+      const qId = sp.get('id') || sp.get('assessmentId');
+      if (qId && !isNaN(Number(qId))) {
+        setActiveContextId(Number(qId));
+        setActiveContextTitle(`Assessment #${qId}`);
+      }
+    }
+  }, [assessmentId, assessmentTitle, pathname]);
+
+  // Autoscroll
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isStreaming]);
+
+  // Fetch AI info when sidebar is opened
+  useEffect(() => {
+    if (showSidebar && !aiInfo) {
+      setLoadingInfo(true);
+      api.ai
+        .getInfo()
+        .then((data) => {
+          setAiInfo(data);
+        })
+        .catch((err) => {
+          console.warn('Could not load AI info:', err);
+        })
+        .finally(() => {
+          setLoadingInfo(false);
+        });
+    }
+  }, [showSidebar, aiInfo]);
+
+  // Keep keyboard focus inside the dialog and return it to the launcher on close.
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const selector = 'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
+    const frame = window.requestAnimationFrame(() => {
+      const first = dialogRef.current?.querySelector<HTMLElement>(selector);
+      (first || dialogRef.current)?.focus();
+    });
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        abortControllerRef.current?.abort();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(selector) || [])
+        .filter((element) => element.offsetWidth > 0 || element.offsetHeight > 0);
+      if (!focusable.length) { event.preventDefault(); dialogRef.current?.focus(); return; }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener('keydown', handleKeyDown);
+      abortControllerRef.current?.abort();
+      setIsStreaming(false);
+      setMessages((current) => current.map((message) => message.status === 'streaming'
+        ? { ...message, content: message.content ? `${message.content}\n\nGeneration stopped.` : 'Generation stopped.', status: 'complete' }
+        : message));
+      activeAssistantMessageIdRef.current = null;
+      previousFocus?.focus();
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  // Send query handler
+  const handleSendMessage = async (queryText?: string) => {
+    const textToSend = (queryText || inputQuery).trim();
+    if (!textToSend || isStreaming) return;
+
+    setInputQuery('');
+    const userMsgId = `usr-${Date.now()}`;
+    const assistantMsgId = `ast-${Date.now()}`;
+    activeAssistantMessageIdRef.current = assistantMsgId;
+
+    // Add user message & placeholder assistant message
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: userMsgId,
+        role: 'user',
+        content: textToSend,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
+      {
+        id: assistantMsgId,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'streaming',
+      },
+    ]);
+
+    setIsStreaming(true);
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    const payload = {
+      message: textToSend,
+      assessmentId: activeContextId || undefined,
+      context: { page: pageSlug },
+      uiContext: {
+        pageId: pageSlug,
+        activeAssessmentId: activeContextId,
+        url: typeof window !== 'undefined' ? window.location.href : '',
+      },
+    };
+
+    let accumulatedResponse = '';
+
+    try {
+      // Try streaming endpoint via SSE
+      await api.ai.stream(payload, {
+        signal: abortController.signal,
+        onChunk: (chunk: string) => {
+          accumulatedResponse += chunk;
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMsgId
+                ? { ...msg, content: accumulatedResponse, status: 'streaming' }
+                : msg
+            )
+          );
+        },
+        onDone: () => {
+          activeAssistantMessageIdRef.current = null;
+          setIsStreaming(false);
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMsgId ? { ...msg, status: 'complete' } : msg
+            )
+          );
+        },
+        onError: async (streamErr) => {
+          if (abortController.signal.aborted) return;
+          console.warn('Streaming error, falling back to chat POST:', streamErr);
+          // Fallback to standard chat endpoint if stream failed
+          try {
+            const fallbackRes = await api.ai.chat(payload);
+            const reply = fallbackRes?.reply || fallbackRes?.message || 'I processed your request.';
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMsgId ? { ...msg, content: reply, status: 'complete' } : msg
+              )
+            );
+          } catch (chatErr: any) {
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMsgId
+                  ? {
+                      ...msg,
+                      content: `I encountered an error communicating with the AI service: ${chatErr?.message || 'Server unavailable'}. Please verify backend connection.`,
+                      status: 'error',
+                    }
+                  : msg
+              )
+            );
+          } finally {
+            activeAssistantMessageIdRef.current = null;
+            setIsStreaming(false);
+          }
+        },
+      });
+    } catch (err: any) {
+      if (err?.name === 'AbortError' || abortController.signal.aborted) return;
+
+      // Direct fallback call
+      try {
+        const fallbackRes = await api.ai.chat(payload);
+        const reply = fallbackRes?.reply || fallbackRes?.message || 'I processed your request.';
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMsgId ? { ...msg, content: reply, status: 'complete' } : msg
+          )
+        );
+      } catch (chatErr: any) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMsgId
+              ? {
+                  ...msg,
+                  content: `I encountered an issue: ${chatErr?.message || 'AI service offline'}. Please ensure the Project KIT backend is running on port 4000.`,
+                  status: 'error',
+                }
+              : msg
+          )
+        );
+      } finally {
+        activeAssistantMessageIdRef.current = null;
+        setIsStreaming(false);
+      }
+    }
+  };
+
+  const handleStopGeneration = () => {
+    abortControllerRef.current?.abort();
+    const activeId = activeAssistantMessageIdRef.current;
+    if (activeId) setMessages((prev) => prev.map((message) => message.id === activeId
+      ? { ...message, content: message.content ? `${message.content}\n\nGeneration stopped.` : 'Generation stopped.', status: 'complete' }
+      : message));
+    activeAssistantMessageIdRef.current = null;
+    setIsStreaming(false);
+  };
+
+  // Handle module upload
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingFile(true);
+    setUploadMessage(null);
+    try {
+      const res = await api.ai.uploadModule(file);
+      setUploadMessage(`"${file.name}" indexed successfully!`);
+      // Notify chat
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `sys-${Date.now()}`,
+          role: 'assistant',
+          content: `📄 **Module Attached**: "${file.name}" has been processed and indexed into the RAG context. You can now ask questions about its content.`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          status: 'complete',
+        },
+      ]);
+      setTimeout(() => setUploadMessage(null), 4000);
+    } catch (err: any) {
+      console.error('File upload failed:', err);
+      setUploadMessage(`Upload failed: ${err.message || 'Check backend'}`);
+    } finally {
+      setUploadingFile(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  // Copy text to clipboard
+  const handleCopy = (text: string, msgId: string) => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setCopiedId(msgId);
+      setTimeout(() => setCopiedId(null), 2000);
+    }
+  };
+
+  // Toggle feedback
+  const handleFeedback = (msgId: string, type: 'like' | 'dislike') => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId ? { ...m, feedback: m.feedback === type ? null : type } : m
+      )
+    );
+  };
+
+  // Clear chat
+  const handleClearChat = () => {
+    setMessages([
+      {
+        id: `welcome-${Date.now()}`,
+        role: 'assistant',
+        content: 'Chat history cleared. How can I assist you today with your assessments?',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'complete',
+      },
+    ]);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm animate-in fade-in duration-200 sm:items-center sm:p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <div ref={dialogRef} id={dialogId} role="dialog" aria-modal="true" aria-labelledby={`${dialogId}-title`} aria-describedby={`${dialogId}-description`} tabIndex={-1} className="relative flex h-[100dvh] max-h-[100dvh] w-full max-w-5xl overflow-hidden rounded-none border border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-900 sm:h-[min(760px,92dvh)] sm:max-h-[92dvh] sm:rounded-3xl">
+        {/* Main Chat Pane */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {/* Modal Header */}
+          <div className="flex h-16 items-center justify-between border-b border-gray-100 px-6 dark:border-gray-800">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-700 text-white">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 id={`${dialogId}-title`} className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
+                    Project KIT AI Copilot
+                  </h2>
+                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600 dark:bg-blue-900/40 dark:text-blue-300">
+                    DepEd Assistant
+                  </span>
+                </div>
+                <p id={`${dialogId}-description`} className="text-[11px] text-gray-500 dark:text-gray-400 leading-tight">
+                  Psychometrics, Table of Specifications &amp; OMR Guidance
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSidebar(!showSidebar)}
+                className={cn(
+                  'flex h-8 w-8 items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:border-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 transition',
+                  showSidebar && 'bg-blue-50 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400'
+                )}
+                title="Toggle System Info Sidebar"
+                aria-label="Toggle AI system information"
+                aria-expanded={showSidebar}
+                aria-controls={`${dialogId}-system-info`}
+              >
+                <Info className="h-4 w-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleClearChat}
+                className="flex h-8 w-8 items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:border-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 transition"
+                title="Clear Chat History"
+                aria-label="Clear chat history"
+                disabled={isStreaming || uploadingFile}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close AI Copilot"
+                className="flex h-9 w-9 sm:h-8 sm:w-8 items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:border-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 transition"
+                title="Close (Esc)"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Context Banner */}
+          {activeContextId && (
+            <div className="flex items-center justify-between border-b border-blue-100 bg-blue-50/60 px-6 py-2 text-xs text-blue-700 dark:border-blue-900/40 dark:bg-blue-950/30 dark:text-blue-300">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-blue-600 animate-pulse" />
+                <span className="font-semibold">
+                  Context: {activeContextTitle || `Assessment #${activeContextId}`}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveContextId(null);
+                  setActiveContextTitle(null);
+                }}
+                className="text-[10px] font-bold uppercase tracking-wider text-blue-500 hover:text-blue-700 dark:hover:text-blue-200"
+              >
+                Clear Context
+              </button>
+            </div>
+          )}
+
+          {/* Messages Scroll Area */}
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 space-y-4 custom-scrollbar sm:px-6" role="log" aria-label="Conversation messages" aria-live="off" aria-relevant="additions text">
+            <p className="sr-only" role="status" aria-live="polite">{isStreaming ? 'AI Copilot is generating a response.' : 'AI Copilot is ready.'}</p>
+            {messages.map((msg) => (
+              <div
+                key={msg.id}
+                className={cn(
+                  'flex gap-3 text-xs',
+                  msg.role === 'user' ? 'justify-end' : 'justify-start'
+                )}
+              >
+                {msg.role === 'assistant' && (
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white shadow-2xs mt-0.5">
+                    <Bot className="h-4 w-4" />
+                  </div>
+                )}
+
+                <div
+                  className={cn(
+                    'max-w-[90%] break-words rounded-2xl p-3 text-[13px] space-y-2 leading-relaxed shadow-2xs sm:max-w-[82%] sm:p-4',
+                    msg.role === 'user'
+                      ? 'bg-blue-600 text-white rounded-br-none'
+                      : 'bg-gray-50 dark:bg-gray-800/70 text-gray-800 dark:text-gray-200 border border-gray-100 dark:border-gray-800 rounded-bl-none'
+                  )}
+                >
+                  {/* Content with basic bold / markdown parsing */}
+                  <div className="select-text [&_p]:my-2 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_h1]:my-2 [&_h1]:text-base [&_h1]:font-bold [&_h2]:my-2 [&_h2]:text-sm [&_h2]:font-bold [&_h3]:my-2 [&_h3]:font-semibold [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-blue-500 [&_blockquote]:pl-3 [&_blockquote]:text-gray-600 dark:[&_blockquote]:text-gray-300 [&_a]:font-semibold [&_a]:text-blue-600 [&_a]:underline dark:[&_a]:text-blue-400 [&_table]:my-2 [&_table]:w-full [&_table]:text-left [&_th]:border-b [&_th]:border-gray-300 [&_th]:px-2 [&_th]:py-1 [&_td]:border-b [&_td]:border-gray-200 [&_td]:px-2 [&_td]:py-1 dark:[&_th]:border-gray-700 dark:[&_td]:border-gray-800">
+                    {msg.content ? (
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+                        a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer noopener">{children}</a>,
+                        pre: ({ children }) => <pre className="my-2 max-w-full overflow-x-auto rounded-lg bg-gray-950 p-3 text-[11px] text-gray-100">{children}</pre>,
+                        code: ({ children, className }) => <code className={cn('rounded bg-gray-200/80 px-1 py-0.5 font-mono text-[0.9em] dark:bg-gray-700/80', className)}>{children}</code>,
+                        table: ({ children }) => <div className="my-2 max-w-full overflow-x-auto"><table>{children}</table></div>,
+                      }}>{msg.content}</ReactMarkdown>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-gray-400">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Thinking...
+                      </span>
+                    )}
+                    {msg.status === 'streaming' && (
+                      <span className="inline-block h-3.5 w-1.5 ml-1 bg-blue-600 dark:bg-blue-400 animate-pulse" />
+                    )}
+                  </div>
+
+                  {/* Assistant Action Bar on completed turns */}
+                  {msg.role === 'assistant' && msg.status !== 'streaming' && msg.content && (
+                    <div className="flex items-center justify-between border-t border-gray-200/60 dark:border-gray-700/60 pt-2 mt-2 text-[10px] text-gray-400">
+                      <span>{msg.timestamp}</span>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(msg.content, msg.id)}
+                          className="flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition"
+                          title="Copy response"
+                          aria-label={copiedId === msg.id ? 'Response copied' : 'Copy response'}
+                        >
+                          {copiedId === msg.id ? (
+                            <>
+                              <Check className="h-3 w-3 text-emerald-500" />
+                              <span className="text-emerald-500 font-semibold">Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-3 w-3" />
+                              <span>Copy</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleFeedback(msg.id, 'like')}
+                          className={cn(
+                            'p-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition',
+                            msg.feedback === 'like' && 'text-blue-600 dark:text-blue-400 font-bold'
+                          )}
+                          title="Helpful"
+                          aria-label="Mark response helpful"
+                          aria-pressed={msg.feedback === 'like'}
                         >
                           <ThumbsUp className="h-3 w-3" />
                         </button>
