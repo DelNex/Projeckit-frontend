@@ -393,15 +393,15 @@ export function TosExamModal({
 
               <button
                 onClick={handleGenerateExam}
-                disabled={isGenerating || generationJob.isStarting || generationJob.helperState === 'offline' || generationJob.helperState === 'needs_attention' || ['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')}
-                title={generationJob.helperState === 'offline' ? 'Groq AI is offline. Configure GROQ_API_KEY on the server.' : undefined}
+                disabled={isGenerating || generationJob.isStarting || generationJob.helperState !== 'online' || (generationJob.quotaAvailable && Boolean(generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0))) || generationJob.retryAfterSeconds > 0 || ['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')}
+                title={generationJob.helperState === 'checking' ? 'Checking Groq server configuration…' : generationJob.helperState === 'offline' ? 'Groq AI is offline. Configure GROQ_API_KEY on the server.' : generationJob.retryAfterSeconds > 0 ? `Retry available in ${generationJob.retryAfterSeconds}s` : undefined}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all disabled:opacity-50"
               >
                 {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                 <span>{isGenerating ? 'Generating...' : 'Generate Exam'}</span>
               </button>
               <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold ${generationJob.helperState === 'offline' ? 'border-slate-300 text-slate-600' : generationJob.helperState === 'needs_attention' ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-emerald-300 bg-emerald-50 text-emerald-800'}`}>
-                Groq AI {generationJob.helperState === 'needs_attention' ? 'needs attention' : generationJob.helperState}
+                Groq AI {generationJob.helperState === 'needs_attention' ? 'needs attention' : generationJob.helperState === 'checking' ? 'checking…' : generationJob.helperState === 'unavailable' ? 'status unavailable' : generationJob.helperState}
               </span>
               <button
                 onClick={() => setShowTeacherCopyModal(true)}
@@ -433,8 +433,29 @@ export function TosExamModal({
               </div>
             )}
 
+            {generationJob.helperState === 'checking' && !isGenerating && (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">Checking Groq availability and your generation allowance…</div>
+            )}
+            {generationJob.helperState === 'unavailable' && !isGenerating && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">Could not verify Groq availability. Refresh this TOS before starting generation.</div>
+            )}
             {generationJob.helperState === 'offline' && !isGenerating && (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">Groq AI is offline. Add GROQ_API_KEY to the server environment to enable generation.</div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">Groq AI is not configured on the server. Please contact your school administrator.</div>
+            )}
+            {generationJob.quotaAvailable && generationJob.quota && (
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Generation allowance: {generationJob.quota.hourly.remaining}/{generationJob.quota.hourly.limit} this hour · {generationJob.quota.daily.remaining}/{generationJob.quota.daily.limit} for your school today.
+              </p>
+            )}
+            {generationJob.retryAfterSeconds > 0 && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                The previous attempt for this TOS failed recently. You can retry in about {generationJob.retryAfterSeconds} seconds.
+              </div>
+            )}
+            {generationJob.quotaAvailable && generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0) && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                {generationJob.quota.hourly.remaining <= 0 ? 'You have reached your hourly exam-generation limit.' : 'Your school has reached its daily exam-generation limit.'} Please wait before generating another exam.
+              </div>
             )}
             {generationJob.helperState === 'needs_attention' && generationJob.job?.status !== 'needs_attention' && (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">An earlier AI generation job needs attention. Resolve or cancel it before starting another generation.</div>
