@@ -150,6 +150,7 @@ export async function requestExamQuestionsFromProviders(
   let lastStatus: number | null = null;
   let lastRetryable = false;
   let lastRetryAfterMs: number | null = null;
+  let lastRateLimit: Record<string, string | null> | null = null;
   // The caller is a 60-second Next.js route. Keep provider failover inside a
   // 50-second budget so the job lease can be renewed/finalized safely.
   const totalSetting = Number(process.env.AI_PROVIDER_TOTAL_TIMEOUT_MS || 50_000);
@@ -187,6 +188,7 @@ export async function requestExamQuestionsFromProviders(
       lastStatus = status;
       lastRetryable = retryable;
       lastRetryAfterMs = retryAfterMs;
+      lastRateLimit = rateLimit;
       const safeDetail = message.replace(/\s+/g, ' ').slice(0, 180);
       failures.push(`${provider.id}${status ? ` HTTP ${status}` : ''}: ${safeDetail}`);
       await logSystemEvent({
@@ -200,6 +202,6 @@ export async function requestExamQuestionsFromProviders(
   }
   throw Object.assign(
     new Error(`No configured AI provider could complete this batch. ${failures.join(' | ').slice(0, 700)}`),
-    { status: lastStatus, retryable: lastRetryable, retryAfterMs: lastRetryAfterMs },
+    { status: lastStatus, retryable: lastRetryable, retryAfterMs: lastRetryAfterMs, rateLimit: lastRateLimit },
   );
 }
