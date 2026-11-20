@@ -41,6 +41,19 @@ security definer
 set search_path = public, pg_temp
 as $$
 begin
+  update public.document_extraction_jobs
+  set status = 'failed',
+      error_code = 'WORKER_TIMEOUT',
+      error_message = 'The document processor stopped before finishing. Please upload the file again.',
+      progress = jsonb_build_object('stage','failed','percent',0,'label','Processing stopped. Please upload the file again.'),
+      claimed_by = null,
+      lease_expires_at = null,
+      finished_at = now(),
+      updated_at = now()
+  where status = 'processing'
+    and lease_expires_at < now()
+    and attempts >= max_attempts;
+
   return query
   with candidate as (
     select id
