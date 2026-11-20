@@ -6,8 +6,6 @@
   :root {
     --font-outfit: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     color-scheme: light;
-    
-    --font-outfit: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --color-brand-50: #eef2ff;
     --color-brand-100: #dce4ff;
     --color-brand-500: #4568f5;
@@ -373,3 +371,25 @@ body { background: var(--pk-canvas); color: var(--pk-ink); }
   .pk-toast-enter { animation: none; }
   .pk-toast-progress { animation: none; }
 }
+
+
+/* Keep the entire product inside one accent family, including legacy utility classes. */
+:root {
+  --color-purple-50: #eef2ff; --color-purple-100: #dce4ff; --color-purple-500: #4568f5; --color-purple-600: #3157e8; --color-purple-700: #2646c8;
+  --color-violet-50: #eef2ff; --color-violet-100: #dce4ff; --color-violet-500: #4568f5; --color-violet-600: #3157e8; --color-violet-700: #2646c8;
+  --color-pink-50: #eef2ff; --color-pink-100: #dce4ff; --color-pink-500: #4568f5; --color-pink-600: #3157e8; --color-pink-700: #2646c8;
+  --color-orange-50: #eef2ff; --color-orange-100: #dce4ff; --color-orange-500: #4568f5; --color-orange-600: #3157e8; --color-orange-700: #2646c8;
+  --color-yellow-50: #eef2ff; --color-yellow-100: #dce4ff; --color-yellow-500: #4568f5; --color-yellow-600: #3157e8; --color-yellow-700: #2646c8;
+  --color-cyan-50: #eef2ff; --color-cyan-100: #dce4ff; --color-cyan-500: #4568f5; --color-cyan-600: #3157e8; --color-cyan-700: #2646c8;
+  --color-teal-50: #eef2ff; --color-teal-100: #dce4ff; --color-teal-500: #4568f5; --color-teal-600: #3157e8; --color-teal-700: #2646c8;
+  --color-lime-50: #eef2ff; --color-lime-100: #dce4ff; --color-lime-500: #4568f5; --color-lime-600: #3157e8; --color-lime-700: #2646c8;
+}
+.pk-brand-mark { width: auto !important; height: auto !important; padding: 0 !important; background: transparent !important; color: var(--pk-ink) !important; border-radius: 0 !important; font-size: 18px; line-height: 1; }
+.pk-theme-toggle { border-color: var(--pk-line) !important; background: var(--pk-surface) !important; color: var(--pk-muted) !important; }
+.pk-theme-toggle:hover { background: var(--pk-surface-muted) !important; color: var(--pk-ink) !important; }
+.pk-dashboard > div:first-child { padding-bottom: 20px; border-color: var(--pk-line); }
+.pk-dashboard > div:first-child h1 { letter-spacing: -.035em; }
+.pk-dashboard .pk-kpi-card { position: relative; overflow: hidden; border-color: var(--pk-line); box-shadow: 0 2px 8px rgba(23,33,43,.035); }
+.pk-dashboard .pk-kpi-card:hover { transform: translateY(-2px); box-shadow: var(--pk-shadow); }
+.pk-dashboard .pk-kpi-card > div:first-child > span:last-child { background: var(--pk-brand-soft) !important; color: var(--pk-brand) !important; }
+.pk-dashboard .pk-kpi-card > div:nth-child(2) > span:first-child { letter-spacing: -.04em; }

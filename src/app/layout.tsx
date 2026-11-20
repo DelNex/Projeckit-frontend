@@ -90,7 +90,7 @@ export const metadata: Metadata = {
     'google-site-verification': '530ffdb1a0b8807b',
     'apple-mobile-web-app-title': 'Project KIT',
     'application-name': 'Project KIT',
-    'msapplication-TileColor': '#3157e8',
+    'msapplication-TileColor': '#2563eb',
     'theme-color': '#2563eb',
     'rating': 'General',
     'distribution': 'Global',
@@ -103,8 +103,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f5f6f8' },
-    { media: '(prefers-color-scheme: dark)', color: '#10151d' },
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#030712' },
   ],
 };
 

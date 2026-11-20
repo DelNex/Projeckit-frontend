@@ -7,7 +7,7 @@ import {
     LogOut,
     Menu,
     Settings,
-    Bot,
+    Sparkles,
     User,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -72,7 +72,7 @@ export function Header({ onToggleSidebar, sidebarOpen = false, title }: HeaderPr
 
   return (
     <>
-      <header className="pk-header sticky top-0 z-40 flex min-h-16 w-full min-w-0 items-center justify-between border-b border-slate-200 bg-white px-3 sm:min-h-[72px] sm:px-6 dark:border-gray-800 dark:bg-gray-900">
+      <header className="sticky top-0 z-40 flex min-h-16 w-full min-w-0 items-center justify-between border-b border-slate-200 bg-white px-3 sm:min-h-[72px] sm:px-6 dark:border-gray-800 dark:bg-gray-900">
         {/* Left: Mobile Toggle & Page Title */}
         <div className="flex min-w-0 items-center gap-2 sm:gap-4">
           <button
@@ -98,10 +98,10 @@ export function Header({ onToggleSidebar, sidebarOpen = false, title }: HeaderPr
           {/* AI Copilot Launcher Button */}
           <button
             onClick={() => setIsAiModalOpen(true)}
-            className="pk-ai-launcher relative flex h-10 items-center gap-1.5 rounded-lg px-2.5 sm:px-3 text-xs font-semibold transition"
+            className="relative flex h-10 items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 sm:px-3 text-xs font-semibold text-blue-800 hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-950/70 transition"
             title="Open AI Copilot (Ctrl + J)"
           >
-            <Bot className="h-4 w-4" />
+            <Sparkles className="h-4 w-4 text-blue-700 dark:text-blue-300" />
             <span className="hidden sm:inline">AI Copilot</span>
             <kbd className="hidden lg:inline-flex rounded bg-blue-100/70 px-1.5 py-0.5 text-[9px] font-mono text-blue-600 dark:bg-blue-900/60 dark:text-blue-300">
               Ctrl+J
@@ -117,9 +117,9 @@ export function Header({ onToggleSidebar, sidebarOpen = false, title }: HeaderPr
               onClick={() => setDropdownOpen(!dropdownOpen)}
               aria-expanded={dropdownOpen}
               aria-haspopup="menu"
-              className="pk-profile-trigger flex min-h-10 items-center gap-1.5 sm:gap-2.5 rounded-lg border border-slate-200 bg-white p-1 sm:p-1.5 sm:pr-3 hover:bg-slate-50 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800"
+              className="flex min-h-10 items-center gap-1.5 sm:gap-2.5 rounded-lg border border-slate-200 bg-white p-1 sm:p-1.5 sm:pr-3 hover:bg-slate-50 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800"
             >
-              <div className="pk-avatar flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg text-xs font-bold">
+              <div className="flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-xs font-bold text-blue-600 dark:bg-blue-900/50 dark:text-blue-400">
                 {initial}
               </div>
               <div className="hidden text-left sm:block">
@@ -140,7 +140,7 @@ export function Header({ onToggleSidebar, sidebarOpen = false, title }: HeaderPr
                   className="fixed inset-0 z-40"
                   onClick={() => setDropdownOpen(false)}
                 />
-                <div role="menu" className="pk-profile-menu absolute right-0 mt-2 w-52 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg dark:border-gray-800 dark:bg-gray-900 z-50">
+                <div role="menu" className="absolute right-0 mt-2 w-52 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg dark:border-gray-800 dark:bg-gray-900 z-50">
                   <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-800 mb-1 sm:hidden">
                     <p className="text-xs font-bold text-gray-900 dark:text-white truncate">
                       {userDisplayName || 'Account'}
