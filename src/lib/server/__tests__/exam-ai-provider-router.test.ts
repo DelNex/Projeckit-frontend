@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildGroqMessages, chooseNextExamJob, getExamProviderRetryDelayMs } from '../groq-exam-worker';
 import { buildExamPrompt } from '../exam-jobs';
-import { getConfiguredExamProviders } from '../exam-ai-provider-router';
+import { getConfiguredExamProviders, resetExamProviderCooldownsForTests } from '../exam-ai-provider-router';
 
 test('exam context retrieval prefers lesson sections relevant to the requested competency', () => {
   const payload = {
@@ -242,6 +242,7 @@ test('Groq retry delay respects Retry-After and applies bounded exponential back
 
 
 test('OpenRouter adapter sends the OpenAI-compatible structured-output request', async () => {
+  resetExamProviderCooldownsForTests();
   const names = ['OPENROUTER_API_KEY', 'OPENROUTER_MODEL', 'AI_PROVIDER_ORDER'];
   const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   const originalFetch = global.fetch;
@@ -269,6 +270,7 @@ test('OpenRouter adapter sends the OpenAI-compatible structured-output request',
     assert.deepEqual(JSON.parse(result), [{ item_number: 3 }]);
   } finally {
     global.fetch = originalFetch;
+    resetExamProviderCooldownsForTests();
     for (const name of names) {
       if (previous[name] === undefined) delete process.env[name];
       else process.env[name] = previous[name];
@@ -277,6 +279,7 @@ test('OpenRouter adapter sends the OpenAI-compatible structured-output request',
 });
 
 test('provider router continues to Gemini when OpenRouter rejects a model-specific request', async () => {
+  resetExamProviderCooldownsForTests();
   const names = ['OPENROUTER_API_KEY', 'OPENROUTER_MODEL', 'GEMINI_API_KEY', 'AI_PROVIDER_ORDER'];
   const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   const originalFetch = global.fetch;
