@@ -50,9 +50,12 @@ Keep it server-only. Do not add it to any `NEXT_PUBLIC_*` variable or commit it 
 
 The worker runs inside the existing web service. Render Free web services spin down after 15 minutes without inbound traffic and wake on the next request. A durable job remains in Supabase during sleep, but the worker cannot run while the service is stopped.
 
-To let jobs continue after the teacher closes the browser, configure Supabase Cron to call the backend dispatch endpoint. Enable `pg_cron`, `pg_net`, and Vault if they are not already enabled, then store the backend URL and the same secret in Vault:
+To let jobs continue after the teacher closes the browser, configure Supabase Cron to call the backend dispatch endpoint. In the connected Project KIT Supabase project, the private `lesson-uploads` bucket already exists (100 MB bucket limit), Vault is already installed, and `pg_cron`/`pg_net` are available but not installed. Enable the two missing extensions in the SQL Editor, then store the backend URL and the same secret in Vault:
 
 ```sql
+create extension if not exists pg_cron with schema pg_catalog;
+create extension if not exists pg_net;
+
 select vault.create_secret(
   'https://YOUR-RENDER-SERVICE.onrender.com',
   'projectkit_backend_url'
