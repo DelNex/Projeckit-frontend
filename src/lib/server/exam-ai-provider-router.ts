@@ -62,10 +62,17 @@ async function readProviderResponse(response: Response, provider: ProviderId): P
       cooldownUntil.set(provider, Date.now() + retryAfterMs);
     }
     const detail = String(body?.error?.message || body?.message || body?.errors?.[0]?.message || 'Provider request failed').slice(0, 180);
+    const rateLimit = response.status === 429 ? {
+      limitTokens: response.headers.get('x-ratelimit-limit-tokens'),
+      remainingTokens: response.headers.get('x-ratelimit-remaining-tokens'),
+      resetTokens: response.headers.get('x-ratelimit-reset-tokens'),
+      retryAfter: response.headers.get('retry-after'),
+    } : null;
     throw Object.assign(new Error(`${provider} returned HTTP ${response.status}: ${detail}`), {
       status: response.status,
       retryable: isRetryableProviderStatus(response.status),
       retryAfterMs: response.status === 429 ? parseRetryAfter(response.headers.get('retry-after')) : null,
+      rateLimit,
     });
   }
 
@@ -115,6 +122,7 @@ async function requestProvider(provider: ProviderConfig, messages: Array<{ role:
       },
       body: JSON.stringify({
         model: provider.model, messages, temperature: 0.2, max_completion_tokens: 8192,
+        ...(isGroq ? { service_tier: process.env.GROQ_SERVICE_TIER || 'auto' } : {}),
         response_format: { type: 'json_schema', json_schema: { name: 'project_kit_exam_questions', strict: true, schema } },
       }),
       signal: timeout, cache: 'no-store',
@@ -142,6 +150,7 @@ export async function requestExamQuestionsFromProviders(
   let lastStatus: number | null = null;
   let lastRetryable = false;
   let lastRetryAfterMs: number | null = null;
+  let lastRateLimit: Record<string, string | null> | null = null;
   // The caller is a 60-second Next.js route. Keep provider failover inside a
   // 50-second budget so the job lease can be renewed/finalized safely.
   const totalSetting = Number(process.env.AI_PROVIDER_TOTAL_TIMEOUT_MS || 50_000);
@@ -172,12 +181,14 @@ export async function requestExamQuestionsFromProviders(
       const message = error instanceof Error ? error.message : `${provider.id} request failed`;
       const status = Number((error as Error & { status?: number }).status) || null;
       const retryAfterMs = Number((error as Error & { retryAfterMs?: number }).retryAfterMs) || null;
+      const rateLimit = (error as Error & { rateLimit?: Record<string, string | null> }).rateLimit || null;
       const retryable = Boolean((error as Error & { retryable?: boolean }).retryable)
         || error instanceof SyntaxError
         || /timeout|fetch failed|network|returned no questions/i.test(message);
       lastStatus = status;
       lastRetryable = retryable;
       lastRetryAfterMs = retryAfterMs;
+      lastRateLimit = rateLimit;
       const safeDetail = message.replace(/\s+/g, ' ').slice(0, 180);
       failures.push(`${provider.id}${status ? ` HTTP ${status}` : ''}: ${safeDetail}`);
       await logSystemEvent({
@@ -191,6 +202,6 @@ export async function requestExamQuestionsFromProviders(
   }
   throw Object.assign(
     new Error(`No configured AI provider could complete this batch. ${failures.join(' | ').slice(0, 700)}`),
-    { status: lastStatus, retryable: lastRetryable, retryAfterMs: lastRetryAfterMs },
+    { status: lastStatus, retryable: lastRetryable, retryAfterMs: lastRetryAfterMs, rateLimit: lastRateLimit },
   );
 }
