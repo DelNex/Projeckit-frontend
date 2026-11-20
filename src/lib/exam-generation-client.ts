@@ -34,6 +34,7 @@ export function useExamGenerationJob(tosId: string | undefined, preflight?: Exam
   const [retryAfterSeconds, setRetryAfterSeconds] = useState(0);
   const [isStarting, setIsStarting] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isPreflightReady, setIsPreflightReady] = useState(false);
   const [savedQuestions, setSavedQuestions] = useState<ExamQuestion[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const startedAt = useRef(0);
@@ -88,8 +89,9 @@ export function useExamGenerationJob(tosId: string | undefined, preflight?: Exam
 
   useEffect(() => {
     alive.current = true;
-    if (!tosId) { setIsInitialLoading(false); return () => { alive.current = false; }; }
+    if (!tosId) { setIsInitialLoading(false); setIsPreflightReady(false); return () => { alive.current = false; }; }
     setIsInitialLoading(true);
+    setIsPreflightReady(false);
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const load = async () => {
@@ -102,6 +104,7 @@ export function useExamGenerationJob(tosId: string | undefined, preflight?: Exam
           }), refreshHelperStatus(true),
         ]);
         if (cancelled) return;
+        setIsPreflightReady(true);
         setJob(latest);
         setIsInitialLoading(false);
         if (latest && ['queued', 'running', 'needs_attention'].includes(latest.status) && !startedAt.current) startedAt.current = Date.now();
@@ -143,6 +146,7 @@ export function useExamGenerationJob(tosId: string | undefined, preflight?: Exam
 
   const start = useCallback(async (input: { lessonText?: string; lessonDocuments?: Array<{ name: string; text: string; competencyId?: string }>; teacherInstructions?: string; repairItemNumber?: number }) => {
     if (!tosId) throw new Error('A TOS is required to start exam generation.');
+    if (!isPreflightReady) throw new Error('Checking Groq availability for this TOS. Please wait a moment and try again.');
     if (helperState !== 'online') throw new Error(helperState === 'checking' ? 'Checking Groq availability. Please wait a moment and try again.' : helperState === 'offline' ? 'Groq is not configured on the server. Please contact your school administrator.' : 'Groq availability could not be confirmed. Refresh the TOS and try again.');
     if (quotaAvailable && quota && (quota.hourly.remaining <= 0 || quota.daily.remaining <= 0)) throw new Error(quota.hourly.remaining <= 0 ? 'You have reached the hourly exam-generation limit. Please wait before trying again.' : 'Your school has reached its daily exam-generation limit.');
     if (retryAfterSeconds > 0) throw new Error(`This TOS recently had a failed generation. Please wait ${retryAfterSeconds} seconds before retrying.`);
@@ -181,7 +185,7 @@ export function useExamGenerationJob(tosId: string | undefined, preflight?: Exam
       if (sourceManifest && !keepSource) await removeCompressedLessonSourceFromBrowser(sourceManifest);
       setIsStarting(false);
     }
-  }, [tosId, job, helperState, quotaAvailable, quota, retryAfterSeconds, refreshHelperStatus]);
+  }, [tosId, job, helperState, quotaAvailable, quota, retryAfterSeconds, isPreflightReady, refreshHelperStatus]);
 
   const cancel = useCallback(async () => {
     if (!job || !['queued', 'running', 'needs_attention'].includes(job.status)) return;
@@ -192,5 +196,5 @@ export function useExamGenerationJob(tosId: string | undefined, preflight?: Exam
     setJob({ ...job, status: 'cancelled' });
   }, [job]);
 
-  return { job, helperState, isStarting, isInitialLoading, savedQuestions, loadError, quota, quotaAvailable, retryAfterSeconds, start, cancel, refreshJob };
+  return { job, helperState, isStarting, isInitialLoading, isPreflightReady, savedQuestions, loadError, quota, quotaAvailable, retryAfterSeconds, start, cancel, refreshJob };
 }
