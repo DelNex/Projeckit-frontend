@@ -20,12 +20,17 @@ export interface ExamGenerationQuota {
   hourly: { used: number; limit: number; remaining: number };
   daily: { used: number; limit: number; remaining: number };
 }
+export interface ExamAiPreflight {
+  state: HelperAvailability;
+  quota: ExamGenerationQuota | null;
+  quotaAvailable: boolean;
+}
 
-export function useExamGenerationJob(tosId: string | undefined) {
+export function useExamGenerationJob(tosId: string | undefined, preflight?: ExamAiPreflight | null) {
   const [job, setJob] = useState<ExamGenerationJob | null>(null);
-  const [helperState, setHelperState] = useState<HelperAvailability>('checking');
-  const [quota, setQuota] = useState<ExamGenerationQuota | null>(null);
-  const [quotaAvailable, setQuotaAvailable] = useState(false);
+  const [helperState, setHelperState] = useState<HelperAvailability>(preflight?.state || 'checking');
+  const [quota, setQuota] = useState<ExamGenerationQuota | null>(preflight?.quota || null);
+  const [quotaAvailable, setQuotaAvailable] = useState(Boolean(preflight?.quotaAvailable));
   const [retryAfterSeconds, setRetryAfterSeconds] = useState(0);
   const [isStarting, setIsStarting] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -35,6 +40,13 @@ export function useExamGenerationJob(tosId: string | undefined) {
   const alive = useRef(true);
   const lastHelperStatusCheckAt = useRef(0);
   const helperStatusRequest = useRef<Promise<void> | null>(null);
+
+  useEffect(() => {
+    if (!preflight) return;
+    setHelperState(preflight.state);
+    setQuota(preflight.quota);
+    setQuotaAvailable(preflight.quotaAvailable);
+  }, [preflight]);
 
   const refreshHelperStatus = useCallback(async (force = false) => {
     if (helperStatusRequest.current) return helperStatusRequest.current;
