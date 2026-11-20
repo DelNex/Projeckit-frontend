@@ -99,7 +99,8 @@ export function ExamGeneratorModal({
   }, [isOpen, generationJob.job?.id, generationJob.job?.status]);
 
   useEffect(() => {
-    if (!isOpen || !tosId || generationJob.isInitialLoading || generationJob.job
+    if (!isOpen || !tosId || generationJob.isInitialLoading
+      || (generationJob.job && ['queued', 'running', 'needs_attention', 'completed', 'partial'].includes(generationJob.job.status))
       || resumeAttemptedRef.current === tosId) return;
     resumeAttemptedRef.current = tosId;
     let cancelled = false;
@@ -224,7 +225,7 @@ export function ExamGeneratorModal({
       // Upload original documents; extraction and OCR run on the backend.
       if (selectedFiles.length > 0) {
         setCurrentStep('extracting');
-        setExtractionProgress('Uploading files to the secure processing queue…');
+        setExtractionProgress('Uploading files to the secure processing queue. Processing continues on the server if you leave this page…');
         const extractResult = await extractTextFromFiles(selectedFiles, {
           tosId,
           teacherInstructions: teacherInstructions.trim() || undefined,
