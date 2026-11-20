@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { extractTextFromFiles, type LessonExtractionProgress } from '@/lib/lesson-parser';
 
-export function ServerOcrValidation() {
+export function ServerOcrValidation({ mockStorage = false }: { mockStorage?: boolean }) {
   const [result, setResult] = useState('WAITING');
   const [progress, setProgress] = useState('');
 
@@ -13,6 +13,11 @@ export function ServerOcrValidation() {
     setProgress('Uploading the file to the server…');
     try {
       const extraction = await extractTextFromFiles([file], {
+        ...(mockStorage ? { storageAdapter: {
+          getUserId: async () => '00000000-0000-4000-8000-000000000001',
+          upload: async () => undefined,
+          remove: async () => undefined,
+        } } : {}),
         onProgress: (value: LessonExtractionProgress) => setProgress(value.message),
       });
       const document = extraction.documents[0];
