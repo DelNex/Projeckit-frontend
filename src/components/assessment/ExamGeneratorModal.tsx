@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { extractTextFromFiles } from '@/lib/lesson-parser';
+import { clearPendingLessonExtraction, extractTextFromFiles, resumePendingLessonExtraction } from '@/lib/lesson-parser';
 import { ExamQuestion } from '@/lib/exam-types';
 import { useToast } from '@/components/ui/toast';
 import { friendlyError } from '@/lib/errors';
@@ -72,6 +72,7 @@ export function ExamGeneratorModal({
   const generatedTextRef = useRef('');
   const handledJobRef = useRef<string | null>(null);
   const expectedJobIdRef = useRef<string | null>(null);
+  const resumeAttemptedRef = useRef<string | null>(null);
   const onExamGeneratedRef = useRef(onExamGenerated);
   const onCloseRef = useRef(onClose);
   onExamGeneratedRef.current = onExamGenerated;
@@ -96,6 +97,45 @@ export function ExamGeneratorModal({
     if (!isOpen || !generationJob.job?.id || !['queued', 'running'].includes(generationJob.job.status)) return;
     expectedJobIdRef.current = generationJob.job.id;
   }, [isOpen, generationJob.job?.id, generationJob.job?.status]);
+
+  useEffect(() => {
+    if (!isOpen || !tosId || generationJob.isInitialLoading || generationJob.job
+      || resumeAttemptedRef.current === tosId) return;
+    resumeAttemptedRef.current = tosId;
+    let cancelled = false;
+    setCurrentStep('extracting');
+    setExtractionProgress('Checking saved server-side document jobs…');
+    void resumePendingLessonExtraction(tosId, (progress) => {
+      if (!cancelled) setExtractionProgress(progress.message + ' (' + progress.fileIndex + '/' + progress.fileCount + ')');
+    }).then(async (resumed) => {
+      if (cancelled) return;
+      if (!resumed) {
+        setCurrentStep('idle');
+        setExtractionProgress('');
+        return;
+      }
+      generatedTextRef.current = resumed.text;
+      setCurrentStep('analyzing');
+      const queued = await generationJob.start({
+        lessonDocuments: resumed.documents,
+        teacherInstructions: resumed.teacherInstructions,
+      });
+      clearPendingLessonExtraction(tosId);
+      expectedJobIdRef.current = queued.id;
+      const slots = buildTosBlueprintSlots(tosRows, Number(targetItems) || 50);
+      setChunkProgress({
+        completed: 0,
+        total: slots.length,
+        label: 'Recovered your saved lesson upload and resumed exam generation.',
+      });
+      setCurrentStep('generating');
+    }).catch((error) => {
+      if (cancelled) return;
+      setCurrentStep('idle');
+      setErrorMsg(error instanceof Error ? error.message : 'Could not resume the saved lesson processing job.');
+    });
+    return () => { cancelled = true; };
+  }, [isOpen, tosId, generationJob.isInitialLoading, generationJob.job, generationJob.start, tosRows, targetItems]);
 
   useEffect(() => {
     if (!generationJob.savedQuestions || !generationJob.job?.id || !['completed', 'partial'].includes(generationJob.job.status)
@@ -186,6 +226,8 @@ export function ExamGeneratorModal({
         setCurrentStep('extracting');
         setExtractionProgress('Uploading files to the secure processing queue…');
         const extractResult = await extractTextFromFiles(selectedFiles, {
+          tosId,
+          teacherInstructions: teacherInstructions.trim() || undefined,
           onProgress: (progress) => setExtractionProgress(progress.message + ' (' + progress.fileIndex + '/' + progress.fileCount + ')'),
         });
         setExtractionProgress('Server-side extraction complete.');
@@ -198,7 +240,7 @@ export function ExamGeneratorModal({
         }
 
         if (!extractedLessonText.trim()) {
-          throw new Error('This file has no readable text. Upload a text-based PDF, DOCX or PPTX.');
+          throw new Error('We could not read any lesson text. Try a clearer scan or a text-based document.');
         }
       }
 
@@ -209,6 +251,7 @@ export function ExamGeneratorModal({
       if (!tosId) throw new Error('Save this Table of Specifications before generating an exam.');
       generatedTextRef.current = extractedLessonText;
       const queued = await generationJob.start({ lessonDocuments, teacherInstructions: teacherInstructions.trim() || undefined });
+      if (tosId) clearPendingLessonExtraction(tosId);
       expectedJobIdRef.current = queued.id;
       const label = queued.status === 'queued'
         ? `Queued (position ${queued.queuePosition || 1}). Groq AI will process this exam in the background.`
