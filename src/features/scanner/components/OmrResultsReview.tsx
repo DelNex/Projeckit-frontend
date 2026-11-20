@@ -160,6 +160,7 @@ export function OmrResultsReview({
               <div
                 key={item.itemNumber}
                 data-state={item.state}
+                role="group"
                 aria-label={`Item ${item.itemNumber}, ${item.state.toLowerCase().replace('_', ' ')}`}
                 className={cn(
                   'pk-omr-answer-card rounded-xl border p-2 flex flex-col justify-between transition-all bg-gray-900/60',

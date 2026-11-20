@@ -751,3 +751,9 @@ body { background: var(--pk-canvas); color: var(--pk-ink); }
 .pk-main .pk-omr-overlay { max-width: none !important; }
 .pk-omr-review-counts { flex-wrap: wrap; }
 .pk-omr-review-summary [class*="text-emerald-"], .pk-omr-review-summary [class*="text-amber-"], .pk-omr-review-summary [class*="text-red-"] { color: #c5d1ff; }
+
+/* Baseline hit target for all application buttons, including the global shell. */
+.pk-shell button, .pk-main button, .pk-auth button { min-height: 36px; }
+@media (max-width: 639px) {
+  .pk-shell button, .pk-main button, .pk-auth button { min-height: 40px; }
+}
