@@ -4,7 +4,13 @@ import { createClient } from '@/lib/supabase/server';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const allowedEndpoints = new Set(['info', 'chat', 'stream', 'upload']);
+function isAllowedEndpoint(segments: string[], method: string) {
+  const path = segments.join('/');
+  if (['info', 'chat', 'stream', 'upload'].includes(path)) return true;
+  if (path === 'lesson-extraction/jobs' && method === 'POST') return true;
+  if (/^lesson-extraction\/jobs\/[0-9a-f-]{36}$/i.test(path) && method === 'GET') return true;
+  return false;
+}
 
 function backendBaseUrl() {
   const configured = process.env.BACKEND_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000';
@@ -13,7 +19,7 @@ function backendBaseUrl() {
 
 async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const segments = (await context.params).path;
-  if (segments.length !== 1 || !allowedEndpoints.has(segments[0])) {
+  if (!isAllowedEndpoint(segments, request.method)) {
     return NextResponse.json({ message: 'AI endpoint not found.' }, { status: 404 });
   }
 
@@ -31,14 +37,15 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
   }
 
   const endpoint = segments[0];
-  const upstreamUrl = `${backendBaseUrl()}/api/ai/${endpoint}${request.nextUrl.search}`;
+  const endpointPath = segments.join('/');
+  const upstreamUrl = `${backendBaseUrl()}/api/ai/${endpointPath}${request.nextUrl.search}`;
   const headers = new Headers({
     Authorization: `Bearer ${session.access_token}`,
     Accept: request.headers.get('accept') || 'application/json',
   });
   let body: BodyInit | undefined;
   if (request.method !== 'GET') {
-    if (endpoint === 'upload') {
+    if (endpoint === 'upload' || endpointPath === 'lesson-extraction/jobs') {
       const incoming = await request.formData();
       const outgoing = new FormData();
       for (const [key, value] of incoming.entries()) outgoing.append(key, value);
@@ -74,14 +81,15 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
 }
 
 export async function GET(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-  if ((await context.params).path[0] !== 'info') {
+  const segments = (await context.params).path;
+  if (!(segments.join('/') === 'info' || /^lesson-extraction\/jobs\/[0-9a-f-]{36}$/i.test(segments.join('/')))) {
     return NextResponse.json({ message: 'Method not allowed.' }, { status: 405 });
   }
   return proxy(request, context);
 }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
-  if (['info'].includes((await context.params).path[0])) {
+  if ((await context.params).path.join('/') === 'info') {
     return NextResponse.json({ message: 'Method not allowed.' }, { status: 405 });
   }
   return proxy(request, context);
