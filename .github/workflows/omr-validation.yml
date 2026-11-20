@@ -2,7 +2,7 @@ name: OMR mobile calibration
 
 on:
   push:
-    branches: [main]
+    branches: [main, ui-redesign]
   pull_request:
     branches: [main]
   workflow_dispatch:
