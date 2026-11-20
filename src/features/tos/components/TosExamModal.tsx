@@ -395,8 +395,8 @@ export function TosExamModal({
 
               <button
                 onClick={handleGenerateExam}
-                disabled={isGenerating || generationJob.isStarting || generationJob.helperState !== 'online' || (generationJob.quotaAvailable && Boolean(generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0))) || generationJob.retryAfterSeconds > 0 || ['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')}
-                title={generationJob.helperState === 'checking' ? 'Checking Groq server configuration…' : generationJob.helperState === 'offline' ? 'Groq AI is offline. Configure GROQ_API_KEY on the server.' : generationJob.retryAfterSeconds > 0 ? `Retry available in ${generationJob.retryAfterSeconds}s` : undefined}
+                disabled={isGenerating || generationJob.isStarting || !generationJob.isPreflightReady || generationJob.helperState !== 'online' || (generationJob.quotaAvailable && Boolean(generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0))) || generationJob.retryAfterSeconds > 0 || ['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')}
+                title={!generationJob.isPreflightReady || generationJob.helperState === 'checking' ? 'Checking Groq server configuration…' : generationJob.helperState === 'offline' ? 'Groq AI is offline. Configure GROQ_API_KEY on the server.' : generationJob.retryAfterSeconds > 0 ? `Retry available in ${generationJob.retryAfterSeconds}s` : undefined}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all disabled:opacity-50"
               >
                 {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
@@ -435,7 +435,7 @@ export function TosExamModal({
               </div>
             )}
 
-            {generationJob.helperState === 'checking' && !isGenerating && (
+            {(!generationJob.isPreflightReady || generationJob.helperState === 'checking') && !isGenerating && (
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">Checking Groq availability and your generation allowance…</div>
             )}
             {generationJob.helperState === 'unavailable' && !isGenerating && (
