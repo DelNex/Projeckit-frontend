@@ -433,7 +433,7 @@ export function TosExamModal({
                 Generation allowance: {generationJob.quota.hourly.remaining}/{generationJob.quota.hourly.limit} this hour · {generationJob.quota.daily.remaining}/{generationJob.quota.daily.limit} for your school today.
               </p>
             )}
-            {generationJob.job?.status === 'failed' && generationJob.retryAfterSeconds <= 0 && (
+            {generationJob.job?.status === 'failed' && (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
                 The last generation attempt did not complete. Your saved TOS and existing questions were not changed. You can try generating again.
               </div>
