@@ -51,7 +51,7 @@ export function useExamGenerationJob(tosId: string | undefined, preflight?: Exam
 
   const refreshHelperStatus = useCallback(async (force = false) => {
     if (helperStatusRequest.current) return helperStatusRequest.current;
-    if (!force && Date.now() - lastHelperStatusCheckAt.current < 30_000) return;
+    if (!force && Date.now() - lastHelperStatusCheckAt.current < 10_000) return;
     const request = (async () => {
       lastHelperStatusCheckAt.current = Date.now();
       try {
@@ -147,7 +147,7 @@ export function useExamGenerationJob(tosId: string | undefined, preflight?: Exam
   const start = useCallback(async (input: { lessonText?: string; lessonDocuments?: Array<{ name: string; text: string; competencyId?: string }>; teacherInstructions?: string; repairItemNumber?: number }) => {
     if (!tosId) throw new Error('A TOS is required to start exam generation.');
     if (!isPreflightReady) throw new Error('Checking Groq availability for this TOS. Please wait a moment and try again.');
-    if (helperState !== 'online') throw new Error(helperState === 'checking' ? 'Checking Groq availability. Please wait a moment and try again.' : helperState === 'offline' ? 'Groq is not configured on the server. Please contact your school administrator.' : 'Groq availability could not be confirmed. Refresh the TOS and try again.');
+    if (helperState !== 'online') throw new Error(helperState === 'checking' ? 'Checking Groq availability. Please wait a moment and try again.' : helperState === 'offline' ? 'Groq is not configured on the server. Please contact your school administrator.' : helperState === 'busy' ? `Groq is temporarily rate-limited. Please wait about ${retryAfterSeconds || 60} seconds before generating.` : 'Groq availability could not be confirmed. Refresh the TOS and try again.');
     if (quotaAvailable && quota && (quota.hourly.remaining <= 0 || quota.daily.remaining <= 0)) throw new Error(quota.hourly.remaining <= 0 ? 'You have reached the hourly exam-generation limit. Please wait before trying again.' : 'Your school has reached its daily exam-generation limit.');
     if (retryAfterSeconds > 0) throw new Error(`This TOS recently had a failed generation. Please wait ${retryAfterSeconds} seconds before retrying.`);
     if (job && ['queued', 'running', 'needs_attention'].includes(job.status)) throw new Error('This TOS already has an active generation job. Cancel or resolve it before starting another.');
