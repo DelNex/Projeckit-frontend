@@ -6,6 +6,7 @@ import {
   validateExamQuestions,
 } from '../exam-types';
 import { randomizeAndBalanceExamQuestions } from '../exam-randomizer';
+import { isRetryableProviderStatus } from '../server/exam-ai-provider-router';
 
 test('Project KIT — AI Exam Pipeline Requirements', async (t) => {
   await t.test('1. No fake questions: when AI is unconfigured and demo mode is off, reject with clear error', async () => {
@@ -179,4 +180,15 @@ test('Project KIT — AI Exam Pipeline Requirements', async (t) => {
       );
     });
   });
+});
+
+
+test('Groq HTTP 400 is not classified as a retryable provider failure', () => {
+  assert.equal(isRetryableProviderStatus(400), false);
+  assert.equal(isRetryableProviderStatus(401), false);
+  assert.equal(isRetryableProviderStatus(403), false);
+  assert.equal(isRetryableProviderStatus(408), true);
+  assert.equal(isRetryableProviderStatus(409), true);
+  assert.equal(isRetryableProviderStatus(429), true);
+  assert.equal(isRetryableProviderStatus(500), true);
 });
