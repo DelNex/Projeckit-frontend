@@ -14,7 +14,7 @@ The Render process runs one OCR job at a time. It uses:
 - `unzip` plus slide XML text extraction for PPTX
 - direct UTF-8 reading for TXT and Markdown
 
-Extracted text is gzip-compressed and saved back to the same private bucket. The browser polls the job endpoint and then passes the returned text into the existing exam-generation flow. The browser no longer performs lesson PDF/image OCR.
+Extracted text is gzip-compressed and saved back to the same private bucket. The browser polls the job endpoint and then passes the returned text into the existing exam-generation flow. The browser no longer performs lesson PDF/image OCR. The main exam modal and the per-competency TOS modal save job references in same-browser local storage; reopening the matching TOS flow resumes the existing jobs instead of requiring another upload.
 
 ## Limits
 
