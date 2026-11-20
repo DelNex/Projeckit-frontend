@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { extractTextFromFiles } from '../lesson-parser';
-import { getLocalDocumentCapacity, LOCAL_DOCUMENT_MAX_CHARACTERS } from '../local-document-engine';
+import { getLocalDocumentCapacity } from '../local-document-engine';
+
+const LOCAL_DOCUMENT_MAX_CHARACTERS = 900_000;
 
 function mockStorage() {
   const uploaded: string[] = [];
