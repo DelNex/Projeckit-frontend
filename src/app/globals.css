@@ -769,3 +769,10 @@ body { background: var(--pk-canvas); color: var(--pk-ink); }
 .pk-main h1, .pk-auth h1 { font-size: clamp(1.35rem, 2.1vw, 1.8rem); line-height: 1.2; font-weight: 750; letter-spacing: -.035em; }
 .pk-main h2, .pk-auth h2 { line-height: 1.25; letter-spacing: -.025em; }
 .pk-main .pk-omr-viewfinder button, .pk-main .pk-omr-viewfinder label { min-height: 44px; min-width: 44px; }
+
+/* Header-launched AI assistant is outside pk-main but still belongs to the app shell. */
+.pk-shell .fixed.inset-0.z-50 > *:not(.pk-omr-dialog) {
+  max-height: calc(100dvh - max(24px, env(safe-area-inset-top)) - max(24px, env(safe-area-inset-bottom)));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
