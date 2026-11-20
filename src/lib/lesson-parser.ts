@@ -205,6 +205,7 @@ export async function extractTextFromFiles(
   if (!userId) throw new Error('Your session expired. Sign in again before uploading lesson files.');
 
   const uploaded: Array<{ storagePath: string; fileName: string; mimeType: string; size: number }> = [];
+  let jobsRequestStarted = false;
   try {
     for (const file of files) {
       const extension = file.name.toLowerCase().split('.').pop() || '';
@@ -221,6 +222,7 @@ export async function extractTextFromFiles(
       });
     }
 
+    jobsRequestStarted = true;
     const response = await fetch('/api/backend/ai/lesson-extraction/jobs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -254,7 +256,7 @@ export async function extractTextFromFiles(
     }
     return buildResult(documents);
   } catch (error) {
-    if (uploaded.length) await storage.remove(uploaded.map((file) => file.storagePath)).catch(() => undefined);
+    if (uploaded.length && !jobsRequestStarted) await storage.remove(uploaded.map((file) => file.storagePath)).catch(() => undefined);
     throw error;
   }
 }
