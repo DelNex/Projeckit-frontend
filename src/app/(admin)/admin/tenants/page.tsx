@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/components/ui/toast';
 import { friendlyError } from '@/lib/errors';
 import { OmrBubble } from '@/components/ui/OmrBubble';
+import { StatusBanner } from '@/components/ui/status-banner';
 import { Building2, Edit2, Loader2, Plus, RefreshCw, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -165,15 +166,13 @@ export default function TenantsPage() {
       </div>
 
       {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300 flex items-center justify-between">
-          <span>{error}</span>
-          <button type="button" 
-            onClick={fetchTenants}
-            className="inline-flex items-center gap-1 font-bold underline hover:text-red-900"
-          >
-            <RefreshCw className="h-3.5 w-3.5" /> Retry
+        <StatusBanner tone="danger" action={
+          <button type="button" onClick={fetchTenants} className="min-h-11 rounded-lg px-3 text-sm font-medium text-[var(--pk-ink)] hover:bg-[var(--pk-raised)]">
+            <RefreshCw className="mr-1 inline h-3.5 w-3.5" /> Retry
           </button>
-        </div>
+        }>
+          {error}
+        </StatusBanner>
       )}
 
       <div className="rounded-2xl sm:rounded-3xl border border-gray-200 bg-white shadow-xs dark:border-gray-800 dark:bg-gray-900 overflow-hidden paint-isolate min-w-0">
