@@ -282,6 +282,7 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
   if (!claimed) return; // Another worker, a cancellation, or a completed job won the race.
 
   const payload = claimed.payload || {};
+  let checkpointPayload = payload;
   try {
     const sourceDocuments = payload.sourceManifest
       ? await readCompressedLessonDocuments(admin, payload.sourceManifest, claimed.created_by)
@@ -295,7 +296,7 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
     // Adapt the batch size to exam size: one request for small exams, then
     // larger batches for longer exams to control response size and retries.
     const batches = splitExamSlotsIntoBatches(slots);
-    const batchSize = getExamBatchSize(slots.length);
+
 
     // Keep successful batches in the durable job payload. A later provider
     // failure can then resume without paying to regenerate completed questions.
@@ -316,8 +317,9 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
       const retainedQuestions = generatedQuestions.filter((question) => !batchItemNumbers.has(Number(question?.item_number)));
       generatedQuestions.splice(0, generatedQuestions.length, ...retainedQuestions, ...batchQuestions);
 
+      checkpointPayload = { ...payload, partialQuestions: generatedQuestions };
       const { data: progressUpdate, error: progressError } = await admin.from('exam_generation_jobs').update({
-        payload: { ...payload, partialQuestions: generatedQuestions },
+        payload: checkpointPayload,
         progress: {
           stage: 'generating',
           label: `Generated ${generatedQuestions.length} of ${slots.length} questions`,
@@ -369,7 +371,7 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
         },
         finished_at: null,
         updated_at: new Date(now).toISOString(),
-        payload,
+        payload: checkpointPayload,
         claimed_by: null,
         // A queued job with a future lease timestamp is not eligible for claim.
         lease_expires_at: retryAt,
