@@ -70,7 +70,11 @@ export default function TosPage() {
       try {
         const response = await fetch('/api/ai/exam-readiness', { cache: 'no-store' });
         const data = await response.json().catch(() => ({}));
-        if (!active || !response.ok) return;
+        if (!active) return;
+        if (!response.ok) {
+          setAiReadiness({ status: 'unavailable', providers: [], checkedAt: new Date().toISOString() });
+          return;
+        }
         setAiReadiness({
           status: data.status || 'unavailable',
           providers: Array.isArray(data.providers) ? data.providers : [],
