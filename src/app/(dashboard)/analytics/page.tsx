@@ -1243,7 +1243,7 @@ function AnalyticsContent() {
                   value={selectedAssessmentId}
                   onChange={(e) => setSelectedAssessmentId(e.target.value)}
                   className="min-h-11 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-white sm:max-w-[22rem]"
-                  title={assessments.find((assessment) => assessment.id === selectedAssessmentId)?.title}
+                  title={(() => { const selected = assessments.find((assessment) => assessment.id === selectedAssessmentId); return selected ? `${selected.title} (${selected.sectionName})` : undefined; })()}
                 >
                   {assessments.map((a) => (
                     <option key={a.id} value={a.id}>
