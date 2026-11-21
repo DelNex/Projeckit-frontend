@@ -1583,7 +1583,7 @@ export default function SchoolSettingsPage() {
           <span>Loading academic context from Supabase...</span>
         </div>
       ) : (
-        <form onSubmit={handleSave} onChange={(event) => { const target = event.target; if (!(target instanceof HTMLElement) || !target.closest("[data-school-header]")) { setAcademicHasChanges(true); setSaved(false); } }} className="mx-auto w-full max-w-5xl min-w-0 space-y-6 pb-28 sm:pb-0">
+        <form onSubmit={handleSave} onChange={(event) => { const target = event.target; if (!(target instanceof HTMLElement) || !target.closest("[data-school-header]")) { setAcademicHasChanges(true); setSaved(false); } }} className={`mx-auto w-full max-w-5xl min-w-0 space-y-6 ${academicHasChanges ? "pb-28 sm:pb-0" : "pb-0"}`}>
           {/* Card 0: School Identity & DepEd Official Header */}
           <div data-school-header className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 space-y-5">
             <div className="flex flex-col gap-3 border-b border-gray-100 pb-3 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between">
@@ -1751,7 +1751,7 @@ export default function SchoolSettingsPage() {
                 <div className="mt-1.5 flex min-h-11 items-center rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-semibold text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-white" aria-live="polite">
                   {gradingPeriods.find((period) => period.is_current)?.name || 'No current term selected'}
                   {gradingPeriods.find((period) => period.is_current)?.code ? ` (${gradingPeriods.find((period) => period.is_current)?.code})` : ''}
-                  <span className="ml-auto rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">Current</span>
+                  {gradingPeriods.some((period) => period.is_current) && <span className="ml-auto rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">Current</span>}
                 </div>
               </div>
             </div>
@@ -1801,7 +1801,7 @@ export default function SchoolSettingsPage() {
                   type="button"
                   disabled={Boolean(rowOperatingId)}
                   onClick={() => handleRequestPreset('4quarter')}
-                  className="rounded-xl border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 transition disabled:opacity-50"
+                  className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[11px] font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 transition disabled:opacity-50"
                 >
                   4 Terms
                 </button>
@@ -1809,7 +1809,7 @@ export default function SchoolSettingsPage() {
                   type="button"
                   disabled={Boolean(rowOperatingId)}
                   onClick={() => handleRequestPreset('2semester')}
-                  className="rounded-xl border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 transition disabled:opacity-50"
+                  className="min-h-11 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[11px] font-bold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 transition disabled:opacity-50"
                 >
                   2 Semesters
                 </button>
