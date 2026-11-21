@@ -102,17 +102,51 @@ async function readProviderResponse(response: Response, provider: ProviderId): P
   }
 
   let content: unknown;
+  let completionMeta: Record<string, unknown> = {};
   if (provider === 'gemini') {
-    content = body?.candidates?.[0]?.content?.parts?.map((part: any) => part.text || '').join('');
-    if (!content && body?.promptFeedback?.blockReason) throw new Error('Gemini blocked this request.');
+    const candidate = body?.candidates?.[0];
+    content = candidate?.content?.parts?.map((part: any) => part.text || '').join('');
+    completionMeta = {
+      finishReason: candidate?.finishReason || null,
+      promptBlockReason: body?.promptFeedback?.blockReason || null,
+    };
+    if (!content && body?.promptFeedback?.blockReason) {
+      throw Object.assign(new Error(`Gemini blocked this request (${body.promptFeedback.blockReason}).`), { retryable: false });
+    }
   } else if (provider === 'cloudflare') {
     content = body?.result?.response ?? body?.result?.output ?? body?.response;
   } else {
-    content = body?.choices?.[0]?.message?.content;
+    const choice = body?.choices?.[0];
+    const message = choice?.message;
+    content = message?.content;
+    completionMeta = {
+      finishReason: choice?.finish_reason || null,
+      nativeFinishReason: choice?.native_finish_reason || null,
+      refusal: Boolean(message?.refusal),
+      hasReasoningOnly: !message?.content && Boolean(message?.reasoning || message?.reasoning_content),
+    };
+    if (!content && message?.refusal) {
+      throw Object.assign(new Error(`${provider} refused the exam-generation request.`), { retryable: false });
+    }
   }
   if (Array.isArray(content)) content = content.map((part: any) => part.text || '').join('');
   if (content && typeof content === 'object' && !Array.isArray(content)) content = JSON.stringify(content);
-  return parseQuestionContent(content);
+  try {
+    return parseQuestionContent(content);
+  } catch (error) {
+    const requestId = response.headers.get('x-request-id')
+      || response.headers.get('x-openrouter-generation-id')
+      || response.headers.get('cf-ray');
+    const detail = error instanceof Error ? error.message : 'Provider response could not be parsed.';
+    throw Object.assign(new Error(
+      `${provider} returned an unusable completion: ${detail} (finish=${String(completionMeta.finishReason || 'unknown')}, request=${requestId || 'unavailable'})`
+    ), {
+      status: null,
+      retryable: true,
+      providerRequestId: requestId,
+      completionMeta,
+    });
+  }
 }
 
 async function requestProvider(provider: ProviderConfig, messages: Array<{ role: string; content: string }>, schema: Record<string, unknown>, timeoutMs: number): Promise<string> {
@@ -160,15 +194,18 @@ async function requestProvider(provider: ProviderConfig, messages: Array<{ role:
         temperature: 0.2,
         ...(isGroq ? { max_completion_tokens: 8192, reasoning_effort: 'low' } : {
           max_tokens: 8192,
-          provider: { require_parameters: true },
-          reasoning: { effort: 'low' },
+          provider: { require_parameters: true, allow_fallbacks: true },
         }),
         ...(isGroq && groqServiceTier ? { service_tier: groqServiceTier } : {}),
-        // Groq JSON mode is more compatible across organization/model tiers.
-        // The application still enforces QUESTION_SCHEMA during finalization.
+        // GPT-OSS 20B/120B support Groq strict structured outputs. This
+        // prevents malformed JSON from becoming a provider-side HTTP 400.
+        // Keep JSON mode for custom Groq models outside the documented allowlist.
         response_format: isGroq
-          ? { type: 'json_object' }
-          : { type: 'json_schema', json_schema: { name: 'project_kit_exam_questions', strict: true, schema } },
+          ? (['openai/gpt-oss-20b', 'openai/gpt-oss-120b'].includes(provider.model.toLowerCase())
+            ? { type: 'json_schema', json_schema: { name: 'project_kit_exam_questions', strict: true, schema } }
+            : { type: 'json_object' })
+          : { type: 'json_object' },
+        ...(provider.id === 'openrouter' ? { plugins: [{ id: 'response-healing' }] } : {}),
       }),
       signal: timeout, cache: 'no-store',
     });
@@ -228,6 +265,8 @@ export async function requestExamQuestionsFromProviders(
       const status = Number((error as Error & { status?: number }).status) || null;
       const retryAfterMs = Number((error as Error & { retryAfterMs?: number }).retryAfterMs) || null;
       const rateLimit = (error as Error & { rateLimit?: Record<string, string | null> }).rateLimit || null;
+      const providerRequestId = (error as Error & { providerRequestId?: string | null }).providerRequestId || null;
+      const completionMeta = (error as Error & { completionMeta?: Record<string, unknown> }).completionMeta || null;
       const retryable = Boolean((error as Error & { retryable?: boolean }).retryable)
         || error instanceof SyntaxError
         || /timeout|fetch failed|network|returned no questions|returned an empty response body/i.test(message);
@@ -248,7 +287,7 @@ export async function requestExamQuestionsFromProviders(
         severity: retryable ? 'warn' : 'error', source: 'exam.provider-router',
         code: status === 429 ? 'AI_PROVIDER_RATE_LIMITED' : status ? 'AI_PROVIDER_HTTP_ERROR' : 'AI_PROVIDER_REQUEST_FAILED',
         message: 'An AI provider could not complete an exam batch.',
-        metadata: { provider: provider.id, status, retryable, detail: safeDetail, attempt: failures.length },
+        metadata: { provider: provider.id, status, retryable, detail: safeDetail, attempt: failures.length, providerRequestId, completionMeta },
       });
       // Continue to the next configured provider even for provider-specific 4xx
       // errors. One model may reject a schema or credential while another works.
