@@ -32,6 +32,7 @@ export default function TosPage() {
   // Primary Data
   const [tosList, setTosList] = useState<TosDocument[]>([]);
   const [activeExamJobTos, setActiveExamJobTos] = useState<Set<string>>(new Set());
+  const [aiReadiness, setAiReadiness] = useState<{ status: 'checking' | 'available' | 'degraded' | 'rate_limited' | 'unavailable' | 'unconfigured'; providers: Array<{ provider: string; status: string }>; checkedAt: string | null }>({ status: 'checking', providers: [], checkedAt: null });
   const [sections, setSections] = useState<Array<{ id: string; name: string; track?: string; grade_level?: string }>>([]);
   const [gradingPeriods, setGradingPeriods] = useState<Array<{ id: string; name: string; is_current: boolean }>>([]);
   const [availableSchoolYears, setAvailableSchoolYears] = useState<string[]>([]);
@@ -61,6 +62,29 @@ export default function TosPage() {
     const interval = setInterval(refresh, 8000);
     return () => { active = false; clearInterval(interval); };
   }, [tosList]);
+
+  // Check AI provider access in the background as soon as the TOS page opens.
+  // This never blocks TOS navigation, lesson uploads, or the exam modal.
+  useEffect(() => {
+    let active = true;
+    const refreshReadiness = async () => {
+      try {
+        const response = await fetch('/api/ai/exam-readiness', { cache: 'no-store' });
+        const data = await response.json().catch(() => ({}));
+        if (!active || !response.ok) return;
+        setAiReadiness({
+          status: data.status || 'unavailable',
+          providers: Array.isArray(data.providers) ? data.providers : [],
+          checkedAt: data.checkedAt || new Date().toISOString(),
+        });
+      } catch {
+        if (active) setAiReadiness((current) => current.status === 'checking' ? { ...current, status: 'unavailable' } : current);
+      }
+    };
+    void refreshReadiness();
+    const interval = setInterval(refreshReadiness, 60_000);
+    return () => { active = false; clearInterval(interval); };
+  }, []);
 
   // Page Controls & Filters
   const [selectedSchoolYear, setSelectedSchoolYear] = useState<string>('');
@@ -660,6 +684,7 @@ export default function TosPage() {
         onClose={() => setExamModalTos(null)}
         tos={examModalTos}
         schoolName={tenant?.tenantName || ''}
+        aiReadiness={aiReadiness}
       />
 
       {/* 4. Delete Confirmation Modal with Linked Exam Warning */}
