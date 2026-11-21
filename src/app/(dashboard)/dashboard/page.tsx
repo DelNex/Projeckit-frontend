@@ -498,7 +498,7 @@ export default function DashboardPage() {
           <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
             Mean Percentage Score across sections
           </p>
-          <div className="mt-3 flex items-center justify-between gap-3">
+          {quarterlyTrendData.points.length >= 3 && <div className="mt-3 flex items-center justify-between gap-3">
             <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">Quarterly trend</span>
             <Sparkline
               values={quarterlyTrendData.points.map((point) => point.mps)}
@@ -586,12 +586,7 @@ export default function DashboardPage() {
                   Mean Percentage Score progression across academic quarters
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="inline-block w-2.5 h-0.5 bg-amber-500 border border-dashed border-amber-500" />
-                <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">
-                  DepEd Benchmark (75.0%)
-                </span>
-              </div>
+              
             </div>
 
             {loading ? (

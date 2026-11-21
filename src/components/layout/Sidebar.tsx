@@ -195,7 +195,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
                   } else if (item.href === '/analytics') {
                     isActive = pathname === '/analytics' && (!currentTab || currentTab === 'overview');
                   } else {
-                    isActive = pathname === item.href;
+                    isActive = pathname === item.href || (item.href !== '/dashboard' && item.href !== '/admin' && pathname.startsWith(item.href));
                   }
 
                   const Icon = item.icon;
@@ -215,7 +215,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
                         )}
                       >
                         <OmrBubble selected={isActive} tone="brand" size={8} />
-                        <Icon className={cn('h-4 w-5 shrink-0 stroke-[1.5]', isActive ? 'text-current' : 'text-slate-500')} />
+                        <Icon className={cn('h-[18px] w-[18px] shrink-0', isActive ? 'text-current' : 'text-slate-500')} />
                         <span className="truncate">{item.name}</span>
                       </Link>
                     </li>

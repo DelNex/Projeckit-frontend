@@ -10,7 +10,6 @@ import {
     Loader2,
     Paperclip,
     Send,
-    Sparkles,
     StopCircle,
     ThumbsDown,
     ThumbsUp,
@@ -392,9 +391,7 @@ export function AiCopilotModal({
                   <h2 id={`${dialogId}-title`} className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
                     Project KIT AI Copilot
                   </h2>
-                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600 dark:bg-blue-900/40 dark:text-blue-300">
-                    DepEd Assistant
-                  </span>
+                  
                 </div>
                 <p id={`${dialogId}-description`} className="text-[11px] text-gray-500 dark:text-gray-400 leading-tight">
                   Psychometrics, Table of Specifications &amp; OMR Guidance
@@ -485,7 +482,7 @@ export function AiCopilotModal({
                     'max-w-[90%] break-words rounded-2xl p-3 text-[13px] space-y-2 leading-relaxed shadow-2xs sm:max-w-[82%] sm:p-4',
                     msg.role === 'user'
                       ? 'bg-blue-600 text-white rounded-br-none'
-                      : 'bg-gray-50 dark:bg-gray-800/70 text-gray-800 dark:text-gray-200 border border-gray-100 dark:border-gray-800 rounded-bl-none'
+                      : 'bg-[var(--pk-raised)] text-[var(--pk-text)] border border-[var(--pk-line)] rounded-bl-none'
                   )}
                 >
                   {/* Content with basic bold / markdown parsing */}
@@ -577,9 +574,9 @@ export function AiCopilotModal({
 
           {/* Quick Suggested Prompt Chips */}
           <div className="border-t border-gray-100 bg-gray-50/50 px-3 py-2.5 dark:border-gray-800 dark:bg-gray-900/50 sm:px-6">
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 shrink-0 mr-1">
-                Suggested:
+            <div className="flex items-center gap-1.5 overflow-x-auto overflow-y-hidden pr-5 pb-2 text-xs no-scrollbar [mask-image:linear-gradient(to_right,#000_0%,#000_92%,transparent_100%)]">
+              <span className="text-[10px] font-semibold text-[var(--pk-text-muted)] shrink-0 mr-1">
+                Suggested
               </span>
               {suggestedChips.map((chip, idx) => (
                 <button
@@ -653,7 +650,7 @@ export function AiCopilotModal({
                     : 'Ask anything about assessments, TOS, or psychometrics...'
                 }
                 disabled={isStreaming}
-                className="max-h-32 min-h-11 flex-1 resize-y rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm font-medium text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:border-blue-500 sm:px-4"
+                className="max-h-32 min-h-[52px] flex-1 resize-y rounded-xl border border-gray-200 bg-white px-3 py-3.5 text-sm leading-5 font-medium text-[var(--pk-text)] outline-none transition placeholder:text-[var(--pk-text-muted)] focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:border-blue-500 sm:px-4"
               />
 
               {isStreaming ? (

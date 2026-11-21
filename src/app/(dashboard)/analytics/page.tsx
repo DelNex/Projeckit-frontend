@@ -999,10 +999,10 @@ function AnalyticsContent() {
 
       {/* Tab Navigation Bar (Matching Legacy Navigation) */}
       <div className="border-b border-gray-200 dark:border-gray-800 print:hidden">
-        <nav className="flex space-x-3 overflow-x-auto no-scrollbar">
+        <nav className="flex items-center gap-2 overflow-x-auto no-scrollbar border-b border-[var(--pk-line)]">
           <button type="button"
             onClick={() => setActiveTab('sectional')}
-            className={`py-2.5 px-4 text-xs font-semibold border-b-2 whitespace-nowrap transition-colors ${
+            className={`shrink-0 whitespace-nowrap min-h-[44px] px-3 text-sm font-semibold border-b-2 transition-colors ${
               activeTab === 'sectional'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white'
@@ -1012,7 +1012,7 @@ function AnalyticsContent() {
           </button>
           <button type="button"
             onClick={() => setActiveTab('longitudinal')}
-            className={`py-2.5 px-4 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
+            className={`shrink-0 whitespace-nowrap min-h-[44px] px-3 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'longitudinal'
                 ? 'border-blue-600 text-blue-600 font-semibold'
                 : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white'

@@ -191,7 +191,7 @@ export function CameraViewfinder({
               <span>Barcode Scanner</span>
             </div>
 
-            <div className="rounded-full bg-black/80 px-2.5 py-0.5 text-[10px] font-medium text-white border border-white/10 shadow-sm z-10">
+            <div className="relative z-20 rounded-full border border-[#383b40] bg-[#1b1d20] px-3 py-1.5 text-[10px] font-semibold text-[#f3f4f6] shadow-sm">
               {detectedBarcode ? (
                 <span className="text-emerald-400 font-bold flex items-center gap-1">
                   <CheckCircle2 className="h-3 w-3" /> Barcode Scanned

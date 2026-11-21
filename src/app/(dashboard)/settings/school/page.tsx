@@ -1001,7 +1001,7 @@ export default function SchoolSettingsPage() {
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string;
       setLogoData(dataUrl);
-      toast.success('Logo uploaded. Click "Save School Header" to apply changes.');
+      toast.success('Logo uploaded. Click "Save school header" to apply changes.');
     };
     reader.onerror = () => {
       setLogoUploadError('Failed to read image file.');
@@ -1581,7 +1581,7 @@ export default function SchoolSettingsPage() {
         <form onSubmit={handleSave} className="mx-auto w-full max-w-5xl min-w-0 space-y-6">
           {/* Card 0: School Identity & DepEd Official Header */}
           <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 space-y-5">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3 dark:border-gray-800">
+            <div className="flex flex-col gap-3 border-b border-gray-100 pb-3 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
                 <School className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
                 <div>
@@ -1597,7 +1597,7 @@ export default function SchoolSettingsPage() {
                 type="button"
                 onClick={() => setSchoolHeaderConfirmModal(true)}
                 disabled={savingSchoolHeader}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 transition disabled:opacity-50"
+                className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 transition disabled:opacity-50"
               >
                 {savingSchoolHeader ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1687,7 +1687,7 @@ export default function SchoolSettingsPage() {
                     <button
                       type="button"
                       onClick={() => setLogoData('')}
-                      className="absolute -top-2 -right-2 rounded-full bg-red-600 text-white p-1 shadow-xs hover:bg-red-700 transition"
+                      className="absolute -top-2 -right-2 flex h-11 w-11 items-center justify-center rounded-full bg-red-600 text-white shadow-xs hover:bg-red-700 transition"
                       title="Remove Logo"
                     >
                       <X className="h-3 w-3" />
