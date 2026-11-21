@@ -383,8 +383,8 @@ export function AiCopilotModal({
           {/* Modal Header */}
           <div className="flex h-16 items-center justify-between border-b border-gray-100 px-6 dark:border-gray-800">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-700 text-white">
-                <Sparkles className="h-5 w-5" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--pk-line)] bg-[var(--pk-raised)] text-[var(--pk-text)]">
+                <Bot className="h-4 w-4 stroke-[1.5]" />
               </div>
               <div>
                 <div className="flex items-center gap-2">

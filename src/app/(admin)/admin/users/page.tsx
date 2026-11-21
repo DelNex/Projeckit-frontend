@@ -1843,9 +1843,10 @@ export default function AllAccountsPage() {
               <button
                 type="button"
                 onClick={() => setDetailUser(null)}
-                className="rounded-xl p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800"
+                aria-label="Close account details"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
               >
-                <XCircle className="h-5 w-5" />
+                <X className="h-5 w-5" />
               </button>
             </div>
 
@@ -1926,11 +1927,11 @@ export default function AllAccountsPage() {
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end">
+            <div className="sticky bottom-0 mt-6 flex justify-end border-t border-gray-100 bg-white pt-3 dark:border-gray-800 dark:bg-gray-900">
               <button
                 type="button"
                 onClick={() => setDetailUser(null)}
-                className="rounded-xl bg-gray-100 px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                className="min-h-[44px] rounded-xl bg-gray-100 px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
               >
                 Close
               </button>
