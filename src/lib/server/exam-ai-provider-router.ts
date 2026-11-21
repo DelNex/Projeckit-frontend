@@ -267,6 +267,8 @@ export async function requestExamQuestionsFromProviders(
   let lastStatus: number | null = null;
   let retryableFailure: { status: number | null; retryAfterMs: number | null; rateLimit: Record<string, string | null> | null } | null = null;
   let lastRateLimit: Record<string, string | null> | null = null;
+  let reasoningBudgetExhaustedFailure = false;
+  let lastCompletionMeta: Record<string, unknown> | null = null;
   // The caller is a 60-second Next.js route. Keep provider failover inside a
   // 50-second budget so the job lease can be renewed/finalized safely.
   const totalSetting = Number(process.env.AI_PROVIDER_TOTAL_TIMEOUT_MS || 50_000);
@@ -305,6 +307,8 @@ export async function requestExamQuestionsFromProviders(
       const providerErrorCode = (error as Error & { providerErrorCode?: string | null }).providerErrorCode || null;
       const hasFailedGeneration = Boolean((error as Error & { hasFailedGeneration?: boolean }).hasFailedGeneration);
       const reasoningBudgetExhausted = Boolean((error as Error & { reasoningBudgetExhausted?: boolean }).reasoningBudgetExhausted);
+      if (reasoningBudgetExhausted) reasoningBudgetExhaustedFailure = true;
+      if (completionMeta) lastCompletionMeta = completionMeta;
       const retryable = !reasoningBudgetExhausted && (
         Boolean((error as Error & { retryable?: boolean }).retryable)
         || error instanceof SyntaxError
@@ -340,6 +344,8 @@ export async function requestExamQuestionsFromProviders(
       retryable: Boolean(retryableFailure),
       retryAfterMs: retryableFailure?.retryAfterMs ?? null,
       rateLimit: retryableFailure?.rateLimit ?? lastRateLimit,
+      reasoningBudgetExhausted: reasoningBudgetExhaustedFailure,
+      completionMeta: lastCompletionMeta,
     },
   );
 }
