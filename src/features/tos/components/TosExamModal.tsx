@@ -399,7 +399,7 @@ export function TosExamModal({
       const queued = await generationJob.start(lessonDocuments.length ? { lessonDocuments } : { lessonText: combinedText });
       setGenerationProgress(queued.status === 'queued'
         ? `Queued (position ${queued.queuePosition || 1}). AI will process this exam in the background.`
-        : queued.status === 'running' ? 'Groq is already generating questions for this TOS.' : 'This TOS already has a job that needs worker attention.');
+        : queued.status === 'running' ? 'Exam generation is already in progress.' : 'This TOS already has a job that needs worker attention.');
     } catch (err: any) {
       console.error('Exam generation error:', err);
       setIsGenerating(false);
@@ -462,8 +462,8 @@ export function TosExamModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
-        <div className="relative w-full sm:max-w-5xl h-full sm:h-auto sm:max-h-[92vh] bg-white dark:bg-slate-900 sm:rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-slate-900/60  overflow-y-auto">
+        <div className="relative w-full sm:max-w-5xl h-full sm:h-auto sm:max-h-[92vh] bg-white dark:bg-slate-900 sm:rounded-2xl shadow-none sm:shadow-xl border border-slate-200 dark:border-slate-800 flex flex-col">
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6 py-5 border-b border-slate-100 dark:border-slate-800 shrink-0">
             <div>
@@ -507,7 +507,7 @@ export function TosExamModal({
 
               <button
                 onClick={() => examDraftDirty ? setConfirmClose(true) : onClose()}
-                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-slate-800 dark:hover:text-slate-100 transition-colors"
                 aria-label="Close modal"
               >
                 <X className="h-5 w-5" />
@@ -692,7 +692,7 @@ export function TosExamModal({
 
       {/* Export Options Modal */}
       {showTeacherCopyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 ">
           <div className="relative w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
             <div>
               <h3 className="text-base font-bold text-slate-900 dark:text-white">
@@ -733,7 +733,7 @@ export function TosExamModal({
                       Official answer sheet with bubbles shaded
                     </div>
                   </div>
-                  <span className="text-[9px] font-bold text-emerald-800 dark:text-emerald-200 bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded-md shrink-0">
+                  <span className="text-xs font-medium text-slate-600 dark:text-slate-300 shrink-0">
                     ANSWER KEY
                   </span>
                 </div>
