@@ -10,5 +10,4 @@ UPDATE public.exam_generation_jobs
 SET max_attempts = 5,
     updated_at = now()
 WHERE status IN ('queued', 'running', 'needs_attention')
-  AND max_attempts < 5
-  AND attempts < max_attempts;
+  AND max_attempts < 5;
