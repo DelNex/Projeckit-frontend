@@ -2585,7 +2585,7 @@ export default function SchoolSettingsPage() {
         </form>
       )}
 
-      <ConfirmationModal isOpen={logoRemoveConfirm} onClose={() => setLogoRemoveConfirm(false)} onConfirm={() => { setLogoData(''); setLogoFileInfo(null); setLogoRemoveConfirm(false); }} title="Remove school seal?" description="The uploaded seal will be removed from the unsaved school header changes. Save the school header to apply this removal." confirmLabel="Remove seal" actionType="danger" />
+      <ConfirmationModal isOpen={logoRemoveConfirm} onClose={() => setLogoRemoveConfirm(false)} onConfirm={() => { setLogoData(''); setLogoFileInfo(null); setLogoRemoveConfirm(false); }} title="Remove school seal?" description="The uploaded seal will be removed from the unsaved school header changes. Save the school header to apply this removal." confirmLabel="Remove seal" actionType="delete" />
 
       {/* Confirmation Modal for Section Archive / Restore / Delete */}
       <ConfirmationModal
