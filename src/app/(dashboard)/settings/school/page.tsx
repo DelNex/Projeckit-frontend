@@ -104,6 +104,8 @@ export default function SchoolSettingsPage() {
   const [division, setDivision] = useState('');
   const [logoData, setLogoData] = useState('');
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
+  const [logoFileInfo, setLogoFileInfo] = useState<string | null>(null);
+  const [logoRemoveConfirm, setLogoRemoveConfirm] = useState(false);
   const [schoolHeaderConfirmModal, setSchoolHeaderConfirmModal] = useState(false);
   const [savingSchoolHeader, setSavingSchoolHeader] = useState(false);
 
@@ -1001,6 +1003,7 @@ export default function SchoolSettingsPage() {
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string;
       setLogoData(dataUrl);
+      setLogoFileInfo(`${file.name} · ${(file.size / 1024).toFixed(1)} KB`);
       toast.success('Logo uploaded. Click "Save school header" to apply changes.');
     };
     reader.onerror = () => {
@@ -1578,7 +1581,7 @@ export default function SchoolSettingsPage() {
           <span>Loading academic context from Supabase...</span>
         </div>
       ) : (
-        <form onSubmit={handleSave} className="mx-auto w-full max-w-5xl min-w-0 space-y-6">
+        <form onSubmit={handleSave} className="mx-auto w-full max-w-5xl min-w-0 space-y-6 pb-28 sm:pb-0">
           {/* Card 0: School Identity & DepEd Official Header */}
           <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 space-y-5">
             <div className="flex flex-col gap-3 border-b border-gray-100 pb-3 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between">
@@ -1625,19 +1628,19 @@ export default function SchoolSettingsPage() {
                     Seal
                   </div>
                 )}
-                <div className="text-[10px] font-medium text-gray-600 dark:text-gray-300">Republic of the Philippines</div>
+                <div className="max-w-full break-words text-[10px] font-medium text-gray-600 dark:text-gray-300">Republic of the Philippines</div>
                 <div className="text-[11px] font-bold text-gray-900 dark:text-white">Department of Education</div>
                 {region ? (
-                  <div className="text-[10px] text-gray-500 dark:text-gray-400">{region}</div>
+                  <div className="max-w-full break-words text-[10px] text-gray-500 dark:text-gray-400">{region}</div>
                 ) : (
                   <div className="text-[10px] italic text-gray-400">[Region not set — optional]</div>
                 )}
                 {division ? (
-                  <div className="text-[10px] text-gray-500 dark:text-gray-400">{division}</div>
+                  <div className="max-w-full break-words text-[10px] text-gray-500 dark:text-gray-400">{division}</div>
                 ) : (
                   <div className="text-[10px] italic text-gray-400">[Schools Division Office not set — optional]</div>
                 )}
-                <div className="text-xs font-black uppercase tracking-wide text-gray-900 dark:text-white pt-0.5">
+                <div className="max-w-full break-words text-xs font-black uppercase tracking-wide text-gray-900 dark:text-white pt-0.5">
                   {tenantSchoolName || 'School Name'}
                 </div>
               </div>
@@ -1678,7 +1681,7 @@ export default function SchoolSettingsPage() {
               </label>
               <div className="flex flex-wrap items-center gap-4">
                 {logoData ? (
-                  <div className="relative group">
+                  <div className="flex items-center gap-3 group">
                     <img
                       src={logoData}
                       alt="Uploaded seal"
@@ -1686,14 +1689,12 @@ export default function SchoolSettingsPage() {
                     />
                     <button
                       type="button"
-                      onClick={() => setLogoData('')}
-                      className="absolute -top-2 -right-2 flex h-11 w-11 items-center justify-center rounded-full bg-transparent text-white transition hover:bg-red-50 dark:hover:bg-red-950/40"
-                      title="Remove Logo"
+                      onClick={() => setLogoRemoveConfirm(true)}
+                      className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-3 text-xs font-semibold text-red-700 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:border-red-900 dark:bg-gray-900 dark:text-red-300 dark:hover:bg-red-950/40"
+                      title="Remove the uploaded school seal"
                       aria-label="Remove school seal"
                     >
-                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-red-600 shadow-xs transition hover:bg-red-700">
-                        <X className="h-3.5 w-3.5" />
-                      </span>
+                      <X className="h-4 w-4" /> Remove
                     </button>
                   </div>
                 ) : (
@@ -1703,12 +1704,11 @@ export default function SchoolSettingsPage() {
                 )}
 
                 <div className="flex-1 min-w-[200px]">
-                  <input
-                    type="file"
-                    accept="image/png, image/jpeg"
-                    onChange={handleLogoUpload}
-                    className="block w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-950/50 dark:file:text-indigo-300 transition"
-                  />
+                  <label htmlFor="school-seal-upload" className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3.5 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 focus-within:ring-2 focus-within:ring-indigo-500 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300">
+                    <Upload className="h-4 w-4" /> Choose seal image
+                  </label>
+                  <input id="school-seal-upload" type="file" accept="image/png, image/jpeg" onChange={handleLogoUpload} className="sr-only" />
+                  {logoFileInfo && <p className="mt-1 text-xs font-medium text-gray-600 dark:text-gray-300">Selected: {logoFileInfo}</p>}
                   <p className="mt-1 text-[11px] text-gray-400">
                     Stored safely in school settings. DepEd schools upload their own official seal.
                   </p>
@@ -1746,27 +1746,11 @@ export default function SchoolSettingsPage() {
                 <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
                   Active Academic Term
                 </label>
-                <select
-                  value={term}
-                  onChange={(e) => setTerm(e.target.value)}
-                  className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-700 dark:bg-gray-800 dark:focus:bg-gray-800 dark:text-white dark:focus:border-blue-500"
-                >
-                  {gradingPeriods.length > 0 ? (
-                    gradingPeriods.map((gp) => (
-                      <option
-                        key={gp.id}
-                        value={gp.name}
-                        className="bg-white text-gray-900 dark:bg-gray-800 dark:text-white"
-                      >
-                        {gp.name} ({gp.code})
-                      </option>
-                    ))
-                  ) : (
-                    <option value="" disabled className="bg-white text-gray-400 dark:bg-gray-800 dark:text-gray-500">
-                      No active terms configured — apply a preset below
-                    </option>
-                  )}
-                </select>
+                <div className="mt-1.5 flex min-h-11 items-center rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-semibold text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-white" aria-live="polite">
+                  {gradingPeriods.find((period) => period.is_current)?.name || 'No current term selected'}
+                  {gradingPeriods.find((period) => period.is_current)?.code ? ` (${gradingPeriods.find((period) => period.is_current)?.code})` : ''}
+                  <span className="ml-auto rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">Current</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1791,6 +1775,7 @@ export default function SchoolSettingsPage() {
                 <button
                   type="button"
                   disabled={gradingPeriods.length >= 4 || Boolean(rowOperatingId)}
+                  aria-describedby={gradingPeriods.length >= 4 ? "term-limit-help" : undefined}
                   onClick={() => {
                     const nextPos = gradingPeriods.length + 1;
                     setNewTermType('term');
@@ -1803,7 +1788,7 @@ export default function SchoolSettingsPage() {
                       ? 'You can have up to 4 terms. Delete or archive one first.'
                       : 'Add a new grading period'
                   }
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>Add Term</span>
@@ -1830,7 +1815,7 @@ export default function SchoolSettingsPage() {
             </div>
 
             {gradingPeriods.length >= 4 && (
-              <div className="flex items-center gap-2 rounded-xl bg-amber-50 p-2.5 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-900/40">
+              <div id="term-limit-help" className="flex items-center gap-2 rounded-xl bg-amber-50 p-2.5 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-900/40">
                 <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
                 <span>You can have up to 4 terms. Delete or archive one first.</span>
               </div>
@@ -1872,8 +1857,9 @@ export default function SchoolSettingsPage() {
                               type="button"
                               disabled={idx === 0 || Boolean(rowOperatingId)}
                               onClick={() => handleReorderPeriod(gp.id, 'up')}
-                              className="text-gray-400 hover:text-gray-600 disabled:opacity-20 transition"
+                              className="flex h-11 w-11 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-35 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700"
                               title="Move up"
+                              aria-label="Move up"
                             >
                               <ArrowUp className="h-3 w-3" />
                             </button>
@@ -1881,8 +1867,9 @@ export default function SchoolSettingsPage() {
                               type="button"
                               disabled={idx === gradingPeriods.length - 1 || Boolean(rowOperatingId)}
                               onClick={() => handleReorderPeriod(gp.id, 'down')}
-                              className="text-gray-400 hover:text-gray-600 disabled:opacity-20 transition"
+                              className="flex h-11 w-11 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-35 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700"
                               title="Move down"
+                              aria-label="Move down"
                             >
                               <ArrowDown className="h-3 w-3" />
                             </button>
@@ -1958,7 +1945,7 @@ export default function SchoolSettingsPage() {
                                   setEditPeriodName(gp.name);
                                   setEditPeriodCode(gp.code.replace(/_arch_.*$/, ''));
                                 }}
-                                className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 disabled:opacity-50 transition"
+                                className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 disabled:opacity-50 transition"
                               >
                                 <Edit2 className="h-3 w-3" /> Rename
                               </button>
@@ -1969,7 +1956,7 @@ export default function SchoolSettingsPage() {
                                 type="button"
                                 disabled={Boolean(rowOperatingId)}
                                 onClick={() => setSetCurrentConfirmModal({ isOpen: true, period: gp })}
-                                className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-2xs hover:bg-blue-700 disabled:opacity-50 transition"
+                                className="inline-flex min-h-11 items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-[11px] font-bold text-white shadow-2xs hover:bg-blue-700 disabled:opacity-50 transition"
                               >
                                 Set as Current Term
                               </button>
@@ -2585,18 +2572,20 @@ export default function SchoolSettingsPage() {
           </div>
 
           {/* Form Action Button */}
-          <div className="pk-sticky-mobile-actions flex justify-end">
+          <div className="pk-sticky-mobile-actions sticky bottom-0 z-30 -mx-4 flex justify-end border-t border-gray-200 bg-white/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur dark:border-gray-800 dark:bg-gray-900/95 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none sm:backdrop-blur-none">
             <button
               type="submit"
               disabled={saving}
-              className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-none hover:bg-blue-700 transition disabled:opacity-50"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-none hover:bg-blue-700 transition disabled:opacity-50 sm:w-auto"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              <span>Save Academic Configuration</span>
+              <span>Save academic settings</span>
             </button>
           </div>
         </form>
       )}
+
+      <ConfirmationModal isOpen={logoRemoveConfirm} onClose={() => setLogoRemoveConfirm(false)} onConfirm={() => { setLogoData(''); setLogoFileInfo(null); setLogoRemoveConfirm(false); }} title="Remove school seal?" description="The uploaded seal will be removed from the unsaved school header changes. Save the school header to apply this removal." confirmLabel="Remove seal" actionType="delete" />
 
       {/* Confirmation Modal for Section Archive / Restore / Delete */}
       <ConfirmationModal
