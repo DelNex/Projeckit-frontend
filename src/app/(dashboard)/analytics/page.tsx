@@ -118,6 +118,12 @@ function AnalyticsContent() {
   const initialTab = (searchParams?.get('tab') as TabKey) || 'sectional';
 
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
+  const tabListRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const activeButton = tabListRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
+    activeButton?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [activeTab]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -500,7 +506,7 @@ function AnalyticsContent() {
   // Longitudinal Growth Data (Real quarterly breakdown across school years)
   const longitudinalData = useMemo(() => {
     const years = schoolYears;
-    const activePeriods =
+    const configuredPeriods =
       gradingPeriods.length > 0
         ? gradingPeriods
         : [
@@ -509,6 +515,9 @@ function AnalyticsContent() {
             { id: '3', name: '3rd Term', code: 'T3', position: 3 },
             { id: '4', name: '4th Term', code: 'T4', position: 4 },
           ];
+    // A period is identified by its configured id, never by its display label.
+    const activePeriods = Array.from(new Map(configuredPeriods.map((period) => [period.id, period] as const)).values())
+      .sort((a, b) => a.position - b.position);
 
     return years.map((yr) => {
       const yrSeries = activePeriods.map((gp) => {
@@ -999,9 +1008,10 @@ function AnalyticsContent() {
 
       {/* Tab Navigation Bar (Matching Legacy Navigation) */}
       <div className="border-b border-gray-200 dark:border-gray-800 print:hidden">
-        <nav className="flex items-center gap-2 overflow-x-auto no-scrollbar border-b border-[var(--pk-line)]">
+        <nav ref={tabListRef} aria-label="Analytics sections" tabIndex={0} className="flex items-center gap-2 overflow-x-auto overscroll-x-contain scroll-smooth no-scrollbar border-b border-[var(--pk-line)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
           <button type="button"
             onClick={() => setActiveTab('sectional')}
+            aria-current={activeTab === 'sectional' ? 'page' : undefined}
             className={`shrink-0 whitespace-nowrap min-h-[44px] px-3 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'sectional'
                 ? 'border-blue-600 text-blue-600'
@@ -1012,6 +1022,7 @@ function AnalyticsContent() {
           </button>
           <button type="button"
             onClick={() => setActiveTab('longitudinal')}
+            aria-current={activeTab === 'longitudinal' ? 'page' : undefined}
             className={`shrink-0 whitespace-nowrap min-h-[44px] px-3 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'longitudinal'
                 ? 'border-blue-600 text-blue-600 font-semibold'
@@ -1022,6 +1033,7 @@ function AnalyticsContent() {
           </button>
           <button type="button"
             onClick={() => setActiveTab('cognitive')}
+            aria-current={activeTab === 'cognitive' ? 'page' : undefined}
             className={`shrink-0 whitespace-nowrap min-h-[44px] px-3 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'cognitive'
                 ? 'border-blue-600 text-blue-600 font-semibold'
@@ -1032,6 +1044,7 @@ function AnalyticsContent() {
           </button>
           <button type="button"
             onClick={() => setActiveTab('item-analysis')}
+            aria-current={activeTab === 'item-analysis' ? 'page' : undefined}
             className={`shrink-0 whitespace-nowrap min-h-[44px] px-3 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'item-analysis'
                 ? 'border-blue-600 text-blue-600 font-semibold'
@@ -1042,6 +1055,7 @@ function AnalyticsContent() {
           </button>
           <button type="button"
             onClick={() => setActiveTab('reports')}
+            aria-current={activeTab === 'reports' ? 'page' : undefined}
             className={`shrink-0 whitespace-nowrap min-h-[44px] px-3 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'reports'
                 ? 'border-blue-600 text-blue-600 font-semibold'
@@ -1139,7 +1153,7 @@ function AnalyticsContent() {
                 Year-over-Year Longitudinal MPS Growth Trends
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Multi-year academic achievement trajectory across school years (2024–2027)
+                Academic years with recorded assessment data: {longitudinalData.filter((year) => year.quarterScores.some((score) => score !== null)).map((year) => year.schoolYear).join(', ') || 'No years with recorded data'}
               </p>
             </div>
             <span className="px-2.5 py-1 text-xs font-bold rounded-md bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
@@ -1183,19 +1197,24 @@ function AnalyticsContent() {
                       <span className="text-[10px] text-gray-400 font-medium">MPS Trajectory</span>
                     </div>
                     <div className="space-y-2">
-                      {yr.periods.map((period, pIdx) => {
-                        const score = yr.quarterScores[pIdx];
+                      {yr.periods.map((period, pIdx) => ({ period, score: yr.quarterScores[pIdx], pIdx })).filter((entry) => entry.score !== null).map(({ period, score, pIdx }) => {
+                        const previousScore = yr.quarterScores.slice(0, pIdx).reverse().find((value) => value !== null) ?? null;
+                        const delta = previousScore === null ? null : Number(score) - previousScore;
                         return (
-                          <div key={period.id || pIdx} className="flex items-center justify-between text-xs">
-                            <span className="text-gray-500 font-medium">
-                              {period.name} ({period.code.replace(/_arch_.*$/, '')})
-                            </span>
-                            <span className="font-mono font-bold text-gray-900 dark:text-white">
-                              {score !== null ? `${score}%` : '—'}
+                          <div key={period.id} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1 text-xs">
+                            <span className="min-w-0 truncate font-medium text-gray-600 dark:text-gray-300">{period.name}</span>
+                            <span className="shrink-0 text-right">
+                              <span className="font-mono font-bold text-gray-900 dark:text-white">{score}%</span>
+                              {delta !== null && <span className={`ml-2 text-[10px] font-semibold ${delta >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>{delta >= 0 ? '+' : ''}{delta.toFixed(1)} pp</span>}
                             </span>
                           </div>
                         );
                       })}
+                      {yr.quarterScores.every((score) => score === null) ? (
+                        <p className="rounded-lg px-2 py-2 text-xs text-gray-400 dark:text-gray-500">No data yet</p>
+                      ) : yr.quarterScores.some((score) => score === null) ? (
+                        <p className="px-2 py-1 text-[10px] text-gray-400 dark:text-gray-500">Some periods have no data yet</p>
+                      ) : null}
                     </div>
                   </div>
                 ))}
@@ -1218,12 +1237,13 @@ function AnalyticsContent() {
               </p>
             </div>
             {assessments.length > 0 && (
-              <div className="flex items-center gap-2">
-                <label className="text-xs font-semibold text-gray-500">Assessment:</label>
+              <div className="flex w-full flex-col items-stretch gap-1.5 sm:w-auto sm:flex-row sm:items-center">
+                <label className="text-xs font-semibold text-gray-600 dark:text-gray-300">Assessment</label>
                 <select
                   value={selectedAssessmentId}
                   onChange={(e) => setSelectedAssessmentId(e.target.value)}
-                  className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  className="min-h-11 w-full min-w-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-white sm:max-w-[22rem]"
+                  title={assessments.find((assessment) => assessment.id === selectedAssessmentId)?.title}
                 >
                   {assessments.map((a) => (
                     <option key={a.id} value={a.id}>
@@ -1257,11 +1277,18 @@ function AnalyticsContent() {
               </Link>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-gray-600 dark:text-gray-300" aria-label="Mastery thresholds">
+                <span className="font-semibold">Mastery levels:</span>
+                <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" />Low: below 60%</span>
+                <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-blue-600" />Developing: 60–74%</span>
+                <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-600" />Proficient: 75%+</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {cognitiveData.map((d) => (
                 <div
                   key={d.key}
-                  className="p-4 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-800/40 space-y-2"
+                  className="p-3 rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-800/40 space-y-1.5"
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-gray-900 dark:text-white">{d.label}</span>
@@ -1280,7 +1307,7 @@ function AnalyticsContent() {
                     />
                   </div>
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-500 text-[10px]">Mastery Rate</span>
+                    <span className="text-gray-600 dark:text-gray-300 text-[10px]">{d.masteryPct !== null && d.masteryPct >= 75 ? "Proficient" : d.masteryPct !== null && d.masteryPct >= 60 ? "Developing" : d.masteryPct !== null ? "Low" : "No data"}</span>
                     <span
                       className={`font-mono font-bold ${
                         d.masteryPct !== null && d.masteryPct >= 75
@@ -1295,6 +1322,7 @@ function AnalyticsContent() {
                   </div>
                 </div>
               ))}
+              </div>
             </div>
           )}
         </div>
