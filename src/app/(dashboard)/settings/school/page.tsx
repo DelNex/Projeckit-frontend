@@ -1604,14 +1604,14 @@ export default function SchoolSettingsPage() {
                 ) : (
                   <Save className="h-3.5 w-3.5" />
                 )}
-                <span>Save School Header</span>
+                <span>Save school header</span>
               </button>
             </div>
 
             {/* Live DepEd Header Preview */}
             <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/70 p-4 text-center dark:border-gray-800 dark:bg-gray-800/40 space-y-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                Printed Answer Sheet Header Preview
+                Printed answer sheet header preview
               </span>
               <div className="pt-2 flex flex-col items-center">
                 {logoData ? (
@@ -1687,10 +1687,13 @@ export default function SchoolSettingsPage() {
                     <button
                       type="button"
                       onClick={() => setLogoData('')}
-                      className="absolute -top-2 -right-2 flex h-11 w-11 items-center justify-center rounded-full bg-red-600 text-white shadow-xs hover:bg-red-700 transition"
+                      className="absolute -top-2 -right-2 flex h-11 w-11 items-center justify-center rounded-full bg-transparent text-white transition hover:bg-red-50 dark:hover:bg-red-950/40"
                       title="Remove Logo"
+                      aria-label="Remove school seal"
                     >
-                      <X className="h-3 w-3" />
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-red-600 shadow-xs transition hover:bg-red-700">
+                        <X className="h-3.5 w-3.5" />
+                      </span>
                     </button>
                   </div>
                 ) : (
