@@ -295,7 +295,7 @@ export async function requestExamQuestionsFromProviders(
         severity: retryable ? 'warn' : 'error', source: 'exam.provider-router',
         code: status === 429 ? 'AI_PROVIDER_RATE_LIMITED' : status ? 'AI_PROVIDER_HTTP_ERROR' : 'AI_PROVIDER_REQUEST_FAILED',
         message: 'An AI provider could not complete an exam batch.',
-        metadata: { provider: provider.id, status, retryable, detail: safeDetail, attempt: failures.length, providerRequestId, providerErrorCode, hasFailedGeneration, completionMeta },
+        metadata: { provider: provider.id, model: provider.model, status, retryable, detail: safeDetail, attempt: failures.length, providerRequestId, providerErrorCode, hasFailedGeneration, completionMeta },
       });
       // Continue to the next configured provider even for provider-specific 4xx
       // errors. One model may reject a schema or credential while another works.
