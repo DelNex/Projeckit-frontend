@@ -720,7 +720,7 @@ export default function DashboardPage() {
 
                   {/* X Axis Labels */}
                   {trendSvgCoords.coords.map((pt, index) => {
-                    const shortLabel = pt.label.match(/\\b([QT]\\s*[1-4])\\b/i)?.[1]?.replace(/\\s+/g, '').toUpperCase() || pt.label.slice(0, 2);
+                    const shortLabel = pt.label.match(/\b([QT]\s*[1-4])\b/i)?.[1]?.replace(/\s+/g, '').toUpperCase() || pt.label.slice(0, 2);
                     if (index > 0 && trendSvgCoords.coords[index - 1].x === pt.x) return null;
                     return (
                       <text
