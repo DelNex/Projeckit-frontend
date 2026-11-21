@@ -202,6 +202,7 @@ export default function TenantsPage() {
             )}
           </div>
         ) : (
+          <>
           <div className="grid gap-3 p-3 sm:hidden">
             {tenants.map((tenant) => (
               <article key={tenant.id} className="min-w-0 rounded-xl border border-gray-200 p-3 dark:border-gray-800">
@@ -268,6 +269,7 @@ export default function TenantsPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 
