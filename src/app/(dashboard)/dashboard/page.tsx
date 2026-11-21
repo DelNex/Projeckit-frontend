@@ -21,6 +21,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useTenant } from '@/context/TenantContext';
 import { getPhilippineSchoolYear } from '@/lib/academic-calendar';
+import { BarList } from '@/components/ui/bar-list';
 
 interface AssessmentItem {
   id: string;
@@ -70,6 +71,7 @@ export default function DashboardPage() {
   const [totalSectionsCount, setTotalSectionsCount] = useState<number>(0);
   const [studentScores, setStudentScores] = useState<StudentScoreRecord[]>([]);
   const [hoveredPoint, setHoveredPoint] = useState<{ quarter: string; mps: number; delta: number; x: number; y: number } | null>(null);
+  const [showTrendTable, setShowTrendTable] = useState(false);
 
   const supabase = createClient();
 
@@ -752,14 +754,51 @@ export default function DashboardPage() {
 
           <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
             <span>Official DepEd passing standard: 75.0% MPS</span>
-            <Link
-              href="/analytics"
-              className="font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 inline-flex items-center gap-1"
-            >
-              <span>Detailed Analytics Hub</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowTrendTable((current) => !current)}
+                aria-expanded={showTrendTable}
+                className="min-h-10 rounded-lg border border-gray-200 px-3 py-2 font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+              >
+                {showTrendTable ? 'Hide data table' : 'View as table'}
+              </button>
+              <Link
+                href="/analytics"
+                className="font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 inline-flex items-center gap-1"
+              >
+                <span>Detailed Analytics Hub</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
           </div>
+          {showTrendTable && (
+            <div className="mt-3 overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-800">
+              <table aria-label="Quarterly mean percentage score data" className="w-full min-w-[320px] text-left text-xs">
+                <thead className="bg-gray-50 text-gray-500 dark:bg-gray-800/60 dark:text-gray-400">
+                  <tr>
+                    <th scope="col" className="px-3 py-2 font-semibold">Academic period</th>
+                    <th scope="col" className="px-3 py-2 text-right font-semibold">Scanned responses</th>
+                    <th scope="col" className="px-3 py-2 text-right font-semibold">Mean score</th>
+                    <th scope="col" className="px-3 py-2 text-right font-semibold">Vs. 75% target</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {quarterlyTrendData.points.map((point) => {
+                    const delta = point.mps === null ? null : Math.round((point.mps - 75) * 10) / 10;
+                    return (
+                      <tr key={point.key}>
+                        <th scope="row" className="px-3 py-2 font-medium text-gray-800 dark:text-gray-200">{point.label}</th>
+                        <td className="px-3 py-2 text-right font-mono tabular-nums">{point.count}</td>
+                        <td className="px-3 py-2 text-right font-mono tabular-nums">{point.mps === null ? '—' : `${point.mps}%`}</td>
+                        <td className="px-3 py-2 text-right font-mono tabular-nums">{delta === null ? '—' : `${delta > 0 ? '+' : ''}${delta} pp`}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Chart 2: Learner Performance Tiers (5 columns on desktop) */}
@@ -809,33 +848,17 @@ export default function DashboardPage() {
                   ) : null)}
                 </div>
 
-                {/* Tier breakdown table */}
-                <div className="overflow-x-auto">
-                  <table aria-label="Learner performance tier breakdown" className="w-full min-w-[280px] text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-gray-100 text-gray-500 dark:border-gray-800 dark:text-gray-400">
-                        <th className="py-2 pr-3 font-medium">Tier</th>
-                        <th className="py-2 px-2 text-right font-medium">Learners</th>
-                        <th className="py-2 pl-2 text-right font-medium">Share</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                      {learnerTierData.counts.map((tier) => (
-                        <tr key={tier.key}>
-                          <td className="py-2 pr-3">
-                            <span className="inline-flex min-w-0 items-center gap-2">
-                              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: tier.color }} />
-                              <span className="min-w-0 break-words font-medium text-gray-800 dark:text-gray-200">{tier.label}</span>
-                              <span className="shrink-0 font-mono text-[10px] text-gray-400">({tier.range})</span>
-                            </span>
-                          </td>
-                          <td className="px-2 py-2 text-right font-semibold tabular-nums text-gray-900 dark:text-white">{tier.count}</td>
-                          <td className="py-2 pl-2 text-right font-mono tabular-nums text-gray-600 dark:text-gray-300">{tier.percentage}%</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <BarList
+                  ariaLabel="Learner performance tier breakdown"
+                  items={learnerTierData.counts.map((tier) => ({
+                    key: tier.key,
+                    label: tier.label,
+                    detail: tier.range,
+                    value: tier.count,
+                    percentage: tier.percentage,
+                    color: tier.color,
+                  }))}
+                />
               </div>
             )}
           </div>
