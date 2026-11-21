@@ -143,13 +143,14 @@ test('Groq adapter uses the configured chat endpoint and parses structured quest
   try {
     process.env.GROQ_API_KEY = 'test-groq-key';
     process.env.GROQ_MODEL = 'openai/gpt-oss-120b';
+    process.env.GROQ_SERVICE_TIER = 'auto';
     process.env.AI_PROVIDER_ORDER = 'groq';
     global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       assert.equal(String(input), 'https://api.groq.com/openai/v1/chat/completions');
       assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer test-groq-key');
       const body = JSON.parse(String(init?.body));
       assert.equal(body.model, 'openai/gpt-oss-120b');
-      assert.equal(body.response_format.type, 'json_schema');
+      assert.equal(body.response_format.type, 'json_object');
       assert.equal(body.service_tier, undefined);
       return new Response(JSON.stringify({
         choices: [{ message: { content: JSON.stringify({ questions: [{ item_number: 1 }] }) } }],
