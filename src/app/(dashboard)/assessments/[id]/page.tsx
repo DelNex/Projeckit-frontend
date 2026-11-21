@@ -19,6 +19,7 @@ import { calculateAssessmentScore } from '@/lib/assessment-scoring';
 import { createClient } from '@/lib/supabase/client';
 import type { Database } from '@/types/database.types';
 import { cn } from '@/lib/utils';
+import { OmrBubble } from '@/components/ui/OmrBubble';
 import { deduplicateItemScans, readScanAnswers, readScanItemStates } from '@/lib/item-response-analysis';
 
 type ScanResultRow = Database['public']['Tables']['scan_results']['Row'];
@@ -1402,7 +1403,44 @@ export default function AssessmentWorkspacePage({
                     No answer sheets scanned yet. Launch the camera scanner to grade exam sheets.
                   </div>
                 ) : (
-                  <div className="overflow-x-auto -mx-4 sm:mx-0">
+                  <>
+                    <div className="grid gap-3 sm:hidden">
+                      {scanResults.map((s) => {
+                        const matchedResp = responsesList.find((r) => r.student_id === s.student_id);
+                        const matchedStd = studentsList.find((std) => std.id === s.student_id);
+                        const studentName = matchedResp?.audit_trail?.studentName || matchedStd?.name || (s.detected_roll_number ? 'Roll #' + s.detected_roll_number : 'Unassigned learner');
+                        const needsReview = s.status === 'VERIFICATION_REQUIRED';
+                        return (
+                          <article key={s.id} className="rounded-xl border border-gray-200 p-3 dark:border-gray-800">
+                            <div className="flex min-w-0 items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <h4 className="break-words text-sm font-semibold text-gray-900 dark:text-white">{studentName}</h4>
+                                <p className="mt-1 font-mono text-xs text-gray-500 dark:text-gray-400">{s.detected_roll_number ? '#' + s.detected_roll_number : matchedStd?.lrn || 'No LRN'}</p>
+                              </div>
+                              <span className="inline-flex shrink-0 items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                                <OmrBubble selected tone={needsReview ? 'warning' : 'success'} size={8} />
+                                {needsReview ? 'Needs review' : s.status}
+                              </span>
+                            </div>
+                            <div className="mt-3 grid grid-cols-2 gap-3 border-t border-gray-100 pt-3 dark:border-gray-800">
+                              <div>
+                                <p className="text-xs text-gray-500">Score</p>
+                                <p className="mt-1 text-sm font-semibold tabular-nums text-gray-900 dark:text-white">{matchedResp?.score !== undefined ? matchedResp.score + ' / ' + itemCount + ' (' + matchedResp.percentage + '%)' : 'Scored'}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500">Confidence</p>
+                                <p className="mt-1 text-sm font-semibold tabular-nums text-gray-900 dark:text-white">{Math.round((s.confidence || 1.0) * 100)}%</p>
+                              </div>
+                              <div className="col-span-2">
+                                <p className="text-xs text-gray-500">Scanned</p>
+                                <time className="mt-1 block text-xs tabular-nums text-gray-700 dark:text-gray-300" dateTime={s.created_at || undefined}>{s.created_at ? new Date(s.created_at).toLocaleString() : '—'}</time>
+                              </div>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                    <div className="hidden overflow-x-auto sm:block">
                     <table className="w-full text-left text-xs table-optimized min-w-[650px]">
                       <thead className="border-b border-gray-100 bg-gray-50 text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:border-gray-800 dark:bg-gray-800/40">
                         <tr>
@@ -1467,7 +1505,8 @@ export default function AssessmentWorkspacePage({
                         })}
                       </tbody>
                     </table>
-                  </div>
+                    </div>
+                  </>
                 )}
               </div>
             </div>
