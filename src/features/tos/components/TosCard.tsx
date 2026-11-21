@@ -8,6 +8,7 @@ import {
   FileDown,
   FilePlus2,
   Users,
+  MoreHorizontal,
 } from 'lucide-react';
 
 interface TosCardProps {
@@ -64,7 +65,7 @@ export function TosCard({
           {onDownloadWord && (
             <button
               onClick={() => onDownloadWord(tos)}
-              className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg transition-colors shrink-0"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-blue-700 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-blue-300 dark:hover:bg-blue-950/40"
               title="Open to download Word"
               aria-label="Open to download Word"
             >
@@ -101,14 +102,14 @@ export function TosCard({
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => onView(tos)}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            className="inline-flex min-h-11 items-center gap-1 px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <Eye className="h-3.5 w-3.5" />
             <span>View</span>
           </button>
           <button
             onClick={() => onEdit(tos)}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            className="inline-flex min-h-11 items-center gap-1 px-3 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <Edit2 className="h-3.5 w-3.5" />
             <span>Edit</span>
@@ -118,19 +119,22 @@ export function TosCard({
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => onCreateExam(tos)}
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 rounded-lg shadow-sm transition-colors"
+            className="inline-flex min-h-11 items-center gap-1 px-3 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 rounded-lg shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
           >
             <FilePlus2 className="h-3.5 w-3.5" />
-            <span>Create exam</span>
+            <span>Create Exam</span>
           </button>
-          <button
-            onClick={() => onDelete(tos)}
-            className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
-            title="Delete Table of Specification"
-            aria-label="Delete Table of Specification"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          <details className="relative">
+            <summary className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-slate-300 dark:hover:bg-slate-800" aria-label="More TOS actions" title="More actions">
+              <MoreHorizontal className="h-5 w-5" />
+            </summary>
+            <div className="absolute bottom-full right-0 z-20 mb-2 min-w-44 rounded-xl border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+              <button type="button" onClick={() => onDelete(tos)} className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-left text-xs font-semibold text-rose-700 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 dark:text-rose-300 dark:hover:bg-rose-950/40">
+                <Trash2 className="h-4 w-4" /> Delete TOS
+              </button>
+              <p className="px-3 pb-2 text-[10px] text-slate-500 dark:text-slate-400">You will be asked to confirm before deletion.</p>
+            </div>
+          </details>
         </div>
       </div>
     </div>
