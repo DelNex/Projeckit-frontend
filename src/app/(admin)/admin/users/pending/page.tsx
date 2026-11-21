@@ -178,6 +178,7 @@ export default function PendingUsersPage() {
             </p>
           </div>
         ) : (
+          <>
           <div className="grid gap-3 p-3 sm:hidden">
             {pendingUsers.map((user) => {
               const isBusy = processingId === user.id;
@@ -325,6 +326,7 @@ export default function PendingUsersPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 
