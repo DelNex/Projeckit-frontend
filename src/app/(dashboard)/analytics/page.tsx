@@ -516,7 +516,7 @@ function AnalyticsContent() {
             { id: '4', name: '4th Term', code: 'T4', position: 4 },
           ];
     // A period is identified by its configured id, never by its display label.
-    const activePeriods = Array.from(new Map(configuredPeriods.map((period) => [period.id, period])).values())
+    const activePeriods = Array.from(new Map(configuredPeriods.map((period) => [period.id, period] as const)).values())
       .sort((a, b) => a.position - b.position);
 
     return years.map((yr) => {
