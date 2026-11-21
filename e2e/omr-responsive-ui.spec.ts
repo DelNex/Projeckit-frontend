@@ -18,8 +18,16 @@ for (const route of routes) {
       test(`${route} fits the ${viewport.name} viewport (${viewport.width}px) in ${theme} mode`, async ({ page }) => {
         await page.setViewportSize({ width: viewport.width, height: viewport.height });
         await page.emulateMedia({ colorScheme: theme });
+        await page.addInitScript((mode) => {
+          window.localStorage.setItem('darkMode', mode === 'dark' ? 'true' : 'false');
+          document.documentElement.classList.toggle('dark', mode === 'dark');
+        }, theme);
         await page.goto(route);
-        await page.evaluate((mode) => document.documentElement.classList.toggle('dark', mode === 'dark'), theme);
+        if (theme === 'dark') {
+          await expect(page.locator('html')).toHaveClass(/dark/);
+        } else {
+          await expect(page.locator('html')).not.toHaveClass(/dark/);
+        }
   
         const main = page.locator('main.pk-auth');
         await expect(main).toBeVisible();
