@@ -19,6 +19,7 @@ import {
 import { buildTosBlueprintSlots } from '@/lib/exam-types';
 import { useExamGenerationJob } from '@/lib/exam-generation-client';
 import { EXAM_SOURCE_FILE_ACCEPT, isSupportedExamSourceFileName } from '@/lib/exam-generation-files';
+import { useDialogAccessibility } from '@/hooks/use-dialog-accessibility';
 
 interface ExamGeneratorModalProps {
   isOpen: boolean;
@@ -68,6 +69,7 @@ export function ExamGeneratorModal({
 }: ExamGeneratorModalProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const generatedTextRef = useRef('');
   const handledJobRef = useRef<string | null>(null);
   const expectedJobIdRef = useRef<string | null>(null);
@@ -77,6 +79,7 @@ export function ExamGeneratorModal({
   onExamGeneratedRef.current = onExamGenerated;
   onCloseRef.current = onClose;
   const generationJob = useExamGenerationJob(tosId);
+  useDialogAccessibility(dialogRef, isOpen, () => onCloseRef.current());
 
   const [currentStep, setCurrentStep] = useState<GenerationStep>('idle');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -288,7 +291,7 @@ export function ExamGeneratorModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 backdrop-blur-xs sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="exam-generator-title">
-      <div className="max-h-[100dvh] h-[100dvh] w-full overflow-y-auto overscroll-contain rounded-none border border-gray-200 bg-white p-4 shadow-2xl dark:border-gray-800 dark:bg-gray-900 space-y-5 sm:h-auto sm:max-h-[90dvh] sm:max-w-xl sm:rounded-3xl sm:p-6">
+      <div ref={dialogRef} tabIndex={-1} className="max-h-[100dvh] h-[100dvh] w-full overflow-y-auto overscroll-contain rounded-none border border-gray-200 bg-white p-4 shadow-2xl outline-none dark:border-gray-800 dark:bg-gray-900 space-y-5 sm:h-auto sm:max-h-[90dvh] sm:max-w-xl sm:rounded-3xl sm:p-6">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
           <div className="flex items-center gap-2.5">
