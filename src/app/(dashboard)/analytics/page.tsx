@@ -1008,7 +1008,7 @@ function AnalyticsContent() {
 
       {/* Tab Navigation Bar (Matching Legacy Navigation) */}
       <div className="border-b border-gray-200 dark:border-gray-800 print:hidden">
-        <nav ref={tabListRef} aria-label="Analytics sections" tabIndex={0} className="flex items-center gap-2 overflow-x-auto overscroll-x-contain scroll-smooth no-scrollbar border-b border-[var(--pk-line)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+        <nav ref={tabListRef} aria-label="Analytics sections" tabIndex={0} className="flex items-center gap-2 overflow-x-auto overscroll-x-contain scroll-smooth no-scrollbar border-b border-[var(--pk-line)] [mask-image:linear-gradient(to_right,transparent_0%,black_3%,black_97%,transparent_100%)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
           <button type="button"
             onClick={() => setActiveTab('sectional')}
             aria-current={activeTab === 'sectional' ? 'page' : undefined}
