@@ -19,7 +19,7 @@ export function useDialogAccessibility(
   dialogRef: RefObject<HTMLElement | null>,
   isOpen: boolean,
   onEscape?: () => void,
- ) {
+) {
   const escapeRef = useRef(onEscape);
   useEffect(() => { escapeRef.current = onEscape; }, [onEscape]);
 
