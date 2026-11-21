@@ -118,7 +118,7 @@ export function Header({ onToggleSidebar, sidebarOpen = false, title }: HeaderPr
               aria-haspopup="menu"
               className="pk-profile-trigger flex min-h-11 items-center gap-1.5 sm:gap-2.5 rounded-lg border border-slate-200 bg-white p-1 sm:p-1.5 sm:pr-3 hover:bg-slate-50 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800"
             >
-              <div className="pk-avatar flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg text-xs font-bold">
+              <div className="pk-avatar flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg border border-[var(--pk-line)] bg-[var(--pk-raised)] text-[var(--pk-text)] text-xs font-bold">
                 {initial}
               </div>
               <div className="hidden text-left sm:block">

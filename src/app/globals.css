@@ -961,3 +961,20 @@ body { background: var(--pk-canvas); color: var(--pk-ink); }
 @media (prefers-reduced-motion: no-preference) {
   .pk-shell button, .pk-main button, .pk-auth button { transition-duration: 160ms; transition-timing-function: ease-out; }
 }
+
+
+/* Contrast contract for form controls, disabled actions and dark graphite surfaces. */
+:root { --pk-text: #111827; --pk-text-secondary: #374151; --pk-text-muted: #6b7280; }
+.dark {
+  --pk-text: #f3f4f6; --pk-text-secondary: #c4c8cd; --pk-text-muted: #9a9fa6;
+  --pk-canvas: #121315; --pk-surface: #1b1d20; --pk-surface-muted: #25282c;
+  --pk-raised: #2d3035; --pk-line: #383b40;
+}
+.pk-main :where(input, select, textarea), .pk-auth :where(input, select, textarea), .pk-shell :where(input, select, textarea) { color: var(--pk-text) !important; }
+.pk-main :where(input, select, textarea)::placeholder, .pk-auth :where(input, select, textarea)::placeholder, .pk-shell :where(input, select, textarea)::placeholder { color: var(--pk-text-muted) !important; opacity: 1; }
+.pk-main :where(button:disabled, [aria-disabled="true"]), .pk-shell :where(button:disabled, [aria-disabled="true"]), .pk-auth :where(button:disabled, [aria-disabled="true"]) {
+  opacity: 1 !important; background-color: var(--pk-surface) !important; color: var(--pk-text-muted) !important;
+  border: 1px solid var(--pk-line) !important; cursor: not-allowed !important;
+}
+.pk-avatar { background: var(--pk-raised) !important; color: var(--pk-text) !important; border: 1px solid var(--pk-line) !important; }
+@media (max-width: 639px) { .pk-main :where(button, a[role="button"], input, select, textarea, [role="button"]) { min-height: 44px; } }
