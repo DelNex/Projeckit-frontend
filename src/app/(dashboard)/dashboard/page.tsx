@@ -501,7 +501,7 @@ export default function DashboardPage() {
         <div className="pk-kpi-card p-5 sm:p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xs transition-all hover:shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-              Total Students Assessed
+              Learners on roster
             </span>
             <span className="p-2.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-xl">
               <Users className="w-5 h-5" />
@@ -516,7 +516,7 @@ export default function DashboardPage() {
             </span>
           </div>
           <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-            Enrolled across {aggregateMetrics.totalSections} class sections
+            {aggregateMetrics.totalSections ? `Enrolled across ${aggregateMetrics.totalSections} class sections` : 'No section data available'}
           </p>
         </div>
 
@@ -524,7 +524,7 @@ export default function DashboardPage() {
         <div className="pk-kpi-card p-5 sm:p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xs transition-all hover:shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-              At-Risk Learners
+              Scans below 75%
             </span>
             <span className="p-2.5 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-xl">
               <AlertTriangle className="w-5 h-5" />
