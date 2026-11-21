@@ -48,7 +48,6 @@ export function TosViewModal({
   const [isExportingWord, setIsExportingWord] = useState(false);
   const [mobileCardView, setMobileCardView] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
-  useDialogAccessibility(dialogRef, isOpen && Boolean(tos && calcResult), onClose);
 
   // Compute live deterministic TOS allocation table
   const calcResult = useMemo(() => {
@@ -68,6 +67,8 @@ export function TosViewModal({
       examType: tos.exam_type || 'Summative Test 1',
     });
   }, [tos]);
+
+  useDialogAccessibility(dialogRef, isOpen && Boolean(tos && calcResult), onClose);
 
   if (!isOpen || !tos || !calcResult) return null;
 
