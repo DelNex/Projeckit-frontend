@@ -248,7 +248,7 @@ test('Groq retry delay respects Retry-After and applies bounded exponential back
 
 test('OpenRouter adapter sends the OpenAI-compatible structured-output request', async () => {
   resetExamProviderCooldownsForTests();
-  const names = ['OPENROUTER_API_KEY', 'OPENROUTER_MODEL', 'AI_PROVIDER_ORDER'];
+  const names = ['OPENROUTER_API_KEY', 'OPENROUTER_MODEL', 'OPENROUTER_MAX_TOKENS', 'AI_PROVIDER_ORDER'];
   const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   const originalFetch = global.fetch;
   const schema = { type: 'object', properties: { questions: { type: 'array' } }, required: ['questions'] };
@@ -264,7 +264,7 @@ test('OpenRouter adapter sends the OpenAI-compatible structured-output request',
       assert.equal(headers.get('x-title'), 'Project KIT');
       const body = JSON.parse(String(init?.body));
       assert.equal(body.model, 'openrouter/free');
-      assert.equal(body.max_tokens, 8192);
+      assert.equal(body.max_tokens, 16384);
       assert.equal(body.max_completion_tokens, undefined);
       assert.deepEqual(body.provider, { require_parameters: true, allow_fallbacks: true });
       assert.equal(body.reasoning, undefined);
@@ -395,14 +395,22 @@ test('OpenRouter empty completion records finish reason and request ID before fa
     process.env.AI_PROVIDER_ORDER = 'openrouter';
     global.fetch = (async () => new Response(JSON.stringify({
       id: 'gen-empty-123',
+      model: 'provider/free-reasoning-model',
+      usage: { completion_tokens: 8192, completion_tokens_details: { reasoning_tokens: 8192 } },
       choices: [{ finish_reason: 'length', message: { content: null, reasoning: 'internal reasoning' } }],
     }), { status: 200, headers: { 'content-type': 'application/json', 'x-request-id': 'req-empty-123' } })) as typeof fetch;
     const { requestExamQuestionsFromProviders } = await import('../exam-ai-provider-router');
     await assert.rejects(
       requestExamQuestionsFromProviders([{ role: 'user', content: 'Return JSON questions.' }], { type: 'object' }),
-      (error: any) => error.retryable === true
+      (error: any) => error.retryable === false
+        && error.reasoningBudgetExhausted === true
+        && error.completionMeta?.requestedModel === 'openrouter/free'
+        && error.completionMeta?.returnedModel === 'provider/free-reasoning-model'
+        && error.completionMeta?.completionTokens === 8192
+        && error.completionMeta?.reasoningTokens === 8192
         && /finish=length/.test(error.message)
-        && /req-empty-123/.test(error.message),
+        && /req-empty-123/.test(error.message)
+        && /Increase OPENROUTER_MAX_TOKENS/.test(error.message),
     );
   } finally {
     global.fetch = originalFetch;
