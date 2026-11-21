@@ -78,6 +78,20 @@ function AssessmentsContent() {
   // Link TOS Modal State for legacy assessments
   const [linkTosModal, setLinkTosModal] = useState<{
     isOpen: boolean;
+  useEffect(() => {
+    if (!isCreateModalOpen && !linkTosModal.isOpen) return;
+    const handleDialogEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (linkTosModal.isOpen) {
+        setLinkTosModal((current) => ({ ...current, isOpen: false }));
+      } else {
+        setIsCreateModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleDialogEscape);
+    return () => window.removeEventListener('keydown', handleDialogEscape);
+  }, [isCreateModalOpen, linkTosModal.isOpen]);
+
     assessment: AssessmentRecord | null;
     selectedTosId: string;
     saving: boolean;
