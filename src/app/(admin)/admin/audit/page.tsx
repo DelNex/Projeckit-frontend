@@ -3,6 +3,7 @@
 import { ColumnDef, DataTable } from '@/components/ui/data-table';
 import { createClient } from '@/lib/supabase/client';
 import { RefreshCw } from 'lucide-react';
+import { OmrBubble } from '@/components/ui/OmrBubble';
 import { useEffect, useMemo, useState } from 'react';
 
 interface AuditLogRecord {
@@ -75,8 +76,13 @@ export default function AuditLogsPage() {
         accessorKey: 'action',
         header: 'Action Type',
         cell: ({ row }) => (
-          <span className="font-mono font-bold text-gray-900 dark:text-white">
-            {row.getValue('action')}
+          <span className="inline-flex min-w-0 items-center gap-2 font-mono text-xs text-gray-900 dark:text-white">
+            <OmrBubble
+              selected
+              size={8}
+              tone={String(row.getValue('action')).toLowerCase().match(/fail|denied|delete|reject/) ? 'danger' : String(row.getValue('action')).toLowerCase().match(/approv|success|created/) ? 'success' : 'muted'}
+            />
+            <span className="break-words">{row.getValue('action')}</span>
           </span>
         ),
       },
@@ -161,7 +167,7 @@ export default function AuditLogsPage() {
         columns={columns}
         data={logs}
         searchKey="action"
-        searchPlaceholder="Search audit action..."
+        searchPlaceholder="Search"
         loading={loading}
         emptyTitle="Audit Log is Clean"
         emptyDescription="No security alerts or audit events recorded yet. Authentication, tenant changes, and user sign-offs will be tracked here in real-time."
