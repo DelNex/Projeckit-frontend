@@ -142,6 +142,12 @@ async function requestProvider(provider: ProviderConfig, messages: Array<{ role:
     });
   } else {
     const isGroq = provider.id === 'groq';
+    const configuredServiceTier = process.env.GROQ_SERVICE_TIER?.trim();
+    // "auto" is not available to every Groq organization; omit it and let
+    // Groq select the account's default tier instead of failing every request.
+    const groqServiceTier = configuredServiceTier && configuredServiceTier.toLowerCase() !== 'auto'
+      ? configuredServiceTier
+      : undefined;
     response = await fetch(isGroq ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -157,8 +163,12 @@ async function requestProvider(provider: ProviderConfig, messages: Array<{ role:
           provider: { require_parameters: true },
           reasoning: { effort: 'low' },
         }),
-        ...(isGroq && process.env.GROQ_SERVICE_TIER?.trim() ? { service_tier: process.env.GROQ_SERVICE_TIER.trim() } : {}),
-        response_format: { type: 'json_schema', json_schema: { name: 'project_kit_exam_questions', strict: true, schema } },
+        ...(isGroq && groqServiceTier ? { service_tier: groqServiceTier } : {}),
+        // Groq JSON mode is more compatible across organization/model tiers.
+        // The application still enforces QUESTION_SCHEMA during finalization.
+        response_format: isGroq
+          ? { type: 'json_object' }
+          : { type: 'json_schema', json_schema: { name: 'project_kit_exam_questions', strict: true, schema } },
       }),
       signal: timeout, cache: 'no-store',
     });

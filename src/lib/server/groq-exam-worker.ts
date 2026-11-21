@@ -6,8 +6,6 @@ import type { TosBlueprintSlot } from '@/lib/exam-types';
 import { requestExamQuestionsFromProviders } from './exam-ai-provider-router';
 import { logSystemEvent } from './system-logger';
 
-const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
-const DEFAULT_MODEL = 'openai/gpt-oss-120b';
 const MAX_LESSON_CHARS = 900_000;
 const WORKER_ID = 'project-kit-groq-worker';
 
@@ -24,6 +22,16 @@ export function splitExamSlotsIntoBatches<T>(slots: readonly T[]): T[][] {
     batches.push(slots.slice(offset, offset + batchSize));
   }
   return batches;
+}
+
+/** A batch is checkpointed only when every requested item has exactly one saved response. */
+export function isExamBatchComplete(
+  batch: readonly { item_number: number }[],
+  questions: readonly { item_number?: number }[],
+): boolean {
+  return batch.every((slot) =>
+    questions.filter((question) => Number(question?.item_number) === Number(slot.item_number)).length === 1
+  );
 }
 
 /** Respect provider Retry-After while bounding queued retries to 15 minutes. */
@@ -272,6 +280,7 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
   if (!claimed) return; // Another worker, a cancellation, or a completed job won the race.
 
   const payload = claimed.payload || {};
+  let checkpointPayload = payload;
   try {
     const sourceDocuments = payload.sourceManifest
       ? await readCompressedLessonDocuments(admin, payload.sourceManifest, claimed.created_by)
@@ -285,11 +294,13 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
     // Adapt the batch size to exam size: one request for small exams, then
     // larger batches for longer exams to control response size and retries.
     const batches = splitExamSlotsIntoBatches(slots);
-    const batchSize = getExamBatchSize(slots.length);
 
-    const generatedQuestions: any[] = [];
+    // Keep successful batches in the durable job payload. A later provider
+    // failure can then resume without paying to regenerate completed questions.
+    const generatedQuestions: any[] = Array.isArray(payload.partialQuestions) ? [...payload.partialQuestions] : [];
     for (let index = 0; index < batches.length; index++) {
       const batchSlots = batches[index];
+      if (isExamBatchComplete(batchSlots, generatedQuestions)) continue;
       const batchPayload = {
         ...generationPayload,
         slots: batchSlots,
@@ -299,13 +310,17 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
       const responseText = await requestGroqQuestions(batchPayload, jobDeadline);
       const batchQuestions = JSON.parse(responseText);
       if (!Array.isArray(batchQuestions)) throw new Error('Groq returned an invalid question batch.');
-      generatedQuestions.push(...batchQuestions);
+      const batchItemNumbers = new Set(batchSlots.map((slot) => Number(slot.item_number)));
+      const retainedQuestions = generatedQuestions.filter((question) => !batchItemNumbers.has(Number(question?.item_number)));
+      generatedQuestions.splice(0, generatedQuestions.length, ...retainedQuestions, ...batchQuestions);
 
+      checkpointPayload = { ...payload, partialQuestions: generatedQuestions };
       const { data: progressUpdate, error: progressError } = await admin.from('exam_generation_jobs').update({
+        payload: checkpointPayload,
         progress: {
           stage: 'generating',
-          label: `Generated ${Math.min((index + 1) * batchSize, slots.length)} of ${slots.length} questions`,
-          completedChunks: index + 1,
+          label: `Generated ${generatedQuestions.length} of ${slots.length} questions`,
+          completedChunks: batches.filter((batch) => isExamBatchComplete(batch, generatedQuestions)).length,
           totalChunks: batches.length,
         },
         lease_expires_at: new Date(Date.now() + 75_000).toISOString(),
@@ -353,7 +368,7 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
         },
         finished_at: null,
         updated_at: new Date(now).toISOString(),
-        payload,
+        payload: checkpointPayload,
         claimed_by: null,
         // A queued job with a future lease timestamp is not eligible for claim.
         lease_expires_at: retryAt,

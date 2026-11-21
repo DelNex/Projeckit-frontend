@@ -4,6 +4,7 @@ import {
   buildGroqMessages,
   chooseNextExamJobs,
   getExamBatchSize,
+  isExamBatchComplete,
   splitExamSlotsIntoBatches,
 } from '../groq-exam-worker';
 
@@ -22,6 +23,13 @@ test('splits slots without dropping, reordering, or duplicating item positions',
   const batches = splitExamSlotsIntoBatches(slots);
   assert.deepEqual(batches.map((batch) => batch.length), [30, 30, 30]);
   assert.deepEqual(batches.flat().map((slot) => slot.item_number), slots.map((slot) => slot.item_number));
+});
+
+test('recognizes only fully checkpointed batches with one response per item', () => {
+  const batch = [{ item_number: 1 }, { item_number: 2 }];
+  assert.equal(isExamBatchComplete(batch, [{ item_number: 1 }, { item_number: 2 }]), true);
+  assert.equal(isExamBatchComplete(batch, [{ item_number: 1 }]), false);
+  assert.equal(isExamBatchComplete(batch, [{ item_number: 1 }, { item_number: 2 }, { item_number: 2 }]), false);
 });
 
 test('uses uploaded lesson text as reference data, not as instructions', () => {
