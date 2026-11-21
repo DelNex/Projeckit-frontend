@@ -410,7 +410,7 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
         progress: {
           stage: 'failed',
           label: 'We could not finish generating this exam because the AI providers did not complete the request.',
-          ...(status === 429 ? { providerStatus: 429, providerRetryAt, retryAfterMs: providerRetryDelayMs, rateLimit: providerError.rateLimit || null } : {}),
+          ...(providerRetryDelayMs ? { providerStatus: status, providerRetryAt, retryAfterMs: providerRetryDelayMs, ...(status === 429 ? { rateLimit: providerError.rateLimit || null } : {}) } : {}),
         },
         error: message.slice(0, 500),
         finished_at: new Date().toISOString(),
