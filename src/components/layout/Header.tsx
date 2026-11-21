@@ -49,12 +49,12 @@ export function Header({ onToggleSidebar, sidebarOpen = false, title }: HeaderPr
 
   const initial = userDisplayName ? userDisplayName.charAt(0).toUpperCase() : 'U';
   const routeTitle = ({
-    '/dashboard': 'School dashboard',
+    '/dashboard': 'Home',
     '/tos': 'Table of Specifications',
     '/assessments': 'Item Analysis',
     '/reports': 'Print & Reports',
     '/students': 'Learners',
-    '/analytics': 'Performance and reports',
+    '/analytics': 'Results',
     '/settings/school': 'School settings',
     '/settings/profile': 'Profile settings',
     '/admin': 'Administration',
@@ -77,7 +77,7 @@ export function Header({ onToggleSidebar, sidebarOpen = false, title }: HeaderPr
         <div className="flex min-w-0 items-center gap-2 sm:gap-4">
           <button type="button"
             onClick={onToggleSidebar}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-100 lg:hidden dark:border-gray-800 dark:text-gray-400 dark:hover:bg-gray-800"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100 lg:hidden dark:border-gray-800 dark:text-gray-400 dark:hover:bg-gray-800"
             aria-label="Toggle Navigation"
             aria-expanded={sidebarOpen}
             aria-controls="app-sidebar"
@@ -98,11 +98,11 @@ export function Header({ onToggleSidebar, sidebarOpen = false, title }: HeaderPr
           {/* AI Copilot Launcher Button */}
           <button type="button"
             onClick={() => setIsAiModalOpen(true)}
-            className="pk-ai-launcher relative flex h-10 items-center gap-1.5 rounded-lg px-2.5 sm:px-3 text-xs font-semibold transition"
+            className="pk-ai-launcher relative flex h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition"
             title="Open AI Copilot (Ctrl + J)"
           >
             <Bot className="h-4 w-4" />
-            <span className="hidden sm:inline">AI Copilot</span>
+            <span className="hidden sm:inline">Copilot</span>
             <kbd className="hidden lg:inline-flex rounded bg-blue-100/70 px-1.5 py-0.5 text-[9px] font-mono text-blue-600 dark:bg-blue-900/60 dark:text-blue-300">
               Ctrl+J
             </kbd>
@@ -117,7 +117,7 @@ export function Header({ onToggleSidebar, sidebarOpen = false, title }: HeaderPr
               onClick={() => setDropdownOpen(!dropdownOpen)}
               aria-expanded={dropdownOpen}
               aria-haspopup="menu"
-              className="pk-profile-trigger flex min-h-10 items-center gap-1.5 sm:gap-2.5 rounded-lg border border-slate-200 bg-white p-1 sm:p-1.5 sm:pr-3 hover:bg-slate-50 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800"
+              className="pk-profile-trigger flex min-h-11 items-center gap-1.5 sm:gap-2.5 rounded-lg border border-slate-200 bg-white p-1 sm:p-1.5 sm:pr-3 hover:bg-slate-50 dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800"
             >
               <div className="pk-avatar flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-lg text-xs font-bold">
                 {initial}
