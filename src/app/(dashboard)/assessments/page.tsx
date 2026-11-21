@@ -710,8 +710,8 @@ function AssessmentsContent() {
 
       {/* New Assessment Modal Dialog */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-lg rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-gray-900 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-xs sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="create-assessment-title">
+          <div className="h-[100dvh] max-h-[100dvh] w-full overflow-y-auto overscroll-contain rounded-none border border-gray-200 bg-white p-4 shadow-2xl dark:border-gray-800 dark:bg-gray-900 sm:h-auto sm:max-h-[90dvh] sm:max-w-lg sm:rounded-3xl sm:p-6">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3 dark:border-gray-800">
               <h3 className="text-base font-bold text-gray-900 dark:text-white">
                 Create New Assessment
@@ -942,8 +942,8 @@ function AssessmentsContent() {
 
       {/* Link TOS Modal Dialog for unlinked assessments */}
       {linkTosModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-gray-900 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-xs sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="link-tos-title">
+          <div className="max-h-[92dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-3xl border border-gray-200 bg-white p-4 shadow-2xl dark:border-gray-800 dark:bg-gray-900 sm:rounded-3xl sm:p-6 space-y-4">
             <div className="border-b border-gray-100 dark:border-gray-800 pb-3">
               <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
                 <Link2 className="h-5 w-5 text-blue-600" />
