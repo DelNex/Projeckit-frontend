@@ -871,6 +871,32 @@ body { background: var(--pk-canvas); color: var(--pk-ink); }
   --color-gray-600: #b0b5bb; --color-gray-700: #c4c8cd; --color-gray-800: #d5d8dc;
   --color-gray-900: #f0f1f2; --color-gray-950: #fafafa;
 }
+/* Keep dark background utilities dark even when text ramps are remapped for contrast. */
+.dark [class*="dark:bg-gray-600"],
+.dark [class*="dark:bg-gray-700"],
+.dark [class*="dark:bg-slate-600"],
+.dark [class*="dark:bg-slate-700"] {
+  background-color: var(--pk-raised) !important;
+}
+.dark [class*="dark:bg-gray-800"],
+.dark [class*="dark:bg-slate-800"] {
+  background-color: var(--pk-surface-muted) !important;
+}
+.dark [class*="dark:bg-gray-900"],
+.dark [class*="dark:bg-slate-900"] {
+  background-color: var(--pk-surface) !important;
+}
+.dark [class*="dark:bg-gray-950"],
+.dark [class*="dark:bg-slate-950"] {
+  background-color: var(--pk-canvas) !important;
+}
+.dark [class*="dark:border-gray-700"],
+.dark [class*="dark:border-gray-800"],
+.dark [class*="dark:border-slate-700"],
+.dark [class*="dark:border-slate-800"] {
+  border-color: var(--pk-line) !important;
+}
+
 .pk-shell, .pk-main, .pk-auth { color: var(--pk-ink); }
 .pk-shell { background: var(--pk-canvas); }
 .pk-main { background: var(--pk-canvas); }
