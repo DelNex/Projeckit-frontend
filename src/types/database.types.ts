@@ -1553,6 +1553,27 @@ export type Database = {
           saved_updated_at: string
         }[]
       }
+      finalize_exam_generation_job: {
+        Args: {
+          p_error_message?: string | null
+          p_exam_status: string
+          p_job_id: string
+          p_job_status: string
+          p_questions: Json
+          p_result_summary: Json
+          p_root_job_id: string
+          p_tenant_id: string
+          p_tos_id: string
+        }
+        Returns: boolean
+      }
+      cancel_exam_generation_job: {
+        Args: {
+          p_job_id: string
+          p_tenant_id: string
+        }
+        Returns: boolean
+      }
       save_generated_exam_questions: {
         Args: {
           p_exam_status?: string

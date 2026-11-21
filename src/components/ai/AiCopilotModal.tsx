@@ -202,7 +202,7 @@ export function AiCopilotModal({
       abortControllerRef.current?.abort();
       setIsStreaming(false);
       setMessages((current) => current.map((message) => message.status === 'streaming'
-        ? { ...message, content: message.content ? `${message.content}\n\nGeneration stopped.` : 'Generation stopped.', status: 'complete' }
+        ? { ...message, content: message.content ? `${message.content}\n\nStopped receiving the response. Any action already in progress may still finish.` : 'Stopped receiving the response. Any action already in progress may still finish.', status: 'complete' }
         : message));
       activeAssistantMessageIdRef.current = null;
       previousFocus?.focus();
@@ -280,64 +280,27 @@ export function AiCopilotModal({
             )
           );
         },
-        onError: async (streamErr) => {
-          if (abortController.signal.aborted) return;
-          console.warn('Streaming error, falling back to chat POST:', streamErr);
-          // Fallback to standard chat endpoint if stream failed
-          try {
-            const fallbackRes = await api.ai.chat(payload);
-            const reply = fallbackRes?.reply || fallbackRes?.message || 'I processed your request.';
-            setMessages((prev) =>
-              prev.map((msg) =>
-                msg.id === assistantMsgId ? { ...msg, content: reply, status: 'complete' } : msg
-              )
-            );
-          } catch (chatErr: any) {
-            setMessages((prev) =>
-              prev.map((msg) =>
-                msg.id === assistantMsgId
-                  ? {
-                      ...msg,
-                      content: `I encountered an error communicating with the AI service: ${chatErr?.message || 'Server unavailable'}. Please verify backend connection.`,
-                      status: 'error',
-                    }
-                  : msg
-              )
-            );
-          } finally {
-            activeAssistantMessageIdRef.current = null;
-            setIsStreaming(false);
-          }
-        },
       });
     } catch (err: any) {
       if (err?.name === 'AbortError' || abortController.signal.aborted) return;
 
-      // Direct fallback call
-      try {
-        const fallbackRes = await api.ai.chat(payload);
-        const reply = fallbackRes?.reply || fallbackRes?.message || 'I processed your request.';
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantMsgId ? { ...msg, content: reply, status: 'complete' } : msg
-          )
-        );
-      } catch (chatErr: any) {
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantMsgId
-              ? {
-                  ...msg,
-                  content: `I encountered an issue: ${chatErr?.message || 'AI service offline'}. Please ensure the Project KIT backend is running on port 4000.`,
-                  status: 'error',
-                }
-              : msg
-          )
-        );
-      } finally {
-        activeAssistantMessageIdRef.current = null;
-        setIsStreaming(false);
-      }
+      // Never replay a failed stream through chat: the server may already have
+      // completed a tool action before the connection was interrupted.
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMsgId
+            ? {
+                ...msg,
+                content: accumulatedResponse
+                  ? `${accumulatedResponse}\n\nI couldn't finish receiving the response. Your request may already have been processed, so I did not send it again. Check the current page before retrying.`
+                  : 'I could not receive the AI response. Your request may already have been processed, so I did not send it again. Check the current page before retrying.',
+                status: 'error',
+              }
+            : msg
+        )
+      );
+      activeAssistantMessageIdRef.current = null;
+      setIsStreaming(false);
     }
   };
 
@@ -345,7 +308,7 @@ export function AiCopilotModal({
     abortControllerRef.current?.abort();
     const activeId = activeAssistantMessageIdRef.current;
     if (activeId) setMessages((prev) => prev.map((message) => message.id === activeId
-      ? { ...message, content: message.content ? `${message.content}\n\nGeneration stopped.` : 'Generation stopped.', status: 'complete' }
+      ? { ...message, content: message.content ? `${message.content}\n\nStopped receiving the response. Any action already in progress may still finish.` : 'Stopped receiving the response. Any action already in progress may still finish.', status: 'complete' }
       : message));
     activeAssistantMessageIdRef.current = null;
     setIsStreaming(false);
