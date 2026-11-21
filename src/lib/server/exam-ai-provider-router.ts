@@ -76,7 +76,7 @@ function parseQuestionContent(raw: unknown): string {
   return JSON.stringify(questions);
 }
 
-async function readProviderResponse(response: Response, provider: ProviderId): Promise<string> {
+async function readProviderResponse(response: Response, provider: ProviderId, requestedModel?: string): Promise<string> {
   const body: any = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 429) {
@@ -86,6 +86,9 @@ async function readProviderResponse(response: Response, provider: ProviderId): P
       cooldownUntil.set(provider, Date.now() + AUTH_COOLDOWN_MS);
     }
     const detail = String(body?.error?.message || body?.message || body?.errors?.[0]?.message || 'Provider request failed').slice(0, 180);
+    const providerErrorCode = body?.error?.code || body?.error?.type || body?.code || null;
+    const hasFailedGeneration = Boolean(body?.error?.failed_generation || body?.failed_generation);
+    const providerRequestId = response.headers.get('x-request-id') || response.headers.get('x-generation-id') || response.headers.get('cf-ray');
     const rateLimit = response.status === 429 ? {
       limitTokens: response.headers.get('x-ratelimit-limit-tokens'),
       remainingTokens: response.headers.get('x-ratelimit-remaining-tokens'),
@@ -98,21 +101,87 @@ async function readProviderResponse(response: Response, provider: ProviderId): P
       retryAfterMs: response.status === 429 || (response.status >= 500 && response.headers.has('retry-after'))
         ? parseRetryAfter(response.headers.get('retry-after')) : null,
       rateLimit,
+      providerErrorCode,
+      hasFailedGeneration,
+      providerRequestId,
     });
   }
 
   let content: unknown;
+  let completionMeta: Record<string, unknown> = {};
   if (provider === 'gemini') {
-    content = body?.candidates?.[0]?.content?.parts?.map((part: any) => part.text || '').join('');
-    if (!content && body?.promptFeedback?.blockReason) throw new Error('Gemini blocked this request.');
+    const candidate = body?.candidates?.[0];
+    content = candidate?.content?.parts?.map((part: any) => part.text || '').join('');
+    completionMeta = {
+      finishReason: candidate?.finishReason || null,
+      promptBlockReason: body?.promptFeedback?.blockReason || null,
+    };
+    if (!content && body?.promptFeedback?.blockReason) {
+      throw Object.assign(new Error(`Gemini blocked this request (${body.promptFeedback.blockReason}).`), { retryable: false });
+    }
   } else if (provider === 'cloudflare') {
     content = body?.result?.response ?? body?.result?.output ?? body?.response;
   } else {
-    content = body?.choices?.[0]?.message?.content;
+    const choice = body?.choices?.[0];
+    const message = choice?.message;
+    content = message?.content;
+    const completionTokens = Number.isFinite(Number(body?.usage?.completion_tokens))
+      ? Number(body.usage.completion_tokens) : null;
+    const reasoningTokens = Number.isFinite(Number(body?.usage?.completion_tokens_details?.reasoning_tokens))
+      ? Number(body.usage.completion_tokens_details.reasoning_tokens) : null;
+    const visibleCompletionTokens = completionTokens !== null && reasoningTokens !== null
+      ? Math.max(0, completionTokens - reasoningTokens) : null;
+    completionMeta = {
+      finishReason: choice?.finish_reason || null,
+      nativeFinishReason: choice?.native_finish_reason || null,
+      refusal: Boolean(message?.refusal),
+      hasReasoningOnly: !message?.content && Boolean(message?.reasoning || message?.reasoning_content),
+      requestedModel: provider === 'openrouter' ? requestedModel || null : null,
+      returnedModel: body?.model || null,
+      completionTokens,
+      reasoningTokens,
+      visibleCompletionTokens,
+    };
+    if (!content && message?.refusal) {
+      throw Object.assign(new Error(`${provider} refused the exam-generation request.`), { retryable: false });
+    }
   }
   if (Array.isArray(content)) content = content.map((part: any) => part.text || '').join('');
   if (content && typeof content === 'object' && !Array.isArray(content)) content = JSON.stringify(content);
-  return parseQuestionContent(content);
+  try {
+    return parseQuestionContent(content);
+  } catch (error) {
+    const requestId = response.headers.get('x-request-id')
+      || response.headers.get('x-openrouter-generation-id')
+      || response.headers.get('cf-ray');
+    const detail = error instanceof Error ? error.message : 'Provider response could not be parsed.';
+    const completionTokens = completionMeta.completionTokens;
+    const reasoningTokens = completionMeta.reasoningTokens;
+    const visibleCompletionTokens = completionMeta.visibleCompletionTokens;
+    // OpenRouter documents that a reasoning model can consume the complete
+    // max_tokens budget and return finish_reason=length with no visible text.
+    // Repeating the same dynamic-router request does not fix that condition.
+    const reasoningBudgetExhausted = provider === 'openrouter'
+      && completionMeta.finishReason === 'length'
+      && typeof completionTokens === 'number'
+      && completionTokens > 0
+      && typeof reasoningTokens === 'number'
+      && reasoningTokens >= completionTokens * 0.9
+      && typeof visibleCompletionTokens === 'number'
+      && visibleCompletionTokens <= Math.max(32, completionTokens * 0.1);
+    const budgetDetail = reasoningBudgetExhausted
+      ? ` Reasoning used ${reasoningTokens}/${completionTokens} completion tokens; visible tokens=${visibleCompletionTokens}. Increase OPENROUTER_MAX_TOKENS or use a pinned non-reasoning model.`
+      : '';
+    throw Object.assign(new Error(
+      `${provider} returned an unusable completion: ${detail} (finish=${String(completionMeta.finishReason || 'unknown')}, request=${requestId || 'unavailable'}, model=${String(completionMeta.returnedModel || requestedModel || 'unknown')})${budgetDetail}`
+    ), {
+      status: null,
+      retryable: !reasoningBudgetExhausted,
+      reasoningBudgetExhausted,
+      providerRequestId: requestId,
+      completionMeta,
+    });
+  }
 }
 
 async function requestProvider(provider: ProviderConfig, messages: Array<{ role: string; content: string }>, schema: Record<string, unknown>, timeoutMs: number): Promise<string> {
@@ -159,21 +228,24 @@ async function requestProvider(provider: ProviderConfig, messages: Array<{ role:
         messages,
         temperature: 0.2,
         ...(isGroq ? { max_completion_tokens: 8192, reasoning_effort: 'low' } : {
-          max_tokens: 8192,
-          provider: { require_parameters: true },
-          reasoning: { effort: 'low' },
+          max_tokens: Math.max(8_192, Math.min(32_768, Math.floor(Number(process.env.OPENROUTER_MAX_TOKENS) || 16_384))),
+          provider: { require_parameters: true, allow_fallbacks: true },
         }),
         ...(isGroq && groqServiceTier ? { service_tier: groqServiceTier } : {}),
-        // Groq JSON mode is more compatible across organization/model tiers.
-        // The application still enforces QUESTION_SCHEMA during finalization.
+        // GPT-OSS 20B/120B support Groq strict structured outputs. This
+        // prevents malformed JSON from becoming a provider-side HTTP 400.
+        // Keep JSON mode for custom Groq models outside the documented allowlist.
         response_format: isGroq
-          ? { type: 'json_object' }
-          : { type: 'json_schema', json_schema: { name: 'project_kit_exam_questions', strict: true, schema } },
+          ? (['openai/gpt-oss-20b', 'openai/gpt-oss-120b'].includes(provider.model.toLowerCase())
+            ? { type: 'json_schema', json_schema: { name: 'project_kit_exam_questions', strict: true, schema } }
+            : { type: 'json_object' })
+          : { type: 'json_object' },
+        ...(provider.id === 'openrouter' ? { plugins: [{ id: 'response-healing' }] } : {}),
       }),
       signal: timeout, cache: 'no-store',
     });
   }
-  return readProviderResponse(response, provider.id);
+  return readProviderResponse(response, provider.id, provider.model);
 }
 
 /** Uses only explicitly configured provider credentials; never rotates identities or bypasses provider quotas. */
@@ -195,6 +267,8 @@ export async function requestExamQuestionsFromProviders(
   let lastStatus: number | null = null;
   let retryableFailure: { status: number | null; retryAfterMs: number | null; rateLimit: Record<string, string | null> | null } | null = null;
   let lastRateLimit: Record<string, string | null> | null = null;
+  let reasoningBudgetExhaustedFailure = false;
+  let lastCompletionMeta: Record<string, unknown> | null = null;
   // The caller is a 60-second Next.js route. Keep provider failover inside a
   // 50-second budget so the job lease can be renewed/finalized safely.
   const totalSetting = Number(process.env.AI_PROVIDER_TOTAL_TIMEOUT_MS || 50_000);
@@ -228,9 +302,18 @@ export async function requestExamQuestionsFromProviders(
       const status = Number((error as Error & { status?: number }).status) || null;
       const retryAfterMs = Number((error as Error & { retryAfterMs?: number }).retryAfterMs) || null;
       const rateLimit = (error as Error & { rateLimit?: Record<string, string | null> }).rateLimit || null;
-      const retryable = Boolean((error as Error & { retryable?: boolean }).retryable)
+      const providerRequestId = (error as Error & { providerRequestId?: string | null }).providerRequestId || null;
+      const completionMeta = (error as Error & { completionMeta?: Record<string, unknown> }).completionMeta || null;
+      const providerErrorCode = (error as Error & { providerErrorCode?: string | null }).providerErrorCode || null;
+      const hasFailedGeneration = Boolean((error as Error & { hasFailedGeneration?: boolean }).hasFailedGeneration);
+      const reasoningBudgetExhausted = Boolean((error as Error & { reasoningBudgetExhausted?: boolean }).reasoningBudgetExhausted);
+      if (reasoningBudgetExhausted) reasoningBudgetExhaustedFailure = true;
+      if (completionMeta) lastCompletionMeta = completionMeta;
+      const retryable = !reasoningBudgetExhausted && (
+        Boolean((error as Error & { retryable?: boolean }).retryable)
         || error instanceof SyntaxError
-        || /timeout|fetch failed|network|returned no questions|returned an empty response body/i.test(message);
+        || /timeout|fetch failed|network|returned no questions|returned an empty response body/i.test(message)
+      );
       lastStatus = status;
       lastRateLimit = rateLimit;
       if (retryable) {
@@ -242,13 +325,13 @@ export async function requestExamQuestionsFromProviders(
           retryableFailure = nextFailure;
         }
       }
-      const safeDetail = message.replace(/\s+/g, ' ').slice(0, 180);
+      const safeDetail = message.replace(/\s+/g, ' ').slice(0, 320);
       failures.push(`${provider.id}${status ? ` HTTP ${status}` : ''}: ${safeDetail}`);
       await logSystemEvent({
         severity: retryable ? 'warn' : 'error', source: 'exam.provider-router',
         code: status === 429 ? 'AI_PROVIDER_RATE_LIMITED' : status ? 'AI_PROVIDER_HTTP_ERROR' : 'AI_PROVIDER_REQUEST_FAILED',
         message: 'An AI provider could not complete an exam batch.',
-        metadata: { provider: provider.id, status, retryable, detail: safeDetail, attempt: failures.length },
+        metadata: { provider: provider.id, model: provider.model, status, retryable, detail: safeDetail, attempt: failures.length, providerRequestId, providerErrorCode, hasFailedGeneration, completionMeta },
       });
       // Continue to the next configured provider even for provider-specific 4xx
       // errors. One model may reject a schema or credential while another works.
@@ -261,6 +344,8 @@ export async function requestExamQuestionsFromProviders(
       retryable: Boolean(retryableFailure),
       retryAfterMs: retryableFailure?.retryAfterMs ?? null,
       rateLimit: retryableFailure?.rateLimit ?? lastRateLimit,
+      reasoningBudgetExhausted: reasoningBudgetExhaustedFailure,
+      completionMeta: lastCompletionMeta,
     },
   );
 }

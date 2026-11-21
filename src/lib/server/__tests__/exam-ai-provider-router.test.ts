@@ -150,7 +150,9 @@ test('Groq adapter uses the configured chat endpoint and parses structured quest
       assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer test-groq-key');
       const body = JSON.parse(String(init?.body));
       assert.equal(body.model, 'openai/gpt-oss-120b');
-      assert.equal(body.response_format.type, 'json_object');
+      assert.equal(body.response_format.type, 'json_schema');
+      assert.equal(body.response_format.json_schema.strict, true);
+      assert.equal(body.response_format.json_schema.name, 'project_kit_exam_questions');
       assert.equal(body.service_tier, undefined);
       return new Response(JSON.stringify({
         choices: [{ message: { content: JSON.stringify({ questions: [{ item_number: 1 }] }) } }],
@@ -238,19 +240,22 @@ test('Groq retry delay respects Retry-After and applies bounded exponential back
   assert.equal(getExamProviderRetryDelayMs(null, 1), 5_000);
   assert.equal(getExamProviderRetryDelayMs(null, 2), 15_000);
   assert.equal(getExamProviderRetryDelayMs(null, 3), 30_000);
+  assert.equal(getExamProviderRetryDelayMs(null, 4), 60_000);
+  assert.equal(getExamProviderRetryDelayMs(null, 5), 120_000);
   assert.equal(getExamProviderRetryDelayMs(60 * 60_000, 1), 15 * 60_000);
 });
 
 
 test('OpenRouter adapter sends the OpenAI-compatible structured-output request', async () => {
   resetExamProviderCooldownsForTests();
-  const names = ['OPENROUTER_API_KEY', 'OPENROUTER_MODEL', 'AI_PROVIDER_ORDER'];
+  const names = ['OPENROUTER_API_KEY', 'OPENROUTER_MODEL', 'OPENROUTER_MAX_TOKENS', 'AI_PROVIDER_ORDER'];
   const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   const originalFetch = global.fetch;
   const schema = { type: 'object', properties: { questions: { type: 'array' } }, required: ['questions'] };
   try {
     process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
     process.env.OPENROUTER_MODEL = 'openrouter/free';
+    delete process.env.OPENROUTER_MAX_TOKENS;
     process.env.AI_PROVIDER_ORDER = 'openrouter';
     global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       assert.equal(String(input), 'https://openrouter.ai/api/v1/chat/completions');
@@ -260,12 +265,12 @@ test('OpenRouter adapter sends the OpenAI-compatible structured-output request',
       assert.equal(headers.get('x-title'), 'Project KIT');
       const body = JSON.parse(String(init?.body));
       assert.equal(body.model, 'openrouter/free');
-      assert.equal(body.max_tokens, 8192);
+      assert.equal(body.max_tokens, 16384);
       assert.equal(body.max_completion_tokens, undefined);
-      assert.deepEqual(body.provider, { require_parameters: true });
-      assert.deepEqual(body.reasoning, { effort: 'low' });
-      assert.equal(body.response_format.type, 'json_schema');
-      assert.deepEqual(body.response_format.json_schema.schema, schema);
+      assert.deepEqual(body.provider, { require_parameters: true, allow_fallbacks: true });
+      assert.equal(body.reasoning, undefined);
+      assert.equal(body.response_format.type, 'json_object');
+      assert.deepEqual(body.plugins, [{ id: 'response-healing' }]);
       return new Response(JSON.stringify({
         choices: [{ message: { content: JSON.stringify({ questions: [{ item_number: 3 }] }) } }],
       }), { status: 200, headers: { 'content-type': 'application/json' } });
@@ -273,6 +278,34 @@ test('OpenRouter adapter sends the OpenAI-compatible structured-output request',
     const { requestExamQuestionsFromProviders } = await import('../exam-ai-provider-router');
     const result = await requestExamQuestionsFromProviders([{ role: 'user', content: 'Create one item.' }], schema);
     assert.deepEqual(JSON.parse(result), [{ item_number: 3 }]);
+  } finally {
+    global.fetch = originalFetch;
+    resetExamProviderCooldownsForTests();
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
+test('Groq custom models keep broad JSON mode instead of unsupported strict schema mode', async () => {
+  resetExamProviderCooldownsForTests();
+  const names = ['GROQ_API_KEY', 'GROQ_MODEL', 'AI_PROVIDER_ORDER'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  try {
+    process.env.GROQ_API_KEY = 'test-groq-key';
+    process.env.GROQ_MODEL = 'custom/model';
+    process.env.AI_PROVIDER_ORDER = 'groq';
+    global.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      assert.deepEqual(body.response_format, { type: 'json_object' });
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: '{"questions":[{"item_number":2}]}' } }],
+      }), { status: 200 });
+    }) as typeof fetch;
+    const { requestExamQuestionsFromProviders } = await import('../exam-ai-provider-router');
+    await requestExamQuestionsFromProviders([{ role: 'user', content: 'Return JSON questions.' }], { type: 'object' });
   } finally {
     global.fetch = originalFetch;
     resetExamProviderCooldownsForTests();
@@ -343,6 +376,43 @@ test('OpenRouter empty content falls through to Gemini instead of stalling the j
     const result = await requestExamQuestionsFromProviders([{ role: 'user', content: 'Create one question.' }], { type: 'object' });
     assert.deepEqual(JSON.parse(result), [{ item_number: 7 }]);
     assert.equal(calls, 2);
+  } finally {
+    global.fetch = originalFetch;
+    resetExamProviderCooldownsForTests();
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
+test('OpenRouter empty completion records finish reason and request ID before failover', async () => {
+  resetExamProviderCooldownsForTests();
+  const names = ['OPENROUTER_API_KEY', 'AI_PROVIDER_ORDER'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  try {
+    process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
+    process.env.AI_PROVIDER_ORDER = 'openrouter';
+    global.fetch = (async () => new Response(JSON.stringify({
+      id: 'gen-empty-123',
+      model: 'provider/free-reasoning-model',
+      usage: { completion_tokens: 8192, completion_tokens_details: { reasoning_tokens: 8192 } },
+      choices: [{ finish_reason: 'length', message: { content: null, reasoning: 'internal reasoning' } }],
+    }), { status: 200, headers: { 'content-type': 'application/json', 'x-request-id': 'req-empty-123' } })) as typeof fetch;
+    const { requestExamQuestionsFromProviders } = await import('../exam-ai-provider-router');
+    await assert.rejects(
+      requestExamQuestionsFromProviders([{ role: 'user', content: 'Return JSON questions.' }], { type: 'object' }),
+      (error: any) => error.retryable === false
+        && error.reasoningBudgetExhausted === true
+        && error.completionMeta?.requestedModel === 'openrouter/free'
+        && error.completionMeta?.returnedModel === 'provider/free-reasoning-model'
+        && error.completionMeta?.completionTokens === 8192
+        && error.completionMeta?.reasoningTokens === 8192
+        && /finish=length/.test(error.message)
+        && /req-empty-123/.test(error.message)
+        && /Increase OPENROUTER_MAX_TOKENS/.test(error.message),
+    );
   } finally {
     global.fetch = originalFetch;
     resetExamProviderCooldownsForTests();
