@@ -682,6 +682,7 @@ export default function StudentsPage() {
       {
         accessorKey: 'lrn',
         header: 'DepEd LRN',
+        mobileHidden: true,
         cell: ({ row }) => (
           <span className="font-mono text-gray-600 dark:text-gray-300">
             {row.getValue('lrn')}
@@ -731,7 +732,7 @@ export default function StudentsPage() {
               <button
                 type="button"
                 onClick={() => openEditModal(s)}
-                className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition"
+                className="inline-flex min-h-[44px] items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition"
               >
                 <Pencil className="h-3.5 w-3.5" />
                 <span>Edit</span>
@@ -739,7 +740,7 @@ export default function StudentsPage() {
               <button
                 type="button"
                 onClick={() => triggerArchiveSelected([s.id])}
-                className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/30 transition"
+                className="inline-flex min-h-[44px] items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/30 transition"
                 title="Archive learner (soft delete)"
               >
                 <Archive className="h-3.5 w-3.5" />
@@ -1002,6 +1003,7 @@ export default function StudentsPage() {
       {/* Unified DataTable Component */}
       <DataTable
         mobileLayout="cards"
+        className="pk-students-table"
         tableLabel={activeTab === 'active' ? 'Student list' : 'Archived students'}
         columns={columns}
         data={displayedStudents}
@@ -1023,7 +1025,7 @@ export default function StudentsPage() {
             : 'No student records have been archived.'
         }
         renderCustomFilter={
-          <div className="flex items-center gap-2">
+          <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
             <Filter className="h-4 w-4 text-gray-400" />
             <select
               value={sectionFilter}
@@ -1031,7 +1033,7 @@ export default function StudentsPage() {
                 setSectionFilter(e.target.value);
                 setSelectedIds(new Set());
               }}
-              className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 outline-none transition focus:border-blue-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300"
+              className="min-h-11 w-full min-w-0 rounded-xl border border-gray-200 bg-white px-3 text-xs font-medium text-[var(--pk-text)] outline-none transition focus:border-blue-600 dark:border-gray-800 dark:bg-gray-900 sm:w-auto"
             >
               <option value="ALL">All Sections</option>
               {sectionsList.map((sec) => (

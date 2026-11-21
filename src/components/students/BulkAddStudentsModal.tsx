@@ -479,7 +479,7 @@ function detectColumnMapping(firstRow: string[]): ColumnMapping {
         }
       }}
     >
-      <div ref={dialogRef} tabIndex={-1} className="relative h-[100dvh] max-h-[100dvh] w-full overflow-y-auto overscroll-contain rounded-none border border-gray-200 bg-white p-4 shadow-2xl outline-none dark:border-gray-800 dark:bg-gray-900 sm:my-8 sm:h-auto sm:max-h-[90dvh] sm:max-w-3xl sm:rounded-2xl sm:p-6">
+      <div ref={dialogRef} tabIndex={-1} className="relative box-border h-[100dvh] max-h-[100dvh] w-full max-w-full min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain rounded-none border border-gray-200 bg-white p-4 shadow-2xl outline-none dark:border-gray-800 dark:bg-gray-900 sm:mx-auto sm:my-8 sm:h-auto sm:max-h-[90dvh] sm:max-w-2xl sm:rounded-[16px] sm:p-6">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 pb-4 dark:border-gray-800">
           <div className="flex items-center gap-2.5">
@@ -587,7 +587,7 @@ function detectColumnMapping(firstRow: string[]): ColumnMapping {
             <select
               value={defaultSection}
               onChange={(e) => setDefaultSection(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 bg-white p-2 text-xs font-medium text-gray-800 outline-none transition focus:border-blue-600 dark:border-gray-700 dark:bg-gray-850 dark:text-gray-200"
+              className="w-full rounded-lg border border-gray-200 bg-white p-2 text-xs font-medium text-[var(--pk-text)] placeholder:text-[var(--pk-text-muted)] outline-none transition focus:border-blue-600 dark:border-gray-700 dark:bg-gray-850"
             >
               <option value="">Use Section from pasted row</option>
               {sections.map((sec) => (
@@ -638,7 +638,7 @@ function detectColumnMapping(firstRow: string[]): ColumnMapping {
             value={rawText}
             onChange={(e) => setRawText(e.target.value)}
             disabled={isSubmitting}
-            placeholder={`101234567891\tDela Cruz, Juan\tDiamond\n101234567892\tSantos, Maria\tDiamond\n101234567893\tReyes, Antonio\tEmerald`}
+            placeholder={`101234567891, Dela Cruz, Juan D., Diamond`}
             className="w-full rounded-xl border border-gray-200 bg-gray-50/50 p-3 font-mono text-xs text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800 resize-y"
           />
           {isCapped && (

@@ -471,10 +471,8 @@ export default function TosPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-2">
         <div>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
-            <span>Table of Specification</span>
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-              DepEd Order 8, s. 2015
-            </span>
+            <span>Table of Specifications</span>
+            <span className="text-xs font-medium text-[var(--pk-text-muted)]">DepEd Order 8, s. 2015</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
             Design standard competency allocation matrices, Bloom taxonomy distributions, and examinations.
@@ -543,7 +541,7 @@ export default function TosPage() {
           <select
             value={filterTerm}
             onChange={(e) => setFilterTerm(e.target.value)}
-            className="min-h-11 w-full sm:w-auto text-sm px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 outline-none font-medium"
+            className="min-h-11 w-full sm:w-auto text-sm px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[var(--pk-text)] outline-none font-medium"
           >
             <option value="ALL">All Terms</option>
             {gradingPeriods.map((gp) => (
@@ -557,7 +555,7 @@ export default function TosPage() {
           <select
             value={filterExamType}
             onChange={(e) => setFilterExamType(e.target.value)}
-            className="w-full sm:w-auto text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 outline-none font-medium"
+            className="min-h-11 w-full sm:w-auto text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[var(--pk-text)] outline-none font-medium"
           >
             <option value="ALL">All Exam Types</option>
             {STANDARD_EXAM_TYPES.map((type) => (
