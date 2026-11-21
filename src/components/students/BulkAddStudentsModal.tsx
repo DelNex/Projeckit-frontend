@@ -465,16 +465,17 @@ function detectColumnMapping(firstRow: string[]): ColumnMapping {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 backdrop-blur-xs sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="bulk-add-learners-title"
       onClick={(e) => {
         if (e.target === e.currentTarget && !isSubmitting) {
           handleAttemptClose();
         }
       }}
     >
-      <div className="relative w-full max-w-3xl rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-gray-900 my-8">
+      <div className="relative h-[100dvh] max-h-[100dvh] w-full overflow-y-auto overscroll-contain rounded-none border border-gray-200 bg-white p-4 shadow-2xl dark:border-gray-800 dark:bg-gray-900 sm:my-8 sm:h-auto sm:max-h-[90dvh] sm:max-w-3xl sm:rounded-2xl sm:p-6">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 pb-4 dark:border-gray-800">
           <div className="flex items-center gap-2.5">
