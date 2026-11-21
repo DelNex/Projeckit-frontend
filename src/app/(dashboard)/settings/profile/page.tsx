@@ -1,7 +1,7 @@
 'use client';
 
 import { createClient } from '@/lib/supabase/client';
-import { CheckCircle2, Loader2, Save } from 'lucide-react';
+import { Loader2, Save } from 'lucide-react';
 import { StatusBanner } from '@/components/ui/status-banner';
 import { useEffect, useState } from 'react';
 
