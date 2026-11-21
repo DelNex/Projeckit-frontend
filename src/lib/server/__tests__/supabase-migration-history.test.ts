@@ -24,14 +24,14 @@ test('OCR dispatch migration installs the ten-minute Vault-authenticated dispatc
 });
 
 test('tenant competency table is only granted to the server service role', async () => {
-  const sql = await readFile(new URL('../../../../supabase/migrations/20261121100000_harden_tenant_competency_access.sql', import.meta.url), 'utf8');
+  const sql = await readFile(new URL('../../../../supabase/migrations/20261121021937_harden_tenant_competency_access.sql', import.meta.url), 'utf8');
   assert.match(sql, /REVOKE ALL ON TABLE public\.tenant_competencies FROM anon, authenticated/i);
   assert.match(sql, /GRANT ALL ON TABLE public\.tenant_competencies TO service_role/i);
   assert.match(sql, /tenant_competencies_tenant_id_idx/);
 });
 
 test('exam finalization locks job rows and commits questions with the final job status atomically', async () => {
-  const sql = await readFile(new URL('../../../../supabase/migrations/20261121110000_atomic_exam_job_finalization.sql', import.meta.url), 'utf8');
+  const sql = await readFile(new URL('../../../../supabase/migrations/20261121021941_atomic_exam_job_finalization.sql', import.meta.url), 'utf8');
   assert.match(sql, /FUNCTION public\.finalize_exam_generation_job/i);
   assert.match(sql, /parent_job_id IS NULL[\s\S]*?FOR UPDATE/i);
   assert.match(sql, /status IS DISTINCT FROM 'running'/i);
