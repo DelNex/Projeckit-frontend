@@ -66,6 +66,7 @@ export function TosExamModal({
   const [sharedNotesConfirm, setSharedNotesConfirm] = useState(false);
   const [examDraftDirty, setExamDraftDirty] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [confirmClearMaterials, setConfirmClearMaterials] = useState(false);
   const handledSavedQuestionsJobId = useRef<string | null>(null);
   const draftWasEditedRef = useRef(false);
   const activeTosIdRef = useRef<string | null>(tos?.id || null);
@@ -319,6 +320,7 @@ export function TosExamModal({
 
   const handleClearSavedMaterials = async () => {
     if (!tos?.id) return;
+    setConfirmClearMaterials(false);
     setMaterials((previous) => Object.fromEntries(Object.entries(previous).map(([id, material]) => [id, { ...material, files: [] }])));
     try { await clearLessonMaterials(tos.id); }
     catch (error) { console.warn('Could not clear saved lesson materials:', error); }
@@ -358,6 +360,10 @@ export function TosExamModal({
 
   // Generate examination
   const handleGenerateExam = async () => {
+    if (examDate < new Date().toLocaleDateString("en-CA")) {
+      toast.error('Exam date cannot be in the past.');
+      return;
+    }
     const hasAnyLessonMaterial = Object.values(materials).some((material) =>
       material.files.some((file) => file.text.trim().length > 0)
     );
@@ -473,9 +479,9 @@ export function TosExamModal({
       <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="generated-exam-title">
         <div ref={dialogRef} tabIndex={-1} className="relative box-border flex h-[100dvh] max-h-[100dvh] w-full max-w-full min-w-0 flex-col overflow-x-hidden overflow-y-hidden border border-slate-200 bg-white shadow-none outline-none dark:border-slate-800 dark:bg-slate-900 sm:mx-auto sm:h-auto sm:max-h-[92dvh] sm:max-w-2xl sm:rounded-[16px] sm:shadow-xl">
           {/* Header */}
-          <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6 py-5 pr-16 sm:pr-6 border-b border-slate-100 dark:border-slate-800 shrink-0">
+          <div className="sticky top-0 z-20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] pr-16 sm:px-6 sm:py-4 sm:pt-4 sm:pr-6 border-b border-slate-100 bg-white dark:border-slate-800 dark:bg-slate-900 shrink-0">
             <div>
-              <h2 id="generated-exam-title" className="text-xl font-bold text-slate-900 dark:text-white">
+              <h2 id="generated-exam-title" className="break-words text-base font-bold leading-snug text-slate-900 dark:text-white sm:text-xl">
                 {tos.description || `${tos.exam_type || 'Examination'} in ${tos.subject}`}
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
@@ -492,13 +498,15 @@ export function TosExamModal({
                   type="date"
                   value={examDate}
                   onChange={(e) => setExamDate(e.target.value)}
-                  className="bg-transparent font-medium text-slate-900 dark:text-white outline-none cursor-pointer"
+                  min={new Date().toLocaleDateString("en-CA")}
+                  className="min-h-11 min-w-0 bg-transparent font-medium text-slate-900 dark:text-white outline-none cursor-pointer"
                 />
               </div>
+              {examDate < new Date().toLocaleDateString("en-CA") && <p className="w-full text-xs font-semibold text-rose-700 dark:text-rose-300" role="alert">Exam date cannot be in the past.</p>}
 
               <button
                 onClick={handleGenerateExam}
-                disabled={isGenerating || generationJob.isStarting || generationJob.retryAfterSeconds > 0 || (generationJob.quotaAvailable && Boolean(generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0))) || ['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')}
+                disabled={isGenerating || examDate < new Date().toLocaleDateString("en-CA") || generationJob.isStarting || generationJob.retryAfterSeconds > 0 || (generationJob.quotaAvailable && Boolean(generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0))) || ['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')}
                 className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all disabled:opacity-50"
               >
                 {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
@@ -524,7 +532,7 @@ export function TosExamModal({
           </div>
 
           {/* Body */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+          <div className="flex-1 overflow-y-auto overscroll-contain p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 space-y-6">
             {/* Provider access is checked on the TOS page in the background. It never gates uploads. */}
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
               <div className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-100">
@@ -534,15 +542,15 @@ export function TosExamModal({
                     ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
                     : <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />}
                 <span>
-                  {aiReadiness.status === 'checking' ? 'Checking AI provider access in the background…'
-                    : aiReadiness.status === 'available' ? 'AI provider access is responding.'
-                      : aiReadiness.status === 'degraded' ? 'Some AI providers are responding; fallback may be limited.'
-                        : aiReadiness.status === 'rate_limited' ? 'Configured AI providers are currently rate-limited.'
-                          : aiReadiness.status === 'unconfigured' ? 'No supported AI provider is configured.'
-                            : 'AI provider access could not be confirmed.'}
+                  {aiReadiness.status === 'checking' ? 'AI provider: Checking…'
+                    : aiReadiness.status === 'available' ? 'AI provider: Connected'
+                      : aiReadiness.status === 'degraded' ? 'AI provider: Partially available'
+                        : aiReadiness.status === 'rate_limited' ? 'AI provider: Rate limited'
+                          : aiReadiness.status === 'unconfigured' ? 'AI provider: Not configured'
+                            : 'AI provider: Unavailable'}
                 </span>
               </div>
-              <p className="mt-1">You can choose and process lesson files while this check runs. It does not use an exam-generation attempt. The check verifies provider API access, not model output or generation quota.</p>
+              <p className="mt-1 hidden sm:block">You can choose and process lesson files while this check runs. It does not use an exam-generation attempt. The check verifies provider API access, not model output or generation quota.</p>
             </div>
 
             {/* Generation Progress Banner */}
@@ -555,8 +563,8 @@ export function TosExamModal({
             )}
 
             {generationJob.quotaAvailable && generationJob.quota && (
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Generation allowance: {generationJob.quota.hourly.remaining}/{generationJob.quota.hourly.limit} this hour · {generationJob.quota.daily.remaining}/{generationJob.quota.daily.limit} for your school today.
+              <p className={`text-[11px] font-medium ${generationJob.quota.hourly.remaining <= 1 || generationJob.quota.daily.remaining <= 5 ? "text-amber-700 dark:text-amber-300" : "text-slate-600 dark:text-slate-300"}`}>
+                {generationJob.quota.hourly.remaining} of {generationJob.quota.hourly.limit} left this hour · {generationJob.quota.daily.remaining} of {generationJob.quota.daily.limit} left today
               </p>
             )}
             {generationJob.job?.status === 'failed' && (
@@ -609,9 +617,6 @@ export function TosExamModal({
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Choose lesson presentations, scanned PDFs, or photos from this device (PDF, DOCX, PPTX, TXT, Markdown, PNG, JPG, WebP). Extracted text is kept in this browser for up to 7 days so you can return after closing the page.
                 </p>
-                {Object.values(materials).some((material) => material.files.length > 0) && (
-                  <button type="button" onClick={handleClearSavedMaterials} className="mt-2 text-[11px] font-semibold text-rose-600 hover:text-rose-700 dark:text-rose-400">Clear saved lesson materials</button>
-                )}
               </div>
 
               <div className="space-y-3">
@@ -628,7 +633,7 @@ export function TosExamModal({
                           <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
                             Competency {idx + 1}:
                           </span>
-                          <span className="text-xs font-semibold text-[var(--pk-text-secondary)] ml-1.5">
+                          <span className="ml-1.5 break-words text-xs font-semibold text-[var(--pk-text-secondary)]">
                             {row.description}
                           </span>
                         </div>
@@ -647,7 +652,7 @@ export function TosExamModal({
                         </label>
                       </div>
 
-                      {mat.progress && <p className={'text-xs ' + (mat.isUploading ? 'text-blue-600 dark:text-blue-300' : 'text-amber-700 dark:text-amber-300')}>{mat.progress}</p>}
+                      {mat.progress && <p className={'text-xs ' + (mat.isUploading || mat.progress.includes('Recovered') ? 'text-blue-700 dark:text-blue-300' : 'text-amber-700 dark:text-amber-300')}>{mat.progress}</p>}
 
                       {/* File Chips */}
                       {mat.files.length > 0 ? (
@@ -658,11 +663,11 @@ export function TosExamModal({
                               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white dark:bg-[var(--pk-raised)] border border-slate-200 dark:border-[var(--pk-line)] text-xs text-[var(--pk-text)]"
                             >
                               <FileText className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                              <span className="truncate max-w-[180px]">{file.name}</span>
+                              <span className="max-w-[180px] truncate">{file.name} <span className="text-[10px] text-slate-500">({Math.max(1, Math.ceil(file.text.length / 1024))} KB)</span></span>
                               <button
                                 type="button"
                                 onClick={() => handleDeleteFile(id, fIdx)}
-                                className="text-slate-400 hover:text-rose-500 ml-0.5"
+                                className="ml-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 dark:text-slate-300 dark:hover:text-rose-400"
                                 title="Remove file"
                               >
                                 <X className="h-3 w-3" />
@@ -679,6 +684,11 @@ export function TosExamModal({
                   );
                 })}
               </div>
+              {Object.values(materials).some((material) => material.files.length > 0) && (
+                <div className="flex justify-end border-t border-slate-200 pt-3 dark:border-slate-700">
+                  <button type="button" onClick={() => setConfirmClearMaterials(true)} className="min-h-11 rounded-lg px-3 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-rose-300">Clear saved lesson materials</button>
+                </div>
+              )}
             </div>
 
             {questions.length > 0 && (
@@ -806,6 +816,7 @@ export function TosExamModal({
           </div>
         </div>
       )}
+      <ConfirmationModal isOpen={confirmClearMaterials} title="Clear saved lesson materials?" description="This removes the lesson files saved in this browser for this TOS. You can upload them again later." confirmLabel="Clear materials" actionType="delete" onConfirm={handleClearSavedMaterials} onClose={() => setConfirmClearMaterials(false)} />
       <ConfirmationModal isOpen={confirmClose} title="Discard unsaved exam changes?"
         description="Your latest edits have not been saved yet. Close anyway and discard them?"
         actionType="neutral" confirmLabel="Discard changes" cancelLabel="Keep editing"
