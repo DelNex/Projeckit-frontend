@@ -4,18 +4,14 @@ import { createClient } from '@/lib/supabase/client';
 import { normalizeQuarter } from '@/lib/deped-grading';
 import {
     AlertCircle,
-    AlertTriangle,
     ArrowUpRight,
     BookOpen,
-    Calendar,
     ChevronRight,
-    GraduationCap,
     Layers,
     Loader2,
     Plus,
     RefreshCw,
     TrendingUp,
-    Users
 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
