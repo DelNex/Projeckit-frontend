@@ -26,6 +26,16 @@ export function splitExamSlotsIntoBatches<T>(slots: readonly T[]): T[][] {
   return batches;
 }
 
+/** A batch is checkpointed only when every requested item has exactly one saved response. */
+export function isExamBatchComplete(
+  batch: readonly { item_number: number }[],
+  questions: readonly { item_number?: number }[],
+): boolean {
+  return batch.every((slot) =>
+    questions.filter((question) => Number(question?.item_number) === Number(slot.item_number)).length === 1
+  );
+}
+
 /** Respect provider Retry-After while bounding queued retries to 15 minutes. */
 export function getExamProviderRetryDelayMs(retryAfterMs: number | null | undefined, attempt: number): number {
   const safeAttempt = Number.isFinite(attempt) ? Math.max(1, Math.trunc(attempt)) : 1;
@@ -287,9 +297,12 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
     const batches = splitExamSlotsIntoBatches(slots);
     const batchSize = getExamBatchSize(slots.length);
 
-    const generatedQuestions: any[] = [];
+    // Keep successful batches in the durable job payload. A later provider
+    // failure can then resume without paying to regenerate completed questions.
+    const generatedQuestions: any[] = Array.isArray(payload.partialQuestions) ? [...payload.partialQuestions] : [];
     for (let index = 0; index < batches.length; index++) {
       const batchSlots = batches[index];
+      if (isExamBatchComplete(batchSlots, generatedQuestions)) continue;
       const batchPayload = {
         ...generationPayload,
         slots: batchSlots,
@@ -299,13 +312,16 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
       const responseText = await requestGroqQuestions(batchPayload, jobDeadline);
       const batchQuestions = JSON.parse(responseText);
       if (!Array.isArray(batchQuestions)) throw new Error('Groq returned an invalid question batch.');
-      generatedQuestions.push(...batchQuestions);
+      const batchItemNumbers = new Set(batchSlots.map((slot) => Number(slot.item_number)));
+      const retainedQuestions = generatedQuestions.filter((question) => !batchItemNumbers.has(Number(question?.item_number)));
+      generatedQuestions.splice(0, generatedQuestions.length, ...retainedQuestions, ...batchQuestions);
 
       const { data: progressUpdate, error: progressError } = await admin.from('exam_generation_jobs').update({
+        payload: { ...payload, partialQuestions: generatedQuestions },
         progress: {
           stage: 'generating',
-          label: `Generated ${Math.min((index + 1) * batchSize, slots.length)} of ${slots.length} questions`,
-          completedChunks: index + 1,
+          label: `Generated ${generatedQuestions.length} of ${slots.length} questions`,
+          completedChunks: batches.filter((batch) => isExamBatchComplete(batch, generatedQuestions)).length,
           totalChunks: batches.length,
         },
         lease_expires_at: new Date(Date.now() + 75_000).toISOString(),
