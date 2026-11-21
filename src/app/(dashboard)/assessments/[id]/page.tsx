@@ -1756,7 +1756,51 @@ export default function AssessmentWorkspacePage({
                     </div>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <>
+                    <div className="grid gap-3 sm:hidden" role="list" aria-label="Item analysis results">
+                      {itemAnalysisStats.rows.map((row) => {
+                        const decisionTone = row.action === 'Retain' ? 'success' : row.action === 'Revise' ? 'warning' : 'danger';
+                        const difficultyWidth = Math.min(100, Math.max(0, row.pIndex * 100));
+                        return (
+                          <article key={row.itemNumber} className="rounded-xl border border-gray-200 p-3 dark:border-gray-800" role="listitem">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Item {row.itemNumber} · {row.code}</p>
+                                <p className="mt-1 break-words text-sm font-medium text-gray-900 dark:text-white">{questionItems.find((question) => question.item_number === row.itemNumber)?.question || row.description}</p>
+                              </div>
+                              <span className="inline-flex shrink-0 items-center gap-2 text-xs font-medium text-gray-700 dark:text-gray-200">
+                                <OmrBubble selected tone={decisionTone} size={8} />
+                                {itemAnalysisStats.N > 0 ? row.action : '—'}
+                              </span>
+                            </div>
+                            <div className="mt-3 grid grid-cols-2 gap-3 border-t border-gray-100 pt-3 dark:border-gray-800">
+                              <div>
+                                <p className="text-xs text-gray-500">Difficulty index (P)</p>
+                                <p className="mt-1 text-sm font-semibold tabular-nums text-gray-900 dark:text-white">{itemAnalysisStats.N > 0 ? row.pIndex.toFixed(2) : '—'}</p>
+                                <p className="text-xs text-gray-500">{row.difficultyCategory}</p>
+                                <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700" role="img" aria-label={'Difficulty index ' + (row.pIndex * 100).toFixed(0) + ' percent'}>
+                                  <div className="h-full rounded-full bg-[var(--pk-brand)]" style={{ width: difficultyWidth + '%' }} />
+                                </div>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500">Discrimination index (D)</p>
+                                <p className="mt-1 text-sm font-semibold tabular-nums text-gray-900 dark:text-white">{itemAnalysisStats.N > 0 ? (row.dIndex > 0 ? '+' : '') + row.dIndex.toFixed(2) : '—'}</p>
+                                <p className="text-xs text-gray-500">{row.discriminationCategory}</p>
+                              </div>
+                            </div>
+                            <div className="mt-3 flex items-center justify-between gap-3 border-t border-gray-100 pt-3 dark:border-gray-800">
+                              <span className="text-xs text-gray-500">Correct responses</span>
+                              {isEditingIa ? (
+                                <input type="number" min={0} max={itemAnalysisStats.N > 0 ? itemAnalysisStats.N : 100} value={tempDraftRi[row.itemNumber] ?? row.Ri} onChange={(event) => handleRiInputChange(row.itemNumber, event.target.value)} className="min-h-11 w-20 rounded-lg border border-gray-200 bg-white px-2 text-center text-sm font-semibold tabular-nums dark:border-gray-700 dark:bg-gray-800" aria-label={'Correct responses for item ' + row.itemNumber} />
+                              ) : (
+                                <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-white">{row.Ri}</span>
+                              )}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                    <div className="hidden overflow-x-auto sm:block">
                     <table className="w-full text-left border-collapse table-fixed min-w-[640px]">
                       <thead>
                         <tr className="border-b border-gray-200 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-800/60 text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">
@@ -1896,7 +1940,8 @@ export default function AssessmentWorkspacePage({
                         </tr>
                       </tfoot>
                     </table>
-                  </div>
+                    </div>
+                  </>
                 )}
               </div>
             </div>
