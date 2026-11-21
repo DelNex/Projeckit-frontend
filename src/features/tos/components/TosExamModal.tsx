@@ -502,10 +502,11 @@ export function TosExamModal({
                   className="min-h-11 min-w-0 bg-transparent font-medium text-slate-900 dark:text-white outline-none cursor-pointer"
                 />
               </div>
+              {examDate < new Date().toLocaleDateString("en-CA") && <p className="w-full text-xs font-semibold text-rose-700 dark:text-rose-300" role="alert">Exam date cannot be in the past.</p>}
 
               <button
                 onClick={handleGenerateExam}
-                disabled={isGenerating || generationJob.isStarting || generationJob.retryAfterSeconds > 0 || (generationJob.quotaAvailable && Boolean(generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0))) || ['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')}
+                disabled={isGenerating || examDate < new Date().toLocaleDateString("en-CA") || generationJob.isStarting || generationJob.retryAfterSeconds > 0 || (generationJob.quotaAvailable && Boolean(generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0))) || ['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')}
                 className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all disabled:opacity-50"
               >
                 {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
@@ -531,7 +532,7 @@ export function TosExamModal({
           </div>
 
           {/* Body */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+          <div className="flex-1 overflow-y-auto overscroll-contain p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 space-y-6">
             {/* Provider access is checked on the TOS page in the background. It never gates uploads. */}
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
               <div className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-100">
