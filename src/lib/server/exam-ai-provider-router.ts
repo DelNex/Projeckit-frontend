@@ -76,7 +76,7 @@ function parseQuestionContent(raw: unknown): string {
   return JSON.stringify(questions);
 }
 
-async function readProviderResponse(response: Response, provider: ProviderId): Promise<string> {
+async function readProviderResponse(response: Response, provider: ProviderId, requestedModel?: string): Promise<string> {
   const body: any = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 429) {
@@ -125,11 +125,22 @@ async function readProviderResponse(response: Response, provider: ProviderId): P
     const choice = body?.choices?.[0];
     const message = choice?.message;
     content = message?.content;
+    const completionTokens = Number.isFinite(Number(body?.usage?.completion_tokens))
+      ? Number(body.usage.completion_tokens) : null;
+    const reasoningTokens = Number.isFinite(Number(body?.usage?.completion_tokens_details?.reasoning_tokens))
+      ? Number(body.usage.completion_tokens_details.reasoning_tokens) : null;
+    const visibleCompletionTokens = completionTokens !== null && reasoningTokens !== null
+      ? Math.max(0, completionTokens - reasoningTokens) : null;
     completionMeta = {
       finishReason: choice?.finish_reason || null,
       nativeFinishReason: choice?.native_finish_reason || null,
       refusal: Boolean(message?.refusal),
       hasReasoningOnly: !message?.content && Boolean(message?.reasoning || message?.reasoning_content),
+      requestedModel: provider === 'openrouter' ? requestedModel || null : null,
+      returnedModel: body?.model || null,
+      completionTokens,
+      reasoningTokens,
+      visibleCompletionTokens,
     };
     if (!content && message?.refusal) {
       throw Object.assign(new Error(`${provider} refused the exam-generation request.`), { retryable: false });
@@ -144,11 +155,29 @@ async function readProviderResponse(response: Response, provider: ProviderId): P
       || response.headers.get('x-openrouter-generation-id')
       || response.headers.get('cf-ray');
     const detail = error instanceof Error ? error.message : 'Provider response could not be parsed.';
+    const completionTokens = completionMeta.completionTokens;
+    const reasoningTokens = completionMeta.reasoningTokens;
+    const visibleCompletionTokens = completionMeta.visibleCompletionTokens;
+    // OpenRouter documents that a reasoning model can consume the complete
+    // max_tokens budget and return finish_reason=length with no visible text.
+    // Repeating the same dynamic-router request does not fix that condition.
+    const reasoningBudgetExhausted = provider === 'openrouter'
+      && completionMeta.finishReason === 'length'
+      && typeof completionTokens === 'number'
+      && completionTokens > 0
+      && typeof reasoningTokens === 'number'
+      && reasoningTokens >= completionTokens * 0.9
+      && typeof visibleCompletionTokens === 'number'
+      && visibleCompletionTokens <= Math.max(32, completionTokens * 0.1);
+    const budgetDetail = reasoningBudgetExhausted
+      ? ` Reasoning used ${reasoningTokens}/${completionTokens} completion tokens; visible tokens=${visibleCompletionTokens}. Increase OPENROUTER_MAX_TOKENS or use a pinned non-reasoning model.`
+      : '';
     throw Object.assign(new Error(
-      `${provider} returned an unusable completion: ${detail} (finish=${String(completionMeta.finishReason || 'unknown')}, request=${requestId || 'unavailable'})`
+      `${provider} returned an unusable completion: ${detail} (finish=${String(completionMeta.finishReason || 'unknown')}, request=${requestId || 'unavailable'}, model=${String(completionMeta.returnedModel || requestedModel || 'unknown')})${budgetDetail}`
     ), {
       status: null,
-      retryable: true,
+      retryable: !reasoningBudgetExhausted,
+      reasoningBudgetExhausted,
       providerRequestId: requestId,
       completionMeta,
     });
@@ -199,7 +228,7 @@ async function requestProvider(provider: ProviderConfig, messages: Array<{ role:
         messages,
         temperature: 0.2,
         ...(isGroq ? { max_completion_tokens: 8192, reasoning_effort: 'low' } : {
-          max_tokens: 8192,
+          max_tokens: Math.max(8_192, Math.min(32_768, Math.floor(Number(process.env.OPENROUTER_MAX_TOKENS) || 16_384))),
           provider: { require_parameters: true, allow_fallbacks: true },
         }),
         ...(isGroq && groqServiceTier ? { service_tier: groqServiceTier } : {}),
@@ -216,7 +245,7 @@ async function requestProvider(provider: ProviderConfig, messages: Array<{ role:
       signal: timeout, cache: 'no-store',
     });
   }
-  return readProviderResponse(response, provider.id);
+  return readProviderResponse(response, provider.id, provider.model);
 }
 
 /** Uses only explicitly configured provider credentials; never rotates identities or bypasses provider quotas. */
@@ -275,9 +304,12 @@ export async function requestExamQuestionsFromProviders(
       const completionMeta = (error as Error & { completionMeta?: Record<string, unknown> }).completionMeta || null;
       const providerErrorCode = (error as Error & { providerErrorCode?: string | null }).providerErrorCode || null;
       const hasFailedGeneration = Boolean((error as Error & { hasFailedGeneration?: boolean }).hasFailedGeneration);
-      const retryable = Boolean((error as Error & { retryable?: boolean }).retryable)
+      const reasoningBudgetExhausted = Boolean((error as Error & { reasoningBudgetExhausted?: boolean }).reasoningBudgetExhausted);
+      const retryable = !reasoningBudgetExhausted && (
+        Boolean((error as Error & { retryable?: boolean }).retryable)
         || error instanceof SyntaxError
-        || /timeout|fetch failed|network|returned no questions|returned an empty response body/i.test(message);
+        || /timeout|fetch failed|network|returned no questions|returned an empty response body/i.test(message)
+      );
       lastStatus = status;
       lastRateLimit = rateLimit;
       if (retryable) {
