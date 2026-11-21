@@ -462,12 +462,12 @@ export function TosExamModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-slate-900/60  overflow-y-auto">
-        <div className="relative w-full sm:max-w-5xl h-full sm:h-auto sm:max-h-[92vh] bg-white dark:bg-slate-900 sm:rounded-2xl shadow-none sm:shadow-xl border border-slate-200 dark:border-slate-800 flex flex-col">
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="generated-exam-title">
+        <div className="relative flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden border border-slate-200 bg-white shadow-none dark:border-slate-800 dark:bg-slate-900 sm:h-auto sm:max-h-[92dvh] sm:max-w-5xl sm:rounded-2xl sm:shadow-xl">
           {/* Header */}
           <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6 py-5 pr-16 sm:pr-6 border-b border-slate-100 dark:border-slate-800 shrink-0">
             <div>
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+              <h2 id="generated-exam-title" className="text-xl font-bold text-slate-900 dark:text-white">
                 {tos.description || `${tos.exam_type || 'Examination'} in ${tos.subject}`}
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
