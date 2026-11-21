@@ -6,9 +6,8 @@ import {
   Edit2,
   Trash2,
   FileDown,
+  FilePlus2,
   Users,
-  Calendar,
-  Layers,
 } from 'lucide-react';
 
 interface TosCardProps {
@@ -121,7 +120,7 @@ export function TosCard({
             onClick={() => onCreateExam(tos)}
             className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 rounded-lg shadow-sm transition-colors"
           >
-            <FileDown className="h-3.5 w-3.5" />
+            <FilePlus2 className="h-3.5 w-3.5" />
             <span>Create exam</span>
           </button>
           <button
