@@ -384,6 +384,41 @@ test('Groq HTTP 400 immediately tries the next configured provider', async () =>
   }
 });
 
+test('OpenRouter truncated JSON falls through to Gemini instead of failing the exam batch', async () => {
+  resetExamProviderCooldownsForTests();
+  const names = ['OPENROUTER_API_KEY', 'GEMINI_API_KEY', 'AI_PROVIDER_ORDER'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  let calls = 0;
+  try {
+    process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
+    process.env.GEMINI_API_KEY = 'test-gemini-key';
+    process.env.AI_PROVIDER_ORDER = 'openrouter,gemini';
+    global.fetch = (async (input: RequestInfo | URL) => {
+      calls += 1;
+      if (String(input).includes('openrouter.ai')) {
+        return new Response(JSON.stringify({
+          choices: [{ message: { content: '{"questions":[{"item_number":9}' } }],
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({
+        candidates: [{ content: { parts: [{ text: '{"questions":[{"item_number":9}]}' }] } }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    const { requestExamQuestionsFromProviders } = await import('../exam-ai-provider-router');
+    const result = await requestExamQuestionsFromProviders([{ role: 'user', content: 'Create one question.' }], { type: 'object' });
+    assert.deepEqual(JSON.parse(result), [{ item_number: 9 }]);
+    assert.equal(calls, 2);
+  } finally {
+    global.fetch = originalFetch;
+    resetExamProviderCooldownsForTests();
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
 test('401 and 403 provider failures use a short credential cooldown', async () => {
   resetExamProviderCooldownsForTests();
   const names = ['GROQ_API_KEY', 'AI_PROVIDER_ORDER'];
