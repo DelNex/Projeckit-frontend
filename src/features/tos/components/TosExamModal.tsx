@@ -77,6 +77,13 @@ export function TosExamModal({
   });
 
   useEffect(() => {
+    if (!isOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [isOpen]);
+
+  useEffect(() => {
     if (tos?.id && activeTosIdRef.current !== tos.id) {
       activeTosIdRef.current = tos.id;
       handledSavedQuestionsJobId.current = null;
@@ -507,7 +514,7 @@ export function TosExamModal({
               <button
                 onClick={handleGenerateExam}
                 disabled={isGenerating || examDate < new Date().toLocaleDateString("en-CA") || generationJob.isStarting || generationJob.retryAfterSeconds > 0 || (generationJob.quotaAvailable && Boolean(generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0))) || ['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')}
-                className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all disabled:opacity-50"
+                className="inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all disabled:opacity-50"
               >
                 <FileText className="h-3.5 w-3.5" />{isGenerating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 <span>{isGenerating ? 'Generating...' : 'Generate exam'}</span>
@@ -515,7 +522,7 @@ export function TosExamModal({
               <button
                 onClick={() => setShowTeacherCopyModal(true)}
                 disabled={questions.length === 0}
-                className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 rounded-xl transition-all disabled:opacity-50"
+                className="inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 rounded-xl transition-all disabled:opacity-50"
               >
                 <FileDown className="h-3.5 w-3.5" />
                 <span className="whitespace-nowrap">Export Exam / Key</span>
