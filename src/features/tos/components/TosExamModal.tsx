@@ -509,7 +509,7 @@ export function TosExamModal({
                 disabled={isGenerating || examDate < new Date().toLocaleDateString("en-CA") || generationJob.isStarting || generationJob.retryAfterSeconds > 0 || (generationJob.quotaAvailable && Boolean(generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0))) || ['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')}
                 className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all disabled:opacity-50"
               >
-                {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+                <FileText className="h-3.5 w-3.5" />{isGenerating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 <span>{isGenerating ? 'Generating...' : 'Generate exam'}</span>
               </button>
               <button
