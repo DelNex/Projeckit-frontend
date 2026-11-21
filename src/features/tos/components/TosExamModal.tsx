@@ -68,7 +68,7 @@ export function TosExamModal({
   const draftWasEditedRef = useRef(false);
   const activeTosIdRef = useRef<string | null>(tos?.id || null);
   const dialogRef = useRef<HTMLDivElement>(null);
-  useDialogAccessibility(dialogRef, isOpen && Boolean(tos), () => {
+  useDialogAccessibility(dialogRef, isOpen && Boolean(tos) && !confirmClose && !sharedNotesConfirm && !showTeacherCopyModal, () => {
     if (examDraftDirty) setConfirmClose(true);
     else onClose();
   });
