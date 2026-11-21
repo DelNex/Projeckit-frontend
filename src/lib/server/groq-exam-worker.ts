@@ -352,8 +352,8 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
     const providerError = error as Error & { status?: number; retryable?: boolean; retryAfterMs?: number | null; rateLimit?: Record<string, string | null> | null };
     const status = Number(providerError.status) || null;
     const attempts = Number(claimed.attempts) || 1;
-    const maxAttempts = Math.max(1, Number(claimed.max_attempts) || 3);
-    const providerRetryDelayMs = status === 429 ? getExamProviderRetryDelayMs(providerError.retryAfterMs, attempts) : null;
+    const maxAttempts = Math.max(1, Number(claimed.max_attempts) || 5);
+    const providerRetryDelayMs = providerError.retryable ? getExamProviderRetryDelayMs(providerError.retryAfterMs, attempts) : null;
     if (providerError.retryable && attempts < maxAttempts) {
       const retryAfterMs = getExamProviderRetryDelayMs(providerError.retryAfterMs, attempts);
       const now = Date.now();
@@ -364,7 +364,7 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
         progress: {
           stage: 'waiting_for_provider',
           label: `AI providers are temporarily unavailable. Retrying automatically in about ${Math.ceil(retryAfterMs / 1000)} seconds.`,
-          ...(status === 429 ? { providerStatus: 429, providerRetryAt: retryAt, rateLimit: providerError.rateLimit || null } : {}),
+          ...(providerError.retryable ? { providerStatus: status, providerRetryAt: retryAt, retryAfterMs, ...(status === 429 ? { rateLimit: providerError.rateLimit || null } : {}) } : {}),
         },
         finished_at: null,
         updated_at: new Date(now).toISOString(),
@@ -392,7 +392,7 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
       progress: {
         stage: 'failed',
         label: 'We could not finish generating this exam because the AI providers did not complete the request.',
-        ...(status === 429 ? { providerStatus: 429, providerRetryAt, retryAfterMs: providerRetryDelayMs, rateLimit: providerError.rateLimit || null } : {}),
+        ...(providerRetryDelayMs ? { providerStatus: status, providerRetryAt, retryAfterMs: providerRetryDelayMs, ...(status === 429 ? { rateLimit: providerError.rateLimit || null } : {}) } : {}),
       },
       error: message.slice(0, 500),
       finished_at: new Date().toISOString(),
