@@ -22,6 +22,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTenant } from '@/context/TenantContext';
 import { getPhilippineSchoolYear } from '@/lib/academic-calendar';
 import { BarList } from '@/components/ui/bar-list';
+import { Sparkline } from '@/components/ui/sparkline';
 
 interface AssessmentItem {
   id: string;
@@ -497,6 +498,13 @@ export default function DashboardPage() {
           <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
             Mean Percentage Score across sections
           </p>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">Quarterly trend</span>
+            <Sparkline
+              values={quarterlyTrendData.points.map((point) => point.mps)}
+              ariaLabel="Quarterly mean percentage score trend"
+            />
+          </div>
         </div>
 
         {/* KPI Card 2: Learners on roster */}
