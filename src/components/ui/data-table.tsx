@@ -47,14 +47,14 @@ export interface DataTableProps<TData, TValue = any> {
   onVisibleRowsChange?: (rows: TData[]) => void;
   onSearchChange?: (search: string) => void;
   /** Render readable record cards on phones instead of requiring sideways table scrolling. */
-  mobileLayout?: 'scroll' | 'cards';
+  mobileLayout?: 'auto' | 'scroll' | 'cards';
 }
 
 export function DataTable<TData, TValue = any>({
   columns,
   data,
   searchKey,
-  searchPlaceholder = 'Search...',
+  searchPlaceholder = 'Search',
   tableLabel = 'Data table',
   loading = false,
   emptyTitle = 'No records found',
@@ -66,7 +66,7 @@ export function DataTable<TData, TValue = any>({
   onRowClick,
   onVisibleRowsChange,
   onSearchChange,
-  mobileLayout = 'scroll',
+  mobileLayout = 'auto',
 }: DataTableProps<TData, TValue>) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
@@ -74,6 +74,7 @@ export function DataTable<TData, TValue = any>({
   const [pageIndex, setPageIndex] = useState<number>(0);
   const [pageSize, setPageSize] = useState<number>(initialPageSize);
   const tableId = React.useId();
+  const useMobileCards = mobileLayout === 'cards' || (mobileLayout === 'auto' && columns.length > 3);
 
   // 1. Filtered data
   const filteredData = useMemo(() => {
@@ -202,8 +203,8 @@ export function DataTable<TData, TValue = any>({
 
       {/* Main Table Container */}
       <div className="rounded-2xl sm:rounded-3xl border border-gray-200 bg-white shadow-2xs dark:border-gray-800 dark:bg-gray-900 overflow-hidden min-w-0">
-        {mobileLayout === 'scroll' && <p className="px-4 pt-3 text-[11px] text-gray-500 sm:hidden" aria-hidden="true">Swipe sideways to see all columns</p>}
-        {mobileLayout === 'cards' && (
+        {!useMobileCards && <p className="px-4 pt-3 text-[11px] text-gray-500 sm:hidden" aria-hidden="true">Swipe sideways to see all columns</p>}
+        {useMobileCards && (
           <div className="grid gap-3 p-3 sm:hidden" role="list" aria-label={`${tableLabel} records`}>
             {loading ? (
               <div className="flex items-center justify-center gap-2 py-10 text-sm text-gray-500" role="status"><Loader2 className="h-5 w-5 animate-spin" />Loading records…</div>
@@ -232,8 +233,8 @@ export function DataTable<TData, TValue = any>({
                     const label = typeof col.header === 'string' ? col.header : col.accessorKey || col.id || `Field ${colIdx + 1}`;
                     return (
                       <div key={col.accessorKey || col.id || colIdx} className={cn('flex min-w-0 items-start justify-between gap-3 py-2', colIdx > 0 && 'border-t border-gray-100 dark:border-gray-800')}>
-                        <span className="w-28 shrink-0 pt-0.5 text-[11px] font-medium text-gray-500 dark:text-gray-400">{label}</span>
-                        <div className="min-w-0 flex-1 text-right text-xs text-gray-900 dark:text-gray-100 [&>*]:max-w-full [&>*]:min-w-0">
+                        <span className="max-w-[42%] shrink pt-0.5 text-xs font-medium text-gray-500 dark:text-gray-400">{label}</span>
+                        <div className="min-w-0 flex-1 text-left text-sm text-gray-900 dark:text-gray-100 [&>*]:max-w-full [&>*]:min-w-0">
                           {col.cell ? col.cell({ row: rowObj }) : col.accessorKey ? String((item as any)?.[col.accessorKey] ?? '—') : '—'}
                         </div>
                       </div>
@@ -250,10 +251,11 @@ export function DataTable<TData, TValue = any>({
             )}
           </div>
         )}
-        <div className={cn('pk-data-table-scroll overflow-x-auto custom-scrollbar touch-pan-x focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500', mobileLayout === 'cards' && 'hidden sm:block')} tabIndex={0} role="region" aria-label={`${tableLabel}. Use the table view to compare all columns.`}>
-          <table className="w-full text-left text-xs border-collapse" style={{ minWidth: `${Math.max(560, columns.length * 112)}px` }}>
+        <div className={cn('pk-data-table-scroll overflow-x-auto custom-scrollbar touch-pan-x focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500', useMobileCards && 'hidden sm:block')} tabIndex={0} role="region" aria-label={`${tableLabel}. Use the table view to compare all columns.`}>
+          <table aria-label={tableLabel} className="w-full text-left text-sm border-collapse" style={{ minWidth: `${Math.max(560, columns.length * 112)}px` }}>
+            <caption className="sr-only">{tableLabel}</caption>
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/70 dark:border-gray-800 dark:bg-gray-800/40 text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+              <tr className="sticky top-0 z-10 border-b border-gray-100 bg-gray-50 dark:border-gray-800 dark:bg-gray-800 text-xs font-medium normal-case tracking-normal text-gray-600 dark:text-gray-300">
                 {columns.map((col, idx) => {
                   const colKey = col.accessorKey || col.id || String(idx);
                   const isSorted = sortKey === colKey;
@@ -264,7 +266,7 @@ export function DataTable<TData, TValue = any>({
                       key={colKey}
                       aria-sort={isSorted ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
                       className={cn(
-                        'px-4 sm:px-6 py-4 select-none whitespace-nowrap',
+                        'px-4 sm:px-6 py-3 select-none whitespace-nowrap',
                         canSort && 'hover:bg-gray-100/60 dark:hover:bg-gray-800/80 transition-colors'
                       )}
                     >
@@ -332,14 +334,14 @@ export function DataTable<TData, TValue = any>({
                       tabIndex={onRowClick ? 0 : undefined}
                       aria-label={onRowClick ? `Open ${tableLabel} record ${rowIdx + 1}` : undefined}
                       className={cn(
-                        'hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors',
+                        'min-h-[44px] hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors',
                         onRowClick && 'cursor-pointer'
                       )}
                     >
                       {columns.map((col, colIdx) => (
                         <td
                           key={col.accessorKey || col.id || colIdx}
-                          className="px-4 sm:px-6 py-4"
+                          className="min-h-[44px] px-4 sm:px-6 py-3"
                         >
                           {col.cell
                             ? col.cell({ row: rowObj })
