@@ -504,7 +504,7 @@ export default function DashboardPage() {
               values={quarterlyTrendData.points.map((point) => point.mps)}
               ariaLabel="Quarterly mean percentage score trend"
             />
-          </div>
+          </div>}
         </div>
 
         {/* KPI Card 2: Learners on roster */}
@@ -719,17 +719,21 @@ export default function DashboardPage() {
                   })}
 
                   {/* X Axis Labels */}
-                  {trendSvgCoords.coords.map((pt) => (
-                    <text
-                      key={`label-${pt.key}`}
-                      x={pt.x}
-                      y={trendSvgCoords.height - 8}
-                      textAnchor="middle"
-                      className="fill-gray-500 dark:fill-gray-400 text-[11px] font-semibold"
-                    >
-                      {pt.label}
-                    </text>
-                  ))}
+                  {trendSvgCoords.coords.map((pt, index) => {
+                    const shortLabel = pt.label.match(/\\b([QT]\\s*[1-4])\\b/i)?.[1]?.replace(/\\s+/g, '').toUpperCase() || pt.label.slice(0, 2);
+                    if (index > 0 && trendSvgCoords.coords[index - 1].x === pt.x) return null;
+                    return (
+                      <text
+                        key={`label-${pt.key}`}
+                        x={pt.x}
+                        y={trendSvgCoords.height - 8}
+                        textAnchor="middle"
+                        className="fill-gray-500 dark:fill-gray-400 text-[11px] font-semibold tabular-nums"
+                      >
+                        {shortLabel}
+                      </text>
+                    );
+                  })}
                 </svg>
 
                 {/* Floating Tooltip */}

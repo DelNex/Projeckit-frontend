@@ -34,6 +34,7 @@ import {
   CheckSquare,
   Square,
   MinusSquare,
+  X,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';

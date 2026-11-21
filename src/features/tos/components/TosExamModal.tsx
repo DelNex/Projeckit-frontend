@@ -499,7 +499,7 @@ export function TosExamModal({
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all disabled:opacity-50"
               >
                 {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
-                <span>{isGenerating ? 'Generating...' : 'Generate Exam'}</span>
+                <span>{isGenerating ? 'Generating...' : 'Generate exam'}</span>
               </button>
               <button
                 onClick={() => setShowTeacherCopyModal(true)}
@@ -524,10 +524,10 @@ export function TosExamModal({
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
             {/* Generation Progress Banner */}
             {generationJob.job?.status === 'needs_attention' && (
-              <div className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+              <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
                 <AlertTriangle className="h-5 w-5 shrink-0" />
                 <span className="font-semibold">This AI job needs attention. Review its error, then clear the job to retry.</span>
-                <button onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="ml-auto shrink-0 rounded-lg border border-amber-300 px-3 py-1.5 font-semibold">Clear job</button>
+                <button onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="min-h-[40px] shrink-0 whitespace-nowrap rounded-lg border border-amber-300 px-3 font-semibold">Clear job</button>
               </div>
             )}
 
@@ -561,9 +561,9 @@ export function TosExamModal({
                   : generationJob.job?.status === 'running'
                     ? `${generationJob.job.progress?.label || generationProgress} This is running in the background; you can leave this page.`
                     : generationJob.job?.status === 'queued'
-                      ? `Queued (position ${generationJob.job.queuePosition || 1}). AI will process this exam in the background. This is running in the background, you can leave this page.`
+                      ? `Queued (position ${generationJob.job.queuePosition || 1}). AI will process this exam in the background; you can leave this page.`
                       : generationProgress}</span>
-                {['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '') && <button onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="ml-auto rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700">Cancel</button>}
+                {['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '') && <button onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="min-h-[40px] shrink-0 whitespace-nowrap rounded-lg border border-rose-200 px-3 text-xs font-semibold text-rose-700">Cancel</button>}
               </div>
             )}
 
