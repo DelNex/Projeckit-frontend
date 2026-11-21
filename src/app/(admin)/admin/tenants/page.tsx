@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/components/ui/toast';
 import { friendlyError } from '@/lib/errors';
+import { OmrBubble } from '@/components/ui/OmrBubble';
 import { Building2, Edit2, Loader2, Plus, RefreshCw, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -201,7 +202,31 @@ export default function TenantsPage() {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="grid gap-3 p-3 sm:hidden">
+            {tenants.map((tenant) => (
+              <article key={tenant.id} className="min-w-0 rounded-xl border border-gray-200 p-3 dark:border-gray-800">
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="break-words text-sm font-semibold text-gray-900 dark:text-white">{tenant.name}</h2>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      DepEd school ID <span className="font-mono tabular-nums">{tenant.code || 'Not provided'}</span>
+                    </p>
+                  </div>
+                  <span className="inline-flex shrink-0 items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                    <OmrBubble selected={tenant.is_active} tone={tenant.is_active ? 'success' : 'muted'} size={8} />
+                    {tenant.is_active ? 'Active' : 'Suspended'}
+                  </span>
+                </div>
+                <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-3 text-xs text-gray-500 dark:border-gray-800 dark:text-gray-400">
+                  <span>Added {new Date(tenant.created_at).toLocaleDateString()}</span>
+                  <button type="button" onClick={() => handleStartEdit(tenant)} className="min-h-11 rounded-lg border border-gray-200 px-3 font-medium text-gray-700 dark:border-gray-700 dark:text-gray-200">
+                    Edit school
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto sm:block">
             <table className="w-full text-left text-xs table-optimized min-w-[500px]">
               <thead className="border-b border-gray-100 bg-gray-50/50 text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:border-gray-800 dark:bg-gray-800/40 dark:text-gray-500">
                 <tr>
@@ -248,7 +273,7 @@ export default function TenantsPage() {
 
       {/* Provision Tenant Modal (Platform Admin Only) */}
       {isModalOpen && isPlatformAdmin && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 ">
           <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-gray-900">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3 dark:border-gray-800">
               <h3 className="text-base font-bold text-gray-900 dark:text-white">
@@ -256,7 +281,7 @@ export default function TenantsPage() {
               </h3>
               <button type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="rounded-lg p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                className="flex h-11 w-11 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"
               >
                 <X className="h-5 w-5" />
               </button>
