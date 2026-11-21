@@ -816,7 +816,7 @@ export function TosExamModal({
           </div>
         </div>
       )}
-      <ConfirmationModal isOpen={confirmClearMaterials} title="Clear saved lesson materials?" description="This removes the lesson files saved in this browser for this TOS. You can upload them again later." confirmLabel="Clear materials" actionType="danger" onConfirm={handleClearSavedMaterials} onClose={() => setConfirmClearMaterials(false)} />
+      <ConfirmationModal isOpen={confirmClearMaterials} title="Clear saved lesson materials?" description="This removes the lesson files saved in this browser for this TOS. You can upload them again later." confirmLabel="Clear materials" actionType="delete" onConfirm={handleClearSavedMaterials} onClose={() => setConfirmClearMaterials(false)} />
       <ConfirmationModal isOpen={confirmClose} title="Discard unsaved exam changes?"
         description="Your latest edits have not been saved yet. Close anyway and discard them?"
         actionType="neutral" confirmLabel="Discard changes" cancelLabel="Keep editing"
