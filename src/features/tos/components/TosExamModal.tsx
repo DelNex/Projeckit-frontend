@@ -25,6 +25,7 @@ import { clearPendingLessonExtraction, extractTextFromFiles, resumePendingLesson
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { ExamDraftEditor } from '@/components/assessment/ExamDraftEditor';
 import { clearLessonMaterials, loadLessonMaterials, saveLessonMaterials } from '@/lib/lesson-material-storage';
+import { useDialogAccessibility } from '@/hooks/use-dialog-accessibility';
 
 interface TosExamModalProps {
   isOpen: boolean;
@@ -66,6 +67,11 @@ export function TosExamModal({
   const handledSavedQuestionsJobId = useRef<string | null>(null);
   const draftWasEditedRef = useRef(false);
   const activeTosIdRef = useRef<string | null>(tos?.id || null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogAccessibility(dialogRef, isOpen && Boolean(tos), () => {
+    if (examDraftDirty) setConfirmClose(true);
+    else onClose();
+  });
 
   useEffect(() => {
     if (tos?.id && activeTosIdRef.current !== tos.id) {
@@ -463,7 +469,7 @@ export function TosExamModal({
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="generated-exam-title">
-        <div className="relative flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden border border-slate-200 bg-white shadow-none dark:border-slate-800 dark:bg-slate-900 sm:h-auto sm:max-h-[92dvh] sm:max-w-5xl sm:rounded-2xl sm:shadow-xl">
+        <div ref={dialogRef} tabIndex={-1} className="relative flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden border border-slate-200 bg-white shadow-none outline-none dark:border-slate-800 dark:bg-slate-900 sm:h-auto sm:max-h-[92dvh] sm:max-w-5xl sm:rounded-2xl sm:shadow-xl">
           {/* Header */}
           <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6 py-5 pr-16 sm:pr-6 border-b border-slate-100 dark:border-slate-800 shrink-0">
             <div>
