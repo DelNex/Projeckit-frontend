@@ -10,7 +10,7 @@ test('atomic quota migration serializes admission and validates tenant ownership
   assert.match(sql, /profile_tenant IS DISTINCT FROM p_tenant_id/);
   assert.match(sql, /EXAM_HOURLY_LIMIT_REACHED/);
   assert.match(sql, /EXAM_DAILY_LIMIT_REACHED/);
-  assert.equal((sql.match(/j\.parent_job_id IS NULL/g) || []).length, 2, 'hourly and daily quotas must count only root exam requests');
+  assert.equal((sql.match(/j\.parent_job_id IS NULL/g) || []).length, 3, 'active-job reuse and both quota checks must only count root exam requests');
   assert.match(sql, /p_hourly_limit integer DEFAULT 5/);
   assert.match(sql, /p_daily_limit integer DEFAULT 100/);
   assert.match(sql, /REVOKE ALL ON FUNCTION public\.enqueue_groq_exam_generation_job/);
