@@ -534,7 +534,7 @@ export function TosExamModal({
           {/* Body */}
           <div className="flex-1 overflow-y-auto overscroll-contain p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 space-y-6">
             {/* Provider access is checked on the TOS page in the background. It never gates uploads. */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300">
+            <div title="Provider status confirms API access only; it does not guarantee successful exam generation or available quota." className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-200">
               <div className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-100">
                 {aiReadiness.status === 'checking'
                   ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
