@@ -118,6 +118,15 @@ export default function StudentsPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedLearner]);
 
+
+  useEffect(() => {
+    if (!isAddModalOpen) return;
+    const handleDialogEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') handleAttemptCloseAddModal();
+    };
+    window.addEventListener('keydown', handleDialogEscape);
+    return () => window.removeEventListener('keydown', handleDialogEscape);
+  }, [isAddModalOpen, handleAttemptCloseAddModal]);
   const handleAttemptCloseAddModal = () => {
     if (hasUnsavedLearner) {
       setIsDiscardModalOpen(true);
