@@ -79,6 +79,7 @@ interface GradingPeriodItem {
 
 export default function SchoolSettingsPage() {
   const [saved, setSaved] = useState(false);
+  const [academicHasChanges, setAcademicHasChanges] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1151,6 +1152,7 @@ export default function SchoolSettingsPage() {
       }
 
       setSaved(true);
+      setAcademicHasChanges(false);
       toast.success('School settings saved successfully.');
       await refetchTenant();
       setTimeout(() => setSaved(false), 4000);
@@ -1581,9 +1583,9 @@ export default function SchoolSettingsPage() {
           <span>Loading academic context from Supabase...</span>
         </div>
       ) : (
-        <form onSubmit={handleSave} className="mx-auto w-full max-w-5xl min-w-0 space-y-6 pb-28 sm:pb-0">
+        <form onSubmit={handleSave} onChange={(event) => { const target = event.target; if (!(target instanceof HTMLElement) || !target.closest("[data-school-header]")) { setAcademicHasChanges(true); setSaved(false); } }} className="mx-auto w-full max-w-5xl min-w-0 space-y-6 pb-28 sm:pb-0">
           {/* Card 0: School Identity & DepEd Official Header */}
-          <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 space-y-5">
+          <div data-school-header className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 space-y-5">
             <div className="flex flex-col gap-3 border-b border-gray-100 pb-3 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
                 <School className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
@@ -2573,7 +2575,8 @@ export default function SchoolSettingsPage() {
           </div>
 
           {/* Form Action Button */}
-          <div className="pk-sticky-mobile-actions sticky bottom-0 z-30 -mx-4 flex justify-end border-t border-gray-200 bg-white/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur dark:border-gray-800 dark:bg-gray-900/95 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none sm:backdrop-blur-none">
+          {academicHasChanges && <div className="pk-sticky-mobile-actions sticky bottom-0 z-30 -mx-4 flex flex-col gap-2 border-t border-gray-200 bg-white/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur dark:border-gray-800 dark:bg-gray-900/95 sm:static sm:mx-0 sm:items-end sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none sm:backdrop-blur-none">
+            <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">Unsaved changes</span>
             <button
               type="submit"
               disabled={saving}
@@ -2582,7 +2585,7 @@ export default function SchoolSettingsPage() {
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               <span>Save academic settings</span>
             </button>
-          </div>
+          </div>}
         </form>
       )}
 
