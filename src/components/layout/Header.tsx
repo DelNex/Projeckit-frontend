@@ -86,8 +86,7 @@ export function Header({ onToggleSidebar, sidebarOpen = false, title }: HeaderPr
           </button>
 
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Project KIT</p>
-            <h1 className="truncate text-sm font-semibold text-slate-900 sm:text-base dark:text-white max-w-[180px] sm:max-w-none">
+            <h1 className="min-w-0 text-base font-semibold text-slate-900 sm:text-lg dark:text-white">
               {pageTitle}
             </h1>
           </div>
@@ -171,9 +170,9 @@ export function Header({ onToggleSidebar, sidebarOpen = false, title }: HeaderPr
                   <button type="button"
                     onClick={handleSignOut}
                     role="menuitem"
-                    className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+                    className="w-full min-h-11 flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-red-600 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-red-400"
                   >
-                    <LogOut className="h-4 w-4 text-red-500" />
+                    <LogOut className="h-4 w-4" />
                     <span>Sign out</span>
                   </button>
                 </div>
