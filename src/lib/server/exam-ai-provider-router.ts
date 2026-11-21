@@ -88,7 +88,7 @@ async function readProviderResponse(response: Response, provider: ProviderId): P
     const detail = String(body?.error?.message || body?.message || body?.errors?.[0]?.message || 'Provider request failed').slice(0, 180);
     const providerErrorCode = body?.error?.code || body?.error?.type || body?.code || null;
     const hasFailedGeneration = Boolean(body?.error?.failed_generation || body?.failed_generation);
-    const providerRequestId = response.headers.get('x-request-id') || response.headers.get('x-openrouter-generation-id') || response.headers.get('cf-ray');
+    const providerRequestId = response.headers.get('x-request-id') || response.headers.get('x-generation-id') || response.headers.get('cf-ray');
     const rateLimit = response.status === 429 ? {
       limitTokens: response.headers.get('x-ratelimit-limit-tokens'),
       remainingTokens: response.headers.get('x-ratelimit-remaining-tokens'),
