@@ -16,10 +16,10 @@ export async function GET(request: Request) {
   const admin = createAdminClient();
   const [tenantResult, hourlyResult, dailyResult] = await Promise.all([
     admin.from('tenants').select('ai_hourly_user_limit,ai_daily_school_limit').eq('id', profile.tenant_id).maybeSingle(),
-    admin.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('created_by', user.id)
+    admin.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('created_by', user.id).is('parent_job_id', null)
       .neq('status', 'cancelled').or('status.neq.failed,attempts.gt.0')
       .gte('created_at', new Date(now - 60 * 60_000).toISOString()),
-    supabase.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('tenant_id', profile.tenant_id)
+    supabase.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('tenant_id', profile.tenant_id).is('parent_job_id', null)
       .neq('status', 'cancelled').or('status.neq.failed,attempts.gt.0')
       .gte('created_at', new Date(now - 24 * 60 * 60_000).toISOString()),
   ]);
