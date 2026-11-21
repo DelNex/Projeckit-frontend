@@ -86,6 +86,9 @@ async function readProviderResponse(response: Response, provider: ProviderId): P
       cooldownUntil.set(provider, Date.now() + AUTH_COOLDOWN_MS);
     }
     const detail = String(body?.error?.message || body?.message || body?.errors?.[0]?.message || 'Provider request failed').slice(0, 180);
+    const providerErrorCode = body?.error?.code || body?.error?.type || body?.code || null;
+    const hasFailedGeneration = Boolean(body?.error?.failed_generation || body?.failed_generation);
+    const providerRequestId = response.headers.get('x-request-id') || response.headers.get('x-openrouter-generation-id') || response.headers.get('cf-ray');
     const rateLimit = response.status === 429 ? {
       limitTokens: response.headers.get('x-ratelimit-limit-tokens'),
       remainingTokens: response.headers.get('x-ratelimit-remaining-tokens'),
@@ -98,6 +101,9 @@ async function readProviderResponse(response: Response, provider: ProviderId): P
       retryAfterMs: response.status === 429 || (response.status >= 500 && response.headers.has('retry-after'))
         ? parseRetryAfter(response.headers.get('retry-after')) : null,
       rateLimit,
+      providerErrorCode,
+      hasFailedGeneration,
+      providerRequestId,
     });
   }
 
@@ -267,6 +273,8 @@ export async function requestExamQuestionsFromProviders(
       const rateLimit = (error as Error & { rateLimit?: Record<string, string | null> }).rateLimit || null;
       const providerRequestId = (error as Error & { providerRequestId?: string | null }).providerRequestId || null;
       const completionMeta = (error as Error & { completionMeta?: Record<string, unknown> }).completionMeta || null;
+      const providerErrorCode = (error as Error & { providerErrorCode?: string | null }).providerErrorCode || null;
+      const hasFailedGeneration = Boolean((error as Error & { hasFailedGeneration?: boolean }).hasFailedGeneration);
       const retryable = Boolean((error as Error & { retryable?: boolean }).retryable)
         || error instanceof SyntaxError
         || /timeout|fetch failed|network|returned no questions|returned an empty response body/i.test(message);
@@ -287,7 +295,7 @@ export async function requestExamQuestionsFromProviders(
         severity: retryable ? 'warn' : 'error', source: 'exam.provider-router',
         code: status === 429 ? 'AI_PROVIDER_RATE_LIMITED' : status ? 'AI_PROVIDER_HTTP_ERROR' : 'AI_PROVIDER_REQUEST_FAILED',
         message: 'An AI provider could not complete an exam batch.',
-        metadata: { provider: provider.id, status, retryable, detail: safeDetail, attempt: failures.length, providerRequestId, completionMeta },
+        metadata: { provider: provider.id, status, retryable, detail: safeDetail, attempt: failures.length, providerRequestId, providerErrorCode, hasFailedGeneration, completionMeta },
       });
       // Continue to the next configured provider even for provider-specific 4xx
       // errors. One model may reject a schema or credential while another works.
