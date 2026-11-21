@@ -1,3 +1,4 @@
+import React from 'react';
 interface SparklineProps {
   values: Array<number | null>;
   ariaLabel: string;
