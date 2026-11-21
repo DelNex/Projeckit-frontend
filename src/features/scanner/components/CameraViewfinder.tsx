@@ -186,11 +186,6 @@ export function CameraViewfinder({
               <div className="h-0.5 bg-blue-500 shadow-[0_0_8px_rgba(69,104,245,0.65)]" />
             </div>
 
-            <div className="flex items-center gap-1 text-[10px] font-bold text-blue-300 z-10">
-              <QrCode className="h-3.5 w-3.5 text-blue-400" />
-              <span>Barcode Scanner</span>
-            </div>
-
             <div className="relative z-20 rounded-full border border-[#383b40] bg-[#1b1d20] px-3 py-1.5 text-[10px] font-semibold text-[#f3f4f6] shadow-sm">
               {detectedBarcode ? (
                 <span className="text-emerald-400 font-bold flex items-center gap-1">

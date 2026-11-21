@@ -168,7 +168,7 @@ export function DataTable<TData, TValue = any>({
     <div className={cn('space-y-4 w-full min-w-0', className)}>
       {/* Table Toolbar: Search and Custom Filters */}
       {(searchKey || renderCustomFilter) && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-col sm:flex-row sm:items-center justify-between gap-3">
           {searchKey && (
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -179,7 +179,7 @@ export function DataTable<TData, TValue = any>({
                 value={searchFilter}
                 onChange={(e) => handleSearchChange(e.target.value)}
                 placeholder={searchPlaceholder}
-                className="h-10 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-9 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-100"
+                className="min-h-11 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-9 text-xs font-medium text-[var(--pk-text)] outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-800 dark:bg-gray-900"
               />
               {searchFilter && (
                 <button
@@ -194,7 +194,7 @@ export function DataTable<TData, TValue = any>({
           )}
 
           {renderCustomFilter && (
-            <div className="flex items-center gap-2 self-end sm:self-auto">
+            <div className="flex min-w-0 w-full items-center gap-2 self-stretch sm:w-auto sm:self-auto">
               {renderCustomFilter}
             </div>
           )}

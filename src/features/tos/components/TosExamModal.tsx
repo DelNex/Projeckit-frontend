@@ -25,6 +25,7 @@ import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { ExamDraftEditor } from '@/components/assessment/ExamDraftEditor';
 import { clearLessonMaterials, loadLessonMaterials, saveLessonMaterials } from '@/lib/lesson-material-storage';
 import { useDialogAccessibility } from '@/hooks/use-dialog-accessibility';
+import { StatusBanner } from '@/components/ui/status-banner';
 
 interface TosExamModalProps {
   isOpen: boolean;
@@ -468,7 +469,7 @@ export function TosExamModal({
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="generated-exam-title">
-        <div ref={dialogRef} tabIndex={-1} className="relative flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden border border-slate-200 bg-white shadow-none outline-none dark:border-slate-800 dark:bg-slate-900 sm:h-auto sm:max-h-[92dvh] sm:max-w-5xl sm:rounded-2xl sm:shadow-xl">
+        <div ref={dialogRef} tabIndex={-1} className="relative box-border flex h-[100dvh] max-h-[100dvh] w-full max-w-full min-w-0 flex-col overflow-x-hidden overflow-y-hidden border border-slate-200 bg-white shadow-none outline-none dark:border-slate-800 dark:bg-slate-900 sm:mx-auto sm:h-auto sm:max-h-[92dvh] sm:max-w-2xl sm:rounded-[16px] sm:shadow-xl">
           {/* Header */}
           <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6 py-5 pr-16 sm:pr-6 border-b border-slate-100 dark:border-slate-800 shrink-0">
             <div>
@@ -496,7 +497,7 @@ export function TosExamModal({
               <button
                 onClick={handleGenerateExam}
                 disabled={isGenerating || generationJob.isStarting || generationJob.retryAfterSeconds > 0 || (generationJob.quotaAvailable && Boolean(generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0))) || ['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all disabled:opacity-50"
+                className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all disabled:opacity-50"
               >
                 {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
                 <span>{isGenerating ? 'Generating...' : 'Generate exam'}</span>
@@ -504,10 +505,10 @@ export function TosExamModal({
               <button
                 onClick={() => setShowTeacherCopyModal(true)}
                 disabled={questions.length === 0}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 rounded-xl transition-all disabled:opacity-50"
+                className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 rounded-xl transition-all disabled:opacity-50"
               >
                 <FileDown className="h-3.5 w-3.5" />
-                <span>Export Exam / Key</span>
+                <span className="whitespace-nowrap">Export Exam / Key</span>
               </button>
 
               <button
@@ -522,60 +523,37 @@ export function TosExamModal({
 
           {/* Body */}
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-            {/* Generation Progress Banner */}
-            {generationJob.job?.status === 'needs_attention' && (
-              <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                <AlertTriangle className="h-5 w-5 shrink-0" />
-                <span className="font-semibold">This AI job needs attention. Review its error, then clear the job to retry.</span>
-                <button onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="min-h-[40px] shrink-0 whitespace-nowrap rounded-lg border border-amber-300 px-3 font-semibold">Clear job</button>
-              </div>
+            {/* One priority-ordered generation status slot. */}
+            {(generationJob.job?.status === 'needs_attention' || generationJob.job?.status === 'failed' || generationJob.retryAfterSeconds > 0 || (generationJob.quotaAvailable && Boolean(generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0))) || isGenerating || questions.length > 0) && (
+              <StatusBanner
+                tone={generationJob.job?.status === 'failed' ? 'danger' : generationJob.job?.status === 'needs_attention' || generationJob.retryAfterSeconds > 0 || (generationJob.quotaAvailable && Boolean(generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0))) ? 'warning' : 'info'}
+                className="border-y-0 rounded-xl bg-[var(--pk-surface)] px-3 items-center justify-between gap-3"
+                action={generationJob.job?.status === 'needs_attention' ? (
+                  <button type="button" onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="min-h-[40px] shrink-0 whitespace-nowrap rounded-lg border border-[var(--pk-line)] px-3 text-xs font-semibold">Clear job</button>
+                ) : isGenerating && ['queued', 'running'].includes(generationJob.job?.status || '') ? (
+                  <button type="button" onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="min-h-[40px] shrink-0 whitespace-nowrap rounded-lg border border-[var(--pk-line)] px-3 text-xs font-semibold">Cancel</button>
+                ) : undefined}
+              >
+                {generationJob.job?.status === 'needs_attention'
+                  ? 'This AI job needs attention. Review its error, then clear the job to retry.'
+                  : generationJob.job?.status === 'failed'
+                    ? generationJob.retryState.lastError || generationJob.job.error || 'The last generation attempt did not complete. Your saved TOS and existing questions were not changed.'
+                    : generationJob.retryAfterSeconds > 0
+                      ? `Please wait ${Math.floor(generationJob.retryAfterSeconds / 60)}:${String(generationJob.retryAfterSeconds % 60).padStart(2, '0')} before retrying this exam.`
+                      : generationJob.quotaAvailable && generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0)
+                        ? (generationJob.quota.hourly.remaining <= 0 ? 'You have reached your hourly exam-generation limit.' : 'Your school has reached its daily exam-generation limit.')
+                        : isGenerating
+                          ? `${(generationJob.job?.progress?.label || generationProgress || 'AI is generating your exam').replace(/[.!?]+$/, '')}. ${generationJob.job?.status === 'queued' ? 'This is queued in the background; you can leave this page.' : 'This is running in the background; you can leave this page.'}`
+                          : 'AI-generated draft. Review every question before approving and administering.'}
+              </StatusBanner>
             )}
-
-            {generationJob.quotaAvailable && generationJob.quota && (
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Generation allowance: {generationJob.quota.hourly.remaining}/{generationJob.quota.hourly.limit} this hour · {generationJob.quota.daily.remaining}/{generationJob.quota.daily.limit} for your school today.
+            {(generationJob.quotaAvailable && generationJob.quota) ? (
+              <p className="text-xs text-[var(--pk-text-muted)]">
+                Generation allowance: {generationJob.quota.hourly.remaining}/{generationJob.quota.hourly.limit} this hour · {generationJob.quota.daily.remaining}/{generationJob.quota.daily.limit} today. Review AI-generated questions before administering.
               </p>
-            )}
-            {generationJob.job?.status === 'failed' && (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                <p className="font-semibold">{generationJob.retryState.lastError || generationJob.job.error || 'The last generation attempt did not complete. Your saved TOS and existing questions were not changed.'}</p>
-                {generationJob.retryAfterSeconds <= 0 && <p className="mt-1">You can try generating again. Your saved lesson materials are still available.</p>}
-              </div>
-            )}
-            {generationJob.retryAfterSeconds > 0 && (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                <p className="font-semibold">Please wait before retrying this exam.</p>
-                <p className="mt-1">Retry available in {Math.floor(generationJob.retryAfterSeconds / 60)}:{String(generationJob.retryAfterSeconds % 60).padStart(2, '0')}. The server will check this limit again when you submit.</p>
-              </div>
-            )}
-            {generationJob.quotaAvailable && generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0) && (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                {generationJob.quota.hourly.remaining <= 0 ? 'You have reached your hourly exam-generation limit.' : 'Your school has reached its daily exam-generation limit.'} Please wait before generating another exam.
-              </div>
-            )}
-            {isGenerating && (
-              <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center gap-3 text-xs text-emerald-900 dark:text-emerald-100">
-                <Loader2 className="h-5 w-5 animate-spin text-emerald-600 shrink-0" />
-                <span className="font-semibold">{generationJob.job?.status === 'needs_attention'
-                  ? 'The AI generation job needs attention. Review the error and retry.'
-                  : generationJob.job?.status === 'running'
-                    ? `${generationJob.job.progress?.label || generationProgress} This is running in the background; you can leave this page.`
-                    : generationJob.job?.status === 'queued'
-                      ? `Queued (position ${generationJob.job.queuePosition || 1}). AI will process this exam in the background; you can leave this page.`
-                      : generationProgress}</span>
-                {['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '') && <button onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="min-h-[40px] shrink-0 whitespace-nowrap rounded-lg border border-rose-200 px-3 text-xs font-semibold text-rose-700">Cancel</button>}
-              </div>
-            )}
-
-            {/* AI Draft Review Banner */}
-            {questions.length > 0 && (
-              <div className="p-3.5 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 flex items-center gap-2.5 text-xs text-indigo-900 dark:text-indigo-200">
-                <CheckCircle2 className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                <span className="font-semibold">
-                  AI-generated draft: review every question before approving and administering.
-                </span>
-              </div>
-            )}
+            ) : questions.length > 0 ? (
+              <p className="text-xs text-[var(--pk-text-muted)]">Review AI-generated questions before administering.</p>
+            ) : null}
 
             {/* 1. Learning Materials By Competency */}
             <div className="space-y-3">
@@ -605,12 +583,12 @@ export function TosExamModal({
                           <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
                             Competency {idx + 1}:
                           </span>
-                          <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 ml-1.5">
+                          <span className="text-xs font-semibold text-[var(--pk-text-secondary)] ml-1.5">
                             {row.description}
                           </span>
                         </div>
 
-                        <label className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[var(--pk-text)] bg-white dark:bg-[var(--pk-raised)] border border-slate-200 dark:border-[var(--pk-line)] rounded-xl hover:bg-slate-50 dark:hover:bg-slate-600 cursor-pointer shrink-0 transition-colors">
+                        <label className="inline-flex min-h-[44px] items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[var(--pk-text)] bg-white dark:bg-[var(--pk-raised)] border border-slate-200 dark:border-[var(--pk-line)] rounded-xl hover:bg-slate-50 dark:hover:bg-slate-600 cursor-pointer shrink-0 transition-colors">
                           <Upload className="h-3.5 w-3.5" />
                           <span>{mat.isUploading ? 'Processing on the server...' : 'Choose Files'}</span>
                           <input
