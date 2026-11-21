@@ -463,7 +463,7 @@ function detectColumnMapping(firstRow: string[]): ColumnMapping {
     }
   };
 
-  useDialogAccessibility(dialogRef, isOpen);
+  useDialogAccessibility(dialogRef, isOpen && !isDiscardModalOpen);
 
   if (!isOpen) return null;
 
