@@ -651,7 +651,9 @@ export default function DashboardPage() {
                     strokeWidth="1.5"
                     strokeDasharray="4 4"
                   />
-{/* Trend Path line */}
+                  <text x={trendSvgCoords.width - trendSvgCoords.paddingX} y={trendSvgCoords.benchmarkY - 7} textAnchor="end" className="fill-gray-500 text-[10px] font-medium">75% target</text>
+
+                  {/* Trend Path line */}
                   {trendSvgCoords.pathD && (
                     <path
                       d={trendSvgCoords.pathD}
