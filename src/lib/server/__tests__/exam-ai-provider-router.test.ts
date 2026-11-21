@@ -240,6 +240,8 @@ test('Groq retry delay respects Retry-After and applies bounded exponential back
   assert.equal(getExamProviderRetryDelayMs(null, 1), 5_000);
   assert.equal(getExamProviderRetryDelayMs(null, 2), 15_000);
   assert.equal(getExamProviderRetryDelayMs(null, 3), 30_000);
+  assert.equal(getExamProviderRetryDelayMs(null, 4), 60_000);
+  assert.equal(getExamProviderRetryDelayMs(null, 5), 120_000);
   assert.equal(getExamProviderRetryDelayMs(60 * 60_000, 1), 15 * 60_000);
 });
 
@@ -373,6 +375,35 @@ test('OpenRouter empty content falls through to Gemini instead of stalling the j
     const result = await requestExamQuestionsFromProviders([{ role: 'user', content: 'Create one question.' }], { type: 'object' });
     assert.deepEqual(JSON.parse(result), [{ item_number: 7 }]);
     assert.equal(calls, 2);
+  } finally {
+    global.fetch = originalFetch;
+    resetExamProviderCooldownsForTests();
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
+test('OpenRouter empty completion records finish reason and request ID before failover', async () => {
+  resetExamProviderCooldownsForTests();
+  const names = ['OPENROUTER_API_KEY', 'AI_PROVIDER_ORDER'];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  const originalFetch = global.fetch;
+  try {
+    process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
+    process.env.AI_PROVIDER_ORDER = 'openrouter';
+    global.fetch = (async () => new Response(JSON.stringify({
+      id: 'gen-empty-123',
+      choices: [{ finish_reason: 'length', message: { content: null, reasoning: 'internal reasoning' } }],
+    }), { status: 200, headers: { 'content-type': 'application/json', 'x-request-id': 'req-empty-123' } })) as typeof fetch;
+    const { requestExamQuestionsFromProviders } = await import('../exam-ai-provider-router');
+    await assert.rejects(
+      requestExamQuestionsFromProviders([{ role: 'user', content: 'Return JSON questions.' }], { type: 'object' }),
+      (error: any) => error.retryable === true
+        && /finish=length/.test(error.message)
+        && /req-empty-123/.test(error.message),
+    );
   } finally {
     global.fetch = originalFetch;
     resetExamProviderCooldownsForTests();
