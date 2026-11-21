@@ -663,12 +663,13 @@ export function TosExamModal({
                               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white dark:bg-[var(--pk-raised)] border border-slate-200 dark:border-[var(--pk-line)] text-xs text-[var(--pk-text)]"
                             >
                               <FileText className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                              <span className="max-w-[180px] truncate">{file.name} <span className="text-[10px] text-slate-500">({Math.max(1, Math.ceil(file.text.length / 1024))} KB)</span></span>
+                              <span className="max-w-[180px] truncate">{file.name} <span className="text-[10px] text-slate-500">(about {Math.max(1, Math.ceil(file.text.length / 1024))} KB text)</span></span>
                               <button
                                 type="button"
                                 onClick={() => handleDeleteFile(id, fIdx)}
                                 className="ml-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 dark:text-slate-300 dark:hover:text-rose-400"
                                 title="Remove file"
+                                aria-label={`Remove ${file.name}`}
                               >
                                 <X className="h-3 w-3" />
                               </button>
