@@ -6,8 +6,6 @@ import type { TosBlueprintSlot } from '@/lib/exam-types';
 import { requestExamQuestionsFromProviders } from './exam-ai-provider-router';
 import { logSystemEvent } from './system-logger';
 
-const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
-const DEFAULT_MODEL = 'openai/gpt-oss-120b';
 const MAX_LESSON_CHARS = 900_000;
 const WORKER_ID = 'project-kit-groq-worker';
 
@@ -296,7 +294,6 @@ export async function runGroqExamJob(jobId: string, admin = createAdminClient(),
     // Adapt the batch size to exam size: one request for small exams, then
     // larger batches for longer exams to control response size and retries.
     const batches = splitExamSlotsIntoBatches(slots);
-
 
     // Keep successful batches in the durable job payload. A later provider
     // failure can then resume without paying to regenerate completed questions.
