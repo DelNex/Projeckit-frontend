@@ -291,7 +291,7 @@ export default function DashboardPage() {
       overallMps,
       atRiskCount,
       totalExaminees: Math.max(distinctStudents, totalEnrolledStudents),
-      totalSections: totalSectionsCount || 8,
+      totalSections: totalSectionsCount,
     };
   }, [studentScores, totalEnrolledStudents, totalSectionsCount, assessments.length]);
 
@@ -497,7 +497,7 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* KPI Card 2: Total Students Assessed */}
+        {/* KPI Card 2: Learners on roster */}
         <div className="pk-kpi-card p-5 sm:p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xs transition-all hover:shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
@@ -520,7 +520,7 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* KPI Card 3: At-Risk Learners */}
+        {/* KPI Card 3: Scans below 75% */}
         <div className="pk-kpi-card p-5 sm:p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xs transition-all hover:shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
@@ -555,15 +555,9 @@ export default function DashboardPage() {
           </div>
           <div className="mt-4 flex items-baseline justify-between">
             <span className="text-3xl font-black text-gray-900 dark:text-white">
-              {loading ? '...' : aggregateMetrics.totalSections}
-            </span>
-            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300 px-2 py-0.5 rounded-full">
-              100% Tracked
+              {loading ? '...' : aggregateMetrics.totalSections || '—'}
             </span>
           </div>
-          <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-            STEM, TVL, and HUMSS strands
-          </p>
         </div>
       </div>
 
