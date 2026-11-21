@@ -141,7 +141,7 @@ export async function POST(request: Request) {
 
     const [tenant, hourly, daily] = await Promise.all([
       caller.admin!.from('tenants').select('ai_hourly_user_limit,ai_daily_school_limit').eq('id', caller.profile!.tenant_id).maybeSingle(),
-      caller.admin!.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('created_by', caller.user!.id)
+      caller.admin!.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('created_by', caller.user!.id).is('parent_job_id', null)
         .neq('status', 'cancelled').or('status.neq.failed,attempts.gt.0').gte('created_at', new Date(Date.now() - 3600000).toISOString()),
       caller.admin!.from('exam_generation_jobs').select('id', { count: 'exact', head: true }).eq('tenant_id', caller.profile!.tenant_id).is('parent_job_id', null)
         .neq('status', 'cancelled').or('status.neq.failed,attempts.gt.0').gte('created_at', new Date(Date.now() - 86400000).toISOString()),
