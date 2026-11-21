@@ -668,9 +668,9 @@ export function OmrCameraModal({
       ref={dialogRef}
       className="pk-omr-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-0 sm:p-4 animate-in fade-in duration-200"
     >
-      <div className="pk-omr-dialog relative flex h-full w-full flex-col overflow-hidden bg-gray-900 border-0 sm:border sm:border-gray-800 shadow-2xl text-white sm:h-auto sm:max-h-[94vh] sm:max-w-4xl sm:rounded-3xl">
+      <div className="pk-omr-dialog relative flex h-full w-full min-w-0 flex-col overflow-hidden border-0 bg-[#1b1d20] text-[#f3f4f6] shadow-2xl sm:h-auto sm:max-h-[94vh] sm:max-w-4xl sm:rounded-3xl sm:border sm:border-[#383b40]">
         {/* Header with Compact Stepper */}
-        <div className="pk-omr-header flex shrink-0 items-center justify-between border-b border-gray-800 px-3.5 py-2.5 sm:px-6 sm:py-3.5 bg-gray-900 z-10">
+        <div className="pk-omr-header flex shrink-0 items-center justify-between border-b border-[#383b40] bg-[#1b1d20] px-3.5 py-2.5 text-[#f3f4f6] sm:px-6 sm:py-3.5 z-10">
           <div className="flex items-center gap-2 min-w-0">
             <Camera className="h-4 w-4 sm:h-5 sm:w-5 text-blue-400 shrink-0" />
             <h3 id="pk-omr-title" className="text-xs sm:text-base font-bold truncate">
@@ -812,7 +812,7 @@ export function OmrCameraModal({
                           setSelectedStudentId(e.target.value);
                           setErrorMessage(null);
                         }}
-                        className="flex-1 min-w-0 rounded-lg bg-gray-900 border border-gray-700 px-2 py-1 text-xs text-white truncate"
+                        className="min-h-[44px] flex-1 min-w-0 rounded-lg border border-[#383b40] bg-[#25282c] px-2 py-2 text-xs text-[#f3f4f6] placeholder:text-[#9a9fa6] truncate"
                       >
                         <option value="">
                           {detectedBarcode ? `Barcode: ${detectedBarcode.rawValue} (Select learner)` : '— Or select student manually —'}

@@ -3,16 +3,16 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   X,
-  Sparkles,
   FileDown,
   Upload,
   FileText,
-  AlertTriangle,
-  CheckCircle2,
   Calendar,
   Loader2,
   Printer,
-} from 'lucide-react';
+
+  Sparkles,
+  AlertTriangle,
+  CheckCircle2,} from 'lucide-react';
 import { TosDocument } from '@/types/tos';
 import { ExamQuestion, getTosCompetencyId } from '@/lib/exam-types';
 import { generateExamDocx, downloadBlob } from '../exam-word-export';
@@ -356,7 +356,7 @@ export function TosExamModal({
     });
   };
 
-  // Generate Examination
+  // Generate examination
   const handleGenerateExam = async () => {
     const hasAnyLessonMaterial = Object.values(materials).some((material) =>
       material.files.some((file) => file.text.trim().length > 0)
@@ -471,7 +471,7 @@ export function TosExamModal({
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="generated-exam-title">
-        <div ref={dialogRef} tabIndex={-1} className="relative flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden border border-slate-200 bg-white shadow-none outline-none dark:border-slate-800 dark:bg-slate-900 sm:h-auto sm:max-h-[92dvh] sm:max-w-5xl sm:rounded-2xl sm:shadow-xl">
+        <div ref={dialogRef} tabIndex={-1} className="relative box-border flex h-[100dvh] max-h-[100dvh] w-full max-w-full min-w-0 flex-col overflow-x-hidden overflow-y-hidden border border-slate-200 bg-white shadow-none outline-none dark:border-slate-800 dark:bg-slate-900 sm:mx-auto sm:h-auto sm:max-h-[92dvh] sm:max-w-2xl sm:rounded-[16px] sm:shadow-xl">
           {/* Header */}
           <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6 py-5 pr-16 sm:pr-6 border-b border-slate-100 dark:border-slate-800 shrink-0">
             <div>
@@ -499,18 +499,18 @@ export function TosExamModal({
               <button
                 onClick={handleGenerateExam}
                 disabled={isGenerating || generationJob.isStarting || generationJob.retryAfterSeconds > 0 || (generationJob.quotaAvailable && Boolean(generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0))) || ['queued', 'running', 'needs_attention'].includes(generationJob.job?.status || '')}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all disabled:opacity-50"
+                className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all disabled:opacity-50"
               >
-                {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                <span>{isGenerating ? 'Generating...' : 'Generate Exam'}</span>
+                {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+                <span>{isGenerating ? 'Generating...' : 'Generate exam'}</span>
               </button>
               <button
                 onClick={() => setShowTeacherCopyModal(true)}
                 disabled={questions.length === 0}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 rounded-xl transition-all disabled:opacity-50"
+                className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 rounded-xl transition-all disabled:opacity-50"
               >
                 <FileDown className="h-3.5 w-3.5" />
-                <span>Export Exam / Key</span>
+                <span className="whitespace-nowrap">Export Exam / Key</span>
               </button>
 
               <button
@@ -628,12 +628,12 @@ export function TosExamModal({
                           <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
                             Competency {idx + 1}:
                           </span>
-                          <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 ml-1.5">
+                          <span className="text-xs font-semibold text-[var(--pk-text-secondary)] ml-1.5">
                             {row.description}
                           </span>
                         </div>
 
-                        <label className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-600 cursor-pointer shrink-0 transition-colors">
+                        <label className="inline-flex min-h-[44px] items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[var(--pk-text)] bg-white dark:bg-[var(--pk-raised)] border border-slate-200 dark:border-[var(--pk-line)] rounded-xl hover:bg-slate-50 dark:hover:bg-slate-600 cursor-pointer shrink-0 transition-colors">
                           <Upload className="h-3.5 w-3.5" />
                           <span>{mat.isUploading ? 'Processing on the server...' : 'Choose Files'}</span>
                           <input
@@ -655,7 +655,7 @@ export function TosExamModal({
                           {mat.files.map((file, fIdx) => (
                             <div
                               key={fIdx}
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-xs text-slate-700 dark:text-slate-200"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white dark:bg-[var(--pk-raised)] border border-slate-200 dark:border-[var(--pk-line)] text-xs text-[var(--pk-text)]"
                             >
                               <FileText className="h-3.5 w-3.5 text-blue-500 shrink-0" />
                               <span className="truncate max-w-[180px]">{file.name}</span>
@@ -671,7 +671,7 @@ export function TosExamModal({
                           ))}
                         </div>
                       ) : (
-                        <div className="text-[11px] text-slate-400 italic">
+                        <div className="text-[11px] text-slate-500 dark:text-slate-300">
                           No local lesson files selected for this competency. Questions will be synthesized from curriculum objectives.
                         </div>
                       )}

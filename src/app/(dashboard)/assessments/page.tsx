@@ -507,6 +507,7 @@ function AssessmentsContent() {
         header: 'Assessment Title',
         cell: ({ row }) => {
           const a = row.original;
+          const assessmentTitle = a.title?.trim().toUpperCase() === 'SAMPLE SURVEY' ? 'Sample survey' : a.title;
           return (
             <div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -515,7 +516,7 @@ function AssessmentsContent() {
                   onClick={(e) => e.stopPropagation()}
                   className="font-bold text-gray-900 hover:text-blue-600 dark:text-white dark:hover:text-blue-400 transition"
                 >
-                  {a.title}
+                  {assessmentTitle}
                 </Link>
                 {a.tos_id ? (
                   <Link
@@ -614,11 +615,11 @@ function AssessmentsContent() {
             badgeClass = 'bg-purple-50 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300';
           }
 
-          return (
-            <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${badgeClass}`}>
-              {status}
-            </span>
-          );
+          if (status === 'DRAFT') {
+            return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--pk-text-muted)]"><span aria-hidden="true" className="h-2 w-2 rounded-full bg-[var(--pk-text-muted)]" />Draft</span>;
+          }
+          const statusLabel = status.charAt(0) + status.slice(1).toLowerCase();
+          return <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${badgeClass}`}>{statusLabel}</span>;
         },
       },
       {
@@ -661,9 +662,6 @@ function AssessmentsContent() {
       {/* Header & Actions */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">
-            Item Analysis
-          </h1>
           <p className="text-xs text-gray-500 dark:text-gray-400">
             Scan answer sheets, verify learner matches, and review item analysis. Print and download by section from Print &amp; Reports.
           </p>
@@ -705,12 +703,12 @@ function AssessmentsContent() {
           window.location.href = `/assessments/${assessment.id}`;
         }}
         renderCustomFilter={
-          <div className="flex items-center gap-2">
+          <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
             <Filter className="h-4 w-4 text-gray-400" />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="h-10 rounded-xl border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 outline-none transition focus:border-blue-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300"
+              className="min-h-11 w-full min-w-0 rounded-xl border border-gray-200 bg-white px-3 text-xs font-medium text-[var(--pk-text)] outline-none transition focus:border-blue-600 dark:border-gray-800 dark:bg-gray-900 sm:w-auto"
             >
               <option value="ALL">All Statuses</option>
               <option value="DRAFT">Draft</option>

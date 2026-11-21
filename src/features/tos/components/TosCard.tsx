@@ -4,12 +4,10 @@ import { TosDocument } from '@/types/tos';
 import {
   Eye,
   Edit2,
-  Sparkles,
   Trash2,
   FileDown,
+  FilePlus2,
   Users,
-  Calendar,
-  Layers,
 } from 'lucide-react';
 
 interface TosCardProps {
@@ -51,7 +49,7 @@ export function TosCard({
   }
 
   const examTypeTitle = tos.exam_type || 'Summative Test';
-  const descriptionText = tos.description || tos.subject;
+  const descriptionText = tos.description && tos.description !== tos.subject ? tos.description : "";
 
   return (
     <div className="flex flex-col justify-between bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-none transition-colors group">
@@ -122,7 +120,7 @@ export function TosCard({
             onClick={() => onCreateExam(tos)}
             className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 rounded-lg shadow-sm transition-colors"
           >
-            <Sparkles className="h-3.5 w-3.5" />
+            <FilePlus2 className="h-3.5 w-3.5" />
             <span>Create exam</span>
           </button>
           <button

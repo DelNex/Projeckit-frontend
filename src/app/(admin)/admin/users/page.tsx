@@ -34,6 +34,7 @@ import {
   CheckSquare,
   Square,
   MinusSquare,
+  X,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
@@ -1825,7 +1826,7 @@ export default function AllAccountsPage() {
       {/* Account Details Modal (B5) */}
       {detailUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-          <div className="w-full max-w-lg rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-gray-900 paint-isolate">
+          <div className="w-full max-w-lg max-h-[90dvh] overflow-y-auto rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-gray-900 paint-isolate">
             <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-gray-800">
               <div className="flex items-center gap-2">
                 <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400 font-bold">
@@ -1843,9 +1844,10 @@ export default function AllAccountsPage() {
               <button
                 type="button"
                 onClick={() => setDetailUser(null)}
-                className="rounded-xl p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800"
+                aria-label="Close account details"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
               >
-                <XCircle className="h-5 w-5" />
+                <X className="h-5 w-5" />
               </button>
             </div>
 
@@ -1926,11 +1928,11 @@ export default function AllAccountsPage() {
               </div>
             </div>
 
-            <div className="mt-6 flex justify-end">
+            <div className="sticky bottom-0 mt-6 flex justify-end border-t border-gray-100 bg-white pt-3 dark:border-gray-800 dark:bg-gray-900">
               <button
                 type="button"
                 onClick={() => setDetailUser(null)}
-                className="rounded-xl bg-gray-100 px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                className="min-h-[44px] rounded-xl bg-gray-100 px-4 py-2 text-xs font-bold text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
               >
                 Close
               </button>
