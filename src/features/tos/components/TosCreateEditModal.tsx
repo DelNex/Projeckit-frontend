@@ -380,7 +380,7 @@ export function TosCreateEditModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-slate-900/60 overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="tos-editor-title">
         <div className="relative my-0 h-[100dvh] max-h-[100dvh] w-full max-w-3xl rounded-none border border-slate-200 bg-white shadow-none dark:border-slate-800 dark:bg-slate-900 sm:my-8 sm:h-auto sm:max-h-[85vh] sm:rounded-2xl sm:shadow-xl flex flex-col">
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 dark:border-slate-800">
