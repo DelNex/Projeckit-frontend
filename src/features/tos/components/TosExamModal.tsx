@@ -30,6 +30,7 @@ interface TosExamModalProps {
   onClose: () => void;
   tos: TosDocument | null;
   schoolName: string;
+  aiReadiness: { status: 'checking' | 'available' | 'degraded' | 'rate_limited' | 'unavailable' | 'unconfigured'; providers: Array<{ provider: string; status: string }>; checkedAt: string | null };
 }
 
 interface CompetencyMaterial {
@@ -45,6 +46,7 @@ export function TosExamModal({
   onClose,
   tos,
   schoolName,
+  aiReadiness,
 }: TosExamModalProps) {
   const { toast } = useToast();
   const supabase = createClient();
@@ -521,11 +523,11 @@ export function TosExamModal({
 
           {/* Body */}
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-            {/* One priority-ordered generation status slot. */}
-            {(generationJob.job?.status === 'needs_attention' || generationJob.job?.status === 'failed' || generationJob.retryAfterSeconds > 0 || (generationJob.quotaAvailable && Boolean(generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0))) || isGenerating || questions.length > 0) && (
+            {/* One priority-ordered status slot for provider readiness and exam generation. */}
+            {(generationJob.job?.status === 'needs_attention' || generationJob.job?.status === 'failed' || generationJob.retryAfterSeconds > 0 || (generationJob.quotaAvailable && Boolean(generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0))) || isGenerating || questions.length > 0 || aiReadiness.status === 'checking' || aiReadiness.status === 'available' || aiReadiness.status === 'degraded' || aiReadiness.status === 'rate_limited' || aiReadiness.status === 'unavailable' || aiReadiness.status === 'unconfigured') && (
               <StatusBanner
-                tone={generationJob.job?.status === 'failed' ? 'danger' : generationJob.job?.status === 'needs_attention' || generationJob.retryAfterSeconds > 0 || (generationJob.quotaAvailable && Boolean(generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0))) ? 'warning' : 'info'}
-                className="border-y-0 rounded-xl bg-[var(--pk-surface)] px-3 items-center justify-between gap-3"
+                tone={generationJob.job?.status === 'failed' ? 'danger' : generationJob.job?.status === 'needs_attention' || generationJob.retryAfterSeconds > 0 || (generationJob.quotaAvailable && Boolean(generationJob.quota && (generationJob.quota.hourly.remaining <= 0 || generationJob.quota.daily.remaining <= 0))) || aiReadiness.status === 'degraded' || aiReadiness.status === 'rate_limited' || aiReadiness.status === 'unavailable' || aiReadiness.status === 'unconfigured' ? 'warning' : 'info'}
+                className="border-y-0 rounded-xl bg-[var(--pk-surface)] px-3 text-[var(--pk-text)] items-center justify-between gap-3"
                 action={generationJob.job?.status === 'needs_attention' ? (
                   <button type="button" onClick={() => void generationJob.cancel().catch((error) => toast.error(error.message))} className="min-h-[40px] shrink-0 whitespace-nowrap rounded-lg border border-[var(--pk-line)] px-3 text-xs font-semibold">Clear job</button>
                 ) : isGenerating && ['queued', 'running'].includes(generationJob.job?.status || '') ? (
@@ -542,7 +544,19 @@ export function TosExamModal({
                         ? (generationJob.quota.hourly.remaining <= 0 ? 'You have reached your hourly exam-generation limit.' : 'Your school has reached its daily exam-generation limit.')
                         : isGenerating
                           ? `${(generationJob.job?.progress?.label || generationProgress || 'AI is generating your exam').replace(/[.!?]+$/, '')}. ${generationJob.job?.status === 'queued' ? 'This is queued in the background; you can leave this page.' : 'This is running in the background; you can leave this page.'}`
-                          : 'AI-generated draft. Review every question before approving and administering.'}
+                          : aiReadiness.status === 'checking'
+                            ? 'Checking AI provider access in the background. You can choose and process lesson files while this check runs; it does not use an exam-generation attempt.'
+                            : aiReadiness.status === 'available'
+                              ? 'AI provider access is responding. This confirms API access, not model output or generation quota.'
+                              : aiReadiness.status === 'degraded'
+                                ? 'Some AI providers are responding; fallback may be limited.'
+                                : aiReadiness.status === 'rate_limited'
+                                  ? 'Configured AI providers are currently rate-limited.'
+                                  : aiReadiness.status === 'unconfigured'
+                                    ? 'No supported AI provider is configured.'
+                                    : aiReadiness.status === 'unavailable'
+                                      ? 'AI provider access could not be confirmed.'
+                                      : 'AI-generated draft. Review every question before approving and administering.'}
               </StatusBanner>
             )}
             {(generationJob.quotaAvailable && generationJob.quota) ? (
