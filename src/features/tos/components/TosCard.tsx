@@ -54,29 +54,21 @@ export function TosCard({
   const descriptionText = tos.description || tos.subject;
 
   return (
-    <div className="flex flex-col justify-between bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all group">
+    <div className="flex flex-col justify-between bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-none transition-colors group">
       <div className="space-y-3">
         {/* Top Badges & Word download */}
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-              {tos.term}
-            </span>
-            <span
-              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 max-w-[200px] truncate"
-              title={tos.subject}
-            >
-              {tos.subject}
-            </span>
-            {isExamGenerating && <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300">Exam is being generated</span>}
+          <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+            <span>{tos.term} · {tos.subject}</span>
+            {isExamGenerating && <span className="inline-flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-[var(--pk-warning)]" />Exam is being generated</span>}
           </div>
 
           {onDownloadWord && (
             <button
               onClick={() => onDownloadWord(tos)}
               className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg transition-colors shrink-0"
-              title="Download TOS as a Word document"
-              aria-label="Download TOS as a Word document"
+              title="Open to download Word"
+              aria-label="Open to download Word"
             >
               <FileDown className="h-4 w-4" />
             </button>
@@ -131,7 +123,7 @@ export function TosCard({
             className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 rounded-lg shadow-sm transition-colors"
           >
             <Sparkles className="h-3.5 w-3.5" />
-            <span>Create Exam</span>
+            <span>Create exam</span>
           </button>
           <button
             onClick={() => onDelete(tos)}

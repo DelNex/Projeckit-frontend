@@ -21,6 +21,8 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useTenant } from '@/context/TenantContext';
 import { getPhilippineSchoolYear } from '@/lib/academic-calendar';
+import { BarList } from '@/components/ui/bar-list';
+import { Sparkline } from '@/components/ui/sparkline';
 
 interface AssessmentItem {
   id: string;
@@ -50,11 +52,11 @@ interface StudentScoreRecord {
 }
 
 const TIER_CONFIG = [
-  { key: 'mastered', label: 'Mastered', range: '96–100%', min: 96, color: '#4568f5', bgClass: 'bg-emerald-500', textClass: 'text-emerald-700 dark:text-emerald-400' },
-  { key: 'closely', label: 'Closely Approximating Mastery', range: '86–95%', min: 86, color: '#6e88f7', bgClass: 'bg-blue-500', textClass: 'text-blue-700 dark:text-blue-400' },
-  { key: 'moving', label: 'Moving Towards Mastery', range: '66–85%', min: 66, color: '#8da1f9', bgClass: 'bg-amber-500', textClass: 'text-amber-700 dark:text-amber-400' },
-  { key: 'average', label: 'Average / Low', range: '35–65%', min: 35, color: '#b4c2ff', bgClass: 'bg-indigo-500', textClass: 'text-indigo-700 dark:text-indigo-400' },
-  { key: 'atRisk', label: 'Very Low / At Risk', range: '<35%', min: 0, color: '#dce4ff', bgClass: 'bg-rose-500', textClass: 'text-rose-700 dark:text-rose-400' },
+  { key: 'mastered', label: 'Mastered', range: '96–100%', min: 96, color: 'var(--pk-brand)', bgClass: 'bg-emerald-500', textClass: 'text-emerald-700 dark:text-emerald-400' },
+  { key: 'closely', label: 'Closely Approximating Mastery', range: '86–95%', min: 86, color: 'color-mix(in srgb, var(--pk-brand) 78%, transparent)', bgClass: 'bg-blue-500', textClass: 'text-blue-700 dark:text-blue-400' },
+  { key: 'moving', label: 'Moving Towards Mastery', range: '66–85%', min: 66, color: 'color-mix(in srgb, var(--pk-brand) 58%, transparent)', bgClass: 'bg-amber-500', textClass: 'text-amber-700 dark:text-amber-400' },
+  { key: 'average', label: 'Average / Low', range: '35–65%', min: 35, color: 'var(--pk-raised)', bgClass: 'bg-indigo-500', textClass: 'text-indigo-700 dark:text-indigo-400' },
+  { key: 'atRisk', label: 'Very Low / At Risk', range: '<35%', min: 0, color: 'var(--pk-danger)', bgClass: 'bg-rose-500', textClass: 'text-rose-700 dark:text-rose-400' },
 ];
 
 export default function DashboardPage() {
@@ -70,6 +72,7 @@ export default function DashboardPage() {
   const [totalSectionsCount, setTotalSectionsCount] = useState<number>(0);
   const [studentScores, setStudentScores] = useState<StudentScoreRecord[]>([]);
   const [hoveredPoint, setHoveredPoint] = useState<{ quarter: string; mps: number; delta: number; x: number; y: number } | null>(null);
+  const [showTrendTable, setShowTrendTable] = useState(false);
 
   const supabase = createClient();
 
@@ -291,7 +294,7 @@ export default function DashboardPage() {
       overallMps,
       atRiskCount,
       totalExaminees: Math.max(distinctStudents, totalEnrolledStudents),
-      totalSections: totalSectionsCount || 8,
+      totalSections: totalSectionsCount,
     };
   }, [studentScores, totalEnrolledStudents, totalSectionsCount, assessments.length]);
 
@@ -366,7 +369,7 @@ export default function DashboardPage() {
     const n = points.length;
 
     const coords = points.map((p, idx) => {
-      const x = paddingX + (idx / (n - 1)) * chartW;
+      const x = paddingX + (n > 1 ? idx / (n - 1) : 0.5) * chartW;
       const val = p.mps !== null ? p.mps : 0;
       const y = height - paddingY - (val / 100) * chartH;
       return { ...p, x, y, hasVal: p.mps !== null };
@@ -495,13 +498,20 @@ export default function DashboardPage() {
           <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
             Mean Percentage Score across sections
           </p>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">Quarterly trend</span>
+            <Sparkline
+              values={quarterlyTrendData.points.map((point) => point.mps)}
+              ariaLabel="Quarterly mean percentage score trend"
+            />
+          </div>
         </div>
 
-        {/* KPI Card 2: Total Students Assessed */}
+        {/* KPI Card 2: Learners on roster */}
         <div className="pk-kpi-card p-5 sm:p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xs transition-all hover:shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-              Total Students Assessed
+              Learners on roster
             </span>
             <span className="p-2.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-xl">
               <Users className="w-5 h-5" />
@@ -516,15 +526,15 @@ export default function DashboardPage() {
             </span>
           </div>
           <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-            Enrolled across {aggregateMetrics.totalSections} class sections
+            {aggregateMetrics.totalSections ? `Enrolled across ${aggregateMetrics.totalSections} class sections` : 'No section data available'}
           </p>
         </div>
 
-        {/* KPI Card 3: At-Risk Learners */}
+        {/* KPI Card 3: Scans below 75% */}
         <div className="pk-kpi-card p-5 sm:p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xs transition-all hover:shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-              At-Risk Learners
+              Scans below 75%
             </span>
             <span className="p-2.5 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-xl">
               <AlertTriangle className="w-5 h-5" />
@@ -555,15 +565,9 @@ export default function DashboardPage() {
           </div>
           <div className="mt-4 flex items-baseline justify-between">
             <span className="text-3xl font-black text-gray-900 dark:text-white">
-              {loading ? '...' : aggregateMetrics.totalSections}
-            </span>
-            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300 px-2 py-0.5 rounded-full">
-              100% Tracked
+              {loading ? '...' : aggregateMetrics.totalSections || '—'}
             </span>
           </div>
-          <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-            STEM, TVL, and HUMSS strands
-          </p>
         </div>
       </div>
 
@@ -653,22 +657,18 @@ export default function DashboardPage() {
                     y1={trendSvgCoords.benchmarkY}
                     x2={trendSvgCoords.width - trendSvgCoords.paddingX}
                     y2={trendSvgCoords.benchmarkY}
-                    stroke="#3157e8"
+                    stroke="var(--pk-brand)"
                     strokeWidth="1.5"
                     strokeDasharray="4 4"
                   />
-
-                  {/* Area fill */}
-                  {trendSvgCoords.areaD && (
-                    <path d={trendSvgCoords.areaD} fill="#dce4ff" fillOpacity="0.7" />
-                  )}
+                  <text x={trendSvgCoords.width - trendSvgCoords.paddingX} y={trendSvgCoords.benchmarkY - 7} textAnchor="end" className="fill-gray-500 text-[10px] font-medium">75% target</text>
 
                   {/* Trend Path line */}
                   {trendSvgCoords.pathD && (
                     <path
                       d={trendSvgCoords.pathD}
                       fill="none"
-                      stroke="#3157e8"
+                      stroke="var(--pk-brand)"
                       strokeWidth="3"
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -701,12 +701,12 @@ export default function DashboardPage() {
                         onMouseLeave={() => setHoveredPoint(null)}
                       >
                         <circle cx={pt.x} cy={pt.y} r="14" fill="transparent" />
-                        <circle cx={pt.x} cy={pt.y} r="12" fill="none" stroke="#3157e8" strokeWidth="2" className="opacity-0 group-focus:opacity-100" />
+                        <circle cx={pt.x} cy={pt.y} r="12" fill="none" stroke="var(--pk-brand)" strokeWidth="2" className="opacity-0 group-focus:opacity-100" />
                         <circle
                           cx={pt.x}
                           cy={pt.y}
                           r="6"
-                          fill="#3157e8"
+                          fill="var(--pk-brand)"
                           stroke="#FFFFFF"
                           strokeWidth="2.5"
                           className="transition-transform group-hover:scale-125"
@@ -744,8 +744,9 @@ export default function DashboardPage() {
                     role="status"
                     aria-live="polite"
                     style={{
-                      left: `${Math.min(trendSvgCoords.width - 120, Math.max(20, hoveredPoint.x - 50))}px`,
-                      top: `${Math.max(10, hoveredPoint.y - 45)}px`,
+                      left: `${Math.min(92, Math.max(8, (hoveredPoint.x / trendSvgCoords.width) * 100))}%`,
+                      top: `${Math.min(82, Math.max(5, (hoveredPoint.y / trendSvgCoords.height) * 100 - 14))}%`,
+                      transform: "translateX(-50%)",
                     }}
                   >
                     <span className="font-bold">{hoveredPoint.quarter}: </span>
@@ -759,16 +760,53 @@ export default function DashboardPage() {
             )}
           </div>
 
-          <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+          <div className="mt-4 flex flex-col gap-3 border-t border-gray-100 pt-3 text-xs text-gray-500 dark:border-gray-800 dark:text-gray-400 sm:flex-row sm:items-center sm:justify-between">
             <span>Official DepEd passing standard: 75.0% MPS</span>
-            <Link
-              href="/analytics"
-              className="font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 inline-flex items-center gap-1"
-            >
-              <span>Detailed Analytics Hub</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowTrendTable((current) => !current)}
+                aria-expanded={showTrendTable}
+                className="min-h-10 rounded-lg border border-gray-200 px-3 py-2 font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+              >
+                {showTrendTable ? 'Hide data table' : 'View as table'}
+              </button>
+              <Link
+                href="/analytics"
+                className="font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 inline-flex items-center gap-1"
+              >
+                <span>Detailed Analytics Hub</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
           </div>
+          {showTrendTable && (
+            <div className="mt-3 overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-800">
+              <table aria-label="Quarterly mean percentage score data" className="w-full min-w-[320px] text-left text-xs">
+                <thead className="bg-gray-50 text-gray-500 dark:bg-gray-800/60 dark:text-gray-400">
+                  <tr>
+                    <th scope="col" className="px-3 py-2 font-semibold">Academic period</th>
+                    <th scope="col" className="px-3 py-2 text-right font-semibold">Scanned responses</th>
+                    <th scope="col" className="px-3 py-2 text-right font-semibold">Mean score</th>
+                    <th scope="col" className="px-3 py-2 text-right font-semibold">Vs. 75% target</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {quarterlyTrendData.points.map((point) => {
+                    const delta = point.mps === null ? null : Math.round((point.mps - 75) * 10) / 10;
+                    return (
+                      <tr key={point.key}>
+                        <th scope="row" className="px-3 py-2 font-medium text-gray-800 dark:text-gray-200">{point.label}</th>
+                        <td className="px-3 py-2 text-right font-mono tabular-nums">{point.count}</td>
+                        <td className="px-3 py-2 text-right font-mono tabular-nums">{point.mps === null ? '—' : `${point.mps}%`}</td>
+                        <td className="px-3 py-2 text-right font-mono tabular-nums">{delta === null ? '—' : `${delta > 0 ? '+' : ''}${delta} pp`}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Chart 2: Learner Performance Tiers (5 columns on desktop) */}
@@ -803,92 +841,32 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Donut Chart Visual */}
-                <div className="flex justify-center items-center py-2">
-                  <div className="relative w-40 h-40">
-                    <svg
-                      viewBox="0 0 140 140"
-                      className="w-full h-full -rotate-90 transform"
-                      role="img"
-                      aria-label={`Learner mastery distribution for ${learnerTierData.totalStudents} scanned students. Exact counts are listed below the chart.`}
-                    >
-                      {/* Background circle track */}
-                      <circle
-                        cx="70"
-                        cy="70"
-                        r="54"
-                        fill="transparent"
-                        stroke="#F1F5F9"
-                        strokeWidth="16"
-                        className="dark:stroke-gray-800"
-                      />
-
-                      {/* Donut segments */}
-                      {donutSlices.map((slice) => {
-                        if (slice.percentage === 0) return null;
-                        return (
-                          <circle
-                            key={slice.key}
-                            cx="70"
-                            cy="70"
-                            r="54"
-                            fill="transparent"
-                            stroke={slice.color}
-                            strokeWidth="16"
-                            strokeDasharray={slice.strokeDasharray}
-                            strokeDashoffset={slice.strokeDashoffset}
-                            strokeLinecap="round"
-                            className="transition-all duration-500 ease-out"
-                          />
-                        );
-                      })}
-                    </svg>
-
-                    {/* Donut Center Label */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                      <span className="text-2xl font-black text-gray-900 dark:text-white">
-                        {learnerTierData.totalStudents}
-                      </span>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                        Scanned
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Tier Rows Breakdown */}
-                <div className="space-y-2 pt-1">
-                  {learnerTierData.counts.map((tier) => (
+                {/* Stacked learner tier bar */}
+                <div
+                  className="flex h-3 w-full overflow-hidden rounded-full bg-[var(--pk-raised)]"
+                  role="img"
+                  aria-label={`Learner mastery distribution for ${learnerTierData.totalStudents} scanned students`}
+                >
+                  {donutSlices.map((slice) => slice.percentage > 0 ? (
                     <div
-                      key={tier.key}
-                      className="flex items-center justify-between text-xs p-2 rounded-xl bg-gray-50/70 dark:bg-gray-800/40 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span
-                          className="w-2.5 h-2.5 rounded-full shrink-0"
-                          style={{ backgroundColor: tier.color }}
-                        />
-                        <div className="truncate">
-                          <span className="font-semibold text-gray-800 dark:text-gray-200">
-                            {tier.label}
-                          </span>
-                          <span className="text-[10px] text-gray-400 ml-1 font-mono">
-                            ({tier.range})
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className="font-bold text-gray-900 dark:text-white">
-                          {tier.count} <span className="text-[10px] font-normal text-gray-400">std</span>
-                        </span>
-                        <span className="font-mono font-bold text-xs min-w-9 text-right" style={{ color: tier.color }}>
-                          {tier.percentage}%
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                      key={slice.key}
+                      className="h-full transition-[width] duration-200"
+                      style={{ width: `${slice.percentage}%`, backgroundColor: slice.color }}
+                    />
+                  ) : null)}
                 </div>
+
+                <BarList
+                  ariaLabel="Learner performance tier breakdown"
+                  items={learnerTierData.counts.map((tier) => ({
+                    key: tier.key,
+                    label: tier.label,
+                    detail: tier.range,
+                    value: tier.count,
+                    percentage: tier.percentage,
+                    color: tier.color,
+                  }))}
+                />
               </div>
             )}
           </div>

@@ -25,6 +25,7 @@ import { clearPendingLessonExtraction, extractTextFromFiles, resumePendingLesson
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { ExamDraftEditor } from '@/components/assessment/ExamDraftEditor';
 import { clearLessonMaterials, loadLessonMaterials, saveLessonMaterials } from '@/lib/lesson-material-storage';
+import { useDialogAccessibility } from '@/hooks/use-dialog-accessibility';
 
 interface TosExamModalProps {
   isOpen: boolean;
@@ -66,6 +67,11 @@ export function TosExamModal({
   const handledSavedQuestionsJobId = useRef<string | null>(null);
   const draftWasEditedRef = useRef(false);
   const activeTosIdRef = useRef<string | null>(tos?.id || null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogAccessibility(dialogRef, isOpen && Boolean(tos) && !confirmClose && !sharedNotesConfirm && !showTeacherCopyModal, () => {
+    if (examDraftDirty) setConfirmClose(true);
+    else onClose();
+  });
 
   useEffect(() => {
     if (tos?.id && activeTosIdRef.current !== tos.id) {
@@ -399,7 +405,7 @@ export function TosExamModal({
       const queued = await generationJob.start(lessonDocuments.length ? { lessonDocuments } : { lessonText: combinedText });
       setGenerationProgress(queued.status === 'queued'
         ? `Queued (position ${queued.queuePosition || 1}). AI will process this exam in the background.`
-        : queued.status === 'running' ? 'Groq is already generating questions for this TOS.' : 'This TOS already has a job that needs worker attention.');
+        : queued.status === 'running' ? 'Exam generation is already in progress.' : 'This TOS already has a job that needs worker attention.');
     } catch (err: any) {
       console.error('Exam generation error:', err);
       setIsGenerating(false);
@@ -462,12 +468,12 @@ export function TosExamModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
-        <div className="relative w-full sm:max-w-5xl h-full sm:h-auto sm:max-h-[92vh] bg-white dark:bg-slate-900 sm:rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col">
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="generated-exam-title">
+        <div ref={dialogRef} tabIndex={-1} className="relative flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden border border-slate-200 bg-white shadow-none outline-none dark:border-slate-800 dark:bg-slate-900 sm:h-auto sm:max-h-[92dvh] sm:max-w-5xl sm:rounded-2xl sm:shadow-xl">
           {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6 py-5 border-b border-slate-100 dark:border-slate-800 shrink-0">
+          <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6 py-5 pr-16 sm:pr-6 border-b border-slate-100 dark:border-slate-800 shrink-0">
             <div>
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+              <h2 id="generated-exam-title" className="text-xl font-bold text-slate-900 dark:text-white">
                 {tos.description || `${tos.exam_type || 'Examination'} in ${tos.subject}`}
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
@@ -507,7 +513,7 @@ export function TosExamModal({
 
               <button
                 onClick={() => examDraftDirty ? setConfirmClose(true) : onClose()}
-                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="absolute right-4 top-4 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-slate-800 dark:hover:text-slate-100 transition-colors sm:static"
                 aria-label="Close modal"
               >
                 <X className="h-5 w-5" />
@@ -692,7 +698,7 @@ export function TosExamModal({
 
       {/* Export Options Modal */}
       {showTeacherCopyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 ">
           <div className="relative w-full max-w-sm bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
             <div>
               <h3 className="text-base font-bold text-slate-900 dark:text-white">
@@ -733,7 +739,7 @@ export function TosExamModal({
                       Official answer sheet with bubbles shaded
                     </div>
                   </div>
-                  <span className="text-[9px] font-bold text-emerald-800 dark:text-emerald-200 bg-emerald-100 dark:bg-emerald-900/60 px-1.5 py-0.5 rounded-md shrink-0">
+                  <span className="text-xs font-medium text-slate-600 dark:text-slate-300 shrink-0">
                     ANSWER KEY
                   </span>
                 </div>

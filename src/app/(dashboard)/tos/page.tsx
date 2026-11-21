@@ -492,7 +492,7 @@ export default function TosPage() {
               setEditingTos(null);
               setIsCreateEditOpen(true);
             }}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-emerald-600/20 transition-all"
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
           >
             <Plus className="h-4 w-4" />
             <span>Create TOS</span>
@@ -501,7 +501,7 @@ export default function TosPage() {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row items-center gap-3 p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div className="flex min-w-0 flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
         {/* Search Input */}
         <div className="relative flex-1 w-full">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -509,17 +509,17 @@ export default function TosPage() {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by subject, description or section..."
-            className="w-full text-xs sm:text-sm pl-10 pr-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border-none outline-none text-slate-900 dark:text-white placeholder:text-slate-400"
+            placeholder="Search"
+            className="min-h-11 w-full min-w-0 text-sm pl-10 pr-4 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 outline-none text-slate-900 dark:text-white placeholder:text-slate-400"
           />
         </div>
 
         {/* Term Filter */}
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
           <select
             value={filterTerm}
             onChange={(e) => setFilterTerm(e.target.value)}
-            className="w-full sm:w-auto text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 outline-none font-medium"
+            className="min-h-11 w-full sm:w-auto text-sm px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 outline-none font-medium"
           >
             <option value="ALL">All Terms</option>
             {gradingPeriods.map((gp) => (

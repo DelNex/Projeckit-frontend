@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
+import { OmrBubble } from '@/components/ui/OmrBubble';
 import { friendlyError } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 
@@ -989,7 +990,75 @@ export default function AllAccountsPage() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="grid gap-3 p-3 sm:hidden" role="list" aria-label="Faculty accounts">
+            {users.map((u) => {
+              const isSelf = u.id === callerId;
+              const isSelected = selectedIds.has(u.id);
+              return (
+                <article key={u.id} className="min-w-0 rounded-xl border border-gray-200 p-3 dark:border-gray-800" role="listitem">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <button type="button" disabled={isSelf} onClick={() => handleToggleSelectRow(u.id)} aria-label={isSelected ? ('Deselect ' + u.display_name) : ('Select ' + u.display_name)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-500 disabled:opacity-30 dark:border-gray-700">
+                      {isSelected ? <CheckSquare className="h-4 w-4 text-blue-600" /> : <Square className="h-4 w-4" />}
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button type="button" onClick={() => setDetailUser(u)} className="break-words text-left text-sm font-semibold text-gray-900 dark:text-white">{u.display_name || 'Unnamed account'}</button>
+                        {isSelf && <span className="text-xs text-gray-500">You</span>}
+                      </div>
+                      <p className="mt-1 break-all text-xs text-gray-500 dark:text-gray-400">{u.email}</p>
+                    </div>
+                    <span className="shrink-0 inline-flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                      <OmrBubble selected tone={u.status === 'approved' ? 'success' : u.status === 'pending' ? 'warning' : u.status === 'rejected' ? 'danger' : 'muted'} size={8} />
+                      {activeTab === 'active' ? u.status : 'Archived'}
+                    </span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-3 border-t border-gray-100 pt-3 text-xs dark:border-gray-800">
+                    <div className="min-w-0">
+                      <span className="block text-gray-500 dark:text-gray-400">School</span>
+                      <span className="mt-1 block break-words text-gray-800 dark:text-gray-200">{u.school || 'Not assigned'}</span>
+                    </div>
+                    <label className="min-w-0">
+                      <span className="block text-gray-500 dark:text-gray-400">Role</span>
+                      <select aria-label={'Role for ' + u.display_name} value={u.role} disabled={isSelf} onChange={(event) => setActionModal({ isOpen: true, type: 'change_role', user: u, targetRole: event.target.value as 'admin' | 'teacher' })} className="mt-1 min-h-11 w-full rounded-lg border border-gray-200 bg-white px-2 text-sm text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 disabled:opacity-50">
+                        <option value="teacher">Teacher</option>
+                        <option value="admin">Administrator</option>
+                      </select>
+                    </label>
+                    <div>
+                      <span className="block text-gray-500 dark:text-gray-400">{activeTab === 'active' ? 'Registered' : 'Archived'}</span>
+                      <time className="mt-1 block tabular-nums text-gray-800 dark:text-gray-200" dateTime={activeTab === 'active' ? u.created_at : (u.archived_at || u.created_at)}>
+                        {new Date(activeTab === 'active' ? u.created_at : (u.archived_at || u.created_at)).toLocaleDateString()}
+                      </time>
+                    </div>
+                    <div>
+                      <span className="block text-gray-500 dark:text-gray-400">Email</span>
+                      <span className="mt-1 block text-gray-800 dark:text-gray-200">{u.is_email_confirmed ? 'Confirmed' : 'Not confirmed'}</span>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2 border-t border-gray-100 pt-3 dark:border-gray-800">
+                    <button type="button" onClick={() => setDetailUser(u)} className="min-h-11 flex-1 rounded-lg border border-gray-200 px-3 text-sm font-medium text-gray-700 dark:border-gray-700 dark:text-gray-200">View details</button>
+                    {activeTab === 'archived' ? (
+                      <>
+                        <button type="button" disabled={isSelf} onClick={() => setActionModal({ isOpen: true, type: 'restore', user: u })} className="min-h-11 rounded-lg border border-gray-200 px-3 text-sm font-medium text-gray-700 disabled:opacity-40 dark:border-gray-700 dark:text-gray-200">Restore</button>
+                        <button type="button" disabled={isSelf} onClick={() => handleOpenPermanentDeleteModal([u.id])} className="min-h-11 rounded-lg border border-red-200 px-3 text-sm font-medium text-red-700 disabled:opacity-40 dark:border-red-900/50 dark:text-red-400">Delete</button>
+                      </>
+                    ) : u.status === 'pending' ? (
+                      <>
+                        <button type="button" disabled={isSelf} onClick={() => setActionModal({ isOpen: true, type: 'approve', user: u })} className="min-h-11 rounded-lg bg-[var(--pk-brand)] px-3 text-sm font-semibold text-white disabled:opacity-40">Approve</button>
+                        <button type="button" disabled={isSelf} onClick={() => setActionModal({ isOpen: true, type: 'reject', user: u })} className="min-h-11 rounded-lg border border-red-200 px-3 text-sm font-medium text-red-700 disabled:opacity-40 dark:border-red-900/50 dark:text-red-400">Decline</button>
+                      </>
+                    ) : u.status === 'approved' && !isSelf ? (
+                      <button type="button" onClick={() => setActionModal({ isOpen: true, type: 'suspend', user: u })} className="min-h-11 rounded-lg border border-gray-200 px-3 text-sm font-medium text-gray-700 dark:border-gray-700 dark:text-gray-200">Suspend</button>
+                    ) : u.status === 'suspended' && !isSelf ? (
+                      <button type="button" onClick={() => setActionModal({ isOpen: true, type: 'reactivate', user: u })} className="min-h-11 rounded-lg border border-gray-200 px-3 text-sm font-medium text-gray-700 dark:border-gray-700 dark:text-gray-200">Reactivate</button>
+                    ) : null}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+          <div className="hidden overflow-x-auto sm:block">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/75 dark:border-gray-800 dark:bg-gray-800/40 font-bold text-gray-600 dark:text-gray-300">
@@ -1374,6 +1443,7 @@ export default function AllAccountsPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
 
         {/* Pagination Bar */}

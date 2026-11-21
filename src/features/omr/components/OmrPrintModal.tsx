@@ -374,13 +374,13 @@ export function OmrPrintModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-2 sm:p-4">
-      <div className="relative flex flex-col w-full max-w-5xl h-[95vh] sm:h-[92vh] rounded-3xl bg-gray-900 border border-gray-800 shadow-2xl text-white overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 p-0 backdrop-blur-sm sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="omr-print-title">
+      <div className="relative flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden rounded-none border border-gray-800 bg-gray-900 text-white shadow-2xl sm:h-[92dvh] sm:max-h-[92dvh] sm:max-w-5xl sm:rounded-3xl">
         {/* Modal Header */}
         <div className="shrink-0 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-gray-800 px-4 sm:px-6 py-3.5">
           <div className="min-w-0">
             <div className="flex items-center gap-3">
-              <h3 className="text-base font-bold truncate">Print Answer Sheets</h3>
+              <h3 id="omr-print-title" className="text-base font-bold truncate">Print Answer Sheets</h3>
               {/* Mode Pills */}
               <div className="inline-flex items-center rounded-xl bg-gray-800 p-0.5 border border-gray-700">
                 <button

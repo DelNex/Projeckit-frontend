@@ -816,7 +816,7 @@ function AnalyticsContent() {
 
   if (loading) {
     return (
-      <div className="space-y-4 animate-pulse" aria-label="Loading performance and reports" aria-busy="true">
+      <div className="space-y-4" aria-label="Loading performance and reports" aria-busy="true">
         <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
           <div className="h-5 w-48 rounded bg-gray-200 dark:bg-gray-800" />
           <div className="mt-2 h-3 w-72 max-w-full rounded bg-gray-100 dark:bg-gray-800" />

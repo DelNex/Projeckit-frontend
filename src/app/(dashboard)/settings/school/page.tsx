@@ -9,6 +9,7 @@ import {
 } from '@/lib/deped-grading';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
+import { StatusBanner } from '@/components/ui/status-banner';
 import {
     Archive,
     ArchiveRestore,
@@ -1567,24 +1568,9 @@ export default function SchoolSettingsPage() {
         </p>
       </div>
 
-      {saved && (
-        <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-semibold text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300">
-          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-          <span>Academic configuration successfully saved to Supabase!</span>
-        </div>
-      )}
-
-      {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-600 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400">
-          {error}
-        </div>
-      )}
-
-      {needsMigration && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs font-semibold text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
-          Archive needs migration 20260908000005 applied.
-        </div>
-      )}
+      {saved && <StatusBanner tone="success">Academic configuration successfully saved.</StatusBanner>}
+      {error && <StatusBanner tone="danger">{error}</StatusBanner>}
+      {needsMigration && <StatusBanner tone="warning">Archive needs migration 20260908000005 applied.</StatusBanner>}
 
       {loading ? (
         <div className="flex items-center gap-2 py-8 text-xs text-gray-400">
@@ -1592,7 +1578,7 @@ export default function SchoolSettingsPage() {
           <span>Loading academic context from Supabase...</span>
         </div>
       ) : (
-        <form onSubmit={handleSave} className="space-y-6">
+        <form onSubmit={handleSave} className="mx-auto w-full max-w-5xl min-w-0 space-y-6">
           {/* Card 0: School Identity & DepEd Official Header */}
           <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 space-y-5">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3 dark:border-gray-800">
@@ -2596,11 +2582,11 @@ export default function SchoolSettingsPage() {
           </div>
 
           {/* Form Action Button */}
-          <div className="flex justify-end">
+          <div className="pk-sticky-mobile-actions flex justify-end">
             <button
               type="submit"
               disabled={saving}
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-2.5 text-xs font-bold text-white shadow-md hover:bg-blue-700 transition disabled:opacity-50"
+              className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-none hover:bg-blue-700 transition disabled:opacity-50"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               <span>Save Academic Configuration</span>

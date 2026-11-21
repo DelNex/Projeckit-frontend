@@ -76,8 +76,8 @@ export function ExamPrintModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4 backdrop-blur-xs overflow-y-auto print:p-0 print:bg-white print:static">
-      <div className="w-full max-w-4xl rounded-3xl border border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-900 max-h-[92vh] flex flex-col print:max-w-none print:max-h-none print:border-none print:shadow-none print:rounded-none">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 backdrop-blur-xs sm:items-center sm:p-4 print:static print:bg-white print:p-0" role="dialog" aria-modal="true" aria-labelledby="exam-print-title">
+      <div className="flex max-h-[100dvh] h-[100dvh] w-full flex-col overflow-hidden rounded-none border border-gray-200 bg-white shadow-2xl dark:border-gray-800 dark:bg-gray-900 sm:h-[92dvh] sm:max-h-[92dvh] sm:max-w-4xl sm:rounded-3xl print:max-h-none print:h-auto print:max-w-none print:rounded-none print:border-none print:shadow-none">
         {/* Controls Toolbar (Hidden when printing) */}
         <div className="flex items-center justify-between border-b border-gray-100 p-4 dark:border-gray-800 print:hidden shrink-0">
           <div className="flex items-center gap-2">

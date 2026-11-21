@@ -18,6 +18,7 @@ import { getTenantContext } from '@/lib/tenant-context';
 import { useToast } from '@/components/ui/toast';
 import { friendlyError } from '@/lib/errors';
 import { cn } from '@/lib/utils';
+import { useDialogAccessibility } from '@/hooks/use-dialog-accessibility';
 
 interface SectionItem {
   id: string;
@@ -76,6 +77,7 @@ export function BulkAddStudentsModal({
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [isDiscardModalOpen, setIsDiscardModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -461,20 +463,23 @@ function detectColumnMapping(firstRow: string[]): ColumnMapping {
     }
   };
 
+  useDialogAccessibility(dialogRef, isOpen && !isDiscardModalOpen);
+
   if (!isOpen) return null;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 backdrop-blur-xs sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="bulk-add-learners-title"
       onClick={(e) => {
         if (e.target === e.currentTarget && !isSubmitting) {
           handleAttemptClose();
         }
       }}
     >
-      <div className="relative w-full max-w-3xl rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-gray-900 my-8">
+      <div ref={dialogRef} tabIndex={-1} className="relative h-[100dvh] max-h-[100dvh] w-full overflow-y-auto overscroll-contain rounded-none border border-gray-200 bg-white p-4 shadow-2xl outline-none dark:border-gray-800 dark:bg-gray-900 sm:my-8 sm:h-auto sm:max-h-[90dvh] sm:max-w-3xl sm:rounded-2xl sm:p-6">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 pb-4 dark:border-gray-800">
           <div className="flex items-center gap-2.5">

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
+import { useDialogAccessibility } from '@/hooks/use-dialog-accessibility';
 import {
   X,
   FileDown,
@@ -46,6 +47,7 @@ export function TosViewModal({
 }: TosViewModalProps) {
   const [isExportingWord, setIsExportingWord] = useState(false);
   const [mobileCardView, setMobileCardView] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   // Compute live deterministic TOS allocation table
   const calcResult = useMemo(() => {
@@ -65,6 +67,8 @@ export function TosViewModal({
       examType: tos.exam_type || 'Summative Test 1',
     });
   }, [tos]);
+
+  useDialogAccessibility(dialogRef, isOpen && Boolean(tos && calcResult), onClose);
 
   if (!isOpen || !tos || !calcResult) return null;
 
@@ -99,12 +103,12 @@ export function TosViewModal({
     : tos.section || 'All Sections';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
-      <div className="relative w-full sm:max-w-5xl h-full sm:h-auto sm:max-h-[92vh] bg-white dark:bg-slate-900 sm:rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 p-0 backdrop-blur-sm sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="tos-preview-title">
+      <div ref={dialogRef} tabIndex={-1} className="relative flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden border border-slate-200 bg-white shadow-2xl outline-none dark:border-slate-800 dark:bg-slate-900 sm:h-auto sm:max-h-[92dvh] sm:max-w-5xl sm:rounded-3xl">
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
           <div>
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <h2 id="tos-preview-title" className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
               <span>Table of Specification</span>
             </h2>

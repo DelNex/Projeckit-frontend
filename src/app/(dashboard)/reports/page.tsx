@@ -64,14 +64,13 @@ export default function ReportsPage() {
   const linkedAssessmentForTos = (tos: TosRow) => sectionAssessments.find((item) => item.id === tos.assessment_id || item.tos_id === tos.id);
 
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-6 px-4 py-6 sm:px-6">
+    <main className="mx-auto w-full max-w-6xl min-w-0 space-y-6 px-3 py-4 sm:px-6 sm:py-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-widest text-blue-600">Print center</p>
-          <h1 className="mt-1 text-2xl font-black text-gray-900 dark:text-white">Section reports</h1>
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-white sm:text-2xl">Section reports</h1>
           <p className="mt-1 max-w-2xl text-sm text-gray-500">Choose a section to download question papers, teacher copies, TOS and analysis DOCX files, or print its OMR sheets.</p>
         </div>
-        <button type="button" onClick={() => void loadReports()} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-gray-200 px-3 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
+        <button type="button" onClick={() => void loadReports()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 text-xs font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
           <RefreshCw className="h-4 w-4" /> Refresh
         </button>
       </header>
@@ -87,17 +86,17 @@ export default function ReportsPage() {
         </div>
       ) : (
         <>
-          <section aria-label="Choose section" className="flex flex-wrap gap-2">
+          <section aria-label="Choose section" className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
             {sections.map((item) => (
               <button type="button" key={item.id} onClick={() => setSelectedSection(item.id)} aria-pressed={selectedSection === item.id}
-                className={`rounded-xl border px-4 py-2.5 text-left text-sm transition ${selectedSection === item.id ? 'border-blue-600 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-200' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300'}`}>
+                className={`min-h-11 w-full rounded-lg border px-4 py-2.5 text-left text-sm transition ${selectedSection === item.id ? 'border-blue-600 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:text-blue-200' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-300'}`}>
                 <span className="block font-bold">{item.name}</span>
                 {item.grade && <span className="text-xs opacity-70">{item.grade}</span>}
               </button>
             ))}
           </section>
 
-          <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-xs dark:border-gray-800 dark:bg-gray-900 sm:p-6">
+          <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-none dark:border-gray-800 dark:bg-gray-900 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-4 dark:border-gray-800">
               <div>
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white">{section?.name || 'Section reports'}</h2>

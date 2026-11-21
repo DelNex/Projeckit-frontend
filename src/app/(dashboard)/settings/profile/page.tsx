@@ -1,7 +1,8 @@
 'use client';
 
 import { createClient } from '@/lib/supabase/client';
-import { CheckCircle2, Loader2, Save } from 'lucide-react';
+import { Loader2, Save } from 'lucide-react';
+import { StatusBanner } from '@/components/ui/status-banner';
 import { useEffect, useState } from 'react';
 
 export default function ProfileSettingsPage() {
@@ -90,7 +91,7 @@ export default function ProfileSettingsPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="mx-auto w-full max-w-2xl min-w-0 space-y-6">
       <div>
         <h1 className="text-2xl font-black text-gray-900 dark:text-white">
           User Profile Settings
@@ -100,18 +101,8 @@ export default function ProfileSettingsPage() {
         </p>
       </div>
 
-      {saved && (
-        <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-semibold text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300">
-          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-          <span>Profile successfully updated in Supabase!</span>
-        </div>
-      )}
-
-      {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-600 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400">
-          {error}
-        </div>
-      )}
+      {saved && <StatusBanner tone="success">Profile successfully updated.</StatusBanner>}
+      {error && <StatusBanner tone="danger">{error}</StatusBanner>}
 
       {loading ? (
         <div className="flex items-center gap-2 py-8 text-xs text-gray-400">
@@ -119,7 +110,7 @@ export default function ProfileSettingsPage() {
           <span>Loading user profile from Supabase...</span>
         </div>
       ) : (
-        <form onSubmit={handleSave} className="rounded-3xl border border-gray-200 bg-white p-6 shadow-xs dark:border-gray-800 dark:bg-gray-900 space-y-4">
+        <form onSubmit={handleSave} className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-none dark:border-gray-800 dark:bg-gray-900 space-y-4">
           <div>
             <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
               Full Name / Display Name
@@ -129,7 +120,7 @@ export default function ProfileSettingsPage() {
               required
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              className="mt-1.5 block w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-xs font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
+              className="mt-1.5 block min-h-11 w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-base sm:text-sm font-medium text-gray-900 outline-none transition focus:border-blue-600 focus:bg-white dark:border-gray-800 dark:bg-gray-800 dark:text-white dark:focus:bg-gray-800"
             />
           </div>
 
@@ -161,11 +152,11 @@ export default function ProfileSettingsPage() {
             />
           </div>
 
-          <div className="pt-2 flex justify-end">
+          <div className="pk-sticky-mobile-actions pt-2 flex justify-end">
             <button
               type="submit"
               disabled={saving}
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-md hover:bg-blue-700 transition disabled:opacity-50"
+              className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-none hover:bg-blue-700 transition disabled:opacity-50"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               <span>Update Profile</span>
