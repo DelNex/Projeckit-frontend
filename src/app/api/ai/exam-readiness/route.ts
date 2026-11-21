@@ -26,6 +26,7 @@ async function checkProvider(provider: ProviderId): Promise<ProviderCheck> {
       signal: AbortSignal.timeout(5_000),
       cache: 'no-store',
     });
+    await response.body?.cancel().catch(() => undefined);
     if (response.ok) return { provider, status: 'available' };
     if (response.status === 429) return { provider, status: 'rate_limited' };
     if (response.status === 401 || response.status === 403) return { provider, status: 'authentication_error' };
