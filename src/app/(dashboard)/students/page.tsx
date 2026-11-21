@@ -1052,14 +1052,17 @@ export default function StudentsPage() {
       {/* Add / Edit Learner Modal Dialog */}
       {isAddModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-xs sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="learner-editor-title"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               handleAttemptCloseAddModal();
             }
           }}
         >
-          <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-gray-800 dark:bg-gray-900">
+          <div className="max-h-[100dvh] h-[100dvh] w-full overflow-y-auto overscroll-contain rounded-none border border-gray-200 bg-white p-4 shadow-2xl dark:border-gray-800 dark:bg-gray-900 sm:h-auto sm:max-h-[92dvh] sm:max-w-md sm:rounded-3xl sm:p-6">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3 dark:border-gray-800">
               <h3 className="text-base font-bold text-gray-900 dark:text-white">
                 {editingStudent ? 'Edit Learner' : 'Add New Learner'}
