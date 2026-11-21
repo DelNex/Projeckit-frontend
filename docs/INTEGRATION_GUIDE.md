@@ -13,6 +13,8 @@ Use browser Supabase clients only for signed-in user work covered by RLS. Keep t
 
 The AI Copilot uses `/api/backend/ai/*`, a same-origin Next.js proxy. The proxy validates the Supabase session, rejects cross-site writes, forwards only the bearer token to the Nest service, and allows only the four AI endpoints that the website needs. Configure `BACKEND_API_BASE_URL` in the web server environment. The old browser-visible `NEXT_PUBLIC_API_BASE_URL` value is supported as a compatibility fallback only; new deployments should use the server-only setting.
 
+The NestJS AI service resolves the requester from the validated session and derives tenant scope from that server-side context. Every tool execution passes through the permission service and the domain tool/service/repository path. Streaming chat must execute a planned tool step once only; progress events are emitted from that execution rather than by re-running the plan. Teacher-facing stream errors must be generic and actionable, while detailed diagnostics remain in server logs. AI audit arguments are recursively redacted for nested credentials and truncated before persistence.
+
 ## Main school workflow
 
 1. Create a Table of Specifications (TOS), choose the sections that share it, and enter competencies and taught days. Review its item allocation before saving.
@@ -101,6 +103,6 @@ Replace the host with the branch deployment's HTTPS hostname. Do not use the mai
 
 ## Large-document and OCR roadmap
 
-The current browser extraction path supports text-based PDF, DOCX, PPTX, TXT, and Markdown. Image-only PDFs are not supported yet. Do not advertise OCR support until a self-hosted browser OCR runtime, language assets, worker lifecycle, cancellation, page-level confidence, and real-device tests are included.
+Lesson extraction is handled by the durable NestJS OCR queue described above, not by a browser OCR runtime. The backend supports text PDFs, scanned PDF pages, DOCX, PPTX, TXT, Markdown, and supported image files. The browser uploads source files to private Storage, creates jobs through the authenticated backend, polls scoped job status, and receives extracted text. Keep the teacher-facing experience independent of whether the browser remains open; the backend worker and configured wake-up scheduler own processing and recovery.
 
 For large documents, the next architecture step is private object storage with short-lived signed upload URLs and resumable TUS uploads, plus a small database manifest containing tenant ownership, source hash, page/chunk metadata, and object paths. Keep source files private and avoid embedding extracted lesson text in job rows. Supabase recommends TUS resumable uploads for files larger than 6 MB and unstable networks. Chunking and retrieval should be introduced with migration/backfill tests before changing the existing queue payload contract.
