@@ -4,6 +4,7 @@ import { ColumnDef, DataTable } from '@/components/ui/data-table';
 import { createClient } from '@/lib/supabase/client';
 import { RefreshCw } from 'lucide-react';
 import { OmrBubble } from '@/components/ui/OmrBubble';
+import { StatusBanner } from '@/components/ui/status-banner';
 import { useEffect, useMemo, useState } from 'react';
 
 interface AuditLogRecord {
@@ -154,11 +155,7 @@ export default function AuditLogsPage() {
         </button>
       </div>
 
-      {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs text-red-600 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400">
-          {error}
-        </div>
-      )}
+      {error && <StatusBanner tone="danger">{error}</StatusBanner>}
 
       {/* Unified DataTable Component */}
       <DataTable
