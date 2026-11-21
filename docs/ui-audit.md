@@ -125,3 +125,22 @@ This pass is a source-level responsive and interaction audit. GitHub Actions pro
 - Re-ran TypeScript and the unit/schema suite: **239 passed, 0 failed, 2 skipped**; schema contract validation reports 20 tables and 0 mismatches.
 - Authenticated teacher/admin screenshots are still not signed off. The fixture-based attempt failed because the temporary Next dev server collided with the existing `.next` production output and the fixture session did not authenticate the protected pages. The resulting captures are not treated as valid review evidence.
 - The OMR camera recovery UI is implemented (permission-denied explanation, retry, and upload fallback), but browser camera automation and physical-device tests remain outstanding. No claim of Android/iOS camera verification is made.
+
+## Responsive UI continuation — 2026-11-21
+
+### Dashboard charts
+- Added a reusable `BarList` primitive with labeled values, semantic progress indicators, clamped percentages, and visible values that do not depend on hover.
+- Added a reusable `Sparkline` primitive and placed the quarterly MPS trend in the Average MPS summary card.
+- Added a keyboard-operable “View as table” control to the quarterly MPS chart. The table exposes period, scan count, mean score, and percentage-point distance from the 75% target.
+- Replaced the tier breakdown's dense table with a labeled horizontal-bar list while keeping the stacked distribution overview.
+
+### Dialog presentation and semantics
+- Standardized full-height phone layouts and desktop max-height behavior for exam generation, bulk learner import, TOS create/edit, TOS preview, generated exam, exam print, OMR print preview, and confirmation dialogs.
+- Added explicit dialog roles, modal state, and title associations to the updated shells. Confirmation dialogs also expose their description through `aria-describedby`.
+- The OMR camera/scanning implementation and document-generation/export logic were not modified by this presentation pass.
+
+### Expanded public-route test matrix
+- The auth browser suite now checks login and registration at 320×568, 390×844, 768×1024, 1280×800, and 1440×900 in both light and dark themes.
+- The suite continues to assert no horizontal page overflow, mobile input font sizing, minimum touch target height, and automated WCAG A/AA checks.
+- Authenticated teacher/admin page screenshots remain unverified because this repository's CI does not have a seeded authenticated browser session. Protected routes must not be marked visually signed off based only on unauthenticated redirects.
+- Latest UI changes are isolated in PR #35. CI status is recorded on the PR; no merge or deployment is implied by this audit note.
