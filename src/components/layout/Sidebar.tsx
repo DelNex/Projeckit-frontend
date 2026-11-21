@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
+import { OmrBubble } from '@/components/ui/OmrBubble';
 import {
   BarChart3,
   BookOpen,
@@ -213,7 +214,8 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
                             : 'border-transparent text-slate-700 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-gray-800'
                         )}
                       >
-                        <Icon className={cn('h-[18px] w-[18px] shrink-0', isActive ? 'text-blue-700 dark:text-blue-300' : 'text-slate-500')} />
+                        <OmrBubble selected={isActive} tone="brand" size={8} />
+                        <Icon className={cn('h-[18px] w-[18px] shrink-0', isActive ? 'text-current' : 'text-slate-500')} />
                         <span className="truncate">{item.name}</span>
                       </Link>
                     </li>
@@ -225,8 +227,8 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
 
           {/* Help & Session Sign Out */}
           <div className="pt-4 border-t border-slate-200 dark:border-gray-800">
-            <h3 className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-gray-500">
-              SESSION
+            <h3 className="mb-2 px-3 text-xs font-medium text-slate-500 dark:text-gray-500">
+              Session
             </h3>
             <button type="button"
               onClick={handleSignOut}
