@@ -470,11 +470,8 @@ export default function DashboardPage() {
         {/* KPI Card 1: Average MPS */}
         <div className="pk-kpi-card p-5 sm:p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xs transition-all hover:shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+            <span className="text-xs font-semibold text-[var(--pk-text-secondary)]">
               Average MPS
-            </span>
-            <span className="p-2.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl">
-              <TrendingUp className="w-5 h-5" />
             </span>
           </div>
           <div className="mt-4 flex items-baseline justify-between">
@@ -482,14 +479,8 @@ export default function DashboardPage() {
               {loading ? '...' : aggregateMetrics.overallMps !== null ? `${aggregateMetrics.overallMps}%` : '—'}
             </span>
             {aggregateMetrics.overallMps !== null ? (
-              <span
-                className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                  aggregateMetrics.overallMps >= 75.0
-                    ? 'text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300'
-                    : 'text-amber-700 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-300'
-                }`}
-              >
-                {aggregateMetrics.overallMps >= 75.0 ? '+ Target Met' : 'Below 75%'}
+              <span className="text-xs font-medium text-[var(--pk-text-muted)]">
+                {aggregateMetrics.overallMps >= 75.0 ? 'Target met' : 'Below 75%'}
               </span>
             ) : (
               <span className="text-[11px] font-medium text-gray-400">Awaiting scans</span>
@@ -510,20 +501,15 @@ export default function DashboardPage() {
         {/* KPI Card 2: Learners on roster */}
         <div className="pk-kpi-card p-5 sm:p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xs transition-all hover:shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+            <span className="text-xs font-semibold text-[var(--pk-text-secondary)]">
               Learners on roster
-            </span>
-            <span className="p-2.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-xl">
-              <Users className="w-5 h-5" />
             </span>
           </div>
           <div className="mt-4 flex items-baseline justify-between">
             <span className="text-3xl font-black text-gray-900 dark:text-white">
               {loading ? '...' : aggregateMetrics.totalExaminees}
             </span>
-            <span className="text-xs font-bold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
-              Active roster
-            </span>
+            <span className="text-xs font-medium text-[var(--pk-text-muted)]">Active roster</span>
           </div>
           <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
             {aggregateMetrics.totalSections ? `Enrolled across ${aggregateMetrics.totalSections} class sections` : 'No section data available'}
@@ -533,19 +519,16 @@ export default function DashboardPage() {
         {/* KPI Card 3: Scans below 75% */}
         <div className="pk-kpi-card p-5 sm:p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xs transition-all hover:shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+            <span className="text-xs font-semibold text-[var(--pk-text-secondary)]">
               Scans below 75%
-            </span>
-            <span className="p-2.5 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-xl">
-              <AlertTriangle className="w-5 h-5" />
             </span>
           </div>
           <div className="mt-4 flex items-baseline justify-between">
             <span className="text-3xl font-black text-rose-600 dark:text-rose-400">
               {loading ? '...' : aggregateMetrics.atRiskCount}
             </span>
-            <span className="text-xs font-bold text-rose-700 bg-rose-50 dark:bg-rose-950/40 dark:text-rose-300 px-2 py-0.5 rounded-full">
-              &lt;75% Grade
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--pk-danger)]">
+              <span aria-hidden="true" className="h-2 w-2 rounded-full bg-[var(--pk-danger)]" />Below 75%
             </span>
           </div>
           <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
@@ -556,11 +539,8 @@ export default function DashboardPage() {
         {/* KPI Card 4: Class Sections */}
         <div className="pk-kpi-card p-5 sm:p-6 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-2xs transition-all hover:shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-              Class Sections
-            </span>
-            <span className="p-2.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-xl">
-              <GraduationCap className="w-5 h-5" />
+            <span className="text-xs font-semibold text-[var(--pk-text-secondary)]">
+              Class sections
             </span>
           </div>
           <div className="mt-4 flex items-baseline justify-between">
@@ -720,11 +700,13 @@ export default function DashboardPage() {
 
                   {/* X Axis Labels */}
                   {trendSvgCoords.coords.map((pt, index) => {
-                    const shortLabel = pt.label.match(/\b([QT]\s*[1-4])\b/i)?.[1]?.replace(/\s+/g, '').toUpperCase() || pt.label.slice(0, 2);
-                    if (index > 0 && trendSvgCoords.coords[index - 1].x === pt.x) return null;
+                    const firstAtPosition = trendSvgCoords.coords.findIndex((candidate) => candidate.x === pt.x);
+                    if (firstAtPosition !== index) return null;
+                    const match = pt.label.match(/\b([QT])\s*([1-4])\b/i);
+                    const shortLabel = match ? `${match[1].toUpperCase()}${match[2]}` : `Q${Math.min(index + 1, 4)}`;
                     return (
                       <text
-                        key={`label-${pt.key}`}
+                        key={`label-${pt.key}-${index}`}
                         x={pt.x}
                         y={trendSvgCoords.height - 8}
                         textAnchor="middle"
