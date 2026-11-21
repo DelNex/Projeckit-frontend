@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { authorizeHelperRequest } from '../helper-auth';
-import { finalizeExamJob, jobBelongsToTenant, verifySourceEvidence } from '../exam-jobs';
+import { canCancelExamJob, finalizeExamJob, jobBelongsToTenant, verifySourceEvidence } from '../exam-jobs';
 
 const slots = [
   { item_number: 1, competency_id: 'C1', competency_code: 'C1', competency_description: 'First competency', cognitive_level: 'remembering' as const },
@@ -65,6 +65,10 @@ test('repair round two saves a partial draft with valid questions only', async (
   assert.deepEqual(result.missingItems, [2]);
   const save = writes.find((write) => write.method === 'rpc');
   assert.ok(save);
+  assert.equal(save.table, 'finalize_exam_generation_job');
+  assert.equal(save.value.p_job_id, 'job-3');
+  assert.equal(save.value.p_root_job_id, 'job-3');
+  assert.equal(save.value.p_job_status, 'partial');
   assert.equal(save.value.p_questions.length, 1);
   assert.equal(save.value.p_questions[0].item_number, 1);
 });
@@ -79,6 +83,7 @@ test('sparse repair slot numbers are checked against TOS slots, not a 1-based ra
   const result = await finalizeExamJob('job-sparse', JSON.stringify([question(lateSlot)]), admin);
   assert.equal(result.status, 'completed');
   const save = writes.find((write) => write.method === 'rpc');
+  assert.equal(save?.table, 'finalize_exam_generation_job');
   assert.deepEqual(save?.value.p_questions.map((item: any) => item.item_number), [1, 25]);
 });
 
@@ -166,6 +171,17 @@ test('job tenant check prevents a tenant from reading another school job', () =>
   assert.equal(jobBelongsToTenant({ tenant_id: 'tenant-b' }, 'tenant-a'), false);
 });
 
+test('only the job creator or a school/platform administrator can cancel a job', () => {
+  const job = { created_by: 'teacher-a' };
+  assert.equal(canCancelExamJob(job, { id: 'teacher-a', role: 'Teacher' }), true);
+  assert.equal(canCancelExamJob(job, { id: 'teacher-b', role: 'Teacher' }), false);
+  assert.equal(canCancelExamJob(job, { id: 'teacher-b', role: 'admin' }), true);
+  assert.equal(canCancelExamJob(job, { id: 'teacher-b', role: 'Administrator' }), true);
+  assert.equal(canCancelExamJob(job, { id: 'teacher-b', role: 'admin', is_platform_admin: true }), true);
+  assert.equal(canCancelExamJob(job, { id: 'teacher-b', role: 'Teacher', is_platform_admin: true }), false);
+  assert.equal(canCancelExamJob(null, { id: 'teacher-a', role: 'Teacher' }), false);
+});
+
 test('claim function uses row locking, leases, retries and tenant concurrency limits', async () => {
   const migration = await readFile(new URL('../../../../supabase/migrations/20261119115522_multi_provider_exam_dispatch_limits.sql', import.meta.url), 'utf8');
   assert.match(migration, /FOR UPDATE SKIP LOCKED/i);
@@ -174,4 +190,28 @@ test('claim function uses row locking, leases, retries and tenant concurrency li
   assert.match(migration, /global_active >= 4/);
   assert.match(migration, /tenant_active >= 2/);
   assert.match(migration, /attempts = attempts \+ 1/);
+});
+
+
+test('atomic cancellation locks the root and cancels active repair children in one transaction', async () => {
+  const migration = await readFile(new URL('../../../../supabase/migrations/20261121120000_atomic_exam_job_cancellation.sql', import.meta.url), 'utf8');
+  assert.match(migration, /WHERE id = p_job_id[\s\S]*?FOR UPDATE/i);
+  assert.match(migration, /parent_job_id = p_job_id[\s\S]*?status IN \('queued', 'running', 'needs_attention'\)/i);
+  assert.match(migration, /RETURNS boolean/i);
+  assert.match(migration, /REVOKE ALL ON FUNCTION public\.cancel_exam_generation_job\(uuid, uuid\)[\s\S]*?GRANT EXECUTE[\s\S]*?TO service_role/i);
+});
+
+test('exam job route delegates cancellation to the atomic tenant-scoped RPC', async () => {
+  const route = await readFile(new URL('../../../app/api/ai/exam-jobs/[id]/route.ts', import.meta.url), 'utf8');
+  assert.match(route, /admin\.rpc\('cancel_exam_generation_job'/);
+  assert.match(route, /p_tenant_id: job\.tenant_id/);
+  assert.match(route, /cancelled !== true/);
+  assert.doesNotMatch(route, /\.update\(\{ status: 'cancelled'[\s\S]*?parent_job_id/);
+});
+
+test('platform administrators can access jobs without a tenant while tenant users remain scoped', async () => {
+  const route = await readFile(new URL('../../../app/api/ai/exam-jobs/[id]/route.ts', import.meta.url), 'utf8');
+  assert.match(route, /const isPlatformAdmin = profile\?\.is_platform_admin === true && profile\.role === 'admin'/);
+  assert.match(route, /if \(!isPlatformAdmin\) jobQuery = jobQuery\.eq\('tenant_id', profile\.tenant_id\)/);
+  assert.match(route, /!profile\.tenant_id && !isPlatformAdmin/);
 });
