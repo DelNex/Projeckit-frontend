@@ -1002,7 +1002,7 @@ function AnalyticsContent() {
         <nav className="flex items-center gap-2 overflow-x-auto no-scrollbar border-b border-[var(--pk-line)]">
           <button type="button"
             onClick={() => setActiveTab('sectional')}
-            className={`shrink-0 whitespace-nowrap min-h-[44px] px-3 text-sm font-semibold border-b-2 transition-colors ${
+            className={`shrink-0 whitespace-nowrap min-h-[44px] px-3 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'sectional'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white'
@@ -1022,7 +1022,7 @@ function AnalyticsContent() {
           </button>
           <button type="button"
             onClick={() => setActiveTab('cognitive')}
-            className={`py-2.5 px-4 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
+            className={`shrink-0 whitespace-nowrap min-h-[44px] px-3 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'cognitive'
                 ? 'border-blue-600 text-blue-600 font-semibold'
                 : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white'
@@ -1032,7 +1032,7 @@ function AnalyticsContent() {
           </button>
           <button type="button"
             onClick={() => setActiveTab('item-analysis')}
-            className={`py-2.5 px-4 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
+            className={`shrink-0 whitespace-nowrap min-h-[44px] px-3 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'item-analysis'
                 ? 'border-blue-600 text-blue-600 font-semibold'
                 : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white'
@@ -1042,7 +1042,7 @@ function AnalyticsContent() {
           </button>
           <button type="button"
             onClick={() => setActiveTab('reports')}
-            className={`py-2.5 px-4 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
+            className={`shrink-0 whitespace-nowrap min-h-[44px] px-3 text-sm font-medium border-b-2 transition-colors ${
               activeTab === 'reports'
                 ? 'border-blue-600 text-blue-600 font-semibold'
                 : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white'
