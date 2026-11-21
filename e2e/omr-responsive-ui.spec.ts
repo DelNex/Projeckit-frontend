@@ -6,14 +6,20 @@ const viewports = [
   { name: 'small phone', width: 320, height: 568 },
   { name: 'phone', width: 390, height: 844 },
   { name: 'tablet', width: 768, height: 1024 },
+  { name: 'laptop', width: 1280, height: 800 },
   { name: 'desktop', width: 1440, height: 900 },
 ];
 
+const themes = ['light', 'dark'] as const;
+
 for (const route of routes) {
   for (const viewport of viewports) {
-    test(`${route} fits the ${viewport.name} viewport (${viewport.width}px)`, async ({ page }) => {
+    for (const theme of themes) {
+    test(`${route} fits the ${viewport.name} viewport (${viewport.width}px) in ${theme} mode`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await page.emulateMedia({ colorScheme: theme });
       await page.goto(route);
+      await page.evaluate((mode) => document.documentElement.classList.toggle('dark', mode === 'dark'), theme);
 
       const main = page.locator('main.pk-auth');
       await expect(main).toBeVisible();
@@ -63,5 +69,6 @@ for (const route of routes) {
         'authentication page should have no automated WCAG A/AA violations',
       ).toEqual([]);
     });
+    }
   }
 }
