@@ -255,6 +255,7 @@ test('OpenRouter adapter sends the OpenAI-compatible structured-output request',
   try {
     process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
     process.env.OPENROUTER_MODEL = 'openrouter/free';
+    delete process.env.OPENROUTER_MAX_TOKENS;
     process.env.AI_PROVIDER_ORDER = 'openrouter';
     global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       assert.equal(String(input), 'https://openrouter.ai/api/v1/chat/completions');
