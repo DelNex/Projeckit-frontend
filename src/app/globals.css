@@ -880,7 +880,7 @@ body { background: var(--pk-canvas); color: var(--pk-ink); }
 .pk-main :where(input[type="number"], input[inputmode="numeric"]) { font-variant-numeric: tabular-nums; }
 .pk-main :where(.text-red-500, .text-red-600, .text-rose-500, .text-rose-600) { color: var(--pk-danger); }
 .pk-main :where(.text-amber-500, .text-amber-600, .text-orange-500, .text-orange-600) { color: var(--pk-warning); }
-.pk-main :where(.text-emerald-500, .text-emerald-600, .text-green-500, .text-green-600) { color: var(--pk-success); }
+.pk-main :where(.text-green-500, .text-green-600) { color: var(--pk-success); }
 .pk-dashboard .pk-kpi-card:hover { transform: none; box-shadow: 0 2px 8px rgb(0 0 0 / 4%); }
 .pk-main :where(.rounded-3xl) { border-radius: 16px; }
 .pk-main :where(.rounded-2xl) { border-radius: 12px; }
