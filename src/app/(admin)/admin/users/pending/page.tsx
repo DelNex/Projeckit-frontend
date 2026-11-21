@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/client';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
 import { useToast } from '@/components/ui/toast';
 import { friendlyError } from '@/lib/errors';
+import { OmrBubble } from '@/components/ui/OmrBubble';
 import { AlertTriangle, Building2, Check, Loader2, RefreshCw, UserCheck, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -177,7 +178,52 @@ export default function PendingUsersPage() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="grid gap-3 p-3 sm:hidden">
+            {pendingUsers.map((user) => {
+              const isBusy = processingId === user.id;
+              const matchedTenant = tenants.find((tenant) => tenant.id === user.tenant_id);
+              return (
+                <article key={user.id} className="min-w-0 rounded-xl border border-gray-200 p-3 dark:border-gray-800">
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="break-words text-sm font-semibold text-gray-900 dark:text-white">{user.display_name || 'Faculty member'}</h2>
+                      <p className="mt-1 break-all text-xs text-gray-500 dark:text-gray-400">{user.email || 'No email provided'}</p>
+                    </div>
+                    <span className="shrink-0 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 dark:border-gray-700 dark:text-gray-300">{user.role}</span>
+                  </div>
+                  <div className="mt-3 space-y-2 border-t border-gray-100 pt-3 dark:border-gray-800">
+                    <div className="flex items-center justify-between gap-3 text-xs">
+                      <span className="text-gray-500 dark:text-gray-400">Requested school</span>
+                      <span className="min-w-0 text-right font-medium text-gray-800 dark:text-gray-200">{matchedTenant?.name || 'Not assigned'}</span>
+                    </div>
+                    {isPlatformAdmin && (
+                      <label className="block text-xs text-gray-500 dark:text-gray-400">
+                        Assign school
+                        <select
+                          value={user.tenant_id || ''}
+                          onChange={(event) => handleAssignSchool(user.id, event.target.value)}
+                          disabled={isBusy}
+                          className="mt-1 min-h-11 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                        >
+                          <option value="">No school assigned</option>
+                          {tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.name}</option>)}
+                        </select>
+                      </label>
+                    )}
+                    <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                      <span className="inline-flex items-center gap-2"><OmrBubble tone="warning" selected size={8} /> Pending review</span>
+                      <time className="tabular-nums" dateTime={user.created_at}>{new Date(user.created_at).toLocaleDateString()}</time>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button type="button" disabled={isBusy} onClick={() => handleUpdateStatus(user.id, 'approved')} className="min-h-11 rounded-lg bg-emerald-600 px-3 text-sm font-semibold text-white disabled:opacity-50">Approve</button>
+                    <button type="button" disabled={isBusy} onClick={() => setRejectModal({ isOpen: true, user })} className="min-h-11 rounded-lg border border-red-200 px-3 text-sm font-semibold text-red-700 dark:border-red-900/50 dark:text-red-400 disabled:opacity-50">Decline</button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+          <div className="hidden overflow-x-auto sm:block">
             <table className="w-full text-left text-xs table-optimized min-w-[650px]">
               <thead className="border-b border-gray-100 bg-gray-50/50 text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:border-gray-800 dark:bg-gray-800/40 dark:text-gray-500">
                 <tr>
