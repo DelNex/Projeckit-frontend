@@ -366,7 +366,7 @@ export default function DashboardPage() {
     const n = points.length;
 
     const coords = points.map((p, idx) => {
-      const x = paddingX + (idx / (n - 1)) * chartW;
+      const x = paddingX + (n > 1 ? idx / (n - 1) : 0.5) * chartW;
       const val = p.mps !== null ? p.mps : 0;
       const y = height - paddingY - (val / 100) * chartH;
       return { ...p, x, y, hasVal: p.mps !== null };
@@ -647,22 +647,16 @@ export default function DashboardPage() {
                     y1={trendSvgCoords.benchmarkY}
                     x2={trendSvgCoords.width - trendSvgCoords.paddingX}
                     y2={trendSvgCoords.benchmarkY}
-                    stroke="#3157e8"
+                    stroke="var(--pk-brand)"
                     strokeWidth="1.5"
                     strokeDasharray="4 4"
                   />
-
-                  {/* Area fill */}
-                  {trendSvgCoords.areaD && (
-                    <path d={trendSvgCoords.areaD} fill="#dce4ff" fillOpacity="0.7" />
-                  )}
-
-                  {/* Trend Path line */}
+{/* Trend Path line */}
                   {trendSvgCoords.pathD && (
                     <path
                       d={trendSvgCoords.pathD}
                       fill="none"
-                      stroke="#3157e8"
+                      stroke="var(--pk-brand)"
                       strokeWidth="3"
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -695,12 +689,12 @@ export default function DashboardPage() {
                         onMouseLeave={() => setHoveredPoint(null)}
                       >
                         <circle cx={pt.x} cy={pt.y} r="14" fill="transparent" />
-                        <circle cx={pt.x} cy={pt.y} r="12" fill="none" stroke="#3157e8" strokeWidth="2" className="opacity-0 group-focus:opacity-100" />
+                        <circle cx={pt.x} cy={pt.y} r="12" fill="none" stroke="var(--pk-brand)" strokeWidth="2" className="opacity-0 group-focus:opacity-100" />
                         <circle
                           cx={pt.x}
                           cy={pt.y}
                           r="6"
-                          fill="#3157e8"
+                          fill="var(--pk-brand)"
                           stroke="#FFFFFF"
                           strokeWidth="2.5"
                           className="transition-transform group-hover:scale-125"
@@ -738,8 +732,9 @@ export default function DashboardPage() {
                     role="status"
                     aria-live="polite"
                     style={{
-                      left: `${Math.min(trendSvgCoords.width - 120, Math.max(20, hoveredPoint.x - 50))}px`,
-                      top: `${Math.max(10, hoveredPoint.y - 45)}px`,
+                      left: `${Math.min(92, Math.max(8, (hoveredPoint.x / trendSvgCoords.width) * 100))}%`,
+                      top: `${Math.min(82, Math.max(5, (hoveredPoint.y / trendSvgCoords.height) * 100 - 14))}%`,
+                      transform: "translateX(-50%)",
                     }}
                   >
                     <span className="font-bold">{hoveredPoint.quarter}: </span>
