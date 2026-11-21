@@ -18,6 +18,7 @@ import { getTenantContext } from '@/lib/tenant-context';
 import { useToast } from '@/components/ui/toast';
 import { friendlyError } from '@/lib/errors';
 import { cn } from '@/lib/utils';
+import { useDialogAccessibility } from '@/hooks/use-dialog-accessibility';
 
 interface SectionItem {
   id: string;
@@ -76,6 +77,7 @@ export function BulkAddStudentsModal({
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [isDiscardModalOpen, setIsDiscardModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -461,6 +463,8 @@ function detectColumnMapping(firstRow: string[]): ColumnMapping {
     }
   };
 
+  useDialogAccessibility(dialogRef, isOpen);
+
   if (!isOpen) return null;
 
   return (
@@ -475,7 +479,7 @@ function detectColumnMapping(firstRow: string[]): ColumnMapping {
         }
       }}
     >
-      <div className="relative h-[100dvh] max-h-[100dvh] w-full overflow-y-auto overscroll-contain rounded-none border border-gray-200 bg-white p-4 shadow-2xl dark:border-gray-800 dark:bg-gray-900 sm:my-8 sm:h-auto sm:max-h-[90dvh] sm:max-w-3xl sm:rounded-2xl sm:p-6">
+      <div ref={dialogRef} tabIndex={-1} className="relative h-[100dvh] max-h-[100dvh] w-full overflow-y-auto overscroll-contain rounded-none border border-gray-200 bg-white p-4 shadow-2xl outline-none dark:border-gray-800 dark:bg-gray-900 sm:my-8 sm:h-auto sm:max-h-[90dvh] sm:max-w-3xl sm:rounded-2xl sm:p-6">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 pb-4 dark:border-gray-800">
           <div className="flex items-center gap-2.5">
