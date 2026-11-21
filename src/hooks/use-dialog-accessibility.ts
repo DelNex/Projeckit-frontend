@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, type RefObject } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 
 const FOCUSABLE = [
   'a[href]',
@@ -19,7 +19,10 @@ export function useDialogAccessibility(
   dialogRef: RefObject<HTMLElement | null>,
   isOpen: boolean,
   onEscape?: () => void,
-) {
+ ) {
+  const escapeRef = useRef(onEscape);
+  useEffect(() => { escapeRef.current = onEscape; }, [onEscape]);
+
   useEffect(() => {
     if (!isOpen) return;
     const dialog = dialogRef.current;
@@ -36,9 +39,9 @@ export function useDialogAccessibility(
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        if (onEscape) {
+        if (escapeRef.current) {
           event.preventDefault();
-          onEscape();
+          escapeRef.current();
         }
         return;
       }
@@ -67,5 +70,5 @@ export function useDialogAccessibility(
       document.removeEventListener('keydown', handleKeyDown);
       if (previousFocus?.isConnected) previousFocus.focus();
     };
-  }, [dialogRef, isOpen, onEscape]);
+  }, [dialogRef, isOpen]);
 }
