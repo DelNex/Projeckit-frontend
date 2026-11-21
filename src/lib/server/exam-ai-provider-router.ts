@@ -325,7 +325,7 @@ export async function requestExamQuestionsFromProviders(
           retryableFailure = nextFailure;
         }
       }
-      const safeDetail = message.replace(/\s+/g, ' ').slice(0, 180);
+      const safeDetail = message.replace(/\s+/g, ' ').slice(0, 320);
       failures.push(`${provider.id}${status ? ` HTTP ${status}` : ''}: ${safeDetail}`);
       await logSystemEvent({
         severity: retryable ? 'warn' : 'error', source: 'exam.provider-router',
