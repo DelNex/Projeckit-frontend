@@ -1840,7 +1840,7 @@ export default function SchoolSettingsPage() {
                     <div
                       key={gp.id}
                       className={cn(
-                        'flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border p-3.5 transition-all',
+                        'flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-2xl border p-3 transition-all',
                         gp.is_current
                           ? 'border-blue-200 bg-blue-50/40 dark:border-blue-900/50 dark:bg-blue-950/20'
                           : 'border-gray-200 bg-gray-50/50 dark:border-gray-800 dark:bg-gray-800/40'
@@ -1928,7 +1928,7 @@ export default function SchoolSettingsPage() {
                       </div>
 
                       {/* Right actions */}
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex flex-wrap items-center gap-2 shrink-0">
                         {isOperating ? (
                           <div className="flex items-center gap-1.5 px-3 py-1 text-xs text-blue-600">
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1974,7 +1974,8 @@ export default function SchoolSettingsPage() {
                                   ? 'At least one term is required.'
                                   : 'Delete or archive this term'
                               }
-                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-950/40 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition"
+                              aria-label={gp.is_current ? 'Delete unavailable: set another term as current first' : 'Delete term'}
+                              className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-700 dark:text-gray-300 dark:hover:bg-red-950/40 dark:hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-35 transition"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
