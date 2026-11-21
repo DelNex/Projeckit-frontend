@@ -194,7 +194,7 @@ test('claim function uses row locking, leases, retries and tenant concurrency li
 
 
 test('atomic cancellation locks the root and cancels active repair children in one transaction', async () => {
-  const migration = await readFile(new URL('../../../../supabase/migrations/20261121120000_atomic_exam_job_cancellation.sql', import.meta.url), 'utf8');
+  const migration = await readFile(new URL('../../../../supabase/migrations/20261121021943_atomic_exam_job_cancellation.sql', import.meta.url), 'utf8');
   assert.match(migration, /WHERE id = p_job_id[\s\S]*?FOR UPDATE/i);
   assert.match(migration, /parent_job_id = p_job_id[\s\S]*?status IN \('queued', 'running', 'needs_attention'\)/i);
   assert.match(migration, /RETURNS boolean/i);
