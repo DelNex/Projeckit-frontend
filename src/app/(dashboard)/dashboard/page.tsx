@@ -50,11 +50,11 @@ interface StudentScoreRecord {
 }
 
 const TIER_CONFIG = [
-  { key: 'mastered', label: 'Mastered', range: '96–100%', min: 96, color: '#4568f5', bgClass: 'bg-emerald-500', textClass: 'text-emerald-700 dark:text-emerald-400' },
-  { key: 'closely', label: 'Closely Approximating Mastery', range: '86–95%', min: 86, color: '#6e88f7', bgClass: 'bg-blue-500', textClass: 'text-blue-700 dark:text-blue-400' },
-  { key: 'moving', label: 'Moving Towards Mastery', range: '66–85%', min: 66, color: '#8da1f9', bgClass: 'bg-amber-500', textClass: 'text-amber-700 dark:text-amber-400' },
-  { key: 'average', label: 'Average / Low', range: '35–65%', min: 35, color: '#b4c2ff', bgClass: 'bg-indigo-500', textClass: 'text-indigo-700 dark:text-indigo-400' },
-  { key: 'atRisk', label: 'Very Low / At Risk', range: '<35%', min: 0, color: '#dce4ff', bgClass: 'bg-rose-500', textClass: 'text-rose-700 dark:text-rose-400' },
+  { key: 'mastered', label: 'Mastered', range: '96–100%', min: 96, color: 'var(--pk-brand)', bgClass: 'bg-emerald-500', textClass: 'text-emerald-700 dark:text-emerald-400' },
+  { key: 'closely', label: 'Closely Approximating Mastery', range: '86–95%', min: 86, color: 'color-mix(in srgb, var(--pk-brand) 78%, transparent)', bgClass: 'bg-blue-500', textClass: 'text-blue-700 dark:text-blue-400' },
+  { key: 'moving', label: 'Moving Towards Mastery', range: '66–85%', min: 66, color: 'color-mix(in srgb, var(--pk-brand) 58%, transparent)', bgClass: 'bg-amber-500', textClass: 'text-amber-700 dark:text-amber-400' },
+  { key: 'average', label: 'Average / Low', range: '35–65%', min: 35, color: 'var(--pk-raised)', bgClass: 'bg-indigo-500', textClass: 'text-indigo-700 dark:text-indigo-400' },
+  { key: 'atRisk', label: 'Very Low / At Risk', range: '<35%', min: 0, color: 'var(--pk-danger)', bgClass: 'bg-rose-500', textClass: 'text-rose-700 dark:text-rose-400' },
 ];
 
 export default function DashboardPage() {
@@ -797,91 +797,47 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Donut Chart Visual */}
-                <div className="flex justify-center items-center py-2">
-                  <div className="relative w-40 h-40">
-                    <svg
-                      viewBox="0 0 140 140"
-                      className="w-full h-full -rotate-90 transform"
-                      role="img"
-                      aria-label={`Learner mastery distribution for ${learnerTierData.totalStudents} scanned students. Exact counts are listed below the chart.`}
-                    >
-                      {/* Background circle track */}
-                      <circle
-                        cx="70"
-                        cy="70"
-                        r="54"
-                        fill="transparent"
-                        stroke="#F1F5F9"
-                        strokeWidth="16"
-                        className="dark:stroke-gray-800"
-                      />
-
-                      {/* Donut segments */}
-                      {donutSlices.map((slice) => {
-                        if (slice.percentage === 0) return null;
-                        return (
-                          <circle
-                            key={slice.key}
-                            cx="70"
-                            cy="70"
-                            r="54"
-                            fill="transparent"
-                            stroke={slice.color}
-                            strokeWidth="16"
-                            strokeDasharray={slice.strokeDasharray}
-                            strokeDashoffset={slice.strokeDashoffset}
-                            strokeLinecap="round"
-                            className="transition-all duration-500 ease-out"
-                          />
-                        );
-                      })}
-                    </svg>
-
-                    {/* Donut Center Label */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                      <span className="text-2xl font-black text-gray-900 dark:text-white">
-                        {learnerTierData.totalStudents}
-                      </span>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                        Scanned
-                      </span>
-                    </div>
-                  </div>
+                {/* Stacked learner tier bar */}
+                <div
+                  className="flex h-3 w-full overflow-hidden rounded-full bg-[var(--pk-raised)]"
+                  role="img"
+                  aria-label={`Learner mastery distribution for ${learnerTierData.totalStudents} scanned students`}
+                >
+                  {donutSlices.map((slice) => slice.percentage > 0 ? (
+                    <div
+                      key={slice.key}
+                      className="h-full transition-[width] duration-200"
+                      style={{ width: `${slice.percentage}%`, backgroundColor: slice.color }}
+                    />
+                  ) : null)}
                 </div>
 
-                {/* Tier Rows Breakdown */}
-                <div className="space-y-2 pt-1">
-                  {learnerTierData.counts.map((tier) => (
-                    <div
-                      key={tier.key}
-                      className="flex items-center justify-between text-xs p-2 rounded-xl bg-gray-50/70 dark:bg-gray-800/40 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span
-                          className="w-2.5 h-2.5 rounded-full shrink-0"
-                          style={{ backgroundColor: tier.color }}
-                        />
-                        <div className="truncate">
-                          <span className="font-semibold text-gray-800 dark:text-gray-200">
-                            {tier.label}
-                          </span>
-                          <span className="text-[10px] text-gray-400 ml-1 font-mono">
-                            ({tier.range})
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className="font-bold text-gray-900 dark:text-white">
-                          {tier.count} <span className="text-[10px] font-normal text-gray-400">std</span>
-                        </span>
-                        <span className="font-mono font-bold text-xs min-w-9 text-right" style={{ color: tier.color }}>
-                          {tier.percentage}%
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                {/* Tier breakdown table */}
+                <div className="overflow-x-auto">
+                  <table aria-label="Learner performance tier breakdown" className="w-full min-w-[280px] text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-gray-100 text-gray-500 dark:border-gray-800 dark:text-gray-400">
+                        <th className="py-2 pr-3 font-medium">Tier</th>
+                        <th className="py-2 px-2 text-right font-medium">Learners</th>
+                        <th className="py-2 pl-2 text-right font-medium">Share</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                      {learnerTierData.counts.map((tier) => (
+                        <tr key={tier.key}>
+                          <td className="py-2 pr-3">
+                            <span className="inline-flex min-w-0 items-center gap-2">
+                              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: tier.color }} />
+                              <span className="min-w-0 break-words font-medium text-gray-800 dark:text-gray-200">{tier.label}</span>
+                              <span className="shrink-0 font-mono text-[10px] text-gray-400">({tier.range})</span>
+                            </span>
+                          </td>
+                          <td className="px-2 py-2 text-right font-semibold tabular-nums text-gray-900 dark:text-white">{tier.count}</td>
+                          <td className="py-2 pl-2 text-right font-mono tabular-nums text-gray-600 dark:text-gray-300">{tier.percentage}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
