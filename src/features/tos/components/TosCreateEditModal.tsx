@@ -380,8 +380,8 @@ export function TosCreateEditModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
-        <div className="relative w-full max-w-3xl my-8 bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[90vh]">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 bg-slate-900/60 overflow-y-auto">
+        <div className="relative my-0 h-[100dvh] max-h-[100dvh] w-full max-w-3xl rounded-none border border-slate-200 bg-white shadow-none dark:border-slate-800 dark:bg-slate-900 sm:my-8 sm:h-auto sm:max-h-[85vh] sm:rounded-2xl sm:shadow-xl flex flex-col">
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 dark:border-slate-800">
             <div>
@@ -399,7 +399,7 @@ export function TosCreateEditModal({
             </div>
             <button
               onClick={() => setShowUnsavedGuard(true)}
-              className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-slate-800 dark:hover:text-slate-100 transition-colors"
               aria-label="Close modal"
             >
               <X className="h-5 w-5" />
@@ -407,7 +407,7 @@ export function TosCreateEditModal({
           </div>
 
           {/* Body / Scroll Area */}
-          <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+          <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6 space-y-6">
             {/* Error Banner with Technical Details for Admin */}
             {formError && (
               <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-900 dark:text-rose-200 text-sm space-y-2">
@@ -640,12 +640,46 @@ export function TosCreateEditModal({
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded-xl hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  <span>Add Competency</span>
+                  <span>Add competency</span>
                 </button>
               </div>
 
-              {/* Table of Competencies */}
-              <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+              {/* Mobile competency cards */}
+              <div className="grid gap-3 sm:hidden">
+                {competencies.map((comp, index) => {
+                  const computedItemCount = calcResult.rows[index]?.itemCount || 0;
+                  return (
+                    <article key={comp.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
+                      <div className="mb-2 text-xs font-medium text-slate-500 dark:text-slate-400">Competency {index + 1}</div>
+                      <input
+                        type="text"
+                        value={comp.description}
+                        list="tos-school-competency-library"
+                        onChange={(e) => handleCompetencyChange(index, 'description', e.target.value)}
+                        placeholder="Enter learning competency"
+                        className="min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                        required
+                      />
+                      <div className="mt-3 grid grid-cols-[1fr_1fr_auto] items-end gap-2">
+                        <label className="min-w-0 text-xs text-slate-500 dark:text-slate-400">
+                          Days taught
+                          <input type="number" min="1" max="100" value={comp.daysTaught} onChange={(e) => handleCompetencyChange(index, 'daysTaught', e.target.value)} className="mt-1 min-h-11 w-full rounded-lg border border-slate-200 bg-white px-2 text-center text-sm font-semibold tabular-nums text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white" required />
+                        </label>
+                        <div className="min-w-0 text-xs text-slate-500 dark:text-slate-400">
+                          Computed items
+                          <div className="mt-1 flex min-h-11 items-center text-sm font-semibold tabular-nums text-slate-900 dark:text-white">{computedItemCount}</div>
+                        </div>
+                        <button type="button" onClick={() => handleRemoveCompetency(index)} disabled={competencies.length <= 1} aria-label={'Delete competency ' + (index + 1)} className="flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 text-slate-500 disabled:opacity-30 dark:border-slate-700">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+
+              {/* Desktop competency table */}
+              <div className="hidden overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 sm:block">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold">
                     <tr>
@@ -715,10 +749,7 @@ export function TosCreateEditModal({
                 <span>Automatic Bloom placement</span>
               </div>
               <p className="leading-relaxed">
-                Items for each competency are divided as evenly as possible across the six Bloom levels. Any remainder
-                starts with the competency&apos;s primary level, which is detected from its action verb. Lower-order and
-                higher-order thinking are balanced according to the exam type, whole item counts are assigned, and every
-                item number is placed under Remembering, Understanding, Applying, Analyzing, Evaluating or Creating.
+                Items are distributed across Bloom levels using the competency action verb and the selected exam type.
               </p>
             </div>
 
@@ -754,7 +785,7 @@ export function TosCreateEditModal({
             </datalist>
 
             {/* Footer Buttons */}
-            <div className="pt-2">
+            <div className="pk-sticky-mobile-actions pt-2">
               <button
                 type="submit"
                 disabled={saving}
