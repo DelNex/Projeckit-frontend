@@ -76,13 +76,13 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
 
   const teacherNavItems = [
     {
-      group: 'MAIN',
+      group: 'Main',
       items: [
         { name: 'Home', href: '/dashboard', icon: LayoutDashboard },
       ],
     },
     {
-      group: 'ACADEMIC WORKFLOW',
+      group: 'Academic workflow',
       items: [
         { name: 'Table of Specifications', href: '/tos', icon: FileSpreadsheet },
         { name: 'Item Analysis', href: '/assessments', icon: BookOpen },
@@ -90,7 +90,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
       ],
     },
     {
-      group: 'ANALYTICS & REPORTS',
+      group: 'Analytics & reports',
       items: [
         { name: 'Results', href: '/analytics', icon: BarChart3 },
         { name: 'Question Analysis', href: '/analytics?tab=item-analysis', icon: CheckSquare },
@@ -98,7 +98,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
       ],
     },
     {
-      group: 'SETTINGS',
+      group: 'Settings',
       items: [
         { name: 'School Settings', href: '/settings/school', icon: Settings },
       ],
@@ -107,7 +107,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
 
   const adminNavItems = [
     {
-      group: 'ADMINISTRATION',
+      group: 'Administration',
       items: [
         { name: 'Console Overview', href: '/admin', icon: Shield },
         { name: 'All Accounts', href: '/admin/users', icon: Users },
@@ -121,7 +121,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
       ],
     },
     {
-      group: 'SWITCH CONTEXT',
+      group: 'Switch context',
       items: [
         { name: 'Teacher Dashboard', href: '/dashboard', icon: LayoutDashboard },
         { name: 'Item Analysis', href: '/assessments', icon: BookOpen },
@@ -137,7 +137,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
       {isOpen && (
         <div
           onClick={onClose}
-          className="fixed inset-0 z-40 bg-slate-950/45 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/35 lg:hidden"
           aria-hidden="true"
         />
       )}
@@ -149,7 +149,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
         aria-modal={isOpen ? true : undefined}
         aria-label={isAdminMode ? 'Administration navigation' : 'School navigation'}
         className={cn(
-          'pk-sidebar fixed inset-y-0 left-0 z-50 flex w-[min(84vw,18rem)] flex-col border-r border-slate-200 bg-white dark:border-gray-800 dark:bg-gray-900 lg:static lg:h-full lg:w-64 lg:shrink-0 lg:translate-x-0 sidebar-transition',
+          'pk-sidebar fixed inset-y-0 left-0 z-50 flex h-dvh w-[min(88vw,20rem)] flex-col border-r border-slate-200 bg-white dark:border-gray-800 dark:bg-gray-900 lg:static lg:h-full lg:w-64 lg:shrink-0 lg:translate-x-0 sidebar-transition',
           isOpen ? 'translate-x-0 shadow-2xl lg:shadow-none' : '-translate-x-full'
         )}
       >
@@ -171,7 +171,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
 
           <button type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 lg:hidden dark:hover:bg-gray-800"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 lg:hidden dark:hover:bg-gray-800"
             aria-label="Close sidebar"
           >
             <X className="h-5 w-5" />
@@ -182,7 +182,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
         <nav aria-label={isAdminMode ? 'Administration' : 'School navigation'} className="flex-1 overflow-y-auto px-3 py-5 space-y-6">
           {navGroups.map((group) => (
             <div key={group.group}>
-              <h3 className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-gray-500">
+              <h3 className="mb-2 px-3 text-xs font-medium text-slate-500 dark:text-gray-500">
                 {group.group}
               </h3>
               <ul className="space-y-1">
@@ -232,7 +232,7 @@ export function Sidebar({ isOpen, onClose, isAdminMode = false }: SidebarProps) 
               onClick={handleSignOut}
               className="pk-signout w-full flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors"
             >
-              <LogOut className="h-5 w-5 text-red-500" />
+              <LogOut className="h-5 w-5 text-current" />
               <span>Sign out</span>
             </button>
           </div>
