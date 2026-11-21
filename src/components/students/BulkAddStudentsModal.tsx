@@ -479,7 +479,7 @@ function detectColumnMapping(firstRow: string[]): ColumnMapping {
         }
       }}
     >
-      <div ref={dialogRef} tabIndex={-1} className="relative h-[100dvh] max-h-[100dvh] w-full overflow-y-auto overscroll-contain rounded-none border border-gray-200 bg-white p-4 shadow-2xl outline-none dark:border-gray-800 dark:bg-gray-900 sm:my-8 sm:h-auto sm:max-h-[90dvh] sm:max-w-3xl sm:rounded-2xl sm:p-6">
+      <div ref={dialogRef} tabIndex={-1} className="relative box-border h-[100dvh] max-h-[100dvh] w-full max-w-full min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain rounded-none border border-gray-200 bg-white p-4 shadow-2xl outline-none dark:border-gray-800 dark:bg-gray-900 sm:mx-auto sm:my-8 sm:h-auto sm:max-h-[90dvh] sm:max-w-2xl sm:rounded-[16px] sm:p-6">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 pb-4 dark:border-gray-800">
           <div className="flex items-center gap-2.5">

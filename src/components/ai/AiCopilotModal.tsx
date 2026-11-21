@@ -387,12 +387,9 @@ export function AiCopilotModal({
                 <Bot className="h-4 w-4 stroke-[1.5]" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h2 id={`${dialogId}-title`} className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
-                    Project KIT AI Copilot
-                  </h2>
-                  
-                </div>
+                <h2 id={`${dialogId}-title`} className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
+                  Project KIT AI Copilot
+                </h2>
                 <p id={`${dialogId}-description`} className="text-[11px] text-gray-500 dark:text-gray-400 leading-tight">
                   Psychometrics, Table of Specifications &amp; OMR Guidance
                 </p>

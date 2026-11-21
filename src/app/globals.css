@@ -980,3 +980,110 @@ body { background: var(--pk-canvas); color: var(--pk-ink); }
 .pk-main nav.flex.items-center.gap-2.overflow-x-auto > button {
   flex: 0 0 auto; min-height: 44px; white-space: nowrap;
 }
+
+
+/* Final semantic text aliases used by shared controls and modal content. */
+:root {
+  --pk-text: #111827;
+  --pk-text-secondary: #374151;
+  --pk-text-muted: #6b7280;
+}
+.dark {
+  --pk-text: #f3f4f6;
+  --pk-text-secondary: #d1d5db;
+  --pk-text-muted: #9a9fa6;
+}
+
+/* Form values must not inherit legacy gray ramps on graphite surfaces. */
+:where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea) {
+  color: var(--pk-text) !important;
+}
+:where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea)::placeholder {
+  color: var(--pk-text-muted) !important;
+  opacity: 1;
+}
+:where(input, select, textarea):disabled {
+  color: var(--pk-text-muted) !important;
+  opacity: 1;
+}
+
+/* Disabled actions remain legible instead of fading into dark surfaces. */
+.pk-shell button:disabled, .pk-main button:disabled, .pk-auth button:disabled,
+button:disabled {
+  opacity: 1 !important;
+  background-color: var(--pk-surface) !important;
+  color: var(--pk-text-muted) !important;
+  border: 1px solid var(--pk-line) !important;
+  cursor: not-allowed !important;
+}
+
+/* Neutral avatar tile: high contrast in both theme palettes. */
+.pk-avatar {
+  background: var(--pk-raised) !important;
+  color: var(--pk-text) !important;
+  border: 1px solid var(--pk-line) !important;
+}
+
+/* Touch targets stay usable through tablet width, not only phone width. */
+@media (max-width: 767px) {
+  .pk-shell button, .pk-main button, .pk-auth button,
+  .pk-shell [role="button"], .pk-main [role="button"], .pk-auth [role="button"] {
+    min-height: 44px;
+  }
+  .pk-shell input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  .pk-shell select, .pk-shell textarea,
+  .pk-main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  .pk-main select, .pk-main textarea,
+  .pk-auth input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  .pk-auth select, .pk-auth textarea { min-height: 44px; }
+}
+
+/* Full-height sheets are border-box constrained to the viewport. */
+@media (max-width: 639px) {
+  .pk-main .fixed.inset-0.z-50 > div, .pk-shell .fixed.inset-0.z-50 > div {
+    box-sizing: border-box; width: 100%; max-width: 100%; min-width: 0;
+    margin-inline: 0; overflow-x: hidden; border-radius: 0;
+  }
+}
+@media (min-width: 640px) {
+  .pk-main .fixed.inset-0.z-50 > div, .pk-shell .fixed.inset-0.z-50 > div {
+    box-sizing: border-box; max-width: min(100%, 42rem); margin-inline: auto;
+    border-radius: 16px;
+  }
+}
+
+
+/* Compact learner cards: identity on one row, actions in a clear footer. */
+@media (max-width: 639px) {
+  .pk-students-table [role="list"] article {
+    display: grid; grid-template-columns: 44px minmax(0, 1fr) auto;
+    grid-template-areas: "select name section" "actions actions actions";
+    align-items: center; column-gap: 8px; row-gap: 8px;
+  }
+  .pk-students-table [role="list"] article > div:nth-child(1),
+  .pk-students-table [role="list"] article > div:nth-child(2),
+  .pk-students-table [role="list"] article > div:nth-child(3),
+  .pk-students-table [role="list"] article > div:nth-child(4) {
+    display: block; border: 0; padding: 0; min-width: 0;
+  }
+  .pk-students-table [role="list"] article > div:nth-child(1) { grid-area: select; }
+  .pk-students-table [role="list"] article > div:nth-child(2) { grid-area: name; }
+  .pk-students-table [role="list"] article > div:nth-child(3) { grid-area: section; }
+  .pk-students-table [role="list"] article > div:nth-child(4) {
+    grid-area: actions; border-top: 1px solid var(--pk-line); padding-top: 8px;
+  }
+  .pk-students-table [role="list"] article > div:nth-child(-n+4) > span { display: none; }
+  .pk-students-table [role="list"] article > div:nth-child(1) > div { min-height: 44px; display: flex; align-items: center; justify-content: center; }
+  .pk-students-table [role="list"] article > div:nth-child(2) > div { text-align: left; }
+  .pk-students-table [role="list"] article > div:nth-child(3) > div { text-align: right; }
+  .pk-students-table [role="list"] article > div:nth-child(4) > div { width: 100%; }
+  .pk-students-table [role="list"] article > div:nth-child(4) > div > div { justify-content: flex-end; gap: 8px; }
+}
+
+
+/* The OMR viewfinder intentionally keeps its own graphite chrome in both themes. */
+.pk-omr-dialog button:disabled {
+  background-color: #25282c !important;
+  color: #9a9fa6 !important;
+  border-color: #383b40 !important;
+}
