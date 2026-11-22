@@ -38,6 +38,14 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
 
   const endpoint = segments[0];
   const endpointPath = segments.join('/');
+  const contentLength = Number(request.headers.get('content-length') || 0);
+  const maxBodyBytes = endpoint === 'upload' ? 10 * 1024 * 1024 : 1024 * 1024;
+  if (contentLength > maxBodyBytes) {
+    return NextResponse.json({ message: 'Request body is too large.' }, { status: 413 });
+  }
+  if (request.nextUrl.search.length > 1024) {
+    return NextResponse.json({ message: 'Query string is too large.' }, { status: 400 });
+  }
   const upstreamUrl = `${backendBaseUrl()}/api/ai/${endpointPath}${request.nextUrl.search}`;
   const headers = new Headers({
     Authorization: `Bearer ${session.access_token}`,
@@ -48,12 +56,20 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
     if (endpoint === 'upload') {
       const incoming = await request.formData();
       const outgoing = new FormData();
-      for (const [key, value] of incoming.entries()) outgoing.append(key, value);
+      for (const [key, value] of incoming.entries()) {
+        if (value instanceof File && value.size > maxBodyBytes) {
+          return NextResponse.json({ message: 'Uploaded file is too large.' }, { status: 413 });
+        }
+        outgoing.append(key, value);
+      }
       body = outgoing;
     } else {
       const contentType = request.headers.get('content-type');
       if (contentType) headers.set('Content-Type', contentType);
       body = await request.arrayBuffer();
+      if (body.byteLength > maxBodyBytes) {
+        return NextResponse.json({ message: 'Request body is too large.' }, { status: 413 });
+      }
     }
   }
 
