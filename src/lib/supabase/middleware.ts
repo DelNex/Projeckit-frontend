@@ -54,6 +54,23 @@ export async function updateSession(request: NextRequest) {
     (root) => pathname === root || pathname.startsWith(`${root}/`)
   );
 
+  // Enforce account approval on the server for every protected page request.
+  // Client-side login checks are UX only and must not be the authorization boundary.
+  if (user && isProtectedRoute) {
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('status, archived_at')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (profileError || !profile || profile.status !== 'approved' || profile.archived_at) {
+      return NextResponse.json(
+        { error: 'Your account is not approved or active. Contact your school administrator.' },
+        { status: 403 }
+      );
+    }
+  }
+
   // If user is not authenticated and trying to access protected routes
   if (!user && isProtectedRoute) {
     const url = request.nextUrl.clone();
