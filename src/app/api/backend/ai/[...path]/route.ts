@@ -66,10 +66,11 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
     } else {
       const contentType = request.headers.get('content-type');
       if (contentType) headers.set('Content-Type', contentType);
-      body = await request.arrayBuffer();
-      if (body.byteLength > maxBodyBytes) {
+      const buffer = await request.arrayBuffer();
+      if (buffer.byteLength > maxBodyBytes) {
         return NextResponse.json({ message: 'Request body is too large.' }, { status: 413 });
       }
+      body = buffer;
     }
   }
 
