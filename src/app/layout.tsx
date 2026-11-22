@@ -10,14 +10,14 @@ const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://projectkit.deped.gov
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: 'Project KIT — DepEd Academic Assessment & Automated OMR Grading System',
+    default: 'Project KIT — Academic Assessment & OMR Grading',
     template: '%s | Project KIT — Assessment & Academic Analytics',
   },
   description:
-    'Project KIT is the official automated academic assessment and analytics platform for Philippine DepEd institutions. Features high-precision camera OMR answer sheet scanning, automated item analysis, Table of Specifications (TOS) generator, and DepEd Order No. 8, s. 2015 compliant grading.',
+    'Project KIT is an independent academic assessment and analytics platform with camera-based OMR answer sheet scanning, item analysis, Table of Specifications (TOS) tools, and configurable grading workflows.',
   applicationName: 'Project KIT',
   authors: [
-    { name: 'Department of Education — Republic of the Philippines' },
+    { name: 'Project KIT' },
   ],
   generator: 'Next.js',
   keywords: [
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     'written works performance tasks quarterly assessment',
   ],
   creator: 'Project KIT ICT & Faculty',
-  publisher: 'Department of Education — Republic of the Philippines',
+  publisher: 'Project KIT',
   category: 'Education / Academic Assessment Software',
   classification: 'Educational Assessment & Grading Platform',
   formatDetection: {
@@ -54,7 +54,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Project KIT — DepEd Academic Assessment & Automated OMR Grading System',
     description:
-      'Official academic assessment platform. High-precision camera OMR scanning, automated item analysis, Table of Specifications (TOS), and DepEd Order No. 8 compliant grading.',
+      'Academic assessment tools with camera-based OMR scanning, item analysis, Table of Specifications (TOS), and configurable grading workflows.',
     url: siteUrl,
     siteName: 'Project KIT',
     locale: 'en_PH',
@@ -116,7 +116,7 @@ const jsonLdData = {
       '@id': `${siteUrl}/#website`,
       url: siteUrl,
       name: 'Project KIT',
-      description: 'DepEd Academic Assessment System & Automated OMR Grading Platform',
+      description: 'Independent academic assessment and OMR grading platform',
       publisher: {
         '@id': `${siteUrl}/#organization`,
       },
@@ -125,13 +125,9 @@ const jsonLdData = {
     {
       '@type': 'EducationalOrganization',
       '@id': `${siteUrl}/#organization`,
-      name: 'Department of Education — Republic of the Philippines',
-      alternateName: 'Project KIT',
+      name: 'Project KIT',
+      alternateName: 'Project KIT Academic Assessment Platform',
       url: siteUrl,
-      department: {
-        '@type': 'GovernmentOrganization',
-        name: 'Department of Education — Republic of the Philippines',
-      },
     },
     {
       '@type': 'SoftwareApplication',
@@ -140,7 +136,7 @@ const jsonLdData = {
       operatingSystem: 'Web, Android, iOS, Windows, macOS, Linux',
       applicationCategory: 'EducationalApplication',
       description:
-        'Automated real-time OMR test sheet scanner, Table of Specifications (TOS) generator, psychometric item analysis, and DepEd Order No. 8, s. 2015 grading calculator.',
+        'Automated OMR test sheet scanning, Table of Specifications (TOS) tools, psychometric item analysis, and configurable grading workflows.',
       offers: {
         '@type': 'Offer',
         price: '0',

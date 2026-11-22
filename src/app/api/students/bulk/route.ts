@@ -5,6 +5,12 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 export async function POST(request: Request) {
   try {
+    const requestOrigin = request.headers.get('origin');
+    const requestUrl = new URL(request.url);
+    if (!requestOrigin || requestOrigin !== requestUrl.origin) {
+      return NextResponse.json({ error: 'Request origin could not be verified.' }, { status: 403 });
+    }
+
     const supabase = await createClient();
 
     // 1. Authenticate user session
@@ -82,7 +88,7 @@ export async function POST(request: Request) {
 
     // 4. Execute operation strictly scoped to tenant_id
     if (action === 'archive') {
-      const { error: updErr } = await (supabase as any)
+      const { data: changedRows, error: updErr } = await (supabase as any)
         .from('students')
         .update({
           is_archived: true,
@@ -90,11 +96,12 @@ export async function POST(request: Request) {
           archived_by: user.id,
         })
         .in('id', studentIds)
-        .eq('tenant_id', tenantId);
+        .eq('tenant_id', tenantId)
+        .select('id');
 
       if (updErr) {
         return NextResponse.json(
-          { error: `Database update error: ${updErr.message}` },
+          { error: 'Could not archive the selected learners.' },
           { status: 400 }
         );
       }
@@ -102,13 +109,13 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: true,
         action: 'archive',
-        count: studentIds.length,
-        message: `Successfully archived ${studentIds.length} learner(s).`,
+        count: changedRows?.length ?? 0,
+        message: `Successfully archived ${changedRows?.length ?? 0} learner(s).`,
       });
     }
 
     if (action === 'restore') {
-      const { error: resErr } = await (supabase as any)
+      const { data: changedRows, error: resErr } = await (supabase as any)
         .from('students')
         .update({
           is_archived: false,
@@ -116,11 +123,12 @@ export async function POST(request: Request) {
           archived_by: null,
         })
         .in('id', studentIds)
-        .eq('tenant_id', tenantId);
+        .eq('tenant_id', tenantId)
+        .select('id');
 
       if (resErr) {
         return NextResponse.json(
-          { error: `Database restore error: ${resErr.message}` },
+          { error: 'Could not restore the selected learners.' },
           { status: 400 }
         );
       }
@@ -128,12 +136,15 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: true,
         action: 'restore',
-        count: studentIds.length,
-        message: `Successfully restored ${studentIds.length} learner(s) to active list.`,
+        count: changedRows?.length ?? 0,
+        message: `Successfully restored ${changedRows?.length ?? 0} learner(s) to active list.`,
       });
     }
 
     if (action === 'delete') {
+      if (profile.role !== 'admin') {
+        return NextResponse.json({ error: 'Only school administrators can permanently delete archived learners.' }, { status: 403 });
+      }
       // 1. First SELECT the ids that match tenant AND is_archived = true (Safe permanent delete)
       const { data: archivedRecords, error: selectErr } = await (supabase as any)
         .from('students')
@@ -144,7 +155,7 @@ export async function POST(request: Request) {
 
       if (selectErr) {
         return NextResponse.json(
-          { error: `Database error verifying records: ${selectErr.message}` },
+          { error: 'Could not verify the archived learner records.' },
           { status: 400 }
         );
       }
@@ -163,16 +174,17 @@ export async function POST(request: Request) {
       }
 
       // 2. Only then run the delete
-      const { error: delErr } = await (supabase as any)
+      const { data: deletedRows, error: delErr } = await (supabase as any)
         .from('students')
         .delete()
         .in('id', studentIds)
         .eq('tenant_id', tenantId)
-        .eq('is_archived', true);
+        .eq('is_archived', true)
+        .select('id');
 
       if (delErr) {
         return NextResponse.json(
-          { error: `Failed to permanently delete records: ${delErr.message}` },
+          { error: 'Could not permanently delete the selected archived learners.' },
           { status: 400 }
         );
       }
@@ -180,8 +192,8 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: true,
         action: 'delete',
-        count: studentIds.length,
-        message: `Permanently deleted ${studentIds.length} learner(s).`,
+        count: deletedRows?.length ?? 0,
+        message: `Permanently deleted ${deletedRows?.length ?? 0} learner(s).`,
       });
     }
 
@@ -215,7 +227,7 @@ export async function POST(request: Request) {
         .from('sections')
         .select('id, name, is_archived')
         .in('config_id', configIds)
-        .ilike('name', trimmedTarget);
+        .ilike('name', trimmedTarget.replace(/[\\%_]/g, (character) => `\\${character}`));
 
       if (secErr || !matchedSections || matchedSections.length === 0) {
         return NextResponse.json(
@@ -235,18 +247,19 @@ export async function POST(request: Request) {
         );
       }
 
-      const { error: moveErr } = await supabase
+      const { data: movedRows, error: moveErr } = await supabase
         .from('students')
         .update({
           section_id: activeSection.id,
           section_name: activeSection.name,
         })
         .in('id', studentIds)
-        .eq('tenant_id', tenantId);
+        .eq('tenant_id', tenantId)
+        .select('id');
 
       if (moveErr) {
         return NextResponse.json(
-          { error: `Failed to move learners: ${moveErr.message}` },
+          { error: 'Could not move the selected learners.' },
           { status: 400 }
         );
       }
@@ -254,16 +267,16 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: true,
         action: 'move',
-        count: studentIds.length,
-        message: `Successfully moved ${studentIds.length} learner(s) to ${activeSection.name}.`,
+        count: movedRows?.length ?? 0,
+        message: `Successfully moved ${movedRows?.length ?? 0} learner(s) to ${activeSection.name}.`,
       });
     }
 
     return NextResponse.json({ error: 'Unhandled action' }, { status: 400 });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Server error in students bulk route:', err);
     return NextResponse.json(
-      { error: err?.message || 'Server error processing student bulk action.' },
+      { error: 'Server error processing student bulk action.' },
       { status: 500 }
     );
   }

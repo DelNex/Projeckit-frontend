@@ -38,12 +38,19 @@ export async function POST(request: Request) {
     }
 
     let matchedTenantId: string | null = null;
-    if (recommendationCode && typeof recommendationCode === 'string' && recommendationCode.trim()) {
+    const hasRecommendationCode = typeof recommendationCode === 'string' && recommendationCode.trim().length > 0;
+    if (recommendationCode !== undefined && recommendationCode !== null && typeof recommendationCode !== 'string') {
+      return NextResponse.json({ error: 'The school code could not be verified. Check the code or contact your school administrator.' }, { status: 400 });
+    }
+    if (hasRecommendationCode) {
       const adminClient = createAdminClient();
       const { data: matchedTenant, error: tenantLookupError } = await adminClient
         .from('tenants').select('id').eq('code', recommendationCode.trim()).maybeSingle();
       if (tenantLookupError) {
         return NextResponse.json({ error: 'Could not verify the school code. Please try again.' }, { status: 503 });
+      }
+      if (!matchedTenant?.id) {
+        return NextResponse.json({ error: 'The school code could not be verified. Check the code or contact your school administrator.' }, { status: 400 });
       }
       if (matchedTenant?.id) {
         matchedTenantId = matchedTenant.id;
@@ -54,7 +61,7 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: 'Could not verify the school registration settings. Please try again.' }, { status: 503 });
         }
         if (!isPublicRegistrationAllowed(schoolSettings?.allow_public_registration)) {
-          return NextResponse.json({ error: 'Public registration is turned off for this school. Contact your school administrator.' }, { status: 403 });
+          return NextResponse.json({ error: 'The school code could not be verified. Check the code or contact your school administrator.' }, { status: 403 });
         }
       }
     }
@@ -95,12 +102,12 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       message: 'Registration submitted successfully with pending status.',
-      user: data.user,
+      user: data.user ? { id: data.user.id, email: data.user.email } : null,
     });
   } catch (err: any) {
     console.error('Server-side registration error:', err);
     return NextResponse.json(
-      { error: err?.message || 'Internal server error during registration.' },
+      { error: 'Registration could not be completed. Please try again later.' },
       { status: 500 }
     );
   }
