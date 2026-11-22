@@ -82,7 +82,7 @@ export async function POST(
     }
 
     // 6. Tenant Scoping
-    if (callerProfile.tenant_id && targetProfile.tenant_id !== callerProfile.tenant_id) {
+    if (!callerProfile.tenant_id || !targetProfile.tenant_id || targetProfile.tenant_id !== callerProfile.tenant_id) {
       return NextResponse.json(
         { error: 'Forbidden: You can only modify user roles within your assigned school.' },
         { status: 403 }
@@ -102,7 +102,11 @@ export async function POST(
         .eq('role', 'admin')
         .eq('status', 'approved');
 
-      if (!countErr && adminCount !== null && adminCount <= 1) {
+      if (countErr || adminCount === null) {
+        console.error('[Admin API] Could not verify remaining school administrators:', countErr);
+        return NextResponse.json({ error: 'Could not verify school administrator coverage. No role changes were made.' }, { status: 503 });
+      }
+      if (adminCount <= 1) {
         return NextResponse.json(
           { error: 'Cannot demote this user: Every school must maintain at least one active administrator.' },
           { status: 400 }
